@@ -4,3 +4,4 @@ export * from './cuit.js';
 export * from './calendar-date.js';
 export * from './result.js';
 export * from './errors.js';
+export * from './totp.js';

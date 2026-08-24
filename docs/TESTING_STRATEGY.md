@@ -95,6 +95,12 @@ métrica tiene umbral de bloqueo de release.
 | S-6 | `UPDATE`/`DELETE` sobre `audit_logs` fallan a nivel de base de datos |
 | S-7 | Reapertura de período requiere dos firmantes distintos |
 | S-8 | **El lint de arquitectura falla si alguien viola el ADR-001** — se introduce una violación real y se verifica que el build se cae. Un lint configurado no es un lint que funciona |
+| S-9 | **Barrido de aislamiento sobre TODOS los endpoints** — el test recorre el inventario de rutas que el servidor construye al registrarlas, no una lista escrita a mano. Un endpoint nuevo sin protección de tenancy lo detecta solo |
+| S-10 | El login no permite enumerar cuentas: email inexistente y contraseña incorrecta devuelven exactamente la misma respuesta |
+| S-11 | El token de sesión se guarda hasheado; buscarlo en claro en `sessions` no da resultados |
+| S-12 | Un rol que exige MFA no accede a datos de empresa sin haberlo configurado |
+| S-13 | Un código de recuperación de MFA sirve una sola vez |
+| S-14 | La cuenta se bloquea tras N intentos fallidos, y con la cuenta bloqueada la contraseña correcta tampoco entra |
 
 ### 2.8 Tests de regresión
 

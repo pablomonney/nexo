@@ -7,8 +7,9 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
 > - ✅ **Monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI** (FASE 1b)
-> - ✅ **10 migraciones aplicadas y 69/69 tests en verde contra PostgreSQL 18.6**
-> - ⬜ Empresas, plan de cuentas, ingesta, motores (FASE 2 en adelante — ver `ROADMAP.md`)
+> - ✅ **API con autenticación, MFA, RBAC granular y tenancy** (FASE 2)
+> - ✅ **14 migraciones aplicadas y 104/104 tests en verde contra PostgreSQL 18.6**
+> - ⬜ Ingesta de comprobantes, OCR y validación ARCA (FASE 3 en adelante — ver `ROADMAP.md`)
 
 ## Puesta en marcha
 

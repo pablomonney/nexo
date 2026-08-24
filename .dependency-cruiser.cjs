@@ -16,7 +16,8 @@ const MOTOR_CONTABLE =
   '^(packages/(accounting-engine|tax-engine|financial-statements)|' +
   'node_modules/@aai/(accounting-engine|tax-engine|financial-statements))';
 
-const CLIENTE_DE_BASE = '^node_modules/(pg|postgres|prisma|@prisma|knex|typeorm|drizzle-orm)';
+const CLIENTE_DE_BASE =
+  '^(packages/db|node_modules/(@aai/db|pg|postgres|prisma|@prisma|knex|typeorm|drizzle-orm))';
 
 const CLIENTE_DE_RED = '^node_modules/(axios|node-fetch|undici|got|superagent)';
 

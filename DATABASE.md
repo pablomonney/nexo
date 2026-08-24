@@ -53,10 +53,12 @@ erDiagram
 | `organizations` | `id`, `name`, `tax_id`, `status` | El estudio contable |
 | `companies` | `id`, `organization_id`, `legal_name`, `cuit`, `entity_type`, `jurisdiction`, `regulator`, `activity_code`, `fiscal_year_end_month_day`, `status` | `entity_type` y `jurisdiction` **alimentan la resolución normativa**, no son decorativos |
 | `company_reporting_frameworks` | `company_id`, `framework` (`RT_FACPCE`\|`NIIF`\|`NIIF_PYMES`), `valid_from`, `valid_to`, `decided_by`, `evidence_document_id` | Materializa la opción del §C-04. La opción del ente se **registra**, no se infiere |
-| `users` | `id`, `email`, `status`, `mfa_enabled` | |
-| `roles`, `permissions`, `role_permissions` | | Roles del §26 |
+| `users` | `id`, `email`, `status`, `mfa_enabled`, `mfa_secret_encrypted`, `failed_login_count`, `locked_until` | El secreto TOTP se guarda cifrado (AES-256-GCM); un CHECK impide declarar MFA habilitado sin secreto confirmado |
+| `roles`, `permissions`, `role_permissions` | | Roles del §26 y **26 permisos granulares** |
 | `user_company_roles` | `user_id`, `company_id`, `role_id`, `valid_from`, `valid_to` | Un usuario puede tener rol distinto por empresa |
-| `sessions` | `id`, `user_id`, `ip`, `user_agent`, `expires_at`, `revoked_at` | |
+| **`organization_members`** | `organization_id`, `user_id`, `level` (`OWNER`\|`ADMIN`\|`MEMBER`) | **Agregada en FASE 2.** Los roles se atan a empresas, así que no había forma de expresar "administrador del estudio" — y sin eso nadie podía crear la primera empresa |
+| `sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `absolute_expires_at`, `mfa_satisfied`, `revoked_at` | El token **nunca** se guarda en claro. Doble expiración: por inactividad y absoluta |
+| `mfa_recovery_codes` | `user_id`, `code_hash`, `used_at` | De un solo uso |
 
 ---
 

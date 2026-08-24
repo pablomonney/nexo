@@ -141,3 +141,45 @@ desarrolladores (el contador que carga normativa también clona el repositorio).
 
 **Consecuencias.** Instalación algo más lenta y sin almacén global compartido. Ninguna consecuencia
 sobre el diseño del producto. Migrar a pnpm más adelante es un cambio local si hiciera falta.
+
+---
+
+## ADR-010 — Puntos de entrada privilegiados en vez de aflojar RLS
+
+*Decidido en FASE 2.*
+
+**Contexto.** La política RLS de `companies` exige `id = app_company_id()`. Al crear una empresa
+todavía no hay contexto —el id no existe— así que ningún `INSERT` del rol de aplicación puede
+satisfacerla. Lo mismo pasa al asignar el primer rol en una empresa recién creada.
+
+La salida obvia es relajar la política: `app_company_id() IS NULL OR id = app_company_id()`. Eso
+abre un agujero grande: cualquier consulta que olvidara fijar el contexto pasaría a ver y escribir
+**todas** las empresas del estudio, que es exactamente la falla que RLS existe para impedir. El
+descuido más barato del código se convertiría en la fuga más cara.
+
+**Decisión.** Tres funciones `SECURITY DEFINER` nominadas —`create_organization`, `create_company`,
+`grant_company_role`— que verifican la autorización **adentro** y hacen una sola cosa cada una.
+Ninguna acepta un "ejecutá esto" genérico.
+
+**Consecuencias.** La superficie privilegiada queda explícita, chica y auditable en un solo archivo
+(`0013_privileged_entrypoints.sql`) en lugar de difusa en una política permisiva. El costo es que
+cada operación de este tipo necesita su propia función; se acepta, porque son pocas y son
+justamente las que conviene revisar de a una.
+
+---
+
+## ADR-011 — La resolución de permisos corre con la empresa en contexto
+
+*Decidido en FASE 2, tras un bug encontrado por los tests.*
+
+**Contexto.** `requireCompany` resolvía roles y permisos con `withoutCompany`, razonando que la
+autorización es "previa" al acceso a datos. Pero `user_company_roles` está bajo RLS por
+`company_id`: consultada sin contexto devuelve **cero filas siempre**, y el resultado era que nadie
+tenía acceso a nada. El test de endpoints lo detectó de inmediato; leyendo el código no era obvio.
+
+**Decisión.** La resolución corre con `withCompany` fijando la empresa pedida.
+
+**Consecuencias.** Ninguna pérdida de seguridad: RLS **acota por empresa, no autoriza**. Si el
+usuario no tiene rol en esa empresa, la consulta sigue devolviendo vacío y el acceso se rechaza
+igual. La lección general —y el motivo de dejar el ADR— es que en un esquema con RLS, "no fijar el
+contexto" no es un estado neutro: es un filtro que devuelve nada.

@@ -10,8 +10,9 @@
 | **FASE 0 — Investigación normativa y arquitectura** | ✅ **Entregada** |
 | **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 21 documentos oficiales archivados con hash |
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
-| FASE 2 — Empresas, usuarios, plan de cuentas | ⬜ Siguiente |
-| FASE 3 → 14 | ⬜ |
+| **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
+| FASE 3 — Ingesta y lectura de comprobantes | ⬜ Siguiente |
+| FASE 4 → 14 | ⬜ |
 
 ---
 
@@ -90,13 +91,42 @@ tengan tests de integración y no solo revisión.
 
 ---
 
-## FASE 2 — Estudio, empresas, usuarios, plan de cuentas
+## FASE 2 — Estudio, empresas, usuarios, plan de cuentas ✅
 
-Organizaciones, empresas, roles y permisos, MFA, plan de cuentas (plantilla + personalizado),
-centros de costo, ejercicios y períodos.
+**Entregado:**
 
-**Criterio:** un estudio con 3 empresas, planes de cuentas distintos, y cero fugas de datos entre
-ellas verificado por test automatizado sobre todos los endpoints.
+- `apps/api` sobre Fastify: autenticación con Argon2id, sesiones con expiración doble (inactividad
+  y absoluta) y token guardado hasheado, bloqueo progresivo por intentos fallidos.
+- **TOTP propio** (RFC 6238) en `@aai/shared`, verificado contra los cinco vectores del estándar.
+  Secreto cifrado en reposo con AES-256-GCM y códigos de recuperación de un solo uso.
+- **26 permisos granulares** repartidos entre los seis roles del §26. El Administrador
+  deliberadamente **no** puede aprobar asientos: administrar el sistema y aprobar contabilidad son
+  responsabilidades distintas (§42).
+- Tenancy en tres capas efectivas: RLS en la base, `withCompany` en `@aai/db` —que no expone un
+  cliente crudo— y resolución de empresa por cabecera en la API.
+- Plan de cuentas por empresa, centros de costo, ejercicios con generación automática de períodos
+  mensuales recortados al ejercicio, cierre y reapertura con doble firma.
+- Dos tablas nuevas por huecos del modelo detectados al implementar: `organization_members`
+  (pertenencia al estudio) y `mfa_recovery_codes`.
+
+**Criterio de salida — cumplido:**
+
+| Criterio | Estado |
+|----------|--------|
+| Un estudio con 3 empresas y planes de cuentas distintos | ✅ |
+| Cero fugas verificadas **sobre todos los endpoints** | ✅ el barrido recorre el inventario de rutas del propio servidor, no una lista a mano |
+| Suite completa | ✅ **104/104** |
+
+**Tres defectos que solo aparecieron al ejecutar:**
+
+1. `requireCompany` resolvía permisos sin contexto de empresa. Como `user_company_roles` está bajo
+   RLS, devolvía cero filas siempre y **nadie tenía acceso a nada**. En un esquema con RLS, "no
+   fijar el contexto" no es neutro: es un filtro que devuelve nada (ADR-011).
+2. `grant_company_role` declaraba una variable `role_id` homónima de la columna. PL/pgSQL falla en
+   ejecución, no al crear la función: sin un test que la invocara, el bug quedaba latente hasta el
+   primer alta de rol en producción.
+3. Las políticas RLS hacían imposible crear una empresa. Se resolvió con puntos de entrada
+   privilegiados nominados en vez de aflojar la política (ADR-010).
 
 ---
 

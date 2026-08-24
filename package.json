@@ -30,11 +30,18 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.23.1",
     "dependency-cruiser": "^16.9.0",
     "eslint": "^9.17.0",
     "pg": "^8.13.1",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.0.2",
+    "@node-rs/argon2": "2.0.2",
+    "fastify": "5.2.1",
+    "zod": "3.24.1"
   }
 }
