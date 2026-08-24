@@ -21,6 +21,11 @@ const CLIENTE_DE_BASE =
 
 const CLIENTE_DE_RED = '^node_modules/(axios|node-fetch|undici|got|superagent)';
 
+// Los agentes reciben contexto ya resuelto; no consultan al organismo por su
+// cuenta. Si lo hicieran, saltearían la bitácora de consultas y el modelo de
+// capacidades por empresa.
+const CLIENTE_ARCA = '^(packages/arca|node_modules/@aai/arca)';
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -33,7 +38,7 @@ module.exports = {
         'diseño está roto: revisá AI_ARCHITECTURE.md §1.',
       severity: 'error',
       from: { path: '^packages/ai-engine' },
-      to: { path: `${MOTOR_CONTABLE}|${CLIENTE_DE_BASE}` },
+      to: { path: `${MOTOR_CONTABLE}|${CLIENTE_DE_BASE}|${CLIENTE_ARCA}` },
     },
     {
       name: 'motor-normativo-independiente-de-ia',

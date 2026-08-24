@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+/**
+ * Verificación de conectividad con ARCA.
+ *
+ * Es el único punto del sistema que necesita el certificado. Se ejecuta una vez,
+ * a mano, el día que el trámite esté hecho — y responde con precisión en qué
+ * paso está la configuración, en vez de dejar al equipo adivinando por qué una
+ * validación fiscal devuelve NO_VERIFICABLE.
+ *
+ *   node scripts/arca-check.mjs --env homologacion --cert ./cert.crt --key ./key.pem --cuit 30xxxxxxxx9
+ *
+ * Sin argumentos hace lo que puede sin credenciales: comprueba que los endpoints
+ * respondan y que el servicio esté arriba.
+ */
+
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+try {
+  process.loadEnvFile(join(HERE, '..', '.env'));
+} catch {
+  // Sin .env se usan las variables del entorno.
+}
+
+const args = new Map();
+for (let i = 2; i < process.argv.length; i += 2) {
+  const key = process.argv[i]?.replace(/^--/, '');
+  if (key !== undefined) args.set(key, process.argv[i + 1]);
+}
+
+const environment = args.get('env') ?? process.env.ARCA_ENVIRONMENT ?? 'homologacion';
+if (environment === 'mock') {
+  console.error('Este script no tiene sentido con ARCA_ENVIRONMENT=mock. Usá --env homologacion.');
+  process.exit(2);
+}
+
+const { endpointsFor, SERVICE_NAMES } = await import('../packages/arca/dist/environment.js');
+const { SoapArcaClient } = await import('../packages/arca/dist/soap/soap-client.js');
+const { WsaaAuthenticator } = await import('../packages/arca/dist/soap/wsaa.js');
+
+const endpoints = endpointsFor(environment);
+const ok = (label, detail = '') => console.log(`  ✔ ${label}${detail ? ` — ${detail}` : ''}`);
+const fail = (label, detail = '') => console.log(`  ✘ ${label}${detail ? ` — ${detail}` : ''}`);
+
+console.log(`\nAmbiente: ${environment}`);
+console.log(`  WSAA : ${endpoints.wsaa}`);
+console.log(`  WSCDC: ${endpoints.wscdc}\n`);
+
+// ── 1. ¿Responden los endpoints? ─────────────────────────────────────────────
+console.log('1. Alcance de red');
+for (const [name, url] of [['WSAA', endpoints.wsaa], ['WSCDC', endpoints.wscdc]]) {
+  try {
+    const response = await fetch(`${url}?WSDL`, { method: 'GET' });
+    if (response.ok) ok(`${name} alcanzable`, `HTTP ${response.status}`);
+    else fail(`${name} respondió ${response.status}`);
+  } catch (error) {
+    fail(`${name} inalcanzable`, error instanceof Error ? error.message : String(error));
+  }
+}
+
+// ── 2. ¿Está arriba el servicio? ─────────────────────────────────────────────
+console.log('\n2. Estado del servicio (Dummy)');
+const probe = new SoapArcaClient({
+  environment,
+  credentials: { async getCertificate() { return null; } },
+});
+const estado = await probe.estadoServicio();
+if (estado.disponible) ok('WSCDC operativo', `app=${estado.appServer} db=${estado.dbServer} auth=${estado.authServer}`);
+else fail('WSCDC no operativo', `app=${estado.appServer} db=${estado.dbServer} auth=${estado.authServer}`);
+
+// ── 3. Autenticación ─────────────────────────────────────────────────────────
+const certPath = args.get('cert');
+const keyPath = args.get('key');
+const cuit = args.get('cuit');
+
+console.log('\n3. Autenticación WSAA');
+if (certPath === undefined || keyPath === undefined || cuit === undefined) {
+  console.log('  – Sin --cert/--key/--cuit: se omite.');
+  console.log('    El trámite está documentado en docs/api/arca-onboarding.md');
+  process.exit(0);
+}
+
+let certificate;
+try {
+  certificate = {
+    companyId: 'check',
+    cuit,
+    certificatePem: await readFile(certPath, 'utf8'),
+    privateKeyPem: await readFile(keyPath, 'utf8'),
+    notAfter: new Date(Date.now() + 86_400_000),
+  };
+  ok('Certificado y clave leídos');
+} catch (error) {
+  fail('No se pudieron leer los archivos', error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+
+try {
+  const authenticator = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
+  const ticket = await authenticator.login(certificate, SERVICE_NAMES.wscdc);
+  ok('Ticket de acceso obtenido', `vence ${ticket.expirationTime.toISOString()}`);
+  console.log('\n  El certificado está emitido, asociado al servicio wscdc y la delegación funciona.');
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  fail('WSAA rechazó la autenticación', message);
+  console.log('\n  Causas habituales, en orden de frecuencia:');
+  console.log('   · El certificado no está asociado al servicio wscdc');
+  console.log('     → Administrador de Relaciones de Clave Fiscal (producción) o WSASS (homologación)');
+  console.log('   · El certificado es de producción y se está usando en homologación, o al revés');
+  console.log('   · El reloj del equipo está desfasado respecto del organismo');
+  console.log('   · El certificado venció');
+  process.exit(1);
+}

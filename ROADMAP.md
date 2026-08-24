@@ -11,7 +11,7 @@
 | **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 21 documentos oficiales archivados con hash |
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
-| FASE 3 — Ingesta y lectura de comprobantes | ⬜ Siguiente |
+| FASE 3 — Ingesta y lectura de comprobantes | 🟡 **En curso** — integración ARCA lista y desacoplada; falta ingesta y OCR |
 | FASE 4 → 14 | ⬜ |
 
 ---
@@ -130,11 +130,32 @@ tengan tests de integración y no solo revisión.
 
 ---
 
-## FASE 3 — Ingesta y lectura de comprobantes
+## FASE 3 — Ingesta y lectura de comprobantes 🟡
+
+### 3a — Integración con ARCA ✅
+
+Entregada y **desacoplada**: el certificado X.509 no bloquea el desarrollo del resto del sistema.
+
+- `packages/arca` con contrato de dominio, `MockArcaClient` determinístico (con escenarios de
+  falla) y `SoapArcaClient` para homologación y producción.
+- Modelo de degradación explícito: `NO_VERIFICABLE` con motivo, nunca un `OK` por omisión.
+- Mapeo al sello de validación **FISCAL**, separado de la contable y la económica (§11).
+- Credenciales cifradas, capacidades por empresa y bitácora de consultas
+  (`0015_arca_integration.sql`).
+- `npm run arca:check` diagnostica en qué paso está la configuración.
+
+**Verificado contra homologación real** (2026-08-24): los endpoints del manual archivado responden
+y `ComprobanteDummy` devolvió `app=OK db=OK auth=OK` — el sobre SOAP que arma el cliente lo entiende
+ARCA y la respuesta se parsea bien. La firma CMS del TRA se verificó con un certificado autofirmado
+generado en el test. **Falta únicamente** el intercambio certificado → ticket de acceso, que
+requiere el trámite.
+
+Trámite documentado paso a paso en [`docs/api/arca-onboarding.md`](docs/api/arca-onboarding.md).
+
+### 3b — Ingesta y OCR ⬜
 
 Subida (PDF/JPG/PNG/XML/CSV/Excel), almacenamiento con hash y versionado, OCR tras adaptador,
-extracción con `raw_value`/`parsed_value`/`confidence`/`method`, detección de duplicados,
-integración WSAA + `wscdcv1` + padrón, y la separación de los tres tipos de validación (§11).
+extracción con `raw_value`/`parsed_value`/`confidence`/`method`, detección de duplicados.
 
 **Criterio:** 100 comprobantes reales anonimizados procesados; métricas de extracción por campo
 publicadas; constatación en ARCA funcionando en homologación.
