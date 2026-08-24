@@ -1,0 +1,55 @@
+# Entorno de desarrollo local.
+#   docker compose -f infrastructure/docker-compose.yml up -d
+#   DATABASE_URL=postgres://aai:aai@localhost:5433/aai npm run db:migrate
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: aai-postgres
+    environment:
+      POSTGRES_USER: aai
+      POSTGRES_PASSWORD: aai
+      POSTGRES_DB: aai
+      # Colación determinística: el orden de los códigos de cuenta no debe
+      # depender de la configuración regional del host.
+      POSTGRES_INITDB_ARGS: '--locale=C --encoding=UTF8'
+    ports:
+      - '5433:5432'
+    volumes:
+      - aai-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aai -d aai']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: aai-redis
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Almacenamiento de documentos y de originales normativos.
+  # El versionado se habilita desde la aplicación; en producción se exige además
+  # object lock (SECURITY.md §6).
+  minio:
+    image: minio/minio:latest
+    container_name: aai-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: aai
+      MINIO_ROOT_PASSWORD: aai-dev-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - aai-minio:/data
+
+volumes:
+  aai-pgdata:
+  aai-minio:

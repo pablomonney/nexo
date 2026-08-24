@@ -1,0 +1,220 @@
+# ROADMAP.md
+
+> Entregable G del §51. Fases del §43, con criterios de salida verificables. Una fase no se cierra
+> con "está hecho": se cierra cuando su criterio pasa en CI.
+
+## Estado actual
+
+| Fase | Estado |
+|------|--------|
+| **FASE 0 — Investigación normativa y arquitectura** | ✅ **Entregada** |
+| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 21 documentos oficiales archivados con hash |
+| **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
+| FASE 2 — Empresas, usuarios, plan de cuentas | ⬜ Siguiente |
+| FASE 3 → 14 | ⬜ |
+
+---
+
+## FASE 0 — Investigación normativa y arquitectura ✅
+
+Entregado: mapa de fuentes oficiales con niveles de verificación, mapa normativo, conflictos
+detectados, relevamiento de APIs oficiales, arquitectura, modelo de datos, riesgos, estrategia de
+seguridad y pruebas, propuesta de MVP.
+
+---
+
+## FASE 1a — Carga normativa `V1` ✅
+
+21 documentos oficiales descargados, validados y archivados con SHA-256 en
+`docs/normative-sources/originals/`, indexados en `registro-de-descargas.csv`.
+
+Resultado sustantivo, más allá del archivado:
+
+- **C-01 cerrado** — las fechas de la RG 5616/2024 no estaban en conflicto: eran hitos de dos
+  normas distintas.
+- **C-03 cerrado** — el art. 3° de la RT 54 enumera las derogaciones. No deroga RT 16 ni RT 26.
+- **C-02 confirmado con texto oficial** — la IGJ remite a las RT adoptadas por el CPCECABA.
+- **FASE 8 (IVA) desbloqueada** — RG 4597 (T.O.) y RG 5707/2025 archivadas.
+- Dos hallazgos de método: el BO no sirve como fuente de texto; la documentación técnica de un
+  organismo no prueba vigencia.
+
+**Criterio de salida:** cumplido. `sha256sum -c ../checksums.sha256` verifica los 21 archivos.
+
+**Deuda declarada:** actos de adopción de consejos fuera de CABA, ajuste por inflación,
+percepciones/retenciones e IIBB. Ver `OFFICIAL_SOURCES.md` §8.
+
+---
+
+## FASE 1b — Fundaciones técnicas ✅
+
+**Entregado:**
+
+- Monorepo con npm workspaces (ADR-009), TypeScript en modo estricto con `noUncheckedIndexedAccess`
+  y `exactOptionalPropertyTypes`, project references.
+- `packages/shared`: `Money` sobre `bigint` en centavos con cuatro modos de redondeo y `allocate`
+  que garantiza la propiedad P-7; `CalendarDate` sin zona horaria; validación de CUIT por módulo 11;
+  `Result`; errores tipados con los códigos de `ACCOUNTING_ENGINE.md`.
+- **9 migraciones SQL** (ADR-008) con los siete candados del Libro Diario, RLS en 25 tablas,
+  bitácora encadenada por hash, motor normativo con la tabla `norm_adoptions`, y los cinco gaps
+  normativos precargados.
+- Contratos de `accounting-engine` y `ai-engine` — sin implementación, pero con la frontera ya
+  puesta y verificada.
+- Cuatro puertas de CI: typecheck, lint de arquitectura, prohibición de floats en importes,
+  integridad del archivo normativo.
+
+**Criterio de salida — cumplido y verificado contra PostgreSQL 18.6:**
+
+| Criterio | Estado |
+|----------|--------|
+| Migraciones aplicadas | ✅ 10 migraciones, idempotentes (segunda corrida sin cambios) |
+| Test de aislamiento entre dos empresas | ✅ 9 casos en verde |
+| El lint de dependencias falla si alguien viola ADR-001 | ✅ S-8 introduce la violación y comprueba que el build se cae |
+| Suite completa | ✅ **69/69** |
+
+Esquema resultante: 43 tablas, **25 con RLS forzado** y su política, 78 constraints `CHECK`,
+3 de exclusión temporal, 21 triggers, 5 gaps normativos precargados.
+
+**Dos defectos reales que aparecieron recién al correr contra la base:**
+
+1. `CHECK ... DEFERRABLE` no existe en PostgreSQL — solo `UNIQUE`, `PK`, `FK` y `EXCLUDE` pueden
+   diferirse. El invariante `Debe = Haber` quedó mejor repartido: `CHECK` inmediato sobre los
+   totales de la cabecera, y `CONSTRAINT TRIGGER` diferido para la coherencia entre esos totales y
+   la suma real de las líneas, que es lo único que necesitaba esperar al `COMMIT`.
+2. PL/pgSQL no cortocircuita las condiciones de un `IF`: compila la expresión entera como una sola
+   sentencia SQL. El guardia de período referenciaba `NEW.kind` protegido por
+   `TG_TABLE_NAME = 'journal_entries'`, y fallaba igual al correr sobre `journal_entry_lines`.
+   Corregido en `0010_fix_period_guard.sql`.
+
+Ninguno de los dos era detectable leyendo el SQL. Es el argumento a favor de que los candados
+tengan tests de integración y no solo revisión.
+
+---
+
+## FASE 2 — Estudio, empresas, usuarios, plan de cuentas
+
+Organizaciones, empresas, roles y permisos, MFA, plan de cuentas (plantilla + personalizado),
+centros de costo, ejercicios y períodos.
+
+**Criterio:** un estudio con 3 empresas, planes de cuentas distintos, y cero fugas de datos entre
+ellas verificado por test automatizado sobre todos los endpoints.
+
+---
+
+## FASE 3 — Ingesta y lectura de comprobantes
+
+Subida (PDF/JPG/PNG/XML/CSV/Excel), almacenamiento con hash y versionado, OCR tras adaptador,
+extracción con `raw_value`/`parsed_value`/`confidence`/`method`, detección de duplicados,
+integración WSAA + `wscdcv1` + padrón, y la separación de los tres tipos de validación (§11).
+
+**Criterio:** 100 comprobantes reales anonimizados procesados; métricas de extracción por campo
+publicadas; constatación en ARCA funcionando en homologación.
+
+---
+
+## FASE 4 — Motor de clasificación
+
+`Accounting Classification Agent`, salida cerrada al plan de cuentas real, sistema de confianza,
+disparadores duros, `ai_predictions` / `ai_reviews`, pantalla de revisión del contador.
+
+**Criterio:** ninguna propuesta puede postearse sin aprobación; toda cita normativa devuelta
+resuelve contra `norm_versions` o la propuesta se rechaza automáticamente.
+
+---
+
+## FASE 5 — Motor contable
+
+`accounting-engine` completo con las 11 validaciones, constraints en base, numeración, períodos,
+contraasientos, `Validation Layer`.
+
+**Criterio:** la suite de *accounting tests* (§33) pasa al 100%, incluidos los casos de intento de
+descuadre, de posteo en período cerrado y de borrado físico.
+
+---
+
+## FASE 6 — Libro Diario · FASE 7 — Libro Mayor
+
+Diario trazable con todos los campos del §15; Mayor como proyección reconstruible; balance de
+sumas y saldos; exportaciones.
+
+**Criterio:** el Mayor reconstruido desde el Diario coincide exactamente; el balance cierra en sus
+tres igualdades; cada movimiento navega hasta el documento original.
+
+---
+
+## FASE 8 — IVA
+
+`tax-engine`: crédito y débito fiscal, notas de crédito y débito, percepciones, retenciones,
+saldos, ajustes, subdiarios IVA Compras / IVA Ventas, base para el Libro de IVA Digital.
+
+**Bloqueante previo:** descarga y carga oficial de RG 4597 T.O. y RG 5707/2025. Sin eso, esta fase
+no arranca — es exactamente el caso en que el sistema debe decir "no tengo fuente".
+
+---
+
+## FASE 9 — Bancos
+
+Importación de extractos, `Bank Reconciliation Engine`, matching automático con score, detección de
+diferencias, transferencias internas, comisiones e impuestos bancarios.
+
+**Criterio:** conciliación de un mes real con ≥ 80% de matching automático propuesto y 0
+conciliaciones confirmadas sin intervención humana.
+
+---
+
+## FASE 10 — Estados contables
+
+`statement_templates` versionadas por `(framework, entity_type, regulator, period)`; ESP, ER, EEPN,
+EFE; información comparativa; anexos.
+
+**Criterio:** dos empresas con marcos distintos generan estructuras distintas **sin cambiar código**;
+todo renglón tiene `lineage_id` no nulo.
+
+---
+
+## FASE 11 — Notas
+
+`Notes Engine`, notas con cada cifra referenciada, políticas contables, borradores del `Notes Agent`.
+
+**Criterio:** invariante A-2 (`AUDIT_TRAIL.md`) pasa: no existe cifra en nota sin respaldo.
+
+---
+
+## FASE 12 — Auditoría
+
+Bitácora encadenada, verificador de cadena, reportes de auditoría, alertas completas del §22,
+modo Auditor.
+
+**Criterio:** los 8 invariantes A-1..A-8 corren en CI y fallan el build al violarse.
+
+---
+
+## FASE 13 — Integraciones oficiales
+
+Ampliación de servicios ARCA según habilitaciones reales, `Normative Update Service` con CKAN de
+datos.gob.ar, monitoreo del Boletín Oficial, exportaciones a formatos de organismos.
+
+**Advertencia:** el alcance real depende de qué servicios tenga habilitado cada CUIT. Se diseña
+para degradar sin romper.
+
+---
+
+## FASE 14 — IA avanzada
+
+`Contador IA` conversacional sobre datos reales, análisis de variaciones, `Audit Agent`, detección
+de anomalías, sandbox de simulación (§34) completo.
+
+---
+
+## Orden de trabajo recomendado
+
+Fases 1 → 2 → 3 → 5 → 6 → 7 → 4 → 8 → 9 → 10 → 11 → 12 → 13 → 14.
+
+**Diferencia con el pliego, deliberada y explicada:** conviene construir el motor contable (5) y
+los libros (6, 7) **antes** del clasificador de IA (4). Motivo: el clasificador necesita un destino
+válido y verificable para sus propuestas. Construirlo primero obliga a validarlo contra algo que
+todavía no existe, y crea la tentación de dejar que la IA escriba directamente — exactamente lo
+que el §29 prohíbe. Con el motor listo, el clasificador nace ya encajonado detrás de la
+`Validation Layer`.
+
+Si preferís seguir el orden literal del pliego, es viable: requiere que la FASE 4 entregue solo
+propuestas persistidas en `ai_predictions`, sin destino contable, y se valide contra fixtures.

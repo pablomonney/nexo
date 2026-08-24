@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+certs/
+secrets/
+.DS_Store
+Thumbs.db
+*.log
+.turbo/
+.cache/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Artefactos de test
+packages/ai-engine/src/__adr001_probe__.ts

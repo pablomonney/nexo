@@ -1,0 +1,28 @@
+# Normalización de fin de línea.
+#
+# El repositorio se trabaja desde Windows y desde Linux (CI). Sin esto, git
+# convierte LF↔CRLF según la plataforma y los diffs se llenan de ruido.
+* text=auto eol=lf
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRÍTICO — los originales normativos son BYTES, no texto.
+# ─────────────────────────────────────────────────────────────────────────────
+# El sistema de citas del §31 se apoya en el SHA-256 de cada documento oficial
+# archivado. Si git normalizara los saltos de línea de los .htm de InfoLeg, el
+# hash del archivo en el working copy dejaría de coincidir con el declarado en
+# checksums.sha256 y en registro-de-descargas.csv: `npm run norms:verify`
+# fallaría en Linux, o peor, pasaría en una máquina y no en otra.
+#
+# Marcarlos como binarios los preserva byte a byte en cualquier plataforma.
+docs/normative-sources/originals/** -text -diff
+
+# Otros binarios
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.zip   binary
+*.xlsx  binary
+
+# El lockfile no aporta nada revisado a mano en un diff.
+package-lock.json linguist-generated=true -diff

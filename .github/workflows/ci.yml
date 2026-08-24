@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: aai
+          POSTGRES_PASSWORD: aai
+          POSTGRES_DB: aai
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aai -d aai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://aai:aai@localhost:5432/aai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # ── Puertas de calidad ────────────────────────────────────────────────
+      # Cada una codifica una promesa del producto. No son "buenas prácticas":
+      # son las condiciones bajo las cuales el sistema es lo que dice ser.
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Lint de arquitectura (ADR-001)
+        run: npm run lint:arch
+
+      - name: Prohibido el punto flotante en importes
+        run: npm run check:no-float
+
+      - name: Integridad del archivo normativo
+        run: npm run norms:verify
+
+      - name: Crear base y migrar
+        run: npm run db:setup
+
+      - name: Migraciones idempotentes
+        # Correrlas dos veces no debe cambiar nada ni fallar.
+        run: npm run db:setup
+
+      - name: Tests
+        run: npm test
+
+  # El archivo normativo se verifica también de forma independiente, para que un
+  # cambio en el código no pueda enmascarar una alteración de los originales.
+  normative-archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verificar hashes de los documentos oficiales
+        run: node scripts/verify-norm-archive.mjs

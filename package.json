@@ -1,0 +1,40 @@
+{
+  "name": "accounting-ai-argentina",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de contabilidad inteligente para Argentina — motor contable determinístico con capa de IA",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --build --force",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:arch": "depcruise packages apps --config .dependency-cruiser.cjs",
+    "check:no-float": "node scripts/check-no-float.mjs",
+    "db:migrate": "node scripts/migrate.mjs up",
+    "db:status": "node scripts/migrate.mjs status",
+    "db:reset": "node scripts/migrate.mjs reset",
+    "norms:verify": "node scripts/verify-norm-archive.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run test",
+    "db:create": "node scripts/db-create.mjs",
+    "db:setup": "npm run db:create && npm run db:migrate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "dependency-cruiser": "^16.9.0",
+    "eslint": "^9.17.0",
+    "pg": "^8.13.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

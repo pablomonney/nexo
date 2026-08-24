@@ -1,0 +1,501 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// BORRADOR DE ESQUEMA — DOCUMENTACIÓN, NO CÓDIGO DE PRODUCCIÓN
+//
+// Cubre el núcleo invariante descripto en DATABASE.md: tenencia, plan de cuentas,
+// documentos, comprobantes, asiento contable, motor normativo, IA y auditoría.
+// Los bloques de bancos, estados contables, notas y anexos se agregan en FASE 1.
+//
+// Las restricciones críticas (Debe = Haber diferido, período abierto, no-DELETE,
+// RLS) NO son expresables en Prisma: van en migraciones SQL. Ver DATABASE.md §7.1.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client { provider = "prisma-client-js" }
+datasource db    { provider = "postgresql", url = env("DATABASE_URL") }
+
+// ── Tenencia ────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String    @id @default(uuid(7))
+  name      String
+  taxId     String    @unique
+  status    String    @default("ACTIVE")
+  companies Company[]
+  createdAt DateTime  @default(now())
+}
+
+model Company {
+  id             String   @id @default(uuid(7))
+  organizationId String
+  legalName      String
+  cuit           String
+  entityType     String   // SA | SA_299 | SRL | SAS | ASOC_CIVIL | FUNDACION | COOPERATIVA | ...
+  jurisdiction   String   // AR | AR-C (CABA) | AR-B | ...  ← determina adopción normativa
+  regulator      String?  // IGJ | CNV | BCRA | INAES | PROVINCIAL | null
+  activityCode   String?
+  fiscalYearEnd  String   // "MM-DD"
+  status         String   @default("ACTIVE")
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  frameworks     CompanyReportingFramework[]
+  accounts       Account[]
+  fiscalYears    FiscalYear[]
+
+  @@unique([organizationId, cuit])
+  @@index([jurisdiction, entityType])
+}
+
+/// Materializa la OPCIÓN normativa del ente (RG IGJ 9/2026 admite RT FACPCE,
+/// NIIF o NIIF PyMES). Se registra con respaldo; NUNCA se infiere. Ver ADR-006.
+model CompanyReportingFramework {
+  id                String   @id @default(uuid(7))
+  companyId         String
+  framework         String   // RT_FACPCE | NIIF | NIIF_PYMES
+  validFrom         DateTime @db.Date
+  validTo           DateTime? @db.Date
+  decidedBy         String
+  evidenceDocumentId String?
+  company           Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, validFrom])
+}
+
+// ── Plan de cuentas ─────────────────────────────────────────────────────────
+
+model Account {
+  id                 String   @id @default(uuid(7))
+  companyId          String
+  chartId            String
+  code               String
+  name               String
+  parentId           String?
+  type               String   // ACTIVO | PASIVO | PN | INGRESO | COSTO | GASTO | ORDEN
+  nature             String   // DEUDORA | ACREEDORA
+  isPostable         Boolean  @default(true)
+  currency           String   @default("ARS")
+  requiresCostCenter Boolean  @default(false)
+  requiresThirdParty Boolean  @default(false)
+  taxRole            String?  // IVA_CF | IVA_DF | PERCEPCION | RETENCION | null
+  status             String   @default("ACTIVE")
+
+  company            Company  @relation(fields: [companyId], references: [id])
+  parent             Account? @relation("AccountTree", fields: [parentId], references: [id])
+  children           Account[] @relation("AccountTree")
+  lines              JournalEntryLine[]
+
+  @@unique([companyId, chartId, code])
+}
+
+// ── Períodos ────────────────────────────────────────────────────────────────
+
+model FiscalYear {
+  id        String   @id @default(uuid(7))
+  companyId String
+  code      String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  status    String   @default("ABIERTO") // ABIERTO | EN_CIERRE | CERRADO
+  company   Company  @relation(fields: [companyId], references: [id])
+  periods   Period[]
+
+  @@unique([companyId, code])
+}
+
+model Period {
+  id           String   @id @default(uuid(7))
+  fiscalYearId String
+  number       Int
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  status       String   @default("ABIERTO") // ABIERTO | BLOQUEADO | CERRADO
+  closedAt     DateTime?
+  closedBy     String?
+
+  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  entries      JournalEntry[]
+
+  @@unique([fiscalYearId, number])
+}
+
+// ── Documentos y extracción (§10: 4 dimensiones por campo) ──────────────────
+
+model Document {
+  id          String   @id @default(uuid(7))
+  companyId   String
+  storageKey  String
+  mime        String
+  bytes       Int
+  sha256      String
+  source      String   // UPLOAD | EMAIL | FOLDER | API
+  uploadedBy  String
+  receivedAt  DateTime @default(now())
+  status      String   @default("RECEIVED")
+  extractions DocumentExtraction[]
+
+  @@unique([companyId, sha256])   // duplicado exacto nivel 1
+}
+
+model DocumentExtraction {
+  id                String   @id @default(uuid(7))
+  documentId        String
+  engine            String
+  engineVersion     String
+  rawPayload        Json
+  overallConfidence Decimal  @db.Decimal(5, 4)
+  startedAt         DateTime
+  finishedAt        DateTime?
+  document          Document @relation(fields: [documentId], references: [id])
+  fields            DocumentExtractionField[]
+}
+
+/// rawValue / parsedValue / confidence / method son columnas SEPARADAS por
+/// exigencia del §10. Una corrección humana INSERTA una fila con method=MANUAL:
+/// jamás sobrescribe la lectura original.
+model DocumentExtractionField {
+  id           String   @id @default(uuid(7))
+  extractionId String
+  fieldPath    String
+  rawValue     String?
+  parsedValue  String?
+  confidence   Decimal  @db.Decimal(5, 4)
+  method       String   // OCR | XML | REGEX | LLM | MANUAL
+  page         Int?
+  bbox         Json?
+  createdAt    DateTime @default(now())
+
+  extraction   DocumentExtraction @relation(fields: [extractionId], references: [id])
+
+  @@index([extractionId, fieldPath])
+}
+
+// ── Comprobantes ────────────────────────────────────────────────────────────
+
+model Party {
+  id         String  @id @default(uuid(7))
+  companyId  String
+  cuit       String
+  legalName  String
+  vatCondition String
+  isCustomer Boolean @default(false)
+  isSupplier Boolean @default(false)
+  riskFlags  Json?
+  invoices   Invoice[]
+
+  @@unique([companyId, cuit])
+}
+
+model Invoice {
+  id            String   @id @default(uuid(7))
+  companyId     String
+  direction     String   // PURCHASE | SALE
+  docTypeCode   String
+  pointOfSale   Int
+  number        Int
+  issueDate     DateTime @db.Date
+  dueDate       DateTime? @db.Date
+  partyId       String
+  cae           String?
+  caeDueDate    DateTime? @db.Date
+  currency      String   @default("ARS")
+  fxRate        Decimal? @db.Decimal(18, 6)
+  netTaxed      Decimal  @db.Decimal(18, 2)
+  netUntaxed    Decimal  @db.Decimal(18, 2) @default(0)
+  exempt        Decimal  @db.Decimal(18, 2) @default(0)
+  vatTotal      Decimal  @db.Decimal(18, 2)
+  otherTaxes    Decimal  @db.Decimal(18, 2) @default(0)
+  perceptions   Decimal  @db.Decimal(18, 2) @default(0)
+  withholdings  Decimal  @db.Decimal(18, 2) @default(0)
+  total         Decimal  @db.Decimal(18, 2)
+  documentId    String?
+  status        String   @default("REGISTRADO")
+
+  party         Party    @relation(fields: [partyId], references: [id])
+  validations   InvoiceValidation[]
+  entries       JournalEntry[]
+
+  // duplicado lógico (índice parcial status<>'ANULADO' va en SQL)
+  @@unique([companyId, direction, docTypeCode, pointOfSale, number, partyId])
+}
+
+/// §11: FISCAL, CONTABLE y ECONÓMICA son dimensiones DISTINTAS.
+/// Que ARCA confirme un CAE no prueba que la operación económica exista.
+model InvoiceValidation {
+  id        String   @id @default(uuid(7))
+  invoiceId String
+  kind      String   // FISCAL | CONTABLE | ECONOMICA
+  result    String   // OK | WARN | FAIL | NO_VERIFICABLE
+  source    String   // ARCA_WSCDCV1 | INTERNAL | HUMAN
+  evidence  Json?
+  checkedAt DateTime @default(now())
+  checkedBy String?
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@unique([invoiceId, kind])
+}
+
+// ── Núcleo contable ─────────────────────────────────────────────────────────
+
+model JournalEntry {
+  id              String   @id @default(uuid(7))
+  companyId       String
+  journalCode     String   // GENERAL | COMPRAS | VENTAS | BANCOS | CAJA | SUELDOS | AJUSTES | CIERRE | APERTURA
+  periodId        String
+  entryNumber     Int
+  entryDate       DateTime @db.Date
+  description     String
+  kind            String   @default("NORMAL") // NORMAL | AJUSTE | APERTURA | CIERRE | REVERSION
+  status          String   @default("BORRADOR") // BORRADOR | PROPUESTO | APROBADO | ANULADO
+  totalDebit      Decimal  @db.Decimal(18, 2)
+  totalCredit     Decimal  @db.Decimal(18, 2)
+  sourceType      String
+  sourceId        String?
+  invoiceId       String?
+  reversesEntryId String?
+
+  /// La FK apunta DESDE el asiento HACIA la predicción, nunca al revés.
+  /// Esa dirección es lo que hace imposible que un agente cree un asiento (ADR-001).
+  aiPredictionId  String?
+
+  createdBy       String
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  period          Period   @relation(fields: [periodId], references: [id])
+  invoice         Invoice? @relation(fields: [invoiceId], references: [id])
+  prediction      AiPrediction? @relation(fields: [aiPredictionId], references: [id])
+  lines           JournalEntryLine[]
+  ruleApplications RuleApplication[]
+
+  @@unique([companyId, journalCode, entryNumber, periodId])
+  @@index([companyId, entryDate])
+}
+
+model JournalEntryLine {
+  id           String  @id @default(uuid(7))
+  entryId      String
+  lineNo       Int
+  accountId    String
+  debit        Decimal @db.Decimal(18, 2) @default(0)
+  credit       Decimal @db.Decimal(18, 2) @default(0)
+  currency     String  @default("ARS")
+  fxRate       Decimal? @db.Decimal(18, 6)
+  costCenterId String?
+  partyId      String?
+  description  String?
+
+  entry        JournalEntry @relation(fields: [entryId], references: [id])
+  account      Account      @relation(fields: [accountId], references: [id])
+
+  @@unique([entryId, lineNo])
+  @@index([accountId])
+}
+
+// ── Motor normativo ─────────────────────────────────────────────────────────
+
+model Norm {
+  id             String   @id @default(uuid(7))
+  organismo      String   // ARCA | IGJ | CNV | BCRA | INAES | FACPCE | CPCE_CABA | PEN | CONGRESO
+  tipo           String   // LEY | DECRETO | RG | RT | RES_JG | RES_CD | INTERPRETACION
+  numero         String
+  anio           Int
+  titulo         String
+  jurisdiccion   String
+  hierarchyLevel Int      // 1..4
+  estado         String   @default("VIGENTE")
+  versions       NormVersion[]
+
+  @@unique([organismo, tipo, numero, anio])
+}
+
+model NormVersion {
+  id                String    @id @default(uuid(7))
+  normId            String
+  version           Int
+  fechaEmision      DateTime  @db.Date
+  fechaPublicacion  DateTime? @db.Date
+  fechaVigencia     DateTime? @db.Date
+  fechaDerogacion   DateTime? @db.Date
+  texto             String?
+
+  /// Eje de TIEMPO DE SISTEMA: cuándo el sistema supo de esta versión.
+  /// Sin esto no se puede reproducir la decisión de ayer con el saber de ayer.
+  recordedFrom      DateTime  @default(now())
+  recordedTo        DateTime?
+
+  verificationLevel String    // V1 | V2 | V3 | V4  ← solo V1 habilita reglas activas
+
+  norm              Norm      @relation(fields: [normId], references: [id])
+  documents         NormDocument[]
+  articles          NormArticle[]
+  adoptions         NormAdoption[]
+  accountingRules   AccountingRule[]
+
+  @@unique([normId, version])
+}
+
+model NormDocument {
+  id            String   @id @default(uuid(7))
+  normVersionId String
+  urlOficial    String
+  storageKey    String
+  sha256        String   // la trazabilidad llega al byte, no a la URL
+  mime          String
+  bytes         Int
+  fechaDescarga DateTime @default(now())
+  capturedBy    String
+  normVersion   NormVersion @relation(fields: [normVersionId], references: [id])
+}
+
+model NormArticle {
+  id            String @id @default(uuid(7))
+  normVersionId String
+  numero        String
+  titulo        String?
+  texto         String
+  orden         Int
+  normVersion   NormVersion @relation(fields: [normVersionId], references: [id])
+
+  @@unique([normVersionId, numero])
+}
+
+/// LA TABLA QUE EL CASO RT 54 OBLIGA A TENER.
+/// FACPCE: vigencia 01/07/2024. CPCECABA (Res. CD 460/2024): 01/01/2025.
+/// Sin esta tabla el sistema no puede representar ambas verdades a la vez.
+model NormAdoption {
+  id            String    @id @default(uuid(7))
+  normVersionId String
+  jurisdiction  String
+  adoptingBody  String    // CPCE_CABA | CPCE_CBA | ...
+  adoptionAct   String    // "Resolución CD 460/2024"
+  validFrom     DateTime  @db.Date
+  validTo       DateTime? @db.Date
+  normVersion   NormVersion @relation(fields: [normVersionId], references: [id])
+
+  @@unique([normVersionId, jurisdiction])
+}
+
+model AccountingRule {
+  id            String    @id @default(uuid(7))
+  ruleKey       String
+  normVersionId String    // NOT NULL: no existe regla sin norma
+  version       Int
+  domain        String    // accounting | tax | disclosure
+  validFrom     DateTime  @db.Date
+  validTo       DateTime? @db.Date
+  jurisdiction  String
+  entityType    String[]
+  framework     String[]
+  priority      Int
+  conditions    Json      // AST declarativo, NO código ejecutable
+  action        Json
+  status        String    @default("DRAFT") // DRAFT | IN_REVIEW | ACTIVE | SUPERSEDED
+  approvedBy    String?   // ACTIVE exige aprobador (verificado en CI)
+  approvedAt    DateTime?
+
+  normVersion   NormVersion @relation(fields: [normVersionId], references: [id])
+  applications  RuleApplication[]
+
+  @@unique([ruleKey, version])
+  @@index([domain, jurisdiction, validFrom])
+}
+
+model RuleApplication {
+  id          String   @id @default(uuid(7))
+  ruleId      String
+  ruleVersion Int
+  entryId     String?
+  targetType  String
+  targetId    String
+  inputs      Json
+  outputs     Json
+  appliedAt   DateTime @default(now())
+
+  rule        AccountingRule @relation(fields: [ruleId], references: [id])
+  entry       JournalEntry?  @relation(fields: [entryId], references: [id])
+}
+
+// ── IA ──────────────────────────────────────────────────────────────────────
+
+model AiPrediction {
+  id               String   @id @default(uuid(7))
+  companyId        String
+  agent            String
+  modelProvider    String
+  modelId          String
+  promptHash       String
+  inputRef         String
+  output           Json
+  confidence       Decimal  @db.Decimal(5, 4)
+  reason           String
+  normativeSources Json     // verificadas contra NormVersion o la propuesta se rechaza
+  latencyMs        Int
+  createdAt        DateTime @default(now())
+
+  reviews          AiReview[]
+  entries          JournalEntry[]
+}
+
+model AiReview {
+  id              String   @id @default(uuid(7))
+  predictionId    String
+  reviewerId      String
+  decision        String   // APROBADA | MODIFICADA | RECHAZADA
+  correctedOutput Json?
+  motivo          String?
+  reviewedAt      DateTime @default(now())
+  prediction      AiPrediction @relation(fields: [predictionId], references: [id])
+}
+
+/// Aprendizaje del §14. Solo mueve sugerencia y confianza.
+/// NO existe ruta de escritura desde acá hacia AccountingRule (ADR-007).
+model ClassificationPreference {
+  id                String   @id @default(uuid(7))
+  companyId         String
+  signal            String
+  suggestedAccountId String
+  supportCount      Int      @default(0)
+  lastConfirmedAt   DateTime?
+
+  @@unique([companyId, signal])
+}
+
+// ── Auditoría y linaje ──────────────────────────────────────────────────────
+
+/// Append-only encadenada. UPDATE y DELETE revocados a nivel de ROL de base de
+/// datos, no por convención. hash = sha256(prevHash || payload).
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  companyId  String
+  actorType  String   // USER | SYSTEM | AI
+  actorId    String
+  action     String
+  objectType String
+  objectId   String
+  oldValue   Json?
+  newValue   Json?
+  motivo     String?
+  ip         String?
+  userAgent  String?
+  occurredAt DateTime @default(now())
+  prevHash   String
+  hash       String
+
+  @@index([companyId, occurredAt])
+  @@index([objectType, objectId])
+}
+
+/// Grafo del §24. Se recorre en ambos sentidos con un CTE recursivo:
+/// misma tabla para "estado → documento" y para "documento → nota".
+model LineageEdge {
+  id        String   @id @default(uuid(7))
+  companyId String
+  fromType  String
+  fromId    String
+  toType    String
+  toId      String
+  relation  String
+  createdAt DateTime @default(now())
+
+  @@index([companyId, toType, toId])
+  @@index([companyId, fromType, fromId])
+}
