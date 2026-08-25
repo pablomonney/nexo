@@ -40,6 +40,20 @@ export const config = {
     ? Buffer.from(required('MFA_ENCRYPTION_KEY'), 'base64')
     : Buffer.from(process.env.MFA_ENCRYPTION_KEY ?? randomBytes(32).toString('base64'), 'base64'),
 
+  documents: {
+    /** Raíz del almacén de documentos. En producción, un volumen dedicado. */
+    storagePath: process.env.DOCUMENT_STORAGE_PATH ?? './var/documents',
+    maxBytes: Number(process.env.DOCUMENT_MAX_BYTES ?? 25 * 1024 * 1024),
+    /**
+     * Motor de OCR: `none` (por defecto) o `mock`.
+     *
+     * No hay caída automática al simulado. Sin motor configurado, los documentos
+     * se archivan y la extracción informa `SIN_MOTOR_OCR` — que es la verdad, y
+     * no "no se encontró ningún campo".
+     */
+    ocrEngine: process.env.OCR_ENGINE ?? 'none',
+  },
+
   /** Registrar la IP en la bitácora queda sujeto a evaluación legal (§21). */
   recordIpInAudit: process.env.AUDIT_RECORD_IP === 'true',
 

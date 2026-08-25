@@ -330,8 +330,40 @@ El Boletín Oficial sirve para **datar y citar** el aviso; no para obtener el te
 | 7 | CNV T.O. de Normas; marco contable BCRA; INAES | Entes de esos regímenes | `V2` |
 | 8 | Manuales ARCA restantes (wsmtxca, wsfexv1, padrón a4/a10) | Integraciones de FASE 13 | `V2` |
 | 9 | RG 1415, 3561, 4291 y 5198 (textos actualizados) | Reglas finas de comprobantes | `V2` |
+| 10 | Vigencias de la tabla de tipos de comprobante (`FEParamGetTiposCbte`) | Interpretar comprobantes por fecha | **Gap declarado** — ver 8.1 |
+| 11 | Alícuotas de IVA (Ley 23.349 y modificatorias, texto actualizado) | Control de coherencia de IVA | No relevado |
 
 Los 10 ítems del backlog original de FASE 0 están **cerrados**: 21 documentos en `V1`.
+
+### 8.1 Hallazgo de FASE 3b — el catálogo de comprobantes es normativa versionada
+
+Al implementar la lectura de comprobantes apareció algo que parecía un dato de configuración y no
+lo es.
+
+**ARCA no publica la tabla de tipos de comprobante como una constante.** Publica el método para
+pedirla, y cada entrada viene con fechas de vigencia:
+
+- `ARCA_manual_desarrollador_wsfev1_v4.6.pdf` (`V1`): `FEParamGetTiposCbte` devuelve
+  `<Id> <Desc> <FchDesde> <FchHasta>`.
+- `ARCA_manual_desarrollador_wscdcv1_v4.pdf` (`V1`): `CbteTipo` "debe ser alguno de los definidos
+  en el método `ComprobantesTipoConsultar()`".
+
+Es decir: la tabla tiene la misma naturaleza que una alícuota o un mínimo no imponible. Cablear los
+códigos de hoy haría que un comprobante de 2019 se interpretara con la tabla de 2026, que es
+exactamente lo que el §6 prohíbe.
+
+**Qué se hizo.** Los códigos que el manual del wsfev1 **sí enumera con descripción** —en
+"Controles aplicados al objeto `<FeCabReq>`", campo `CbteTipo`, "Obligatorio. Valores
+permitidos"— se transcribieron como semilla `V1` y viven en `arca_comprobante_types` con
+`vigencia_verificada = false`. Saber qué significa el código 1 y saber desde cuándo significa eso
+son dos afirmaciones distintas, y el sistema solo hace la primera.
+
+**Qué queda pendiente.** Sincronizar la tabla con vigencias contra el organismo. Requiere el
+certificado (FASE 3a), así que está atado al mismo trámite.
+
+**Lo que no se hizo, deliberadamente.** El manual menciona otros códigos —5, 34, 39, 40, 60, 61,
+88, 991— entre los comprobantes asociables, pero **nunca dice qué son**. No se les inventó
+descripción: `tipoComprobanteSemilla()` devuelve `null` y la UI muestra el número tal cual (§30).
 
 ---
 

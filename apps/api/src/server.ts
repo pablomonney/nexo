@@ -1,10 +1,13 @@
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { config } from './config.js';
 import { HttpError } from './http/errors.js';
 import { attachContext } from './http/context.js';
 import { accountRoutes } from './routes/accounts.js';
 import { authRoutes } from './routes/auth.js';
+import { documentRoutes } from './routes/documents.js';
 import { periodRoutes } from './routes/periods.js';
 import { studioRoutes } from './routes/studio.js';
 
@@ -47,6 +50,13 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
 
   await app.register(cookie);
 
+  // El límite de cuerpo general es de 1 MB; los documentos escaneados no entran
+  // ahí. Multipart tiene su propio tope, y sube un solo archivo por petición:
+  // un lote de cien facturas son cien peticiones, cada una con su resultado.
+  await app.register(multipart, {
+    limits: { fileSize: config.documents.maxBytes, files: 1, fields: 8 },
+  });
+
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
@@ -84,6 +94,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(studioRoutes);
   await app.register(accountRoutes);
   await app.register(periodRoutes);
+  await app.register(documentRoutes);
 
   return app;
 }

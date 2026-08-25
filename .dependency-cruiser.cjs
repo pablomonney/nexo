@@ -26,6 +26,11 @@ const CLIENTE_DE_RED = '^node_modules/(axios|node-fetch|undici|got|superagent)';
 // capacidades por empresa.
 const CLIENTE_ARCA = '^(packages/arca|node_modules/@aai/arca)';
 
+// El motor documental escribe en el object storage y decide qué se archiva. Un
+// agente que pudiera invocarlo saltearía la bitácora de ingesta y podría
+// producir documentos sin actor humano detrás.
+const MOTOR_DOCUMENTAL = '^(packages/document-engine|node_modules/@aai/document-engine)';
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -38,7 +43,7 @@ module.exports = {
         'diseño está roto: revisá AI_ARCHITECTURE.md §1.',
       severity: 'error',
       from: { path: '^packages/ai-engine' },
-      to: { path: `${MOTOR_CONTABLE}|${CLIENTE_DE_BASE}|${CLIENTE_ARCA}` },
+      to: { path: `${MOTOR_CONTABLE}|${CLIENTE_DE_BASE}|${CLIENTE_ARCA}|${MOTOR_DOCUMENTAL}` },
     },
     {
       name: 'motor-normativo-independiente-de-ia',

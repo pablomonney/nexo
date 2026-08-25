@@ -88,6 +88,39 @@ fetch al BO obtiene una cáscara vacía.
 ser la fuente de texto del sistema. El BO se usa para datar y citar el aviso. Ver
 `docs/api/official-apis.md`.
 
+### 🔴 R-23 — El error silencioso de extracción *(nuevo, 2026-08-24)*
+
+Un OCR nítido que leyó `1.019,83` donde el papel decía `7.019,83` devuelve confianza 0.98 y está
+equivocado. No hay puntaje de confianza que detecte esto: el motor está seguro, y tiene razón en
+estarlo — leyó bien lo que ve.
+
+*Por qué importa:* es la falla más cara del módulo documental, porque no se parece a una falla.
+Una abstención le cuesta al contador un minuto de mirar el papel; un error silencioso le cuesta un
+asiento mal imputado que nadie revisó, y eventualmente una declaración jurada rectificativa.
+
+*Mitigaciones, en capas:*
+
+1. **Controles de coherencia** (`coherencia.ts`): neto + IVA + exento + tributos tiene que dar el
+   total, **sin tolerancia**. Es lo único que detecta un error con confianza alta.
+2. **Abstención ante ambigüedad** en los parsers, en lugar de elegir la lectura más probable.
+3. **Techo de confianza por método**: una lectura de imagen no puede alcanzar el nivel de un campo
+   estructurado, por más que el motor lo afirme.
+4. **La métrica de la fase es la tasa de error silencioso**, no la precisión global, y
+   `metrics:extraction` termina con error si hay alguno.
+
+*Residual:* alto mientras no haya corpus real. Un comprobante sin IVA discriminado no tiene
+aritmética que controlar, y ahí la única defensa es la revisión humana.
+
+### 🟡 R-24 — La planilla que ya perdió precisión antes de llegar *(nuevo, 2026-08-24)*
+
+Un XLSX guarda los números como flotantes IEEE. Si el sistema que generó la planilla escribió
+`1234.5599999999999`, el error de redondeo ocurrió **antes** de la ingesta y no hay forma de
+recuperar el valor original.
+
+*Mitigación:* los lectores tabulares devuelven siempre **texto**, nunca llaman a `Number()`, y el
+parser rechaza más decimales de los que admite la moneda. Un importe así se marca en vez de
+redondearse: la señal de que el origen del dato tiene un problema es más valiosa que el número.
+
 ### 🟡 R-06 — Ajuste por inflación
 
 Régimen sensible y con condiciones de aplicación que dependen de índices y de la norma vigente.

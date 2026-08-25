@@ -11,7 +11,7 @@
 | **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 21 documentos oficiales archivados con hash |
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
-| FASE 3 — Ingesta y lectura de comprobantes | 🟡 **En curso** — integración ARCA lista y desacoplada; falta ingesta y OCR |
+| **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
 | FASE 4 → 14 | ⬜ |
 
 ---
@@ -152,13 +152,45 @@ requiere el trámite.
 
 Trámite documentado paso a paso en [`docs/api/arca-onboarding.md`](docs/api/arca-onboarding.md).
 
-### 3b — Ingesta y OCR ⬜
+### 3b — Ingesta y OCR 🟡
 
-Subida (PDF/JPG/PNG/XML/CSV/Excel), almacenamiento con hash y versionado, OCR tras adaptador,
-extracción con `raw_value`/`parsed_value`/`confidence`/`method`, detección de duplicados.
+**Entregado:**
 
-**Criterio:** 100 comprobantes reales anonimizados procesados; métricas de extracción por campo
-publicadas; constatación en ARCA funcionando en homologación.
+- `packages/document-engine`: detección de tipo por contenido, almacenamiento con hash y prefijo
+  por empresa, lectura de XML / CSV / XLSX (lector de ZIP propio, sin dependencias), OCR tras
+  adaptador, extracción con las cuatro dimensiones del §10, controles de coherencia y duplicados en
+  tres niveles.
+- Migraciones `0016` y `0017`: `documents`, `document_versions`, `document_extractions`,
+  `document_extraction_fields`, `document_findings`, `document_duplicates` y
+  `arca_comprobante_types`, con RLS y borrado prohibido.
+- API: subida multipart, bandeja de revisión, descarga del original, corrección manual de campos y
+  resolución de duplicados.
+- `npm run metrics:extraction`: mide la extracción contra un corpus y **falla si hay algún error
+  silencioso**.
+
+**Cuatro decisiones que definen el comportamiento:**
+
+1. **Se archiva antes de interpretar**, y se archiva aunque la interpretación falle por completo.
+2. **Ante ambigüedad real, se abstiene.** `1.234` puede ser 1234 o 1,234 —mil veces de diferencia—
+   y `12/25/2026` no es una fecha argentina. El sistema no elige por el contador.
+3. **La lectura nunca se sobrescribe.** La corrección del contador inserta una fila `MANUAL`; lo
+   impide un trigger y, desde la `0017`, también la falta del privilegio.
+4. **Sin motor de OCR configurado no se cae al simulado.** Informa `SIN_MOTOR_OCR`.
+
+**Hallazgo normativo:** la tabla de tipos de comprobante de ARCA no es una constante sino normativa
+versionada en el tiempo. Ver `OFFICIAL_SOURCES.md` §8.1.
+
+**Criterio de salida — estado:**
+
+| | |
+|---|---|
+| Métricas de extracción por campo publicadas | ✅ instrumento listo y probado |
+| Constatación en ARCA en homologación | 🟡 transporte y parseo verificados; falta el certificado |
+| 100 comprobantes reales anonimizados procesados | ⬜ **requiere el corpus** |
+
+El tercero no se puede cerrar desde acá: un conjunto de facturas sintéticas mide la calidad del
+generador, no la del sistema. El instrumento está construido y probado; los documentos los aporta
+quien los tiene. Ver [`corpus/README.md`](corpus/README.md).
 
 ---
 

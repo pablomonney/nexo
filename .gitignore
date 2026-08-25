@@ -24,3 +24,9 @@ Thumbs.db
 
 # Artefactos de test
 packages/ai-engine/src/__adr001_probe__.ts
+
+# Documentos ingeridos y corpus de evaluación: comprobantes reales, aun
+# anonimizados, no se commitean.
+var/
+corpus/*
+!corpus/README.md

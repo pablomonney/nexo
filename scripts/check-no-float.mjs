@@ -44,7 +44,16 @@ const FORBIDDEN = [
   },
 ];
 
-/** Los tests pueden nombrar los patrones prohibidos para verificar que se detectan. */
+/**
+ * Excepción explícita, en la línea o en la inmediatamente anterior.
+ *
+ * Se admite en la línea previa para que la justificación pueda ser una frase y no
+ * un comentario apretado al final de una expresión larga. No debilita la puerta:
+ * la marca sigue siendo explícita y se encuentra con un grep. La usan los tests
+ * que necesitan nombrar los patrones prohibidos, y los pocos lugares donde un
+ * flotante es lo correcto —un puntaje de confianza, un porcentaje de acierto—
+ * porque no representan dinero.
+ */
 const ALLOW_MARKER = 'no-float-check: allow';
 
 async function* walk(dir) {
@@ -72,6 +81,7 @@ for (const scanDir of SCAN_DIRS) {
     const lines = source.split(/\r?\n/);
     lines.forEach((line, index) => {
       if (line.includes(ALLOW_MARKER)) return;
+      if (index > 0 && lines[index - 1].includes(ALLOW_MARKER)) return;
       for (const rule of FORBIDDEN) {
         if (rule.pattern.test(line)) {
           findings.push({
