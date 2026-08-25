@@ -12,7 +12,8 @@
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
 | **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
-| FASE 4 → 14 | ⬜ |
+| **FASE 4 — Motor de clasificación** | ✅ **Entregada** — la IA propone, la Validation Layer filtra, la persona aprueba |
+| FASE 5 → 14 | ⬜ |
 
 ---
 
@@ -194,13 +195,41 @@ quien los tiene. Ver [`corpus/README.md`](corpus/README.md).
 
 ---
 
-## FASE 4 — Motor de clasificación
+## FASE 4 — Motor de clasificación ✅
 
-`Accounting Classification Agent`, salida cerrada al plan de cuentas real, sistema de confianza,
-disparadores duros, `ai_predictions` / `ai_reviews`, pantalla de revisión del contador.
+**Entregado:**
 
-**Criterio:** ninguna propuesta puede postearse sin aprobación; toda cita normativa devuelta
-resuelve contra `norm_versions` o la propuesta se rechaza automáticamente.
+- `packages/ai-engine`: `ClassificationAgent`, Validation Layer, sistema de confianza con
+  disparadores duros, aprendizaje por empresa y proveedor agnóstico con modo sin IA externa.
+- Migración `0018`: `prompt_versions` (con FK desde `ai_predictions` y prompts inmutables),
+  `ai_rejections`, triage persistido con la predicción, preferencias con cuentas compitiendo.
+- API: `POST /documents/:id/classify`, bandeja `GET /predictions`, revisión y métricas de deriva.
+
+**Criterio de salida — cumplido:**
+
+| | |
+|---|---|
+| Ninguna propuesta puede postearse sin aprobación | ✅ `je_ai_requires_human_approval`, con test |
+| Toda cita resuelve o la propuesta se rechaza | ✅ y se registra como alucinación detectada |
+
+**Cinco decisiones que definen el comportamiento:**
+
+1. **La salida es cerrada y no tiene dónde poner un importe.** La cuenta es un `enum` con el plan
+   real; los importes no existen en el schema. No es una regla a recordar: es que no hay lugar.
+2. **Solo se cita lo que vino en el contexto.** Una norma que el modelo "recuerda" pero que nadie
+   le pasó no está fundada en nada verificable.
+3. **Inventar ≠ equivocarse.** Una cuenta inexistente es alucinación; una cuenta de agrupación mal
+   elegida es criterio. Se registran por separado porque no se corrigen igual.
+4. **Los disparadores duros se calculan de hechos**, nunca se le preguntan al modelo. El importe
+   atípico usa mediana y MAD sobre `bigint`, no media y desvío: la media se deja arrastrar
+   justamente por el outlier que se busca.
+5. **Sin proveedor de IA el sistema sigue sugiriendo**, con la historia de la empresa y sin mandar
+   nada afuera. Es un modo previsto (§8), no un estado degradado.
+
+**Consecuencia declarada:** mientras el motor normativo no exista (FASE 6), el estado normativo es
+`NO_CONSULTADO` —que no es `FUENTE_NO_ENCONTRADA`: nadie preguntó— y funciona como disparador duro.
+**Toda propuesta cae hoy en 🔴 y ninguna se aprueba en lote.** Es lo correcto: aprobar contabilidad
+en tanda sin motor normativo sería exactamente lo que este diseño evita.
 
 ---
 

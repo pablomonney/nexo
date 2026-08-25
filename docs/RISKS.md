@@ -121,6 +121,30 @@ recuperar el valor original.
 parser rechaza más decimales de los que admite la moneda. Un importe así se marca en vez de
 redondearse: la señal de que el origen del dato tiene un problema es más valiosa que el número.
 
+### 🔴 R-25 — La aprobación que se vuelve un trámite *(nuevo, 2026-08-24)*
+
+Todo el diseño descansa en que un profesional revisa antes de aprobar. Si la bandeja se llena de
+propuestas y la mayoría son correctas, la revisión degenera en apretar "aprobar" sin leer — y en ese
+momento el sistema pasa a contabilizar solo, con la firma de alguien que no miró.
+
+*Por qué importa:* es el modo de falla más probable de todo el producto, y no lo produce un bug.
+Lo produce que el sistema funcione bien. Un asistente que acierta el 97% entrena a su usuario a
+confiar en el 3% restante.
+
+*Mitigaciones:*
+
+1. **Umbrales conservadores por defecto** (`auto_threshold` 0.9): la aprobación en lote se gana, no
+   viene puesta.
+2. **Fundamentación exigida para 🟢**: sin citas, o con citas que no llegan a `V1`, la propuesta no
+   entra al lote por más confianza que declare. Se aprueba de a una.
+3. **Los disparadores duros no se pueden apagar** desde la política de la empresa.
+4. **Métrica de deriva** (`GET /predictions/metrics`): si la tasa de rechazo humano sube, el umbral
+   automático hay que bajarlo antes de que la confianza se vuelva costumbre.
+5. **El aprendizaje no puede levantar un bloqueo**, por más veces que se haya repetido.
+
+*Residual:* alto, y en buena medida fuera del software. La UI puede hacer más —mostrar cuántas
+propuestas se aprobaron en menos de N segundos, por ejemplo— y está anotado para FASE 12.
+
 ### 🟡 R-06 — Ajuste por inflación
 
 Régimen sensible y con condiciones de aplicación que dependen de índices y de la norma vigente.

@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@aai/ai-engine": "0.1.0",
     "@aai/db": "0.1.0",
     "@aai/document-engine": "0.1.0",
     "@aai/shared": "0.1.0",

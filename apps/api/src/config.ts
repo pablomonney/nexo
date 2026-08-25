@@ -54,6 +54,17 @@ export const config = {
     ocrEngine: process.env.OCR_ENGINE ?? 'none',
   },
 
+  ai: {
+    /**
+     * Proveedor de modelo: `none` (por defecto) o `mock`.
+     *
+     * `none` no es "sin funcionalidad": el sistema sigue sugiriendo con la
+     * historia de la empresa, sin mandar un solo documento afuera. Es un modo de
+     * operación previsto (§8), no un estado degradado.
+     */
+    provider: process.env.AI_PROVIDER ?? 'none',
+  },
+
   /** Registrar la IP en la bitácora queda sujeto a evaluación legal (§21). */
   recordIpInAudit: process.env.AUDIT_RECORD_IP === 'true',
 

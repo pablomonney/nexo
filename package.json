@@ -25,10 +25,11 @@
     "norms:verify": "node scripts/verify-norm-archive.mjs",
     "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run test",
     "db:create": "node scripts/db-create.mjs",
-    "db:setup": "npm run db:create && npm run db:migrate",
+    "db:setup": "npm run db:create && npm run db:migrate && npm run build && npm run catalog:seed && npm run prompts:register",
     "arca:check": "node scripts/arca-check.mjs",
     "catalog:seed": "node scripts/seed-comprobante-types.mjs",
-    "metrics:extraction": "node scripts/extraction-metrics.mjs"
+    "metrics:extraction": "node scripts/extraction-metrics.mjs",
+    "prompts:register": "node scripts/register-prompts.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

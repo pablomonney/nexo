@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: FASES 0 a 3 construidas. El motor de clasificación llega en FASE 4.**
+> **Estado: FASES 0 a 4 construidas. El motor contable llega en FASE 5.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -10,10 +10,11 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **API con autenticación, MFA, RBAC granular y tenancy** (FASE 2)
 > - ✅ **Integración con ARCA desacoplada, con mocks y datos de prueba** (FASE 3a)
 > - ✅ **Ingesta, extracción con las cuatro dimensiones del §10, coherencia y duplicados** (FASE 3b)
-> - ✅ **17 migraciones aplicadas y 218/218 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Clasificación asistida: salida cerrada, citas verificadas, la persona aprueba** (FASE 4)
+> - ✅ **18 migraciones aplicadas y 282/282 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`) y el certificado de ARCA (ver `docs/api/arca-onboarding.md`)
-> - ⬜ Clasificación asistida por IA (FASE 4 en adelante — ver `ROADMAP.md`)
+> - ⬜ Motor contable y motor normativo (FASE 5 en adelante — ver `ROADMAP.md`)
 
 ## Puesta en marcha
 

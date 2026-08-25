@@ -9,6 +9,7 @@ import { accountRoutes } from './routes/accounts.js';
 import { authRoutes } from './routes/auth.js';
 import { documentRoutes } from './routes/documents.js';
 import { periodRoutes } from './routes/periods.js';
+import { predictionRoutes } from './routes/predictions.js';
 import { studioRoutes } from './routes/studio.js';
 
 export interface RouteEntry {
@@ -95,6 +96,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(accountRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
+  await app.register(predictionRoutes);
 
   return app;
 }
