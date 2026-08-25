@@ -3,6 +3,7 @@ import {
   add,
   allocate,
   compare,
+  convert,
   formatAr,
   money,
   moneyFromDecimalString,
@@ -152,5 +153,42 @@ describe('rango', () => {
     const huge = moneyFromDecimalString('999999999999999999999.99', 'ARS');
     const doubled = add(huge, huge);
     expect(toDecimalString(doubled)).toBe('1999999999999999999999.98');
+  });
+});
+
+describe('conversión de moneda', () => {
+  const dolar = { numerator: 1000n, denominator: 1n };
+
+  it('convierte con una cotización exacta', () => {
+    // USD 100,00 a 1000 → ARS 100.000,00
+    expect(convert(money(10_000n, 'USD'), 'ARS', dolar, 'HALF_UP')).toEqual({
+      amount: 10_000_000n,
+      currency: 'ARS',
+    });
+  });
+
+  it('ajusta la escala cuando las monedas tienen distintos decimales', () => {
+    // CLP no tiene centavos. Sin ajustar la escala el resultado saldría cien
+    // veces más grande, y nada en el sistema lo notaría.
+    const aPesosChilenos = { numerator: 1n, denominator: 1n };
+    expect(convert(money(12_345n, 'ARS'), 'CLP', aPesosChilenos, 'HALF_UP').amount).toBe(123n);
+    expect(convert(money(123n, 'CLP'), 'ARS', aPesosChilenos, 'HALF_UP').amount).toBe(12_300n);
+  });
+
+  it('el modo de redondeo cambia el resultado, y por eso se pide', () => {
+    const media = { numerator: 100_050n, denominator: 100n }; // 1000,50
+    expect(convert(money(1n, 'USD'), 'ARS', media, 'HALF_UP').amount).toBe(1001n);
+    expect(convert(money(1n, 'USD'), 'ARS', media, 'DOWN').amount).toBe(1000n);
+    expect(convert(money(1n, 'USD'), 'ARS', media, 'HALF_EVEN').amount).toBe(1000n);
+  });
+
+  it('rechaza un denominador no positivo en lugar de dividir por cero', () => {
+    expect(() => convert(money(1n, 'USD'), 'ARS', { numerator: 1n, denominator: 0n }, 'HALF_UP')).toThrow();
+  });
+
+  it('no pierde precisión con importes grandes', () => {
+    const grande = moneyFromDecimalString('99999999999999999.99', 'USD');
+    const convertido = convert(grande, 'ARS', dolar, 'HALF_UP');
+    expect(convertido.amount).toBe(grande.amount * 1000n);
   });
 });

@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@aai/accounting-engine": "0.1.0",
     "@aai/ai-engine": "0.1.0",
     "@aai/db": "0.1.0",
     "@aai/document-engine": "0.1.0",

@@ -13,7 +13,8 @@
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
 | **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
 | **FASE 4 — Motor de clasificación** | ✅ **Entregada** — la IA propone, la Validation Layer filtra, la persona aprueba |
-| FASE 5 → 14 | ⬜ |
+| **FASE 5 — Motor contable** | ✅ **Entregada** — once validaciones, numeración sin huecos, contraasientos, balance |
+| FASE 6 → 14 | ⬜ |
 
 ---
 
@@ -233,13 +234,44 @@ en tanda sin motor normativo sería exactamente lo que este diseño evita.
 
 ---
 
-## FASE 5 — Motor contable
+## FASE 5 — Motor contable ✅
 
-`accounting-engine` completo con las 11 validaciones, constraints en base, numeración, períodos,
-contraasientos, `Validation Layer`.
+**Entregado:**
 
-**Criterio:** la suite de *accounting tests* (§33) pasa al 100%, incluidos los casos de intento de
-descuadre, de posteo en período cerrado y de borrado físico.
+- `packages/accounting-engine`: las once validaciones del §2, conversión de moneda extranjera con
+  modo de redondeo como parámetro, contraasiento, máquina de estados del período, checklist de
+  cierre y balance de sumas y saldos con sus tres igualdades.
+- `convert()` en `@aai/shared`: conversión exacta entre monedas con distinta cantidad de decimales,
+  reutilizando la misma división redondeada que `multiplyByRate` — dos implementaciones del
+  redondeo son dos criterios que en algún momento divergen.
+- API: alta de asientos, aprobación, contraasiento, listado y `GET /reports/trial-balance`.
+- **Séptima puerta de CI**: cobertura. Estaba declarada en la configuración de vitest desde FASE 1b
+  pero `@vitest/coverage-v8` no estaba instalado, así que el umbral del 95% para el motor contable
+  era inaplicable. Ahora corre en `npm run verify`.
+
+**Criterio de salida — cumplido:**
+
+| Caso exigido por el §33 | Estado |
+|---|---|
+| Intento de descuadre | ✅ 422 con `E_UNBALANCED`, sin ajuste automático |
+| Posteo en período cerrado | ✅ 422 con `E_PERIOD_CLOSED` |
+| Borrado físico | ✅ prohibido por trigger, verificado |
+| Suite de accounting tests | ✅ 48 unitarios + 12 de integración por HTTP |
+
+**Cuatro decisiones que definen el comportamiento:**
+
+1. **Ante un descuadre rechaza, no ajusta.** No hay cuenta de diferencias donde esconder el resto.
+2. **El signo lo da la columna**: importes negativos rechazados, y el contraasiento **intercambia**
+   Debe y Haber en vez de restar.
+3. **El motor no numera.** Devuelve un asiento listo para numerar; el número lo toma el repositorio
+   dentro de la transacción. Un test postea diez asientos en paralelo y verifica que la secuencia
+   salga sin saltos. Un asiento anulado conserva su número.
+4. **En la base van los importes originales** con su moneda y cotización; el convertido se
+   recalcula. Guardar solo el convertido perdería la operación tal como ocurrió.
+
+**Un caso que vale la pena mirar:** hay un test donde el mismo asiento en dólares cuadra con
+`HALF_UP` y no cuadra con `DOWN`. Es la razón concreta por la que el modo de redondeo es un
+parámetro normativo y no una constante del código (ADR-005).
 
 ---
 

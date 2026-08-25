@@ -11,6 +11,13 @@ export default defineConfig({
       exclude: ['**/*.test.ts', '**/index.ts'],
       // ACCOUNTING_ENGINE.md: el motor contable exige >= 95%. El umbral global
       // arranca más bajo y sube por paquete a medida que se implementan.
+      //
+      // Nota sobre lo que estos números miden y lo que no: los tests de
+      // integración ejercitan la API, que importa los paquetes **compilados**
+      // (`dist`), no `src`. Por eso `packages/db/src` aparece en 0% aunque cada
+      // consulta pase por él en cada test de integración. La cobertura acá es de
+      // los tests unitarios; la de integración se mide por criterio de salida,
+      // no por porcentaje.
       thresholds: {
         lines: 80,
         functions: 80,

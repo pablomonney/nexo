@@ -23,19 +23,21 @@
     "db:status": "node scripts/migrate.mjs status",
     "db:reset": "node scripts/migrate.mjs reset",
     "norms:verify": "node scripts/verify-norm-archive.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run test",
+    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run test:coverage",
     "db:create": "node scripts/db-create.mjs",
     "db:setup": "npm run db:create && npm run db:migrate && npm run build && npm run catalog:seed && npm run prompts:register",
     "arca:check": "node scripts/arca-check.mjs",
     "catalog:seed": "node scripts/seed-comprobante-types.mjs",
     "metrics:extraction": "node scripts/extraction-metrics.mjs",
-    "prompts:register": "node scripts/register-prompts.mjs"
+    "prompts:register": "node scripts/register-prompts.mjs",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.2",
     "@types/node-forge": "^1.3.11",
     "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "2.1.9",
     "dependency-cruiser": "^16.9.0",
     "eslint": "^9.17.0",
     "pg": "^8.13.1",

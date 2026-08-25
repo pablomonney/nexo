@@ -22,6 +22,9 @@
     },
     {
       "path": "../../packages/ai-engine"
+    },
+    {
+      "path": "../../packages/accounting-engine"
     }
   ]
 }

@@ -215,6 +215,31 @@ export function multiplyByRate(value: Money, factor: Rate, mode: RoundingMode): 
   return money(divideRounded(scaled, factor.denominator, mode), value.currency);
 }
 
+/**
+ * Convierte a otra moneda con una cotización exacta.
+ *
+ * Vive acá y no en el motor contable por una razón concreta: la división
+ * redondeada es la misma que usa `multiplyByRate`, y tener dos implementaciones
+ * del redondeo es tener dos criterios que en algún momento divergen.
+ *
+ * Contempla que las monedas tengan distinta cantidad de decimales — ARS tiene
+ * dos y CLP ninguno—: convertir sin ajustar la escala daría el resultado
+ * multiplicado o dividido por cien.
+ *
+ * El `mode` se pide explícitamente (ADR-005): el criterio de redondeo aplicable
+ * depende de la norma y de la operación, no del código.
+ */
+export function convert(value: Money, to: Currency, factor: Rate, mode: RoundingMode): Money {
+  if (factor.denominator <= 0n) {
+    throw new RangeError('El denominador de la cotización debe ser positivo');
+  }
+  const fromDecimals = BigInt(minorUnitsOf(value.currency));
+  const toDecimals = BigInt(minorUnitsOf(to));
+  const scaled = value.amount * factor.numerator * 10n ** toDecimals;
+  const divisor = factor.denominator * 10n ** fromDecimals;
+  return money(divideRounded(scaled, divisor, mode), to);
+}
+
 /** Multiplica por una cantidad entera. No hay redondeo posible, así que no lo pide. */
 export function multiplyByInteger(value: Money, factor: bigint): Money {
   return money(value.amount * factor, value.currency);

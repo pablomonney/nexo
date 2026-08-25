@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: FASES 0 a 4 construidas. El motor contable llega en FASE 5.**
+> **Estado: FASES 0 a 5 construidas. El motor normativo llega en FASE 6.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -11,10 +11,11 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **Integración con ARCA desacoplada, con mocks y datos de prueba** (FASE 3a)
 > - ✅ **Ingesta, extracción con las cuatro dimensiones del §10, coherencia y duplicados** (FASE 3b)
 > - ✅ **Clasificación asistida: salida cerrada, citas verificadas, la persona aprueba** (FASE 4)
-> - ✅ **18 migraciones aplicadas y 282/282 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Motor contable: once validaciones, numeración sin huecos, contraasientos, balance** (FASE 5)
+> - ✅ **18 migraciones aplicadas y 347/347 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`) y el certificado de ARCA (ver `docs/api/arca-onboarding.md`)
-> - ⬜ Motor contable y motor normativo (FASE 5 en adelante — ver `ROADMAP.md`)
+> - ⬜ Motor normativo y Libro Diario/Mayor (FASE 6 en adelante — ver `ROADMAP.md`)
 
 ## Puesta en marcha
 
@@ -31,9 +32,10 @@ Si preferís no instalar PostgreSQL en el host:
 docker compose -f infrastructure/docker-compose.yml up -d
 ```
 
-`npm run verify` corre las seis puertas: typecheck, ESLint, lint de arquitectura, prohibición de
-floats en importes, integridad del archivo normativo y tests. Sin PostgreSQL levantado, los tests
-de integración se saltean en vez de fallar; en CI siempre corren.
+`npm run verify` corre las siete puertas: typecheck, ESLint, lint de arquitectura, prohibición de
+floats en importes, integridad del archivo normativo, tests y cobertura —con umbral propio del 95%
+para el motor contable—. Sin PostgreSQL levantado, los tests de integración se saltean en vez de
+fallar; en CI siempre corren.
 
 ---
 
