@@ -147,8 +147,8 @@ export const EXPLICACION_BLOQUEO: Record<HardBlockReason, string> = {
   FUENTE_NO_ENCONTRADA: 'No hay norma relevada para este caso.',
   CONFLICTO_NORMATIVO: 'Hay más de una norma aplicable sin derogación declarada.',
   MOTOR_NORMATIVO_NO_DISPONIBLE:
-    'El motor normativo todavía no está implementado (FASE 6). Ninguna propuesta puede fundarse ' +
-    'normativamente, así que todas requieren revisión individual.',
+    'No se consultó al motor normativo para este caso: falta el marco contable registrado del ' +
+    'ente, o el ejercicio que contiene la fecha. Sin eje temporal toda resolución es una suposición.',
   CITA_NO_RESOLUBLE: 'La propuesta citó una norma que no está en el archivo del sistema.',
   PROVEEDOR_NUEVO: 'Es la primera operación registrada con este proveedor.',
   PROVEEDOR_APOCRIFO: 'El emisor figura en la base de facturas apócrifas.',

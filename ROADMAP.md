@@ -14,6 +14,7 @@
 | **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
 | **FASE 4 — Motor de clasificación** | ✅ **Entregada** — la IA propone, la Validation Layer filtra, la persona aprueba |
 | **FASE 5 — Motor contable** | ✅ **Entregada** — once validaciones, numeración sin huecos, contraasientos, balance |
+| **FASE 5b — Motor normativo** | ✅ **Entregada** — no tenía fase asignada. Vigencia bitemporal, adopción jurisdiccional, citas |
 | FASE 6 → 14 | ⬜ |
 
 ---
@@ -227,10 +228,11 @@ quien los tiene. Ver [`corpus/README.md`](corpus/README.md).
 5. **Sin proveedor de IA el sistema sigue sugiriendo**, con la historia de la empresa y sin mandar
    nada afuera. Es un modo previsto (§8), no un estado degradado.
 
-**Consecuencia declarada:** mientras el motor normativo no exista (FASE 6), el estado normativo es
-`NO_CONSULTADO` —que no es `FUENTE_NO_ENCONTRADA`: nadie preguntó— y funciona como disparador duro.
-**Toda propuesta cae hoy en 🔴 y ninguna se aprueba en lote.** Es lo correcto: aprobar contabilidad
-en tanda sin motor normativo sería exactamente lo que este diseño evita.
+**Consecuencia declarada:** desde FASE 5b la clasificación consulta al motor normativo, pero
+`accounting_rules` está vacía, así que el estado es `FUENTE_NO_ENCONTRADA` —se preguntó y no hay
+nada relevado— y funciona como disparador duro. **Toda propuesta cae hoy en 🔴 y ninguna se aprueba
+en lote.** Es lo correcto: aprobar contabilidad en tanda sin reglas fundadas sería exactamente lo
+que este diseño evita.
 
 ---
 
@@ -275,6 +277,41 @@ parámetro normativo y no una constante del código (ADR-005).
 
 ---
 
+## FASE 5b — Motor normativo ✅
+
+> **Corrección de planificación.** El motor normativo no tenía fase asignada: sus tablas se crearon
+> en FASE 1b y `NORMATIVE_ENGINE.md` lo describe desde FASE 0, pero ninguna fase lo implementaba. En
+> FASE 4 lo referencié como "FASE 6", que en este roadmap es el Libro Diario. Queda como **5b**, entre
+> el motor contable y los libros, porque es lo que los dos necesitan: sin él ninguna regla tiene
+> fuente y ninguna propuesta se puede fundar.
+
+**Entregado:**
+
+- `packages/normative-engine`: aplicabilidad de cinco variables con adopción jurisdiccional,
+  resolución bitemporal, intérprete cerrado de condiciones y render de citas.
+- `npm run norms:seed`: el archivo de FASE 1 pasa a ser consultable.
+- `docs/normative-sources/vigencias.csv`: las fechas de vigencia como dato citable, con el artículo
+  del que surge cada una.
+- La clasificación asistida ya consulta al motor en vez de declarar `NO_CONSULTADO`.
+
+**Cuatro decisiones:**
+
+1. **La vigencia no es `WHERE fecha <= now()`.** Se ata al inicio del ejercicio, depende del acto de
+   adopción de la jurisdicción, y la aplicación anticipada a veces se ancla al cierre.
+2. **Ser elegible no es haber optado.** La aplicación anticipada es una opción del ente que se
+   registra; deducirla de que las fechas dan sería decidir por él.
+3. **Un empate solo lo resuelve una derogación declarada.** Hay dos tests gemelos: la misma
+   situación da `CONFLICTO` sin la relación y se resuelve con ella. "La más nueva gana" es una
+   heurística razonable que se equivoca en silencio.
+4. **Lo que el intérprete no puede evaluar, falla; nunca vale `false`.** Una regla que deja de
+   aplicarse sin que nadie se entere es peor que una que rompe.
+
+**Estado de los datos, declarado:** 7 de 21 documentos cargados —los que tienen fecha de emisión
+verificada—, **0 adopciones** y **0 reglas**. Para que el motor resuelva en CABA falta archivar la
+Res. CPCECABA 460/2024; para que haya reglas hay que transcribir articulado con revisión humana.
+Mientras tanto responde `FUENTE_NO_ENCONTRADA`, que es la verdad.
+
+---
 ## FASE 6 — Libro Diario · FASE 7 — Libro Mayor
 
 Diario trazable con todos los campos del §15; Mayor como proyección reconstruible; balance de

@@ -52,12 +52,12 @@ export interface HechosDelComprobante {
   readonly historicoImportes: readonly string[];
   /** Hallazgos del motor documental que bloquean. */
   readonly hallazgosBloqueantes: readonly string[];
-  /** Del motor normativo: `FUENTE_NO_ENCONTRADA`, `CONFLICTO_NORMATIVO`, … */
   /**
    * Respuesta del motor normativo para este caso.
    *
    * `NO_CONSULTADO` no es lo mismo que `FUENTE_NO_ENCONTRADA`: el motor
-   * normativo llega en FASE 6, y hasta entonces el sistema no preguntó. Decir
+   * normativo puede no haber sido consultado —falta el marco del ente, o el
+   * ejercicio que contiene la fecha—, y entonces el sistema no preguntó. Decir
    * "no hay norma" cuando en realidad nadie buscó sería afirmar de más — y es
    * justamente el tipo de afirmación que el §30 prohíbe.
    */

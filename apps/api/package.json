@@ -19,6 +19,7 @@
     "@aai/ai-engine": "0.1.0",
     "@aai/db": "0.1.0",
     "@aai/document-engine": "0.1.0",
+    "@aai/normative-engine": "0.1.0",
     "@aai/shared": "0.1.0",
     "@fastify/cookie": "11.0.2",
     "@fastify/multipart": "9.0.3",

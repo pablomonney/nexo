@@ -74,14 +74,18 @@ sistema puede mostrarte de dónde lo saca".
 
 ## Hoy, todo cae en 🔴
 
-El motor normativo llega en FASE 6. Hasta entonces el estado normativo es
-`NO_CONSULTADO` — que **no** es lo mismo que `FUENTE_NO_ENCONTRADA`: el sistema no
-preguntó, y decir "no hay norma" cuando nadie buscó sería afirmar de más.
+El motor normativo existe desde FASE 5b y se consulta en cada clasificación,
+pero `accounting_rules` está vacía: cargar una regla exige transcribir el
+articulado que la funda, con revisión humana.
 
-`NO_CONSULTADO` es un disparador duro, así que ninguna propuesta se aprueba en
-lote todavía. Es lo correcto: aprobar contabilidad en tanda sin motor normativo
-sería exactamente lo que este diseño existe para no hacer. La sugerencia igual
-sirve — el contador la ve con su razón y su cuenta, y aprueba de a una.
+Así que el estado hoy es `FUENTE_NO_ENCONTRADA` —se preguntó y no hay nada
+relevado—, que **no** es lo mismo que `NO_CONSULTADO`, el estado de cuando el
+sistema no puede ni preguntar. Los dos son disparadores duros, así que ninguna
+propuesta se aprueba en lote todavía.
+
+Es lo correcto: aprobar contabilidad en tanda sin reglas fundadas sería
+exactamente lo que este diseño existe para no hacer. La sugerencia igual sirve —
+el contador la ve con su razón y su cuenta, y aprueba de a una.
 
 ## Sin proveedor de IA el sistema sigue sugiriendo
 

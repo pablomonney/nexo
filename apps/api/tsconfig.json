@@ -25,6 +25,9 @@
     },
     {
       "path": "../../packages/accounting-engine"
+    },
+    {
+      "path": "../../packages/normative-engine"
     }
   ]
 }

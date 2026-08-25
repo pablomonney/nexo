@@ -6,13 +6,22 @@
  * le pongamos en el contexto**, así que qué normas se cargan acá determina qué
  * puede afirmar el sistema.
  *
- * Hoy se cargan cero, y no por un olvido: el motor normativo llega en FASE 6.
- * Mientras tanto el estado normativo es `NO_CONSULTADO`, que es un disparador
- * duro. La consecuencia es deliberada y conviene decirla en voz alta:
+ * Desde FASE 5b las normas las resuelve `@aai/normative-engine`, y solo entran
+ * las que el motor **resolvió**: una regla en conflicto o sin adopción relevada
+ * no aporta su norma al contexto.
+ *
+ * Hoy eso da cero normas, porque `accounting_rules` está vacía —cargar una regla
+ * exige transcribir el articulado que la funda, con revisión humana—. La
+ * diferencia con lo que había antes no es cosmética: el estado pasó de
+ * `NO_CONSULTADO` ("nadie preguntó") a `FUENTE_NO_ENCONTRADA` ("se preguntó y no
+ * hay nada relevado"). Son hechos distintos y ahora el sistema puede afirmar el
+ * segundo.
+ *
+ * Los dos siguen siendo disparadores duros, así que la consecuencia no cambia:
  *
  *     Toda propuesta cae en 🔴 y ninguna se puede aprobar en lote.
  *
- * No es un bug. Aprobar contabilidad en tanda sin motor normativo sería
+ * No es un bug. Aprobar contabilidad en tanda sin reglas fundadas sería
  * exactamente lo que este diseño existe para no hacer. La sugerencia igual sirve
  * —el contador la ve, con su razón y su cuenta, y aprueba de a una—, que es
  * bastante más que escribirla desde cero.
@@ -34,8 +43,15 @@ import {
   type HechosDelComprobante,
   type LLMProvider,
   type PreferenciaAprendida,
+  type NormaDisponible,
   type ResultadoSelloFiscal,
 } from '@aai/ai-engine';
+import {
+  resolverVarias,
+  type CatalogoNormativo,
+  type ContextoNormativo,
+} from '@aai/normative-engine';
+import { parseCalendarDate, type CalendarDate } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
@@ -361,8 +377,14 @@ async function armarContexto(
   companyId: string,
   documentId: string,
 ): Promise<ContextoClasificacion> {
-  const hechos = await hechosDelDocumento(tx, companyId, documentId);
-  if (hechos === null) throw notFound('Documento no encontrado');
+  const hechosBase = await hechosDelDocumento(tx, companyId, documentId);
+  if (hechosBase === null) throw notFound('Documento no encontrado');
+
+  const normativa = await resolverNormativa(tx, companyId, hechosBase.fecha);
+  const hechos: HechosDelComprobante = {
+    ...hechosBase,
+    estadoNormativo: normativa.estado,
+  };
 
   const cuentas = await tx.query<{
     id: string;
@@ -419,9 +441,7 @@ async function armarContexto(
         usadaAntes: fila.usada_antes,
       }),
     ),
-    // Vacío hasta FASE 6. No es una lista que se olvidó de llenarse: es que el
-    // motor normativo no existe, y por eso `estadoNormativo` es NO_CONSULTADO.
-    normas: [],
+    normas: normativa.normas,
     preferencias: preferencias.rows.map(
       (fila): PreferenciaAprendida => ({
         signal: fila.signal,
@@ -440,6 +460,188 @@ async function armarContexto(
           },
     tratamientos: [...TRATAMIENTOS_POR_DEFECTO],
   };
+}
+
+/**
+ * Le pregunta al motor normativo qué reglas regían el hecho.
+ *
+ * Devuelve las normas que el motor **resolvió**, que son las únicas que el
+ * agente puede citar. Si una regla quedó en conflicto o su adopción no está
+ * relevada, su norma no entra: sería darle al modelo permiso para fundamentar en
+ * algo que el propio motor no pudo resolver.
+ *
+ * Hoy `accounting_rules` está vacía —cargar una regla exige transcribir el
+ * articulado que la funda, con revisión humana— así que el resultado es
+ * `FUENTE_NO_ENCONTRADA`. Nótese la diferencia con lo que había antes: eso ya no
+ * es "nadie preguntó", es "se preguntó y no hay nada relevado". Es un hecho
+ * distinto y el sistema ahora puede afirmarlo.
+ */
+async function resolverNormativa(
+  tx: Tx,
+  companyId: string,
+  fechaHecho: string | null,
+): Promise<{ estado: HechosDelComprobante['estadoNormativo']; normas: NormaDisponible[] }> {
+  if (fechaHecho === null) {
+    // Sin fecha del comprobante no hay contexto temporal, y sin eje temporal
+    // toda resolución normativa es una suposición.
+    return { estado: 'NO_CONSULTADO', normas: [] };
+  }
+
+  const empresa = await tx.query<{
+    jurisdiction: string;
+    entity_type: string;
+    framework: string | null;
+    inicio: Date | null;
+    cierre: Date | null;
+  }>(
+    `SELECT c.jurisdiction, c.entity_type,
+            (SELECT f.framework FROM company_reporting_frameworks f
+              WHERE f.company_id = c.id AND f.valid_from <= $2::date
+                AND (f.valid_to IS NULL OR f.valid_to >= $2::date)
+              ORDER BY f.valid_from DESC LIMIT 1) AS framework,
+            (SELECT y.start_date FROM fiscal_years y
+              WHERE y.company_id = c.id AND $2::date BETWEEN y.start_date AND y.end_date) AS inicio,
+            (SELECT y.end_date FROM fiscal_years y
+              WHERE y.company_id = c.id AND $2::date BETWEEN y.start_date AND y.end_date) AS cierre
+       FROM companies c WHERE c.id = $1`,
+    [companyId, fechaHecho],
+  );
+  const fila = empresa.rows[0];
+  if (fila === undefined || fila.inicio === null || fila.cierre === null) {
+    // Sin ejercicio que contenga la fecha no se puede anclar la vigencia de una
+    // norma profesional, que se ata al inicio del ejercicio y no al hecho.
+    return { estado: 'NO_CONSULTADO', normas: [] };
+  }
+  if (fila.framework === null) {
+    // El marco contable es una **opción del ente**, que se registra con respaldo
+    // documental (§C-04). Suponer `RT_FACPCE` porque es lo más común sería
+    // decidir por el ente.
+    return { estado: 'FUENTE_NO_ENCONTRADA', normas: [] };
+  }
+
+  const catalogo = await cargarCatalogo(tx);
+  const contexto: ContextoNormativo = {
+    fechaHecho: parseCalendarDate(fechaHecho),
+    inicioEjercicio: aFecha(fila.inicio),
+    cierreEjercicio: aFecha(fila.cierre),
+    jurisdiccion: fila.jurisdiction,
+    tipoEnte: fila.entity_type,
+    marco: fila.framework,
+    asOf: new Date().toISOString(),
+  };
+
+  const claves = [...new Set(catalogo.rules.map((regla) => regla.ruleKey))];
+  if (claves.length === 0) {
+    return { estado: 'FUENTE_NO_ENCONTRADA', normas: [] };
+  }
+
+  let hayConflicto = false;
+  const normas: NormaDisponible[] = [];
+
+  for (const [, resolucion] of resolverVarias(claves, contexto, catalogo)) {
+    if (resolucion.estado === 'CONFLICTO') hayConflicto = true;
+    if (resolucion.estado !== 'RESUELTA') continue;
+    const cita = resolucion.regla.cita;
+    normas.push({
+      normVersionId: cita.normVersionId,
+      etiqueta: `${cita.organismo} — ${cita.norma}`,
+      resumen: resolucion.regla.rule.ruleKey,
+      verificationLevel: cita.nivelVerificacion,
+    });
+  }
+
+  // Un conflicto es un disparador duro por sí solo, aunque otras reglas hayan
+  // resuelto: el contador tiene que mirarlo antes de imputar.
+  if (hayConflicto) return { estado: 'CONFLICTO_NORMATIVO', normas };
+  if (normas.length === 0) return { estado: 'FUENTE_NO_ENCONTRADA', normas };
+  return { estado: 'RESUELTO', normas };
+}
+
+async function cargarCatalogo(tx: Tx): Promise<CatalogoNormativo> {
+  const norms = await tx.query(
+    `SELECT id, organismo, tipo, numero, anio, titulo, jurisdiccion,
+            hierarchy_level, estado FROM norms`,
+  );
+  const versions = await tx.query(
+    `SELECT v.id, v.norm_id, v.version, v.fecha_emision, v.fecha_vigencia, v.fecha_derogacion,
+            v.recorded_from, v.recorded_to, v.verification_level,
+            EXISTS (SELECT 1 FROM norm_documents d WHERE d.norm_version_id = v.id) AS tiene_documento
+       FROM norm_versions v`,
+  );
+  const adoptions = await tx.query(
+    `SELECT norm_version_id, jurisdiction, adopting_body, adoption_act,
+            valid_from, valid_to, early_from, early_anchor FROM norm_adoptions`,
+  );
+  const rules = await tx.query(
+    `SELECT id, rule_key, version, norm_version_id, domain, valid_from, valid_to,
+            jurisdiction, entity_types, frameworks, priority, conditions, action, status
+       FROM accounting_rules WHERE status = 'ACTIVE'`,
+  );
+  const modifications = await tx.query(
+    'SELECT modificadora_version_id, modificada_version_id, tipo FROM norm_modifications',
+  );
+
+  return {
+    norms: norms.rows.map((f) => ({
+      id: f['id'] as string,
+      organismo: f['organismo'] as string,
+      tipo: f['tipo'] as string,
+      numero: f['numero'] as string,
+      anio: f['anio'] as number,
+      titulo: f['titulo'] as string,
+      jurisdiccion: f['jurisdiccion'] as string,
+      hierarchyLevel: f['hierarchy_level'] as 1 | 2 | 3 | 4,
+      estado: f['estado'] as 'VIGENTE' | 'DEROGADA' | 'SUSTITUIDA',
+    })),
+    versions: versions.rows.map((f) => ({
+      id: f['id'] as string,
+      normId: f['norm_id'] as string,
+      version: f['version'] as number,
+      fechaEmision: aFecha(f['fecha_emision'] as Date),
+      fechaVigencia: f['fecha_vigencia'] === null ? null : aFecha(f['fecha_vigencia'] as Date),
+      fechaDerogacion: f['fecha_derogacion'] === null ? null : aFecha(f['fecha_derogacion'] as Date),
+      recordedFrom: (f['recorded_from'] as Date).toISOString(),
+      recordedTo: f['recorded_to'] === null ? null : (f['recorded_to'] as Date).toISOString(),
+      verificationLevel: f['verification_level'] as 'V1' | 'V2' | 'V3' | 'V4',
+      tieneDocumento: f['tiene_documento'] as boolean,
+    })),
+    adoptions: adoptions.rows.map((f) => ({
+      normVersionId: f['norm_version_id'] as string,
+      jurisdiction: f['jurisdiction'] as string,
+      adoptingBody: f['adopting_body'] as string,
+      adoptionAct: f['adoption_act'] as string,
+      validFrom: aFecha(f['valid_from'] as Date),
+      validTo: f['valid_to'] === null ? null : aFecha(f['valid_to'] as Date),
+      earlyFrom: f['early_from'] === null ? null : aFecha(f['early_from'] as Date),
+      earlyAnchor: f['early_anchor'] as 'INICIO_EJERCICIO' | 'CIERRE_EJERCICIO' | null,
+    })),
+    rules: rules.rows.map((f) => ({
+      id: f['id'] as string,
+      ruleKey: f['rule_key'] as string,
+      version: f['version'] as number,
+      normVersionId: f['norm_version_id'] as string,
+      domain: f['domain'] as 'accounting' | 'tax' | 'disclosure',
+      validFrom: aFecha(f['valid_from'] as Date),
+      validTo: f['valid_to'] === null ? null : aFecha(f['valid_to'] as Date),
+      jurisdiction: f['jurisdiction'] as string,
+      entityTypes: f['entity_types'] as string[],
+      frameworks: f['frameworks'] as string[],
+      priority: f['priority'] as number,
+      conditions: f['conditions'],
+      action: f['action'],
+      status: f['status'] as 'DRAFT' | 'IN_REVIEW' | 'ACTIVE' | 'SUPERSEDED',
+    })),
+    modifications: modifications.rows.map((f) => ({
+      modificadoraVersionId: f['modificadora_version_id'] as string,
+      modificadaVersionId: f['modificada_version_id'] as string,
+      tipo: f['tipo'] as 'SUSTITUYE' | 'INCORPORA' | 'DEROGA' | 'RATIFICA',
+    })),
+  };
+}
+
+function aFecha(valor: Date | string): CalendarDate {
+  const texto = typeof valor === 'string' ? valor : valor.toISOString().slice(0, 10);
+  return parseCalendarDate(texto.slice(0, 10));
 }
 
 async function hechosDelDocumento(
