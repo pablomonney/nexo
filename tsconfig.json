@@ -17,6 +17,9 @@
       "path": "./packages/normative-engine"
     },
     {
+      "path": "./packages/tax-engine"
+    },
+    {
       "path": "./packages/accounting-engine"
     },
     {

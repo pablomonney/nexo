@@ -27,6 +27,14 @@ export default defineConfig({
           functions: 95,
           branches: 90,
         },
+        // El motor de IVA se sostiene en sus negativas —no supone la alícuota,
+        // no declara computable un crédito—, y una negativa que no se ejercita
+        // en un test es una promesa. Mismo umbral que el motor contable.
+        'packages/tax-engine/src/**': {
+          lines: 95,
+          functions: 95,
+          branches: 90,
+        },
       },
     },
   },

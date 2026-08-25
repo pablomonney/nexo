@@ -275,6 +275,51 @@ contraasiento antedatado) no se ven leyendo el libro de corrido.
 la rúbrica del art. 323 y la autorización del art. 329 son trámites del Registro Público, y el pie
 dice que el sistema no los tiene en vez de afirmar que faltan.
 
+### 🔴 R-28 — La alícuota que casi siempre acierta *(nuevo, 2026-08-25)*
+
+El 21% es la alícuota general del IVA en Argentina desde hace décadas. Un motor que la suponga
+cuando no tiene el dato acierta en la enorme mayoría de las operaciones — y ahí está el riesgo: nadie
+va a notar que está suponiendo, hasta la operación de carnes, de medicina prepaga o de bienes de
+capital, que son grandes.
+
+*Por qué importa:* es el mismo mecanismo del R-25 pero en un número en vez de en una decisión. Un
+sistema que acierta el 97% entrena a su usuario a no revisar el 3%.
+
+*Mitigaciones:*
+
+1. **No hay un `21` en el código del motor de IVA.** Ni un `0.21`. Hay un test que lo afirma.
+2. **`tax_rates.norm_version_id NOT NULL`**: una alícuota sin norma no se puede insertar, ni por
+   la aplicación ni por un `psql` manual.
+3. **La aplicación no puede insertar alícuotas** (`REVOKE INSERT`): cargarlas exige credenciales de
+   migración y revisión humana, igual que las normas y los prompts.
+4. **Cuando ninguna alícuota relevada produce el IVA declarado, el motor no elige la más cercana.**
+   Devuelve `ALICUOTA_NO_IDENTIFICADA` y enumera las que hay.
+
+*Residual:* bajo mientras `tax_rates` esté vacía; el riesgo real aparece el día que se cargue la
+primera alícuota y alguien tenga la tentación de cargar solo la general.
+
+### 🟠 R-29 — El sistema que "presenta" lo que no puede presentar *(nuevo, 2026-08-25)*
+
+El art. 6° de la RG 4597 exige Clave Fiscal Nivel 3 para el PORTAL IVA, y el art. 8° remite los
+diseños de registro al micrositio. Un producto que quiera mostrar un botón "presentar" tiene dos
+caminos: pedirle la Clave Fiscal al estudio —guardando la llave de todos sus clientes— o inventar el
+layout del archivo.
+
+*Por qué importa:* las dos tentaciones son comerciales, no técnicas. La primera destruye el modelo de
+seguridad entero; la segunda produce un archivo que ARCA rechaza, o peor, uno que acepta con los
+campos corridos.
+
+*Mitigaciones:*
+
+1. **La Clave Fiscal no se pide, no se guarda y no se usa** (regla de FASE 3a). El estado se llama
+   `PRESENTADO_POR_TERCERO`, no `PRESENTADO`: el nombre dice quién lo hizo.
+2. **Los dos endpoints existen y devuelven 501** con el artículo adentro, en vez de no existir. Un
+   404 haría pensar que nadie lo pensó.
+3. **El desbloqueo está escrito**: archivar los diseños de registro del micrositio con su fecha y su
+   hash, y recién entonces implementar el exportador contra esa fuente.
+
+*Residual:* medio, y es presión de producto más que riesgo técnico.
+
 ---
 
 ## Riesgo de proyecto

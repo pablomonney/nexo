@@ -210,15 +210,45 @@ sola vez, para que ninguna pantalla lo rearme por su cuenta.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `taxes` | `code` (`IVA`, `IIBB`, `GANANCIAS`, `SUSS`...), `name`, `jurisdiction` |
-| `tax_rates` | `tax_id`, `rate`, `valid_from`, `valid_to`, `norm_version_id` ← **toda alícuota cita su norma** |
-| `tax_transactions` | `company_id`, `invoice_id`, `tax_id`, `rate`, `base`, `amount`, `direction` (`CREDITO`\|`DEBITO`), `period_id`, `treatment` |
-| `tax_perceptions`, `tax_withholdings` | régimen, jurisdicción, certificado, `norm_version_id` |
-| `vat_books` | `company_id`, `period_id`, `kind` (`COMPRAS`\|`VENTAS`), `status`, `generated_at`, `export_key` |
-| `vat_book_lines` | detalle exportable, alineado con el formato del Libro de IVA Digital |
+| `taxes` | `code` (`IVA`, `IIBB`, `GANANCIAS`, `SUSS`, `INTERNOS`), `name`, `jurisdiction` |
+| `tax_rates` | `tax_id`, `numerator`, `denominator`, `valid_from`, `valid_to`, `norm_version_id`, `articulo` |
+| `tax_transactions` | comprobante con su IVA: `cbte_tipo`, `punto_venta`, `cbte_numero`, `cbte_fecha`, `neto`, `iva`, `no_gravado`, `exento`, `percepciones`, `total`, `tax_rate_id?`, `constatacion`, `emisor_apocrifo?` |
+| `vat_books` | `anio`, `mes`, `vencimiento`, `status`, `compras_sha256`, `ventas_sha256`, `acuse_recibo` |
+| `vat_book_lines` | detalle del período, **con signo**: una nota de crédito resta |
+| `tax_perceptions`, `tax_withholdings` | diseñadas, **no implementadas**: fuera del alcance de FASE 8 |
 
-`tax_rates.norm_version_id` es `NOT NULL`. Es la implementación concreta del ADR-005: si alguien
-quiere cargar una alícuota, tiene que decir de qué norma sale.
+### 8.1 La columna que sostiene el módulo
+
+```sql
+tax_rates.norm_version_id  uuid  NOT NULL  REFERENCES norm_versions (id)
+```
+
+Es ADR-005 hecho constraint. Una alícuota sin norma no se puede insertar, ni por la aplicación ni
+por un `psql` manual. Además `REVOKE INSERT, UPDATE ON tax_rates FROM aai_app`: cargarlas exige
+credenciales de migración, igual que las normas y los prompts.
+
+La alícuota se guarda como **razón entera** (`numerator`/`denominator`), no como `numeric(5,4)`:
+`21/100` es exacto y `0.21` no lo es en binario. Un factor con error de representación que
+multiplica millones de pesos corre el subdiario de a centavos.
+
+**La tabla está vacía**, y es una afirmación, no un pendiente: la Ley 23.349 no está archivada, así
+que el motor responde `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%.
+
+### 8.2 Importes sin signo en la operación, con signo en el libro
+
+`tax_transactions` guarda los importes **sin signo** y `vat_book_lines` **con signo**. El signo
+depende de la clase del comprobante, que se resuelve contra `arca_comprobante_types` por fecha — y
+esa es justamente la resolución que puede fallar. Guardarlo ya con signo obligaría a saber la clase
+al insertar.
+
+`tax_tx_total_cierra` no admite tolerancia: `total = neto + iva + no_gravado + exento +
+percepciones`. Un peso de diferencia significa que hay un concepto que nadie está leyendo.
+
+### 8.3 El artículo 12 hecho constraint
+
+`vat_books_sin_movimiento_coherente` impide declarar `SIN_MOVIMIENTO` con comprobantes cargados.
+La RG 4597 art. 12 permite esa novedad cuando no hubo operaciones; usarla habiéndolas sería una
+declaración jurada falsa, y la base no deja.
 
 ---
 

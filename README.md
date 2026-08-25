@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: FASES 0 a 7 construidas. El IVA llega en FASE 8.**
+> **Estado: FASES 0 a 8 construidas. Bancos llegan en FASE 9.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -14,12 +14,15 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **Motor contable: once validaciones, numeración sin huecos, contraasientos, balance** (FASE 5)
 > - ✅ **Motor normativo: vigencia bitemporal, adopción jurisdiccional, citas verificables** (FASE 5b)
 > - ✅ **Libro Diario con los controles de forma del CCyC y Mayor como proyección** (FASES 6 y 7)
-> - ✅ **20 migraciones aplicadas y 433/433 tests en verde contra PostgreSQL 18.6**
+> - 🟡 **IVA: subdiarios, notas de crédito y Libro de IVA Digital** (FASE 8) — el motor funciona,
+>   pero `tax_rates` está vacía hasta archivar la Ley 23.349, así que responde
+>   `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%
+> - ✅ **21 migraciones aplicadas y 482/482 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`) y el certificado de ARCA (ver `docs/api/arca-onboarding.md`)
 > - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado y
 >   archivar la Res. CPCECABA 460/2024 (ver `packages/normative-engine/README.md`)
-> - ⬜ IVA, bancos y estados contables (FASE 8 en adelante — ver `ROADMAP.md`)
+> - ⬜ Bancos y estados contables (FASE 9 en adelante — ver `ROADMAP.md`)
 
 ## Puesta en marcha
 

@@ -306,7 +306,7 @@ parámetro normativo y no una constante del código (ADR-005).
 4. **Lo que el intérprete no puede evaluar, falla; nunca vale `false`.** Una regla que deja de
    aplicarse sin que nadie se entere es peor que una que rompe.
 
-**Estado de los datos, declarado:** 8 de 21 documentos cargados —los que tienen fecha de emisión
+**Estado de los datos, declarado:** 9 de 21 documentos cargados —los que tienen fecha de emisión
 verificada—, **0 adopciones** y **0 reglas**. Para que el motor resuelva en CABA falta archivar la
 Res. CPCECABA 460/2024; para que haya reglas hay que transcribir articulado con revisión humana.
 Mientras tanto responde `FUENTE_NO_ENCONTRADA`, que es la verdad.
@@ -353,13 +353,37 @@ FASE 8) y exportación a PDF con formato de libro.
 
 ---
 
-## FASE 8 — IVA
+## FASE 8 — IVA 🟡
 
-`tax-engine`: crédito y débito fiscal, notas de crédito y débito, percepciones, retenciones,
-saldos, ajustes, subdiarios IVA Compras / IVA Ventas, base para el Libro de IVA Digital.
+`tax-engine`: subdiarios IVA Compras / IVA Ventas, notas de crédito, evaluación del crédito fiscal
+y Libro de IVA Digital.
 
-**Bloqueante previo:** descarga y carga oficial de RG 4597 T.O. y RG 5707/2025. Sin eso, esta fase
-no arranca — es exactamente el caso en que el sistema debe decir "no tengo fuente".
+**Bloqueante previo, cumplido:** RG 4597 T.O. y RG 5707/2025 están archivadas y cargadas al motor
+normativo. **Bloqueante que sigue abierto:** la **Ley 23.349** no está archivada, y sin ella no hay
+alícuotas ni requisitos de cómputo del crédito fiscal.
+
+Por eso la fase queda en 🟡: el motor funciona y sus controles corren, pero `tax_rates` está vacía
+y toda operación cae en `SIN_ALICUOTAS_RELEVADAS`. Es el caso que el pliego describe — "el sistema
+debe decir *no tengo fuente*" — y funciona así por diseño, no por falta de tiempo.
+
+**Las decisiones:**
+
+1. **No hay un `21` en el código.** Ni `0.21`, ni una constante `IVA_GENERAL`. Las alícuotas salen
+   de `tax_rates`, con `norm_version_id NOT NULL`: ADR-005 hecho constraint. Suponer 21% acertaría
+   casi siempre, y fallaría en silencio en carnes, medicina prepaga y bienes de capital.
+2. **`EstadoCreditoFiscal` no tiene `COMPUTABLE`.** La computabilidad la deciden los arts. 12 y 13
+   de la Ley 23.349. El motor verifica todo lo verificable —constatación, apócrifos, discriminación,
+   alícuota, total— y devuelve `NO_DETERMINABLE` con esa lista y con lo que falta relevar.
+3. **El signo de un comprobante lo decide el catálogo, no una lista de códigos.** Se resuelve contra
+   `arca_comprobante_types` por la fecha del comprobante. Código desconocido = bloqueo, no "suma".
+4. **El subdiario de IVA es el subdiario del art. 327 del CCyC.** `comoSubdiarioDeclarado()` devuelve
+   la estructura que el motor contable exige para aceptar un asiento resumido, con hash.
+5. **Tres negativas con su artículo**: no genera el archivo de importación (art. 8°: los diseños están
+   en el micrositio, no en la norma), no presenta el libro (art. 6°: Clave Fiscal Nivel 3, que este
+   sistema no pide ni guarda) y no dice quién estaba obligado antes del 01/12/2025 (el texto anterior
+   del art. 2° lo puso la RG 5133/2021, no archivada).
+
+Documentado en [TAX_ENGINE.md](TAX_ENGINE.md).
 
 ---
 

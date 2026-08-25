@@ -303,6 +303,51 @@ Pendiente: extracción artículo por artículo a `norm_articles`.
 
 ---
 
+### 5.4 Ley 23.349 (IVA) — **NO ARCHIVADA**. Bloqueante de FASE 8.
+
+Es el gap más caro que tiene el repositorio hoy. Sin ella no hay:
+
+- **alícuotas** (art. 28 y sus reducciones) → `tax_rates` está vacía y el motor responde
+  `SIN_ALICUOTAS_RELEVADAS`;
+- **requisitos del crédito fiscal** (arts. 12 y 13: vinculación con operaciones gravadas, regla de
+  tope, prorrateo) → `EstadoCreditoFiscal` no tiene `COMPUTABLE`.
+
+Hasta que se archive, el motor de IVA verifica **la forma** —constatación, apócrifos,
+discriminación, coherencia del total— y devuelve `NO_DETERMINABLE` sobre el fondo. Ver
+[TAX_ENGINE.md](TAX_ENGINE.md).
+
+---
+
+## 5bis. Régimen del Libro de IVA Digital · `V1`
+
+### RG AFIP 4597/2019 — texto actualizado
+
+**Archivada y cargada al motor normativo.** Emitida en CABA el 30/09/2019, publicada el 01/10/2019
+(pie del documento: *e. 01/10/2019 N° 74350/19*), vigencia desde el 01/10/2019 por su art. 25 con
+cronograma escalonado.
+
+**Hallazgo de FASE 8 — el texto archivado es un T.O., y eso tiene consecuencias.** La RG ARCA
+5707/2025 (B.O. 02/06/2025) reescribió buena parte de la resolución, con vigencia **01/12/2025**
+salvo la derogación del Título II, que rige desde el 01/07/2025 (art. 2° de la 5707). Lo que cambió:
+
+| Art. | Qué dice ahora |
+|---|---|
+| 2° | Obligados: los **sujetos exentos** en el IVA, con seis excepciones |
+| 6° | PORTAL IVA con **Clave Fiscal Nivel 3**, como mínimo |
+| 8° | Los **diseños de registro** se publican en el micrositio IVA, **no en la norma** |
+| 12 | Mes calendario · 15 días corridos · novedad `SIN MOVIMIENTO` · secuencialidad |
+| Título II | **Derogado** (IVA Simplificado) |
+
+Los textos **anteriores** de esos artículos —sustituidos por las RG 5133/2021, 4925/2021, 4796/2020
+y 4671/2020— figuran en la sección *Antecedentes Normativos* del documento archivado, pero **no
+están transcriptos**. Consecuencia directa: para períodos anteriores al 01/12/2025 el sistema
+responde `OBLIGACION_NO_DETERMINABLE`. Aplicar la regla de hoy hacia atrás sería el §6 al revés.
+
+**El art. 8° es el segundo caso del mismo patrón que la tabla de comprobantes (§8.1):** la norma no
+contiene el formato, contiene la referencia a dónde está el formato. No se inventa.
+
+---
+
 ## 6. Conflictos — estado actualizado
 
 | ID | Conflicto | Estado |
