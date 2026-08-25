@@ -22,6 +22,7 @@
 
 import type { Currency, Money } from '@aai/shared';
 import { add, money, subtract, zero } from '@aai/shared';
+import type { LibroMayor } from './libro-mayor.js';
 
 export interface MovimientoDeMayor {
   readonly accountId: string;
@@ -196,4 +197,37 @@ interface LineaMutable {
  */
 export function diferenciaEnMenor(balance: BalanceDeSumasYSaldos): string {
   return (balance.totalDebitos.amount - balance.totalCreditos.amount).toString();
+}
+
+/**
+ * Balance armado desde el Libro Mayor.
+ *
+ * Existe para que el balance y el Mayor no puedan discrepar: si los dos se
+ * arman por caminos distintos, tarde o temprano alguien arregla uno y se olvida
+ * del otro. Acá el balance es una lectura del Mayor, y el Mayor es una lectura
+ * del Diario. Una sola fuente, dos proyecciones.
+ *
+ * Los saldos iniciales salen del propio Mayor, que ya los recibió resueltos.
+ * Volver a pasarlos por separado permitiría que no coincidan.
+ */
+export function balanceDesdeMayor(mayor: LibroMayor): BalanceDeSumasYSaldos {
+  const movimientos: MovimientoDeMayor[] = [];
+  const iniciales: SaldoInicial[] = [];
+
+  for (const cuenta of mayor.cuentas) {
+    iniciales.push({ accountId: cuenta.accountId, monto: cuenta.saldoInicial });
+    // Se agrega una sola fila por cuenta con sus totales, en vez de una por
+    // movimiento: el balance suma lo mismo y el recorrido deja de ser cuadrático
+    // en libros de cien mil movimientos.
+    movimientos.push({
+      accountId: cuenta.accountId,
+      accountCode: cuenta.accountCode,
+      accountName: cuenta.accountName,
+      nature: cuenta.nature,
+      debit: cuenta.totalDebe,
+      credit: cuenta.totalHaber,
+    });
+  }
+
+  return balanceDeSumasYSaldos(movimientos, iniciales, mayor.moneda);
 }

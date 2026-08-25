@@ -66,6 +66,10 @@ demostrable **no se puede postear**, ni siquiera manualmente — el humano debe 
 - Toda la aritmética en enteros de centavos. **`float` está prohibido en el paquete** (regla de lint).
 - La conversión de moneda extranjera guarda `rate`, `source` y `date`; la diferencia de redondeo
   se imputa a una cuenta configurable de *diferencias de cambio*, nunca se "reparte".
+- Una línea guarda **dos** importes en columnas distintas (migración `0020`): `debit`/`credit` es lo
+  registrado en moneda de contabilidad —lo que el libro suma, CCyC art. 325— y `original_*` es la
+  operación tal como ocurrió. Sin el primero el libro no suma; sin el segundo la conversión no se
+  puede rehacer.
 - El criterio de redondeo (medio arriba, medio par, truncamiento) es **parámetro normativo por
   operación**, no una constante del código (ADR-005).
 - Cuando la suma de líneas redondeadas no cierra, el motor **rechaza**; no ajusta en silencio.
@@ -128,12 +132,18 @@ resultado queda archivado en `accounting_closures.checklist`.
 El Libro Mayor **no es una tabla independiente**: es una proyección del Diario. Se materializa en
 `ledger_movements` + `account_balances` por rendimiento, con dos garantías:
 
-1. **Reconstruibilidad**: existe un comando que reconstruye el Mayor completo desde el Diario y
-   verifica que coincide con lo materializado. Corre en cada cierre y en CI.
+1. **Reconstruibilidad**: `npm run ledger:verify` reconstruye el Mayor completo desde el Diario y
+   verifica que coincide con lo materializado. Corre en cada cierre y en `npm run verify`. El
+   resultado queda en `ledger_verifications` con fecha y nombre.
 2. **Reversibilidad**: cada movimiento del Mayor apunta a su `journal_entry_line`, que apunta a su
    asiento, que apunta a su comprobante, que apunta a su documento.
 
 Si el Mayor y el Diario discrepan, el Diario gana y se emite alerta crítica.
+
+Desde la migración `0019` la aplicación **no puede escribir** `ledger_movements`: lo hace un trigger
+diferido cuando un asiento pasa a `APROBADO`, y a `aai_app` se le revoca el `INSERT`. Un movimiento
+tampoco se borra nunca, ni al anular el asiento — lo compensa el contraasiento, y borrarlo además lo
+contaría dos veces. El detalle está en [BOOKS.md](BOOKS.md).
 
 ---
 

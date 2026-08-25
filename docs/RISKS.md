@@ -231,6 +231,50 @@ caminos frecuentes, poda por archivado (nunca borrado).
 *Mitigación:* caché por hash de documento, procesamiento por lotes, modelos pequeños para tareas
 simples, presupuesto por empresa, y el hecho de que el sistema **funciona sin IA**.
 
+### 🔴 R-26 — Una columna que significa dos cosas *(nuevo, 2026-08-25)*
+
+`journal_entry_lines.debit` guardaba el importe original de la línea mientras la cabecera guardaba
+el convertido. Con toda la contabilidad en pesos los dos números coinciden y el defecto es
+invisible; aparece recién con la primera línea en moneda extranjera, y entonces el asiento se cae al
+COMMIT, el balance suma centavos de dólar como pesos y el Mayor hereda la mezcla.
+
+*Por qué importa:* no lo encontró ningún test, porque ningún test de integración tenía una línea en
+otra moneda. Lo encontró conectar el Mayor y preguntarse qué unidad tenían esos números. La clase de
+defecto —una columna con dos significados según el caso— no la detecta la cobertura: el código está
+todo ejecutado, y ejecutado da bien.
+
+*Mitigaciones:*
+
+1. **La migración `0020` separa las dos cosas** en columnas distintas, con `COMMENT ON COLUMN` que
+   dice qué es cada una.
+2. **Un trigger exige que la moneda de la línea sea la del asiento** (`E_CURRENCY_MISMATCH`): la
+   mezcla ya no depende de que la aplicación se porte bien.
+3. **Tres tests de integración con moneda extranjera**, que es el caso que faltaba.
+4. **`MONEDA_DE_REGISTRO`** en los controles del Diario mira lo mismo desde el otro lado.
+
+*Residual:* medio. El patrón puede repetirse en cualquier columna que hoy tenga un solo caso de uso.
+La defensa es la misma que acá funcionó: cuando un módulo nuevo consume un dato viejo, preguntar en
+qué unidad está antes de sumarlo.
+
+### 🟡 R-27 — Un libro que se emite sin decir cómo está llevado *(nuevo, 2026-08-25)*
+
+El CCyC art. 330 le da eficacia probatoria a la contabilidad *«llevada en la forma y con los
+requisitos prescritos»*. Un sistema que imprime el Diario sin verificar esos requisitos deja al
+contador firmando algo que no comprobó — y los defectos de forma (un hueco de numeración, un
+contraasiento antedatado) no se ven leyendo el libro de corrido.
+
+*Mitigaciones:*
+
+1. **Siete controles de forma**, cada uno citando el inciso del que sale, corren en cada emisión.
+2. **No bloquean**: un Diario con un hueco existe y hay que poder verlo para arreglarlo.
+3. **Quedan grabados** en `book_emissions.controles` junto con el hash del contenido, así que
+   después no se puede decir que no se sabía.
+4. **El pie del libro los transcribe**, con nombre de control y cantidad.
+
+*Residual:* bajo para lo que el software puede ver. Queda fuera lo que no es un dato del sistema:
+la rúbrica del art. 323 y la autorización del art. 329 son trámites del Registro Público, y el pie
+dice que el sistema no los tiene en vez de afirmar que faltan.
+
 ---
 
 ## Riesgo de proyecto

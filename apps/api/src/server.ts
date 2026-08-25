@@ -8,6 +8,7 @@ import { attachContext } from './http/context.js';
 import { accountRoutes } from './routes/accounts.js';
 import { authRoutes } from './routes/auth.js';
 import { documentRoutes } from './routes/documents.js';
+import { bookRoutes } from './routes/books.js';
 import { journalEntryRoutes } from './routes/journal-entries.js';
 import { periodRoutes } from './routes/periods.js';
 import { predictionRoutes } from './routes/predictions.js';
@@ -99,6 +100,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
   await app.register(journalEntryRoutes);
+  await app.register(bookRoutes);
 
   return app;
 }

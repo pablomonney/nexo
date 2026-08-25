@@ -263,6 +263,35 @@ empresa o establecimiento comercial, industrial, agropecuario o de servicios."*
 
 Texto plano de trabajo en `docs/normative-sources/extracted/CCyC.txt`.
 
+#### 5.1.1 Vigencia — relevada en FASE 6
+
+Todo sale del mismo documento archivado, sin recurrir a ninguna fuente secundaria:
+
+| Dato | Valor | De dónde |
+|---|---|---|
+| Sanción | 2014-10-01 | Encabezado de la Ley 26.994 |
+| Promulgación | 2014-10-07 | Decreto 1795/2014, transcripto |
+| Publicación | 2014-10-08 | Encabezado |
+| **Vigencia** | **2015-08-01** | **Art. 7° de la ley** |
+
+El art. 7° original decía 2016-01-01. La edición archivada **ya trae el texto sustituido** y su nota
+al pie: *"Texto sustituido por art. 1° de la ley 27.077, BO 19/12/2014"*. Es un caso de manual del
+§6: si el sistema resolviera la vigencia del CCyC leyendo el texto original, se equivocaría por
+cinco meses.
+
+Cargado en `vigencias.csv` con `ancla_vigencia = FECHA_HECHO`. Los arts. 320 a 331 no registran
+modificaciones en esta edición.
+
+**Lo que sí falta:** la Ley 27.077 no está archivada. El sistema conoce la vigencia correcta porque
+la edición del CCyC transcribe la sustitución, no porque haya leído la ley modificatoria. Para
+cargar la relación en `norm_modifications` haría falta archivarla.
+
+#### 5.1.2 Qué construye esta sección del Código
+
+Los arts. 321, 324, 325 y 327 son la fuente de los siete controles de forma del Libro Diario y de la
+regla del Diario resumido. El mapeo artículo → control está en [BOOKS.md](BOOKS.md) §3 y §4, y cada
+control transcribe su fundamento en el código.
+
 ### 5.2 Ley General de Sociedades 19.550 (T.O. 1984)
 
 Texto actualizado **archivado** desde InfoLeg. Sección IX "De la documentación y de la

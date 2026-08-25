@@ -98,11 +98,17 @@ npm run norms:seed
 ```
 
 Carga el archivo de FASE 1 en `norms` / `norm_versions` / `norm_documents`. De los
-21 documentos archivados entran **7**: los que tienen fecha de emisión verificada
+21 documentos archivados entran **8**: los que tienen fecha de emisión verificada
 en [`vigencias.csv`](../../docs/normative-sources/vigencias.csv), donde cada fila
-cita el artículo del que surge. Los otros 14 se saltean y el script dice cuáles y
+cita el artículo del que surge. Los otros 13 se saltean y el script dice cuáles y
 por qué — completar `fecha_emision` con la de publicación sería afirmar un hecho
 que nadie verificó.
+
+El octavo lo agregó la FASE 6: el **Código Civil y Comercial (Ley 26.994)**, del
+que salen las formalidades del Libro Diario. Su fecha de vigencia —01/08/2015—
+sale del art. 7°, y la edición archivada trae además la nota al pie que dice que
+ese texto lo sustituyó el art. 1° de la ley 27.077. Todo verificable en el mismo
+documento que el sistema leyó.
 
 **Adopciones cargadas: cero.** Para que el motor resuelva normas profesionales en
 CABA falta archivar la Res. CPCECABA 460/2024. Hasta entonces responde

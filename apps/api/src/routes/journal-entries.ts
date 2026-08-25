@@ -168,24 +168,35 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
       const entryId = cabecera.rows[0]!.id;
 
       for (const linea of asiento.lines) {
+        // Dos importes, dos columnas (migración 0020).
+        //
+        // `debit`/`credit` llevan el CONVERTIDO a moneda de contabilidad, que es
+        // lo que el libro suma y lo que la cabecera declara como total. Guardar
+        // acá el original hacía que `assert_entry_consistent` abortara el COMMIT
+        // en cuanto una línea venía en otra moneda.
+        //
+        // `original_*` lleva la operación tal como ocurrió. Sin eso, la
+        // conversión no se puede rehacer.
+        const enOtraMoneda = linea.draft.currency !== draft.currency;
         await tx.query(
           `INSERT INTO journal_entry_lines
              (company_id, entry_id, line_no, account_id, debit, credit, currency,
+              original_currency, original_debit, original_credit,
               fx_rate, fx_source, fx_date, cost_center_id, party_id, description, tax_transaction_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                   (SELECT id FROM cost_centers WHERE company_id = $1 AND code = $11),
-                   $12, $13, $14)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                   (SELECT id FROM cost_centers WHERE company_id = $1 AND code = $14),
+                   $15, $16, $17)`,
           [
             tenant.companyId,
             entryId,
             linea.lineNo,
             linea.account.id,
-            // En la base van los importes ORIGINALES de la línea, con su moneda y
-            // su cotización. El convertido se recalcula: guardar solo el
-            // convertido perdería el dato de la operación tal como ocurrió.
-            toDecimalString(linea.draft.debit),
-            toDecimalString(linea.draft.credit),
-            linea.draft.currency,
+            toDecimalString(linea.debit),
+            toDecimalString(linea.credit),
+            draft.currency,
+            enOtraMoneda ? linea.draft.currency : null,
+            enOtraMoneda ? toDecimalString(linea.draft.debit) : null,
+            enOtraMoneda ? toDecimalString(linea.draft.credit) : null,
             linea.draft.fx === undefined
               ? null
               : razonATexto(linea.draft.fx.rate.numerator, linea.draft.fx.rate.denominator),
@@ -348,9 +359,13 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
             entryId,
             linea.lineNo,
             linea.account.id,
-            toDecimalString(linea.draft.debit),
-            toDecimalString(linea.draft.credit),
-            linea.draft.currency,
+            // El contraasiento se arma desde importes ya registrados, así que el
+            // convertido y el original son el mismo número. Se usa igual
+            // `linea.debit` —el resuelto— para que no haya dos caminos distintos
+            // por los que un importe llega a `journal_entry_lines`.
+            toDecimalString(linea.debit),
+            toDecimalString(linea.credit),
+            contra.draft.currency,
             linea.draft.description ?? null,
           ],
         );

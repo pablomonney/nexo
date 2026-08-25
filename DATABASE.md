@@ -130,9 +130,11 @@ sellos por separado y nunca deriva uno del otro.
 | `periods` | `fiscal_year_id`, `number`, `start_date`, `end_date`, `status` (`ABIERTO`\|`BLOQUEADO`\|`CERRADO`), `closed_at`, `closed_by` |
 | `journals` | libros/subdiarios: `company_id`, `code` (`GENERAL`, `COMPRAS`, `VENTAS`, `BANCOS`, `CAJA`, `SUELDOS`, `AJUSTES`, `CIERRE`, `APERTURA`), `numbering_scope` |
 | `journal_entries` | `id`, `company_id`, `journal_id`, `period_id`, `entry_number`, `entry_date`, `description`, `kind` (`NORMAL`\|`AJUSTE`\|`APERTURA`\|`CIERRE`\|`REVERSION`), `status` (`BORRADOR`\|`PROPUESTO`\|`APROBADO`\|`ANULADO`), `source_type`, `source_id`, `reverses_entry_id`, `created_by`, `approved_by`, `approved_at`, `ai_prediction_id?` |
-| `journal_entry_lines` | `entry_id`, `line_no`, `account_id`, `debit numeric(18,2)`, `credit numeric(18,2)`, `currency`, `fx_rate`, `cost_center_id?`, `party_id?`, `description`, `tax_transaction_id?` |
-| `ledger_movements` | proyección para el Mayor: `company_id`, `account_id`, `period_id`, `entry_line_id`, `date`, `debit`, `credit`, `running_balance` |
-| `account_balances` | saldos por `(account_id, period_id)`: `opening`, `debits`, `credits`, `closing` |
+| `journal_entry_lines` | `entry_id`, `line_no`, `account_id`, `debit numeric(18,2)`, `credit numeric(18,2)`, `currency`, `original_currency?`, `original_debit?`, `original_credit?`, `fx_rate`, `cost_center_id?`, `party_id?`, `description`, `tax_transaction_id?` |
+| `ledger_movements` | proyección para el Mayor: `company_id`, `account_id`, `period_id`, `entry_line_id`, `movement_date`, `debit`, `credit`. **La escribe un trigger, no la aplicación** |
+| `account_balances` | saldos por `(account_id, period_id)`: `opening`, `debits`, `credits`, `closing`. Los recalcula `rebuild_account_balances()` |
+| `ledger_verifications` | cada corrida de `ledger:verify`: `movimientos`, `discrepancias`, `detalle jsonb`, `resultado` |
+| `book_emissions` | cada libro emitido: `book`, `desde`, `hasta`, `content_sha256`, `controles jsonb`, `cumple_formalidades`, `autorizacion_registro?`. Inmutable |
 | `accounting_closures` | `fiscal_year_id`, `checklist jsonb`, `status`, `performed_by`, `performed_at` |
 
 ### 7.1 Los candados (§38)
@@ -175,6 +177,32 @@ un bug de la aplicación, ni por un `psql` manual.
 > [`infrastructure/db/migrations/0005_journal.sql`](infrastructure/db/migrations/0005_journal.sql)
 > y están cubiertos por [`tests/integration/journal-locks.test.ts`](tests/integration/journal-locks.test.ts).
 > El esquema es SQL-first: ver ADR-008.
+
+### 7.2 Dos importes por línea (migración `0020`)
+
+`debit`/`credit` es el importe **registrado**, en la moneda de la contabilidad: lo que el libro suma
+y lo que la cabecera declara como total (CCyC art. 325). `original_currency`/`original_debit`/
+`original_credit` es la operación **tal como ocurrió**, cuando se pactó en otra moneda.
+
+Pedirle a una sola columna que signifique las dos cosas era un defecto real de la FASE 5: con todo
+en pesos coincidían y no se notaba; con una línea en dólares el asiento se caía al COMMIT con
+`E_UNBALANCED`. Tres constraints y un trigger lo cierran: `jel_fx_complete`,
+`jel_original_es_otra_moneda`, `jel_original_mismo_lado` y `assert_line_currency_matches_entry()`.
+
+### 7.3 El Mayor no lo escribe la aplicación (migración `0019`)
+
+`project_ledger_movements()` es un CONSTRAINT TRIGGER diferido sobre `journal_entries`: cuando un
+asiento pasa a `APROBADO`, proyecta sus líneas. A `aai_app` se le **revoca el INSERT** sobre
+`ledger_movements` y `account_balances`, así que la única forma de que aparezca un movimiento es que
+exista el asiento.
+
+Un movimiento no se edita ni se borra, ni al anular el asiento: lo compensa el contraasiento, y
+borrarlo además lo contaría dos veces. La migración incluye el backfill de los asientos que ya
+estaban aprobados — una migración que crea una proyección y no la puebla deja la base en un estado
+que nada declara.
+
+La vista `ledger_trace` escribe el camino movimiento → línea → asiento → comprobante → documento una
+sola vez, para que ninguna pantalla lo rearme por su cuenta.
 
 ---
 

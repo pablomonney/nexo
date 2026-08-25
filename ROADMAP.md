@@ -306,19 +306,50 @@ parámetro normativo y no una constante del código (ADR-005).
 4. **Lo que el intérprete no puede evaluar, falla; nunca vale `false`.** Una regla que deja de
    aplicarse sin que nadie se entere es peor que una que rompe.
 
-**Estado de los datos, declarado:** 7 de 21 documentos cargados —los que tienen fecha de emisión
+**Estado de los datos, declarado:** 8 de 21 documentos cargados —los que tienen fecha de emisión
 verificada—, **0 adopciones** y **0 reglas**. Para que el motor resuelva en CABA falta archivar la
 Res. CPCECABA 460/2024; para que haya reglas hay que transcribir articulado con revisión humana.
 Mientras tanto responde `FUENTE_NO_ENCONTRADA`, que es la verdad.
 
 ---
-## FASE 6 — Libro Diario · FASE 7 — Libro Mayor
+## FASE 6 — Libro Diario · FASE 7 — Libro Mayor ✅
 
 Diario trazable con todos los campos del §15; Mayor como proyección reconstruible; balance de
 sumas y saldos; exportaciones.
 
 **Criterio:** el Mayor reconstruido desde el Diario coincide exactamente; el balance cierra en sus
-tres igualdades; cada movimiento navega hasta el documento original.
+tres igualdades; cada movimiento navega hasta el documento original. **Cumplido**, con un test por
+cada una de las tres afirmaciones.
+
+**Fuente que gobierna la fase:** Ley 26.994 — CCyC arts. 320 a 331, archivada con su sha256 y
+cargada al motor normativo. Cada control de forma del Diario cita el inciso del que sale.
+Documentado en [BOOKS.md](BOOKS.md).
+
+**Las decisiones:**
+
+1. **Un libro no es un reporte.** El Diario además de mostrar lo que hay declara si está bien
+   llevado (art. 330: la contabilidad prueba en juicio *si* se lleva en la forma prescrita). Siete
+   controles de forma, cada uno citando su artículo, ninguno bloqueante y todos grabados en la
+   emisión.
+2. **La aplicación no escribe el Mayor.** Lo escribe un trigger desde el Diario y a `aai_app` se le
+   revoca el INSERT. Una proyección que se puede escribir a mano deja de ser una proyección.
+3. **Un movimiento del Mayor no se borra nunca, ni al anular el asiento.** El contraasiento lo
+   compensa; borrarlo además lo contaría dos veces — y borrar es lo que el art. 324 inc. c prohíbe.
+4. **Resumir el Diario exige subdiario declarado** (art. 327). Agrupar por mes y sumar es trivial;
+   lo que el artículo pide es que atrás haya un registro detallado. Sin él, el motor se niega.
+5. **La exportación es canónica y hasheada**, con punto decimal y LF: un número formateado según el
+   locale haría que el hash dependa de la máquina donde se corrió.
+
+> **Defecto de la FASE 5 corregido acá.** `journal_entry_lines.debit` guardaba el importe
+> *original* mientras la cabecera guardaba el *convertido*. Con todo en pesos coinciden y no se
+> nota; con una línea en dólares el asiento se caía al COMMIT con `E_UNBALANCED`, el balance sumaba
+> centavos de dólar como pesos, y el Mayor habría heredado la mezcla. La migración `0020` separa las
+> dos cosas en columnas distintas: `debit`/`credit` es lo que el libro registra, `original_*` es la
+> operación tal como ocurrió. Ninguna de las dos sobra.
+
+**Lo que queda declarado como gap:** foliatura y rúbrica del art. 323 (es un trámite, no un dato que
+el software produzca), política de retención del art. 328, subdiarios como libros propios (llegan en
+FASE 8) y exportación a PDF con formato de libro.
 
 ---
 

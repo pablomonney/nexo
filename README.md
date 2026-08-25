@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: FASES 0 a 5b construidas. El Libro Diario llega en FASE 6.**
+> **Estado: FASES 0 a 7 construidas. El IVA llega en FASE 8.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -13,12 +13,13 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **Clasificación asistida: salida cerrada, citas verificadas, la persona aprueba** (FASE 4)
 > - ✅ **Motor contable: once validaciones, numeración sin huecos, contraasientos, balance** (FASE 5)
 > - ✅ **Motor normativo: vigencia bitemporal, adopción jurisdiccional, citas verificables** (FASE 5b)
-> - ✅ **18 migraciones aplicadas y 378/378 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Libro Diario con los controles de forma del CCyC y Mayor como proyección** (FASES 6 y 7)
+> - ✅ **20 migraciones aplicadas y 433/433 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`) y el certificado de ARCA (ver `docs/api/arca-onboarding.md`)
 > - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado y
 >   archivar la Res. CPCECABA 460/2024 (ver `packages/normative-engine/README.md`)
-> - ⬜ Libro Diario y Mayor (FASE 6 en adelante — ver `ROADMAP.md`)
+> - ⬜ IVA, bancos y estados contables (FASE 8 en adelante — ver `ROADMAP.md`)
 
 ## Puesta en marcha
 
