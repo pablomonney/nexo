@@ -47,8 +47,40 @@ como falso positivo.
 
 Antes de traer un comprobante real hay que sacarle los datos que identifican al
 contribuyente. Lo mínimo: CUIT, razón social, domicilio y número de documento del
-receptor. Reemplazar el CUIT por otro **con dígito verificador válido** —si no, el
-parser lo va a rechazar por una razón que no es la que se quiere medir.
+receptor.
+
+Los CUIT los hace el script:
+
+```bash
+npm run cuit:anonimizar -- entrada.csv --verificar     # qué hay, sin escribir nada
+npm run cuit:anonimizar -- entrada.csv --salida limpio.csv --tabla ../tabla.json
+```
+
+Reemplaza cada CUIT por un sustituto **con dígito verificador válido** —uno
+inválido lo rechaza el parser por un motivo que no es el que se quiere medir— y
+sostiene tres propiedades más que a mano se pierden:
+
+- **Determinístico y estable.** El mismo original da siempre el mismo sustituto.
+  Sin eso el mismo proveedor aparece con un CUIT distinto en cada comprobante, y
+  el corpus deja de servir para medir detección de duplicados, agrupación por
+  contraparte e historial de importes — que es la mitad de lo que hay que medir.
+- **Conserva el prefijo.** `20`/`23`/`24`/`27` es persona física, `30`/`33`/`34`
+  es persona jurídica: el tipo de sujeto es parte de lo que el sistema interpreta.
+- **No colisiona.** Dos originales distintos nunca comparten sustituto. Si lo
+  hicieran, dos proveedores se fusionarían y el corpus mediría algo que no pasó.
+
+La **tabla de correspondencia re-identifica el corpus entero**, así que el script
+se niega a escribirla dentro del repositorio. Guardala donde guardás
+credenciales, o no la guardes: la sustitución se reproduce con el mismo
+`--semilla`.
+
+### Lo que el script no hace, y hay que hacer a mano
+
+Razón social, domicilio, DNI y número de Ingresos Brutos —que suele traer el CUIT
+real con otro prefijo—. **No es un olvido:** detectar un nombre propio dentro de
+texto libre es adivinar, y un anonimizador que acierta el 95% es peor que
+ninguno, porque deja creer que el archivo quedó limpio. El script enumera esos
+campos al terminar para que alguien los mire.
 
 Este directorio está en `.gitignore` salvo este README: los comprobantes no se
 commitean, ni siquiera anonimizados.

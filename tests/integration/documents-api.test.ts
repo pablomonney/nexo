@@ -9,7 +9,7 @@
 
 import { closePool, initPool } from '@aai/db';
 import { buildServer } from '@aai/api/server';
-import { totp } from '@aai/shared';
+import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from './helpers/db.js';
@@ -41,13 +41,6 @@ suite('ingesta de documentos por HTTP', () => {
   let companyId: string;
   let documentId: string;
   let extractionId: string;
-
-  function withCheckDigit(firstTen: string): string {
-    const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-    const total = weights.reduce((acc, w, i) => acc + Number(firstTen[i]) * w, 0);
-    const remainder = total % 11;
-    return `${firstTen}${remainder === 0 ? 0 : remainder === 1 ? 9 : 11 - remainder}`;
-  }
 
   /** Cuerpo multipart armado a mano: evita sumar una dependencia solo para el test. */
   function multipart(nombre: string, mime: string, contenido: string): Buffer {

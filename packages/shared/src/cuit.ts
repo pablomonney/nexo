@@ -36,6 +36,45 @@ export function isValidCuit(input: string): boolean {
   return Number(digits[10]) === expected;
 }
 
+/**
+ * El dígito verificador que le corresponde a los diez primeros dígitos.
+ *
+ * Es la misma cuenta que hace `isValidCuit`, expuesta para **construir** un CUIT
+ * en vez de comprobarlo. Existe por dos razones concretas:
+ *
+ * - Cinco archivos de test tenían su propia copia del módulo 11 para armar CUIT
+ *   de fixture. Cinco copias de un algoritmo son cinco oportunidades de que una
+ *   se desvíe y los tests pasen contra una regla que el sistema no aplica.
+ * - Anonimizar un comprobante real exige reemplazar el CUIT por otro **válido**:
+ *   uno inválido lo rechaza el parser por un motivo que no es el que se quiere
+ *   medir.
+ *
+ * No valida el prefijo: quien construye elige el tipo de sujeto, y `isValidCuit`
+ * es quien después dice si el resultado sirve.
+ */
+export function cuitCheckDigit(firstTen: string): number {
+  const digits = normalizeCuit(firstTen);
+  if (digits.length !== 10) {
+    throw new RangeError(`Se esperaban 10 dígitos y llegaron ${digits.length}: ${JSON.stringify(firstTen)}`);
+  }
+
+  let total = 0;
+  for (let index = 0; index < WEIGHTS.length; index += 1) {
+    total += Number(digits[index]) * WEIGHTS[index]!;
+  }
+
+  const remainder = total % 11;
+  if (remainder === 0) return 0;
+  if (remainder === 1) return 9; // convención de ARCA para resto 1
+  return 11 - remainder;
+}
+
+/** Los diez dígitos más el verificador que les corresponde. `30` + 8 dígitos → CUIT. */
+export function withCheckDigit(firstTen: string): string {
+  const digits = normalizeCuit(firstTen);
+  return `${digits}${cuitCheckDigit(digits)}`;
+}
+
 /** Devuelve el CUIT normalizado o lanza. Usar en bordes de entrada, no en el dominio. */
 export function parseCuit(input: string): Cuit {
   const digits = normalizeCuit(input);

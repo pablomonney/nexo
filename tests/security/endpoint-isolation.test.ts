@@ -11,6 +11,9 @@
  */
 
 import { closePool, initPool } from '@aai/db';
+// La API valida el CUIT en el borde: un número inventado se rechaza con 400
+// antes de llegar a la lógica que el test quiere ejercitar.
+import { withCheckDigit } from '@aai/shared';
 import { buildServer } from '@aai/api/server';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -25,19 +28,6 @@ interface Actor {
 }
 
 /**
- * Completa el dígito verificador de un CUIT (módulo 11).
- *
- * La API valida el CUIT en el borde, así que un número inventado se rechaza con
- * 400 antes de llegar a la lógica que el test quiere ejercitar.
- */
-function withCheckDigit(firstTen: string): string {
-  const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  const total = weights.reduce((acc, weight, index) => acc + Number(firstTen[index]) * weight, 0);
-  const remainder = total % 11;
-  const check = remainder === 0 ? 0 : remainder === 1 ? 9 : 11 - remainder;
-  return `${firstTen}${check}`;
-}
-
 /**
  * Rutas que no son company-scoped por diseño: pertenecen al estudio o al propio
  * usuario. Se excluyen del barrido de aislamiento por empresa y se verifican
