@@ -257,11 +257,35 @@ declaración jurada falsa, y la base no deja.
 | Tabla | Campos clave |
 |-------|--------------|
 | `bank_accounts` | `company_id`, `bank_name`, `cbu`, `alias`, `currency`, `account_id` (cuenta contable) |
-| `bank_statements` | `bank_account_id`, `period`, `source_document_id`, `opening_balance`, `closing_balance` |
-| `bank_transactions` | `statement_id`, `date`, `description`, `amount`, `sign`, `external_ref`, `raw jsonb`, `status` |
-| `bank_reconciliations` | `bank_account_id`, `period_id`, `status`, `performed_by` |
-| `bank_reconciliation_matches` | `reconciliation_id`, `bank_transaction_id`, `journal_entry_line_id`, `match_type` (`EXACTO`\|`APROXIMADO`\|`MANUAL`\|`AGRUPADO`), `confidence`, `matched_by` |
-| `bank_reconciliation_differences` | tipo de diferencia, importe, estado, explicación |
+| `bank_statement_layouts` | el mapeo declarado por cuenta: qué columna es cada cosa, formato de fecha e importe, separador |
+| `bank_statements` | `bank_account_id`, `desde`, `hasta`, `saldo_inicial`, `saldo_final`, `cadena_verificada`, `errores jsonb`, `source_document_id` |
+| `bank_transactions` | `fecha`, `descripcion`, `importe` (**siempre positivo**), `sentido` (`ENTRADA`|`SALIDA`), `referencia`, `saldo_posterior`, `crudo`, `huella`, `status` |
+| `bank_reconciliations` | `period_id`, `status`, `saldo_extracto`, `saldo_libro`, `ajuste_neto`, `cobertura`, `confirmed_by` |
+| `bank_reconciliation_matches` | `bank_transaction_id`, `journal_entry_line_id`, `match_type`, `score` (entero 0–100), `senales jsonb`, `confirmed_by` |
+| `bank_reconciliation_differences` | tipo, importe, sentido, `explicacion` (**la carga el contador, no el sistema**) |
+
+### 9.1 Los cinco candados del criterio de la fase
+
+*0 conciliaciones confirmadas sin intervención humana* no se cumple midiéndolo:
+
+```
+rec_confirmada_firmada .............. confirmar exige persona y fecha
+match_confirmado_firmado ........... un match confirmado tiene firmante
+assert_reconciliation_confirmable() . no se confirma con matches sin revisar
+rec_acta_cierra .................... saldo_extracto + ajuste_neto = saldo_libro
+brm_immutable_when_confirmed ....... los matches de una confirmada no se tocan
+```
+
+El tercero es tajante incluso con un match de score 100. El cuarto es el que más cuesta aceptar: una
+conciliación que no cierra no es una con una observación al pie, es una que no está hecha.
+
+### 9.2 `ENTRADA`/`SALIDA`, nunca `DEBITO`/`CREDITO`
+
+En el extracto "débito" es plata que sale; en el libro, un débito en la cuenta Banco es plata que
+entra. El CHECK rechaza la palabra ambigua para que nadie tenga que acordarse de cuál era.
+
+Por la misma razón `bank_transactions.importe` es **siempre positivo** y el sentido va aparte:
+guardarlo con signo obliga a fijar de quién es la óptica.
 
 ---
 

@@ -320,6 +320,57 @@ campos corridos.
 
 *Residual:* medio, y es presión de producto más que riesgo técnico.
 
+### 🔴 R-30 — El match plausible que cierra los saldos igual *(nuevo, 2026-08-26)*
+
+Es el modo de falla propio de la conciliación, y no lo produce un bug. El motor propone un match
+razonable —mismo importe, fecha cercana—, el contador aprueba porque los otros cuarenta estaban
+bien, y el pago a un proveedor queda cancelando la factura de otro. **Los saldos cierran igual.**
+Nadie se entera hasta que el proveedor reclama.
+
+*Por qué importa:* la conciliación es el único proceso contable donde un error puede pasar todos los
+controles aritméticos. El balance cuadra, el Mayor coincide con el Diario, el acta cierra — y la
+imputación está mal.
+
+*Mitigaciones:*
+
+1. **El importe exacto es precondición.** No hay match "por poco": una diferencia de importe es una
+   partida conciliatoria, no un match con menos confianza.
+2. **El empate no se resuelve**: dos candidatos con el mismo puntaje vuelven los dos.
+3. **Las señales viajan con la propuesta.** El contador ve qué sumó y qué no antes de aprobar, en vez
+   de un número de confianza sin desglose.
+4. **No hay confirmación en lote.** Ningún endpoint acepta "confirmar todas": es exactamente cómo la
+   revisión se vuelve un trámite (R-25).
+5. **Una agrupación nunca puntúa como un match uno a uno**, y el mensaje dice que tres importes que
+   suman un cuarto pueden ser coincidencia.
+
+*Residual:* medio-alto, y es el mismo residual de R-25: depende de que la persona mire. Lo que el
+software puede hacer es no facilitarle no mirar.
+
+### 🟠 R-31 — La misma palabra significando lo contrario *(nuevo, 2026-08-26)*
+
+En el extracto bancario "débito" es plata que sale de la cuenta. En el libro, un débito en la cuenta
+Banco es plata que entra. Las dos son correctas y opuestas, y cualquier código que use esas palabras
+obliga a quien lo lee a recordar en qué óptica está parado.
+
+*Por qué importa:* apareció en esta misma fase. La primera versión del acta tenía el signo invertido
+en dos de los cuatro casos de partida conciliatoria, y **cerraba igual** cuando los importes de las
+dos puntas coincidían —que es el caso de prueba que uno escribe primero—. Lo encontró un test con
+importes distintos, no una revisión de código.
+
+*Mitigaciones:*
+
+1. **El tipo se llama `ENTRADA`/`SALIDA`**, siempre desde la caja de la empresa. No tiene dos
+   lecturas.
+2. **La traducción se hace una sola vez**, en el importador, con la columna del banco nombrada como
+   el banco la titula.
+3. **La base rechaza la palabra ambigua**: `sentido IN ('ENTRADA','SALIDA')`.
+4. **Los cuatro casos del acta están escritos uno por uno en un comentario**, con su ejemplo, porque
+   los dos del medio se confunden todo el tiempo.
+
+*Residual:* bajo en bancos. El patrón —una palabra del dominio que cambia de signo según el
+observador— puede repetirse en cualquier módulo nuevo; la defensa es nombrar el efecto, no la
+partida.
+
 ---
 
 ## Riesgo de proyecto

@@ -8,6 +8,7 @@ import { attachContext } from './http/context.js';
 import { accountRoutes } from './routes/accounts.js';
 import { authRoutes } from './routes/auth.js';
 import { documentRoutes } from './routes/documents.js';
+import { bankRoutes } from './routes/banks.js';
 import { bookRoutes } from './routes/books.js';
 import { journalEntryRoutes } from './routes/journal-entries.js';
 import { vatRoutes } from './routes/vat.js';
@@ -103,6 +104,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(journalEntryRoutes);
   await app.register(bookRoutes);
   await app.register(vatRoutes);
+  await app.register(bankRoutes);
 
   return app;
 }

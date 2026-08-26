@@ -35,6 +35,15 @@ export default defineConfig({
           functions: 95,
           branches: 90,
         },
+        // La conciliación es donde un sistema contable miente más fácil: un
+        // match plausible aprobado sin mirar deja los saldos cerrando y la
+        // cuenta de un proveedor mal para siempre. Las tres reglas duras del
+        // motor tienen que estar todas ejercitadas.
+        'packages/bank-engine/src/**': {
+          lines: 95,
+          functions: 95,
+          branches: 88,
+        },
       },
     },
   },

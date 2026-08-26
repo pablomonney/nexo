@@ -387,13 +387,42 @@ Documentado en [TAX_ENGINE.md](TAX_ENGINE.md).
 
 ---
 
-## FASE 9 — Bancos
+## FASE 9 — Bancos ✅
 
-Importación de extractos, `Bank Reconciliation Engine`, matching automático con score, detección de
-diferencias, transferencias internas, comisiones e impuestos bancarios.
+Importación de extractos, `bank-engine`, matching con score, acta de conciliación y partidas
+conciliatorias.
 
 **Criterio:** conciliación de un mes real con ≥ 80% de matching automático propuesto y 0
-conciliaciones confirmadas sin intervención humana.
+conciliaciones confirmadas sin intervención humana. **La segunda mitad está cumplida y es
+inviolable**: son cinco candados en la base, no una validación de la aplicación, y hay un test que
+intenta romper cada uno con SQL directo. La primera mitad es un indicador que el motor calcula
+(`cobertura.porcentaje`) y que se verifica recién con un extracto real — como el corpus de FASE 3.
+
+**Las decisiones:**
+
+1. **El importe exacto es precondición, no un componente del puntaje.** Casi todo el software de
+   conciliación pesa el importe y deja ganar a un match con cincuenta centavos de diferencia. Eso
+   cierra una factura equivocada y deja el saldo del proveedor mal para siempre.
+2. **El empate no se resuelve.** Dos líneas con el mismo puntaje vuelven las dos. Y un movimiento
+   ambiguo **no cuenta como cubierto**: contarlo inflaría el indicador con los casos que más trabajo
+   humano requieren.
+3. **`ENTRADA`/`SALIDA`, nunca `DEBITO`/`CREDITO`.** En el extracto "débito" es plata que sale; en
+   el libro es plata que entra. La traducción se hace una sola vez, en el importador.
+4. **El acta cierra o dice cuánto falta.** `saldo extracto + partidas = saldo libro`, y es un
+   constraint: una conciliación descuadrada no se puede confirmar.
+5. **El motor no clasifica las partidas por concepto.** No dice "comisión" ni "impuesto Ley 25.413":
+   esa ley no está archivada y la descripción del banco no es una fuente. Dice de qué lado quedó y
+   dónde mirar.
+6. **La importación no adivina el formato.** Mapeo declarado por cuenta, y la cadena de saldos como
+   control de integridad — una columna corrida la rompe en la primera fila afectada.
+
+> **Defecto encontrado por un test durante la fase.** El acta tenía el signo invertido en dos de los
+> cuatro casos de partida conciliatoria. Cerraba igual cuando los importes de las dos puntas
+> coincidían, que es el caso de prueba que uno escribe primero. La causa de fondo no era el signo
+> sino el vocabulario: `DEBITO`/`CREDITO` significan cosas opuestas según quién mire. Se corrigió
+> renombrando el tipo, no ajustando los signos.
+
+Documentado en [BANKS.md](BANKS.md).
 
 ---
 

@@ -13,8 +13,8 @@
 // Los paquetes del dominio contable, tal como pueden aparecer resueltos: por ruta
 // del workspace o a través del symlink que npm crea en node_modules.
 const MOTOR_CONTABLE =
-  '^(packages/(accounting-engine|tax-engine|financial-statements)|' +
-  'node_modules/@aai/(accounting-engine|tax-engine|financial-statements))';
+  '^(packages/(accounting-engine|tax-engine|bank-engine|financial-statements)|' +
+  'node_modules/@aai/(accounting-engine|tax-engine|bank-engine|financial-statements))';
 
 const CLIENTE_DE_BASE =
   '^(packages/db|node_modules/(@aai/db|pg|postgres|prisma|@prisma|knex|typeorm|drizzle-orm))';
@@ -61,7 +61,7 @@ module.exports = {
         'Los paquetes de dominio son funciones puras sobre datos: sin red, sin disco, ' +
         'sin base. Es la condición para poder testearlos de forma exhaustiva.',
       severity: 'error',
-      from: { path: '^packages/(accounting-engine|tax-engine|normative-engine|shared)' },
+      from: { path: '^packages/(accounting-engine|tax-engine|normative-engine|bank-engine|shared)' },
       to: { path: `${CLIENTE_DE_BASE}|${CLIENTE_DE_RED}` },
     },
     {

@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: FASES 0 a 8 construidas. Bancos llegan en FASE 9.**
+> **Estado: FASES 0 a 9 construidas. Estados contables llegan en FASE 10.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -17,12 +17,15 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - 🟡 **IVA: subdiarios, notas de crédito y Libro de IVA Digital** (FASE 8) — el motor funciona,
 >   pero `tax_rates` está vacía hasta archivar la Ley 23.349, así que responde
 >   `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%
-> - ✅ **21 migraciones aplicadas y 482/482 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Bancos: importación con mapeo declarado y conciliación asistida** (FASE 9)
+> - ✅ **22 migraciones aplicadas y 543/543 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
->   (ver `corpus/README.md`) y el certificado de ARCA (ver `docs/api/arca-onboarding.md`)
+>   (ver `corpus/README.md`). El certificado de ARCA ya está emitido; queda correr
+>   `npm run arca:check -- --cert … --key … --cuit …` para que el propio sistema confirme que la
+>   delegación funciona. El certificado **no entra al repositorio**: el script lo lee del disco
 > - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado y
 >   archivar la Res. CPCECABA 460/2024 (ver `packages/normative-engine/README.md`)
-> - ⬜ Bancos y estados contables (FASE 9 en adelante — ver `ROADMAP.md`)
+> - ⬜ Estados contables, cierre y dashboard (FASE 10 en adelante — ver `ROADMAP.md`)
 
 ## Puesta en marcha
 
