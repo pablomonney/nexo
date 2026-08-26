@@ -4,26 +4,42 @@
  *
  *   npm run statements:seed
  *
- * Hoy no siembra ninguna, y el motivo no es que falte escribirlas: es que
- * `statement_templates.norm_version_id` es `NOT NULL` y la norma de la que sale
- * la estructura del ESP —la **Ley 19.550 (T.O. 1984), arts. 63 y 64**— no está
- * sembrada en `norms`.
+ * Las estructuras salen de la **Ley 19.550 (T.O. 1984), arts. 63 y 64**,
+ * archivada con sha256 en `INFOLEG_LGS_19550_texto_actualizado.htm`. Viven en
+ * `scripts/statement-templates.mjs`, donde cada rubro cita su inciso.
  *
- * Y no está sembrada por la misma regla que dejó afuera a otros doce documentos
- * en FASE 5b: su `fecha_emision` no surge del documento archivado. El texto de
- * InfoLeg dice *"Texto ordenado por el Anexo del Decreto N° 841/84 B.O.
- * 30/03/1984"* — eso es la fecha de **publicación** del decreto que ordenó el
- * texto, no la de emisión. Completar una con la otra sería afirmar un hecho que
- * nadie verificó.
+ * ## Por qué este script tardó tanto en poder correr
  *
- * Este script existe para que ese bloqueo sea **una respuesta, no un silencio**:
- * se corre, dice exactamente qué falta y en qué archivo se destraba.
+ * `statement_templates.norm_version_id` es `NOT NULL`, y la Ley 19.550 no se
+ * sembraba: su texto actualizado declara la **publicación** del Decreto 841/84
+ * (30/03/1984) y no su dictado, y `norm_versions.fecha_emision` también es NOT
+ * NULL. Completar una con la otra habría sido afirmar un hecho que nadie
+ * verificó, así que la norma quedaba afuera y esta tabla vacía río abajo.
+ *
+ * Se destrabó archivando la **ficha oficial del Decreto 841/84**, que sí declara
+ * el dictado: 20/03/1984. Un documento más, no un campo completado de memoria.
+ *
+ * ## Lo que el script sigue sin hacer solo
+ *
+ * Validar. Toda plantilla pasa por `validarPlantilla()` antes de insertarse, y si
+ * hay un error no se inserta ninguna. La estructura viene de un archivo del
+ * repositorio, pero termina en una columna `jsonb` que el motor lee en cada
+ * emisión: confiar en que está bien formada porque la escribimos nosotros es
+ * exactamente la confianza que el validador existe para no necesitar.
  */
 
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+
+import { validarPlantilla } from '@aai/financial-statements';
+import {
+  ALCANCE,
+  CONVENCION_DE_CODIGOS,
+  LO_QUE_ESTAS_PLANTILLAS_NO_EXPONEN,
+  PLANTILLAS,
+} from './statement-templates.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 if (existsSync(join(HERE, '..', '.env'))) {
@@ -36,94 +52,209 @@ if (DATABASE_URL === '') {
   process.exit(0);
 }
 
-/** La norma que cada plantilla necesita, y qué artículo la funda. */
-const REQUISITOS = [
-  {
-    estado: 'ESP',
-    organismo: 'CONGRESO',
-    tipo: 'LEY',
-    numero: '19550',
-    articulo: 'Art. 63 — contenido del balance general',
-    archivo: 'INFOLEG_LGS_19550_texto_actualizado.htm',
-  },
-  {
-    estado: 'ER',
-    organismo: 'CONGRESO',
-    tipo: 'LEY',
-    numero: '19550',
-    articulo: 'Art. 64 — contenido del estado de resultados',
-    archivo: 'INFOLEG_LGS_19550_texto_actualizado.htm',
-  },
-];
+const NORMA = { organismo: 'CONGRESO', tipo: 'LEY', numero: '19550' };
+
+/**
+ * Forma canónica de un árbol, para comparar lo que hay con lo que iría.
+ *
+ * `jsonb` no conserva el orden de las claves, así que comparar el JSON tal cual
+ * daría "distinto" en cada corrida y el script publicaría una versión nueva cada
+ * vez. Se ordenan las claves de cada objeto; el orden de los arrays **sí**
+ * importa —es el orden de los renglones del estado— y se respeta.
+ */
+function canonico(valor) {
+  if (Array.isArray(valor)) return `[${valor.map(canonico).join(',')}]`;
+  if (valor !== null && typeof valor === 'object') {
+    const claves = Object.keys(valor).sort();
+    return `{${claves.map((clave) => `${JSON.stringify(clave)}:${canonico(valor[clave])}`).join(',')}}`;
+  }
+  return JSON.stringify(valor);
+}
 
 const client = new pg.Client({ connectionString: DATABASE_URL });
 await client.connect();
 
 try {
-  const existentes = await client.query(
-    `SELECT statement_kind, framework, entity_type, regulator, version
-       FROM statement_templates ORDER BY statement_kind, framework`,
+  const norma = await client.query(
+    `SELECT v.id
+       FROM norm_versions v
+       JOIN norms n ON n.id = v.norm_id
+      WHERE n.organismo = $1 AND n.tipo = $2 AND n.numero = $3
+      ORDER BY v.version DESC LIMIT 1`,
+    [NORMA.organismo, NORMA.tipo, NORMA.numero],
   );
 
-  if (existentes.rows.length > 0) {
-    console.log(`Plantillas ya cargadas: ${existentes.rows.length}`);
-    for (const fila of existentes.rows) {
-      console.log(
-        `  · ${fila.statement_kind} ${fila.framework} ${fila.entity_type} ${fila.regulator} v${fila.version}`,
-      );
-    }
-  }
-
-  const faltantes = [];
-  for (const requisito of REQUISITOS) {
-    const norma = await client.query(
-      `SELECT n.id
-         FROM norms n
-         JOIN norm_versions v ON v.norm_id = n.id
-        WHERE n.organismo = $1 AND n.tipo = $2 AND n.numero = $3
-        LIMIT 1`,
-      [requisito.organismo, requisito.tipo, requisito.numero],
-    );
-    if (norma.rows.length === 0) faltantes.push(requisito);
-  }
-
-  if (faltantes.length === 0) {
+  if (norma.rows.length === 0) {
     console.log('');
-    console.log('La Ley 19.550 está sembrada. Ya se pueden cargar las plantillas:');
-    console.log('  1. Transcribir la estructura de los arts. 63 y 64 al árbol de la plantilla.');
-    console.log('  2. Validarla con `validarPlantilla()` antes de insertarla.');
-    console.log('  3. Cada RUBRO tiene que citar su inciso: el validador lo exige.');
+    console.log('Plantillas sembradas: 0. La Ley 19.550 no está sembrada en `norms`.');
     console.log('');
-    console.log('No se hace desde este script: transcribir articulado a una estructura de');
-    console.log('presentación es una decisión profesional, no una corrida automática.');
+    console.log('  Corré `npm run norms:seed`. Si tampoco la carga, revisá que');
+    console.log('  INFOLEG_LGS_19550_texto_actualizado.htm tenga su fila en');
+    console.log('  docs/normative-sources/vigencias.csv con fecha_emision verificada — la del');
+    console.log('  Decreto 841/84 que aprobó el T.O., que surge de la ficha oficial archivada.');
+    console.log('');
+    console.log('  Mientras tanto el motor responde FUENTE NO ENCONTRADA en vez de armar una');
+    console.log('  estructura por su cuenta.');
     process.exit(0);
   }
 
-  console.log('');
-  console.log(`Plantillas sembradas: 0. Falta la norma de la que sale la estructura.`);
-  console.log('');
-  for (const requisito of faltantes) {
-    console.log(`  ✘ ${requisito.estado}: ${requisito.organismo} ${requisito.tipo} ${requisito.numero}`);
-    console.log(`      ${requisito.articulo}`);
-    console.log(`      Archivo: docs/normative-sources/originals/${requisito.archivo} (ya archivado, con sha256)`);
+  const normVersionId = norma.rows[0].id;
+
+  // ---------------------------------------------------------------------------
+  // Validar antes de tocar la base
+  // ---------------------------------------------------------------------------
+  const problemas = [];
+  for (const plantilla of PLANTILLAS) {
+    const errores = validarPlantilla({
+      id: `${plantilla.tipo}-${ALCANCE.marco}-${ALCANCE.tipoEnte}-${ALCANCE.regulador}`,
+      tipo: plantilla.tipo,
+      marco: ALCANCE.marco,
+      tipoEnte: ALCANCE.tipoEnte,
+      regulador: ALCANCE.regulador,
+      version: 1,
+      vigenteDesde: ALCANCE.vigenteDesde,
+      vigenteHasta: null,
+      normVersionId,
+      articulo: plantilla.articulo,
+      raiz: plantilla.raiz,
+    });
+    for (const error of errores) {
+      problemas.push(`${plantilla.tipo} · ${error.codigo} en "${error.nodo}": ${error.mensaje}`);
+    }
   }
+
+  if (problemas.length > 0) {
+    console.error('');
+    console.error(`La validación encontró ${problemas.length} problema(s). No se sembró ninguna.`);
+    console.error('');
+    for (const problema of problemas) console.error(`  ✘ ${problema}`);
+    console.error('');
+    console.error('Se aborta entero y no plantilla por plantilla: un ESP sin su ER es un estado');
+    console.error('contable incompleto, y dejarlo a medias es peor que no tener ninguno.');
+    process.exit(1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Insertar
+  // ---------------------------------------------------------------------------
+  const nuevas = [];
+  const yaEstaban = [];
+  const corregidas = [];
+
+  await client.query('BEGIN');
+
+  for (const plantilla of PLANTILLAS) {
+    const previa = await client.query(
+      `SELECT id, version, structure, valid_from::text AS valid_from, valid_to
+         FROM statement_templates
+        WHERE company_id IS NULL AND statement_kind = $1 AND framework = $2
+          AND entity_type = $3 AND regulator = $4
+        ORDER BY version DESC LIMIT 1`,
+      [plantilla.tipo, ALCANCE.marco, ALCANCE.tipoEnte, ALCANCE.regulador],
+    );
+
+    const anterior = previa.rows[0];
+    let version = 1;
+
+    if (anterior !== undefined) {
+      // `jsonb` reordena las claves, así que comparar el JSON tal cual daría
+      // "distinto" siempre y el script publicaría una versión nueva en cada
+      // corrida. Se compara una forma canónica.
+      if (canonico(anterior.structure) === canonico(plantilla.raiz)) {
+        yaEstaban.push(`${plantilla.tipo} v${anterior.version}`);
+        continue;
+      }
+
+      // La estructura cambió. La base prohíbe reescribirla —y prohíbe borrarla—
+      // porque hacerlo cambiaría todos los estados ya emitidos con ella. El
+      // camino es el que la 0023 deja abierto: cerrar la vigente y publicar la
+      // siguiente.
+      //
+      // Se cierra con `valid_to = valid_from`, una ventana de largo cero, y eso
+      // es una afirmación precisa: **esta versión nunca tuvo un día aplicable**.
+      // Corregir una plantilla defectuosa no es lo mismo que un cambio de norma:
+      // el art. 63 no cambió, cambió nuestra transcripción. Cerrarla "desde hoy"
+      // diría que hasta hoy era la correcta, y un estado de un ejercicio anterior
+      // emitido mañana volvería a tomarla.
+      if (anterior.valid_to === null) {
+        await client.query('UPDATE statement_templates SET valid_to = valid_from WHERE id = $1', [
+          anterior.id,
+        ]);
+      }
+      version = anterior.version + 1;
+      corregidas.push(`${plantilla.tipo}: v${anterior.version} → v${version}`);
+    }
+
+    await client.query(
+      `INSERT INTO statement_templates
+         (company_id, statement_kind, framework, entity_type, regulator, version,
+          valid_from, structure, norm_version_id, articulo, created_by)
+       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, 'seed-statement-templates')`,
+      [
+        plantilla.tipo,
+        ALCANCE.marco,
+        ALCANCE.tipoEnte,
+        ALCANCE.regulador,
+        version,
+        ALCANCE.vigenteDesde,
+        JSON.stringify(plantilla.raiz),
+        normVersionId,
+        plantilla.articulo,
+      ],
+    );
+    nuevas.push(`${plantilla.tipo} v${version}`);
+  }
+
+  await client.query('COMMIT');
+
   console.log('');
-  console.log('Cómo se destraba, en un paso:');
+  console.log(
+    `Plantillas del sistema publicadas: ${nuevas.length}${yaEstaban.length > 0 ? ` (${yaEstaban.length} sin cambios)` : ''}`,
+  );
+  for (const etiqueta of nuevas) console.log(`  + ${etiqueta} — ${ALCANCE.tipoEnte} / ${ALCANCE.regulador} / ${ALCANCE.marco}`);
+  for (const etiqueta of yaEstaban) console.log(`  = ${etiqueta}`);
+
+  if (corregidas.length > 0) {
+    console.log('');
+    console.log('Versiones cerradas por corrección de la transcripción:');
+    for (const etiqueta of corregidas) console.log(`  · ${etiqueta}`);
+    console.log('');
+    console.log('  Se cerraron con valid_to = valid_from: nunca tuvieron un día aplicable. El');
+    console.log('  art. 63 no cambió — cambió nuestra transcripción, y son cosas distintas.');
+    console.log('  Los estados ya emitidos con la versión anterior siguen apuntando a ella.');
+  }
+
   console.log('');
-  console.log('  Agregar una fila a docs/normative-sources/vigencias.csv para');
-  console.log('  INFOLEG_LGS_19550_texto_actualizado.htm con su `fecha_emision` verificada.');
+  console.log('Estas plantillas ASUMEN esta codificación del plan de cuentas:');
   console.log('');
-  console.log('  Hoy no está porque el documento archivado solo dice "Texto ordenado por el');
-  console.log('  Anexo del Decreto N° 841/84 B.O. 30/03/1984": esa es la fecha de PUBLICACIÓN');
-  console.log('  del decreto, no la de su emisión. Es la misma regla que dejó afuera a otros');
-  console.log('  doce documentos: completar la emisión con la publicación sería afirmar un');
-  console.log('  hecho que nadie verificó.');
+  for (const linea of CONVENCION_DE_CODIGOS) console.log(`  ${linea}`);
   console.log('');
-  console.log('  Con esa fila, `npm run norms:seed` carga la ley y este script vuelve a correr.');
+  console.log('  El art. 63 pide separar créditos de bienes de cambio y bienes de uso de');
+  console.log('  inmateriales, y eso no sale de `accounts.type`. Los selectores usan prefijos,');
+  console.log('  así que una empresa con otra codificación NO puede usar estas plantillas.');
   console.log('');
-  console.log('Mientras tanto el motor funciona: hay 33 tests que lo prueban sobre plantillas');
-  console.log('de fixture. Lo que no hay es una plantilla en producción, y el sistema responde');
-  console.log('FUENTE NO ENCONTRADA en vez de armar una estructura por su cuenta.');
+  console.log('  Falla ruidosa, no silenciosa: el control CUENTA_SIN_RUBRO marca cada cuenta');
+  console.log('  que ningún renglón capturó. Un plan que no sigue la convención produce un');
+  console.log('  estado con decenas de cuentas señaladas, imposible de leer como correcto.');
+  console.log('  Esa empresa carga la suya: statement_templates.company_id existe para eso.');
+
+  console.log('');
+  console.log('Lo que estas plantillas NO exponen, y el artículo sí exige:');
+  console.log('');
+  for (const gap of LO_QUE_ESTAS_PLANTILLAS_NO_EXPONEN) console.log(`  · ${gap}`);
+  console.log('');
+  console.log('  Ninguno se resuelve con un renglón más: los tres primeros piden datos que el');
+  console.log('  plan de cuentas no lleva. Van en nota, que es la salida que el propio art. 64');
+  console.log('  prevé cuando el monto no se expone en el cuerpo del estado.');
+
+  console.log('');
+  console.log(`Sin plantilla propia, los otros once tipos de ente siguen sin cobertura. Copiar`);
+  console.log('la de una SA cambiándole la etiqueta sería afirmar que una cooperativa expone su');
+  console.log('patrimonio igual, y la RT 62 capítulo 12 dice que no.');
+} catch (error) {
+  await client.query('ROLLBACK').catch(() => {});
+  console.error(String(error instanceof Error ? error.message : error));
+  process.exitCode = 1;
 } finally {
   await client.end();
 }

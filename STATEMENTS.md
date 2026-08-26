@@ -124,23 +124,81 @@ ella.
 
 | | Estado |
 |---|---|
-| Motor y controles | Funcionando, 33 tests |
-| `statement_templates` | **vacía** |
-| Ley 19.550 en `norms` | **no sembrada** |
+| Motor y controles | Funcionando |
+| Ley 19.550 en `norms` | **sembrada** — la fecha de emisión del T.O. salió de la ficha oficial del Decreto 841/84 |
+| `statement_templates` | **ESP y ER**, transcriptos de los arts. 63 y 64, para SA / IGJ / RT FACPCE |
 
 ```bash
 npm run statements:seed
 ```
 
-Dice exactamente qué falta y cómo se destraba. Resumen: la `fecha_emision` de la
-Ley 19.550 no surge del documento archivado, que solo da el B.O. del Decreto
-841/84 que ordenó el texto. Es la misma regla que dejó afuera a otros doce
-documentos en FASE 5b — completar la emisión con la publicación sería afirmar un
-hecho que nadie verificó.
+Valida las dos plantillas con `validarPlantilla()` **antes** de insertar ninguna, y
+aborta entero si alguna falla: un ESP sin su ER es un estado contable incompleto.
+
+### La convención de plan de cuentas que asumen
+
+```
+1.1.*  Activo corriente          1.2.*  Activo no corriente
+2.1.*  Pasivo corriente          2.2.*  Pasivo no corriente
+3.*    Patrimonio neto
+4.1-4.7 Ingresos ordinarios · 4.8 Ganancias de ejercicios anteriores · 4.9 Ganancias extraordinarias
+5.*    Costo de ventas y de servicios prestados
+6.1 Administración · 6.2 Comercialización · 6.3 Financiación · 6.4 Otros gastos ordinarios
+6.8 Pérdidas de ejercicios anteriores · 6.9 Pérdidas extraordinarias
+7.*    Cuentas de orden
+```
+
+El art. 63 pide separar créditos de bienes de cambio, y bienes de uso de
+inmateriales; también corriente de no corriente. Nada de eso sale de
+`accounts.type`, así que los selectores usan **prefijos de código** — y eso ata
+las plantillas a una codificación. Cada empresa arma su plan, así que **una
+empresa con otra codificación no puede usar estas plantillas**: carga la suya, que
+para eso `statement_templates.company_id` es nullable.
+
+Lo importante es cómo falla ese caso: `CUENTA_SIN_RUBRO` marca cada cuenta que
+ningún renglón capturó, así que un plan que no sigue la convención produce un
+estado con decenas de cuentas señaladas y `emisible = false`. Imposible de
+confundir con un balance correcto.
+
+### Los signos: todo el ER va INVERTIDO
+
+En el Mayor un saldo acreedor es negativo; en el estado, el pasivo se expone
+positivo y el costo se resta. Marcando `INVERTIDO` los ingresos **y también** los
+costos y gastos, cada `TOTAL` queda como una suma llana y el resultado sale solo.
+La alternativa era que los totales supieran restar según el nodo, que es volver a
+poner contabilidad en el código.
+
+### Una corrección de transcripción no es un cambio de norma
+
+La primera versión del ER tomaba el prefijo `4.` entero y excluía `4.9`. Estaba
+mal: `excluir` compara **códigos exactos**, así que `4.9` no excluye a `4.9.01` y
+la ganancia extraordinaria sumaba en dos renglones. Lo encontró
+`CUENTA_EN_DOS_RUBROS`, que es para lo que ese control existe.
+
+La base no deja reescribir ni borrar una plantilla publicada, así que la
+corrección entró como **v2** y la v1 se cerró con `valid_to = valid_from`: una
+ventana de largo cero, que afirma con precisión que esa versión *nunca tuvo un día
+aplicable*. Cerrarla "desde hoy" diría que hasta hoy era la correcta, y un estado
+de un ejercicio anterior emitido mañana volvería a tomarla.
 
 ## 8. Gaps declarados
 
-- **Ley 19.550 sin sembrar**: bloquea la carga de plantillas.
+- **Art. 64 inc. I. b) puntos 1 a 9**: los nueve montos que deben hacerse constar
+  —retribuciones de administradores, honorarios, sueldos y contribuciones, gastos
+  de estudios, regalías, publicidad, impuestos con sus intereses y multas
+  separados, intereses por acreedor, amortizaciones y previsiones—. No están como
+  renglones: exigirían una convención de tercer y cuarto nivel que casi ningún
+  plan sigue igual, y un renglón vacío porque el prefijo no existe es peor que la
+  ausencia — afirma que el concepto es cero. El propio artículo prevé la salida:
+  van en la memoria o en nota.
+- **Art. 63 inc. 1) b) y d)**: la apertura de créditos e inversiones con sociedades
+  controlantes, controladas o vinculadas, y los litigiosos. Piden un dato de la
+  contraparte que el plan de cuentas no lleva.
+- **Art. 63 inc. 4) b) y c)**: si los derechos y obligaciones están documentados o
+  con garantía real, y la exposición separada de los saldos en moneda extranjera.
+- **Los otros once tipos de ente**: solo hay plantillas para SA / IGJ. Copiar la de
+  una SA cambiándole la etiqueta afirmaría que una cooperativa expone su
+  patrimonio igual, y la RT 62 capítulo 12 dice que no.
 - **EEPN y EFE**: fuera del MVP con motivo (`docs/product/MVP.md`).
 - **Ajuste por inflación** (RT 6 / RT 54 cap. correspondiente): no implementado.
 - **Notas y anexos**: FASE 11.

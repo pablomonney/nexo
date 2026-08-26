@@ -47,14 +47,28 @@ suite('Candados de los estados contables', () => {
     await client?.end();
   });
 
-  it('el sistema no trae ninguna plantilla de fábrica', async () => {
-    // La Ley 19.550 no está sembrada, así que ninguna migración puede cargar una
-    // plantilla: `norm_version_id` es NOT NULL. No es un pendiente, es la regla.
-    const result = await client.query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM statement_templates WHERE created_by <> 'tester'`,
+  it('ninguna migración carga una plantilla: las publica un script, desde una norma', async () => {
+    // Este test decía que la tabla estaba vacía. Ya no lo está —hay dos
+    // plantillas del art. 63 y 64— y actualizar el número esperado habría
+    // convertido un candado en un contador.
+    //
+    // Lo que hay que sostener es de dónde salen: ninguna migración las escribe,
+    // para que publicar una estructura de estado contable nunca sea un efecto
+    // secundario de un cambio de esquema.
+    const deMigraciones = await client.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM statement_templates
+        WHERE created_by NOT IN ('tester', 'seed-statement-templates')`,
     );
+    expect(deMigraciones.rows[0]?.n).toBe('0');
 
-    expect(result.rows[0]?.n).toBe('0');
+    // Y que cada una cite el documento archivado del que se transcribió.
+    const sinDocumento = await client.query<{ statement_kind: string }>(
+      `SELECT t.statement_kind
+         FROM statement_templates t
+         LEFT JOIN norm_documents d ON d.norm_version_id = t.norm_version_id
+        WHERE t.created_by = 'seed-statement-templates' AND d.id IS NULL`,
+    );
+    expect(sinDocumento.rows).toEqual([]);
   });
 
   it('una plantilla sin norma no se puede insertar', async () => {

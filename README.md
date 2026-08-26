@@ -18,16 +18,14 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 >   pero `tax_rates` está vacía hasta archivar la Ley 23.349, así que responde
 >   `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%
 > - ✅ **Bancos: importación con mapeo declarado y conciliación asistida** (FASE 9)
-> - 🟡 **Estados contables: plantilla versionada, cada cifra con su origen** (FASE 10) — el motor
->   funciona y la Ley 19.550 ya está sembrada; falta transcribir sus arts. 63 y 64 al árbol de la
->   plantilla, que es trabajo profesional y no una corrida de script
->   (`npm run statements:seed` dice cómo)
+> - ✅ **Estados contables: ESP y ER transcriptos de los arts. 63 y 64, cada cifra con su origen**
+>   (FASE 10) — para SA / IGJ / RT FACPCE, sobre una convención de plan de cuentas declarada
 > - ✅ **Notas con cada cifra referenciada al estado, no escrita** (FASE 11)
 > - ✅ **Los ocho invariantes A-1..A-8 como puerta de CI que rompe el build** (FASE 12)
 > - ✅ **Habilitaciones de ARCA relevadas y vigilancia normativa que produce candidatos** (FASE 13)
 > - ✅ **Auditoría determinística y respondedor que no puede inventar un número** (FASE 14)
 > - ✅ **Sandbox que exige prueba de ser un sandbox en vez de sospechar de producción** (FASE 15)
-> - ✅ **29 migraciones aplicadas y 700/700 tests en verde contra PostgreSQL 18.6**
+> - ✅ **30 migraciones aplicadas y 710/710 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`). El certificado de ARCA ya está emitido; queda correr
 >   `npm run arca:check -- --cert … --key … --cuit …` para que el propio sistema confirme que la

@@ -332,8 +332,20 @@ sale de la Ley 19.550 arts. 63 y 64, y esa ley no se sembraba porque su fecha de
 del documento archivado — el texto actualizado solo declara la publicación del Decreto 841/84.
 
 Se destrabó archivando la **ficha oficial del Decreto 841/84**, que sí declara la fecha de dictado
-(20/03/1984). La ley ya está sembrada; transcribir los arts. 63 y 64 al árbol de la plantilla sigue
-siendo trabajo profesional con revisión humana, y `npm run statements:seed` dice exactamente eso.
+(20/03/1984). Hoy la tabla tiene el ESP y el ER del art. 63 y 64, publicados por
+`npm run statements:seed`, que los valida antes de insertar ninguno.
+
+### 10.2b Corregir una plantilla publicada
+
+`statement_templates` prohíbe reescribirla (`forbid_template_rewrite`) y borrarla (`forbid_delete`).
+La corrección entra como **versión siguiente**, y la anterior se cierra con `valid_to`.
+
+El caso ya ocurrió: la v1 del ER agrupaba mal las ganancias extraordinarias. Se cerró con
+`valid_to = valid_from` —una ventana de largo cero— y no con la fecha de hoy. La diferencia importa:
+el art. 64 no cambió, cambió nuestra transcripción, así que esa versión **nunca tuvo un día
+aplicable**. Cerrarla "desde hoy" habría dicho que hasta hoy era la correcta, y un estado de un
+ejercicio anterior emitido mañana habría vuelto a tomarla, porque `plantillaAplicable()` busca por
+la fecha de cierre del ejercicio y no por la de emisión.
 
 ### 10.3 Emitido significa firmado
 

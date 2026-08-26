@@ -5,10 +5,13 @@
  * estructuras distintas **sin cambiar código**; todo renglón tiene lineage no
  * nulo"*. Los dos primeros `describe` son esa frase, verificada.
  *
- * Las plantillas de este archivo son **fixtures de test**. La estructura sale de
- * la Ley 19.550 (T.O. 1984) arts. 63 y 64, archivada; en producción
- * `statement_templates` está vacía hasta que esa ley esté sembrada, porque su
- * `norm_version_id` es `NOT NULL`.
+ * Las plantillas de este archivo son **fixtures de test**, chicas a propósito:
+ * prueban el motor, no la transcripción. Las de producción —el ESP y el ER
+ * completos de los arts. 63 y 64— viven en `scripts/statement-templates.mjs` y se
+ * ejercitan desde `tests/integration/statement-templates.test.ts`, que las lee
+ * **de la base**: entre el archivo y lo que el motor recibe hay una
+ * serialización, un `INSERT` y una lectura, y un test sobre el objeto del archivo
+ * no prueba ninguno de esos tres pasos.
  */
 
 import { describe, expect, it } from 'vitest';

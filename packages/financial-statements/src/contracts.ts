@@ -88,7 +88,14 @@ export interface SelectorDeCuentas {
   readonly tipos?: readonly TipoCuenta[];
   /** Códigos exactos, para las excepciones que ningún prefijo captura. */
   readonly codigos?: readonly string[];
-  /** Códigos que se excluyen aunque el prefijo los capture. */
+  /**
+   * Códigos **exactos** que se excluyen aunque el prefijo los capture.
+   *
+   * Exactos, no prefijos: `'4.9'` no excluye a `'4.9.01'`. La asimetría con
+   * `prefijos` es fácil de leer al revés —costó una plantilla mal armada, que
+   * `CUENTA_EN_DOS_RUBROS` atrapó— así que para sacar una rama entera conviene
+   * enumerar los prefijos que sí van, en vez de tomar uno ancho y descontar.
+   */
   readonly excluir?: readonly string[];
 }
 

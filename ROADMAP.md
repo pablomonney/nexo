@@ -19,7 +19,7 @@
 | **FASE 7 — Libro Mayor** | ✅ **Entregada** — proyección verificada contra el Diario, exportación canónica |
 | **FASE 8 — IVA** | ✅ **Entregada** — alícuotas desde el art. 28 archivado; el crédito fiscal sigue sin decir `COMPUTABLE`, y ahora por el motivo correcto |
 | **FASE 9 — Bancos** | ✅ **Entregada** — cero conciliaciones confirmadas sin intervención humana, con cinco candados en la base |
-| **FASE 10 — Estados contables** | 🟡 **Construida** — el motor funciona y la Ley 19.550 ya está sembrada; falta transcribir sus arts. 63 y 64 al árbol |
+| **FASE 10 — Estados contables** | ✅ **Entregada** — ESP y ER transcriptos de los arts. 63 y 64, con la convención de plan de cuentas declarada |
 | **FASE 11 — Notas** | ✅ **Entregada** — cada cifra referenciada al estado, ninguna escrita a mano |
 | **FASE 12 — Invariantes** | ✅ **Entregada** — A-1..A-8 como puerta de CI que devuelve filas, no cuentas |
 | **FASE 13 — Integraciones oficiales** | ✅ **Entregada** — habilitaciones que degradan sin romper; vigilancia que produce candidatos, nunca normas |
@@ -450,7 +450,7 @@ Documentado en [BANKS.md](BANKS.md).
 
 ---
 
-## FASE 10 — Estados contables 🟡
+## FASE 10 — Estados contables ✅
 
 `statement_templates` versionadas por `(framework, entity_type, regulator, period)`; ESP y ER;
 información comparativa.
@@ -460,11 +460,25 @@ todo renglón tiene `lineage` no nulo. **Cumplido**: hay un test que arma el mis
 plantillas y obtiene doce renglones contra siete, con los mismos totales; y el linaje no es opcional
 ni en los tipos ni en la base.
 
-Queda en 🟡 porque `statement_templates` sigue **vacía**, pero el motivo cambió. La Ley 19.550 ya
-está sembrada —se destrabó archivando la ficha oficial del Decreto 841/84, que declara el dictado
-(20/03/1984) que el texto actualizado no trae—. Lo que falta es transcribir los arts. 63 y 64 al
-árbol de la plantilla, y eso es una decisión profesional: qué rubro va antes de cuál, qué se agrupa,
-qué inciso funda cada renglón. `npm run statements:seed` se niega a hacerlo solo y explica por qué.
+`statement_templates` tiene el **ESP y el ER** transcriptos de los arts. 63 y 64, para SA / IGJ /
+RT FACPCE. Cada rubro cita su inciso, en el orden del artículo y no en el que quedaba cómodo.
+
+La transcripción obligó a una decisión que conviene tener a la vista: **el art. 63 pide separaciones
+que `accounts.type` no da**. Créditos y bienes de cambio son los dos ACTIVO; corriente y no
+corriente también. Así que los selectores usan prefijos de código, y eso ata las plantillas a una
+convención de plan de cuentas — que queda declarada, se imprime al sembrar, y no es obligatoria para
+nadie: una empresa con otra codificación carga la suya.
+
+Lo que hace aceptable ese supuesto es cómo falla: `CUENTA_SIN_RUBRO` marca cada cuenta que ningún
+renglón capturó y el estado sale con `emisible = false`. No hay forma de que un plan incompatible
+produzca un balance que parezca correcto.
+
+**Una corrección de transcripción no es un cambio de norma.** La v1 del ER tomaba `4.` entero y
+excluía `4.9`, y `excluir` compara códigos exactos: la ganancia extraordinaria sumaba dos veces. Lo
+encontró `CUENTA_EN_DOS_RUBROS`. Como la base no deja reescribir ni borrar una plantilla publicada,
+la corrección entró como v2 y la v1 se cerró con `valid_to = valid_from` — una ventana de largo
+cero, que dice exactamente lo que pasó: esa versión nunca tuvo un día aplicable. Cerrarla "desde
+hoy" habría dejado que un estado de un ejercicio anterior volviera a tomarla.
 
 **Las decisiones:**
 
