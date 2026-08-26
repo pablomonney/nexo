@@ -15,7 +15,14 @@ import { describe, expect, it } from 'vitest';
 import { money, parseCalendarDate, type CalendarDate, type Money } from '@aai/shared';
 import {
   aplanar,
+  cifraDeRenglon,
+  cifrasDeLasNotas,
   construirEstado,
+  desagregarRenglon,
+  remisiones,
+  renglonDe,
+  verificarNotas,
+  type Nota,
   plantillaAplicable,
   totalDe,
   validarPlantilla,
@@ -827,5 +834,191 @@ describe('la plantilla se valida antes de usarla', () => {
     expect(estado.renglones.find((r) => r.codigo === 'A.TODO')?.importe.amount).toBe(200_000n);
     expect(estado.renglones.find((r) => r.codigo === 'A.BU')?.importe.amount).toBe(100_000n);
     expect(estado.emisible).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Notas complementarias — art. 65 e invariante A-2
+// ---------------------------------------------------------------------------
+
+describe('una cifra de nota no se escribe: se referencia', () => {
+  const estado = construirEstado(
+    {
+      ...ESP_LGS,
+      raiz: ESP_LGS.raiz.map((nodo) =>
+        nodo.codigo === 'A'
+          ? {
+              ...nodo,
+              hijos: (nodo.hijos ?? []).map((hijo) =>
+                hijo.codigo === 'AC'
+                  ? {
+                      ...hijo,
+                      hijos: (hijo.hijos ?? []).map((nieto) =>
+                        nieto.codigo === 'AC.CAJA' ? { ...nieto, nota: 3 } : nieto,
+                      ),
+                    }
+                  : hijo,
+              ),
+            }
+          : nodo,
+      ),
+    },
+    DATOS,
+  );
+
+  function nota(overrides: Partial<Nota> = {}): Nota {
+    return {
+      numero: 3,
+      titulo: 'Caja y bancos',
+      fundamento: 'Ley 19.550 (T.O. 1984), art. 65',
+      referidaPor: ['AC.CAJA'],
+      bloques: [
+        { tipo: 'TEXTO', contenido: 'Se compone de:', origenTexto: 'HUMANO' },
+        {
+          tipo: 'CIFRAS',
+          cifras: [cifraDeRenglon(estado, 'AC.CAJA')!],
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it('la cifra hereda importe y linaje del renglón', () => {
+    const cifra = cifraDeRenglon(estado, 'AC.CAJA');
+
+    expect(cifra?.importe.amount).toBe(120_000n);
+    expect(cifra?.origen.map((o) => o.codigo)).toEqual(['1.1.01', '1.1.02']);
+    // No hay forma de construir una cifra con un importe propio: la única vía es
+    // esta, y falla cuando el renglón no existe.
+    expect(cifraDeRenglon(estado, 'NO_EXISTE')).toBeNull();
+  });
+
+  it('desagregar un renglón produce una fila por cuenta, y suman el renglón', () => {
+    const filas = desagregarRenglon(estado, 'AC.CAJA');
+    const suma = filas.reduce((acc, fila) => acc + fila.importe.amount, 0n);
+
+    expect(filas.map((f) => f.etiqueta)).toEqual(['1.1.01', '1.1.02']);
+    expect(suma).toBe(120_000n);
+    // Cada fila arrastra su propia cuenta: el cuadro es navegable célula a célula.
+    expect(filas[0]?.origen).toHaveLength(1);
+    expect(desagregarRenglon(estado, 'NO_EXISTE')).toEqual([]);
+  });
+
+  it('un juego de notas coherente pasa', () => {
+    const resultado = verificarNotas(estado, [nota()]);
+
+    expect(resultado.errores).toEqual([]);
+    expect(resultado.consistente).toBe(true);
+  });
+
+  it('un renglón que remite a una nota inexistente se detecta', () => {
+    const resultado = verificarNotas(estado, []);
+
+    expect(resultado.errores.map((e) => e.codigo)).toContain('REMISION_SIN_NOTA');
+  });
+
+  it('una nota a la que nadie remite también se detecta', () => {
+    // El control que casi nadie mira: delata la nota que quedó del ejercicio
+    // anterior, con las cifras del ejercicio anterior adentro.
+    const resultado = verificarNotas(estado, [nota(), nota({ numero: 9, referidaPor: [] })]);
+    const huerfana = resultado.errores.find((e) => e.codigo === 'NOTA_NO_REFERIDA');
+
+    expect(huerfana?.nota).toBe(9);
+    expect(huerfana?.mensaje).toMatch(/ejercicio anterior/);
+  });
+
+  it('una cifra que referencia un renglón inexistente se detecta', () => {
+    const conCifraVieja = nota({
+      bloques: [
+        { tipo: 'TEXTO', contenido: 'x', origenTexto: 'HUMANO' },
+        {
+          tipo: 'CIFRAS',
+          cifras: [
+            {
+              etiqueta: 'Rubro de otro ejercicio',
+              renglonCodigo: 'RUBRO_VIEJO',
+              importe: pesos(1n),
+              comparativo: null,
+              origen: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    const resultado = verificarNotas(estado, [conCifraVieja]);
+    expect(resultado.errores.map((e) => e.codigo)).toContain('RENGLON_INEXISTENTE');
+  });
+
+  it('una nota sin texto es una tabla suelta, no una nota', () => {
+    const soloCifras = nota({
+      bloques: [{ tipo: 'CIFRAS', cifras: [cifraDeRenglon(estado, 'AC.CAJA')!] }],
+    });
+
+    const resultado = verificarNotas(estado, [soloCifras]);
+    expect(resultado.errores.map((e) => e.codigo)).toContain('NOTA_SIN_TEXTO');
+  });
+
+  it('un borrador de IA no llega a un estado emitido', () => {
+    const conBorrador = nota({
+      bloques: [
+        { tipo: 'TEXTO', contenido: 'Redactado por el modelo', origenTexto: 'IA_BORRADOR' },
+      ],
+    });
+
+    const resultado = verificarNotas(estado, [conBorrador]);
+    const error = resultado.errores.find((e) => e.codigo === 'BORRADOR_DE_IA_SIN_REVISAR');
+
+    expect(error?.mensaje).toMatch(/afirmación profesional/);
+    expect(resultado.consistente).toBe(false);
+  });
+
+  it('dos notas con el mismo número rompen las remisiones', () => {
+    const resultado = verificarNotas(estado, [nota(), nota()]);
+    expect(resultado.errores.map((e) => e.codigo)).toContain('NUMERO_DUPLICADO');
+  });
+
+  it('una nota vacía se detecta', () => {
+    const resultado = verificarNotas(estado, [nota({ bloques: [] })]);
+    const codigos = resultado.errores.map((e) => e.codigo);
+
+    expect(codigos).toContain('NOTA_SIN_BLOQUES');
+    expect(codigos).toContain('NOTA_SIN_TEXTO');
+  });
+
+  it('las cifras de un cuadro también se verifican', () => {
+    const conCuadro = nota({
+      bloques: [
+        { tipo: 'TEXTO', contenido: 'Composición:', origenTexto: 'HUMANO' },
+        {
+          tipo: 'CUADRO',
+          encabezados: ['Cuenta', 'Importe'],
+          filas: [desagregarRenglon(estado, 'AC.CAJA')],
+        },
+      ],
+    });
+
+    const resultado = verificarNotas(estado, [conCuadro]);
+    expect(resultado.consistente).toBe(true);
+    // Y todas sus cifras salen con linaje para el invariante A-2.
+    const cifras = cifrasDeLasNotas([conCuadro]);
+    expect(cifras).toHaveLength(2);
+    expect(cifras.every((entrada) => entrada.cifra.origen.length > 0)).toBe(true);
+  });
+
+  it('las remisiones se derivan del estado, no se mantienen a mano', () => {
+    const mapa = remisiones(estado);
+
+    expect(mapa.get(3)).toEqual(['AC.CAJA']);
+    expect(mapa.size).toBe(1);
+  });
+
+  it('desde una cifra se vuelve al renglón del estado', () => {
+    const cifra = cifraDeRenglon(estado, 'AC.CAJA')!;
+
+    expect(renglonDe(estado, cifra)?.etiqueta).toBe('Caja y bancos');
+    expect(
+      renglonDe(estado, { ...cifra, renglonCodigo: 'NO_EXISTE' }),
+    ).toBeUndefined();
   });
 });

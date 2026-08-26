@@ -49,9 +49,10 @@ suite('El Mayor es una proyección del Diario', () => {
       `INSERT INTO journal_entries
         (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
          description, kind, status, total_debit, total_credit, source_type,
-         reverses_entry_id, created_by, approved_by, approved_at)
+          manual_justification, reverses_entry_id, created_by, approved_by, approved_at)
        VALUES ($1, 'GENERAL', $2, $3, next_entry_number($1, 'GENERAL', $3), $4,
-               'Proyección', $5, 'APROBADO', $6, $6, 'MANUAL', $7, 'tester', 'contador', now())
+               'Proyección', $5, 'APROBADO', $6, $6, 'MANUAL',
+               'Asiento manual de prueba de proyección', $7, 'tester', 'contador', now())
        RETURNING id`,
       [
         fx.companyA,
@@ -302,10 +303,10 @@ suite('Importe registrado e importe original (migración 0020)', () => {
       `INSERT INTO journal_entries
         (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
          description, kind, status, currency, total_debit, total_credit, source_type,
-         created_by, approved_by, approved_at)
+         manual_justification, created_by, approved_by, approved_at)
        VALUES ($1, 'GENERAL', $2, $3, next_entry_number($1, 'GENERAL', $3), '2025-01-15',
                'Compra en USD', 'NORMAL', 'APROBADO', 'ARS', '1000000.00', '1000000.00',
-               'MANUAL', 'tester', 'contador', now())
+               'MANUAL', 'Compra en moneda extranjera de prueba', 'tester', 'contador', now())
        RETURNING id`,
       [fx.companyA, fx.periodA, fx.fiscalYearA],
     );

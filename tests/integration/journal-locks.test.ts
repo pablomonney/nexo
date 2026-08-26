@@ -39,9 +39,11 @@ suite('Candados del Libro Diario', () => {
     const result = await client.query<{ id: string }>(
       `INSERT INTO journal_entries
         (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
-         description, kind, status, total_debit, total_credit, source_type, created_by)
+         description, kind, status, total_debit, total_credit, source_type,
+          manual_justification, created_by)
        VALUES ($1, 'GENERAL', $2, $3, next_entry_number($1, 'GENERAL', $3), $4,
-               'Test', $5, $6, $7, $8, 'MANUAL', 'tester')
+               'Test', $5, $6, $7, $8, 'MANUAL',
+               'Asiento manual de prueba: je_trazabilidad_obligatoria exige respaldo', 'tester')
        RETURNING id`,
       [
         fx.companyA,

@@ -233,6 +233,29 @@ suite('Candados de los estados contables', () => {
   });
 
   it('statement_trace lleva del renglón a las cuentas que lo formaron', async () => {
+    // El linaje tiene que resolver a asientos aprobados: es el invariante A-1, y
+    // `npm run audit:invariants` lo verifica sobre TODA la base — incluidas las
+    // filas que dejan los tests. Un fixture con linaje inventado hace fallar la
+    // puerta de CI, que es exactamente lo que la puerta tiene que hacer.
+    await client.query('BEGIN');
+    const asiento = await client.query<{ id: string }>(
+      `INSERT INTO journal_entries
+         (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
+          description, kind, status, total_debit, total_credit, source_type,
+          manual_justification, created_by, approved_by, approved_at)
+       VALUES ($1, 'GENERAL', $2, $3, next_entry_number($1, 'GENERAL', $3), '2025-01-20',
+               'Respaldo del linaje', 'NORMAL', 'APROBADO', '120000.00', '120000.00', 'MANUAL',
+               'Asiento que respalda el linaje del renglón', 'tester', 'contador', now())
+       RETURNING id`,
+      [fx.companyA, fx.periodA, fx.fiscalYearA],
+    );
+    await client.query(
+      `INSERT INTO journal_entry_lines (company_id, entry_id, line_no, account_id, debit, credit)
+       VALUES ($1, $2, 1, $3, '120000.00', 0), ($1, $2, 2, $4, 0, '120000.00')`,
+      [fx.companyA, asiento.rows[0]!.id, fx.cashA, fx.salesA],
+    );
+    await client.query('COMMIT');
+
     const statementId = await nuevoEstado();
     await client.query(
       `INSERT INTO financial_statement_lines

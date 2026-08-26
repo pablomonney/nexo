@@ -98,6 +98,23 @@ Estos tests fallan el build, no emiten advertencias:
 | A-7 | El Mayor reconstruido desde el Diario coincide con `ledger_movements` |
 | A-8 | Ninguna `accounting_rule` en estado `ACTIVE` carece de `approved_by` |
 
+### Cómo se corren
+
+```bash
+npm run audit:invariants
+```
+
+Parte de `npm run verify`. Devuelve **las filas que violan** cada invariante, no un conteo: un
+"3 violaciones de A-1" obliga a escribir la consulta de nuevo para saber cuáles.
+
+Los que no tienen filas sobre las que fallar se informan como **VACUO**, no como verde. Un
+invariante que pasa porque no hay datos no es lo mismo que uno que pasa porque los datos están
+bien (R-35).
+
+Cuando un invariante puede convertirse en candado, se convierte: **A-3** es desde la migración
+`0025` un CHECK sobre `journal_entries`. Un invariante que solo se verifica después ya se violó
+cuando se detecta.
+
 A-6 es la verificación mecánica de la promesa central del producto. Si alguna vez falla, el
 producto dejó de ser lo que dice ser.
 

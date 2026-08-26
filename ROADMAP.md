@@ -465,20 +465,67 @@ Documentado en [STATEMENTS.md](STATEMENTS.md).
 
 ---
 
-## FASE 11 — Notas
+## FASE 11 — Notas ✅
 
-`Notes Engine`, notas con cada cifra referenciada, políticas contables, borradores del `Notes Agent`.
+Notas con cada cifra referenciada, remisiones cruzadas y borradores marcados como tales.
 
-**Criterio:** invariante A-2 (`AUDIT_TRAIL.md`) pasa: no existe cifra en nota sin respaldo.
+**Criterio:** el invariante A-2 pasa — no existe cifra en nota sin respaldo. **Cumplido**, y no por
+validación sino por construcción: `note_figures.statement_line_id` es `NOT NULL` y una
+`CifraDeNota` solo se puede obtener de `cifraDeRenglon()`, que la deriva de un renglón del estado.
+
+**Las decisiones:**
+
+1. **Una cifra de nota no se escribe: se referencia.** No hay constructor que acepte un importe. La
+   alternativa —dejar escribir el número y validar después que coincida— falla la primera vez que el
+   estado se recalcula: la nota queda con el número viejo y lo dice con toda naturalidad.
+2. **Un trigger verifica que el importe de la cifra sea el del renglón.** Una nota que informa un
+   número distinto del estado del que sale es peor que una nota sin cifras.
+3. **Se controlan las dos direcciones de la remisión.** `REMISION_SIN_NOTA` lo revisa todo el mundo;
+   `NOTA_NO_REFERIDA` casi nadie, y es el que delata la nota que quedó del ejercicio anterior — con
+   las cifras del ejercicio anterior adentro.
+4. **Un borrador de IA no llega a un estado emitido** (§42). La nota es una afirmación profesional:
+   tiene que pasar a HUMANO antes. Es el mismo candado que `je_ai_requires_human_approval`.
+5. **El sistema no redacta.** Arma la estructura y pega las cifras con su origen; el texto lo escribe
+   quien firma.
 
 ---
 
-## FASE 12 — Auditoría
+## FASE 12 — Auditoría ✅
 
-Bitácora encadenada, verificador de cadena, reportes de auditoría, alertas completas del §22,
-modo Auditor.
+Los ocho invariantes de `AUDIT_TRAIL.md` como puerta de CI.
 
-**Criterio:** los 8 invariantes A-1..A-8 corren en CI y fallan el build al violarse.
+**Criterio:** A-1..A-8 corren en CI y **fallan el build** al violarse. Cumplido:
+`npm run audit:invariants` es parte de `npm run verify`, devuelve las filas que violan cada uno —no
+un conteo— y sale con código distinto de cero.
+
+**Dos decisiones:**
+
+1. **Un invariante vacuo no es un invariante verde.** A-2 y A-4 hoy no tienen filas sobre las que
+   fallar, y se informan aparte. Un tablero que los pinta iguales acompaña una base vacía con la
+   misma cara que una base sana.
+2. **Donde el invariante puede ser un candado, se vuelve candado.** A-3 —todo asiento aprobado tiene
+   comprobante o justificación— pasó a ser un CHECK: un invariante que solo se verifica después ya
+   se violó cuando se detecta.
+
+> **El invariante A-5 encontró un defecto serio de la FASE 1b: la cadena de auditoría se bifurcaba.**
+>
+> `audit_chain_link()` buscaba el eslabón anterior con `ORDER BY occurred_at DESC`, y `occurred_at`
+> es `now()` — la hora de **inicio de la transacción**, no la del INSERT. Con transacciones
+> concurrentes sobre la misma empresa, sus horas de inicio se intercalan con el orden real de
+> inserción, y tres entradas terminaban con el mismo `prev_hash`. En la base de desarrollo había 19
+> bifurcaciones sobre 204 entradas.
+>
+> Importa más que un bug común: una cadena de hashes existe para que agregar, borrar o reordenar una
+> entrada sea detectable, y en una bifurcación esa propiedad se pierde **en silencio** — dos ramas
+> paralelas admiten que se borre una entera sin que ningún eslabón quede colgando. El control que
+> protege la bitácora estaba roto justo bajo carga, que es cuando hace falta.
+>
+> La migración `0025` encadena por un `seq` de secuencia —el orden en que las entradas entraron— y
+> mete `seq` en el payload, así reordenar la bitácora también rompe la cadena. El candado de
+> serialización estaba bien; lo que estaba mal era la pregunta.
+
+**Lo que queda de la fase, declarado:** reportes de auditoría y modo Auditor como pantallas; las
+alertas del §22 más allá de las ya implementadas.
 
 ---
 

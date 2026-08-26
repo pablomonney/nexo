@@ -83,10 +83,13 @@ describe.skipIf(!hasDatabase)('candados de clasificación asistida', () => {
         const entrada = await client.query<{ id: string }>(
           `INSERT INTO journal_entries
              (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
-              description, status, total_debit, total_credit, source_type, ai_prediction_id,
+              description, status, total_debit, total_credit, source_type,
+              manual_justification, ai_prediction_id,
               created_by, approved_by, approved_at)
            VALUES ($1, 'GRAL', $2, $3, $4, '2025-01-15', 'Asiento propuesto por IA', $5,
-                   100.00, 100.00, 'INVOICE', $6, 'ai:CLASSIFICATION', $7,
+                   100.00, 100.00, 'INVOICE',
+                   'Propuesta de IA en fixture; sin comprobante asociado',
+                   $6, 'ai:CLASSIFICATION', $7,
                    CASE WHEN $7::text IS NULL THEN NULL ELSE now() END)
            RETURNING id`,
           [

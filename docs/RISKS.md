@@ -413,6 +413,57 @@ visible.
 *Residual:* bajo acá, medio como patrón. La regla es: ante un operando ausente, fallar; nunca
 sustituir por un neutro que haga pasar la comprobación.
 
+### 🔴 R-34 — La cadena de auditoría que se bifurca en silencio *(nuevo, 2026-08-26)*
+
+`audit_logs` encadena cada entrada con el hash de la anterior para que agregar, borrar o reordenar
+sea detectable. El eslabón anterior se buscaba con `ORDER BY occurred_at DESC`, y `occurred_at` es
+`now()`: la hora de **inicio de la transacción**, no la del INSERT.
+
+Bajo concurrencia las horas de inicio se intercalan con el orden real de inserción, y tres entradas
+terminan con el mismo `prev_hash`. En la base de desarrollo había **19 bifurcaciones sobre 204
+entradas** — sin una sola alarma.
+
+*Por qué importa:* en una bifurcación la propiedad que la cadena existe para dar **se pierde**. Dos
+ramas paralelas admiten que se borre una entera sin que ningún eslabón quede colgando. Y el control
+fallaba justo bajo carga, que es cuando una bitácora importa.
+
+*Cómo apareció:* no lo encontró una revisión de código ni un test. Lo encontró el invariante A-5 la
+primera vez que se lo corrió contra datos reales. El candado de serialización
+(`pg_advisory_xact_lock`) estaba bien; lo que estaba mal era la pregunta — se ordenaba por "cuál
+empezó última" y había que ordenar por "cuál entró última".
+
+*Mitigaciones:*
+
+1. **La cadena se encadena por `seq`**, una secuencia que toma valor en el INSERT (migración 0025).
+2. **`seq` entra al payload hasheado**: reordenar la bitácora también rompe la cadena.
+3. **`verify_audit_chain` usa la misma fórmula y el mismo orden.** Un verificador que calcula
+   distinto reporta rupturas donde no las hay y —peor— deja de reportar las que sí.
+4. **A-5 corre en `npm run verify`**: si vuelve a bifurcarse, el build no pasa.
+
+*Residual:* bajo. Queda el acoplamiento entre las dos fórmulas —trigger y verificador— que hoy se
+mantiene a mano; son diez líneas en el mismo archivo, y está anotado que hay que extraerlas a una
+función compartida si crecen.
+
+### 🟠 R-35 — El invariante que pasa porque no hay datos *(nuevo, 2026-08-26)*
+
+De los ocho invariantes, dos (A-2 y A-4) hoy no tienen ninguna fila sobre la que puedan fallar: no
+hay cifras de nota ni aplicaciones de regla. Reportarlos en verde sería literalmente cierto y
+completamente engañoso.
+
+*Por qué importa:* es el mismo error que `NO_CONSULTADO` vs `FUENTE_NO_ENCONTRADA` en el motor
+normativo, o `cadenaVerificada: null` en bancos. Un tablero que pinta igual "verificado y está bien"
+que "no había nada que verificar" acompaña una base vacía con la misma cara que una base sana — y la
+primera vez que alguien confía en ese verde, confía en nada.
+
+*Mitigaciones:*
+
+1. **`audit:invariants` cuenta el universo de cada invariante** y marca `VACUO` cuando es cero.
+2. **El resumen los informa por separado**: "6 verificados, 2 vacuos", nunca "8 en verde".
+3. Es el mismo criterio ya aplicado en el motor normativo, en el de IVA y en la conciliación.
+
+*Residual:* bajo mientras la distinción se mantenga. El riesgo real es que alguien "simplifique" el
+resumen a un booleano.
+
 ---
 
 ## Riesgo de proyecto
