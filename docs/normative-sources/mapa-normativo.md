@@ -50,7 +50,7 @@ Una regla que no declare de cuáles de estas depende, no puede activarse.
 
 ## 3. Mapa por capacidad del sistema
 
-Estado al 2026-08-24, tras la descarga y archivado de 21 documentos oficiales.
+Estado al 2026-08-26, tras la descarga y archivado de 25 documentos oficiales.
 
 | Capacidad | Normas de referencia | Depende de | Estado |
 |-----------|---------------------|------------|--------|

@@ -10,9 +10,11 @@
  * qué norma sale (ADR-005).
  *
  * La segunda decisión, más incómoda: **el motor no dice si un crédito fiscal es
- * computable**. La regla de fondo está en la Ley 23.349, que no está archivada.
- * Lo que sí hace es verificar todo lo verificable —el comprobante, el emisor, la
- * discriminación, la alícuota— y devolver `NO_DETERMINABLE` con esa lista. Es
+ * computable**, y no lo dice aunque la Ley de IVA ya esté archivada. El art. 12
+ * condiciona el cómputo a la vinculación con operaciones gravadas, que es un
+ * hecho del negocio y no un campo del comprobante. Lo que sí hace es verificar
+ * todo lo verificable —el comprobante, el emisor, la discriminación, la alícuota,
+ * el tope del art. 12— y devolver `NO_DETERMINABLE` con esa lista. Es
  * exactamente el §11: validación fiscal ≠ validación contable ≠ validación
  * económica, y confundirlas es cómo un sistema termina afirmando que un crédito
  * se puede tomar cuando lo único que verificó fue que la factura existe.
@@ -171,7 +173,11 @@ export interface EvaluacionCreditoFiscal {
   /** Lo que sí se verificó, con su resultado. Es el valor real de la respuesta. */
   readonly hallazgos: readonly HallazgoIva[];
   readonly ivaDiscriminado: Money;
-  /** Qué falta para poder decidir. Vacío nunca: siempre falta la ley. */
+  /**
+   * Qué falta para poder decidir. Vacío nunca — y no porque falte una fuente:
+   * los tres primeros ítems son hechos del negocio y de la operación, que ningún
+   * archivo normativo va a traer.
+   */
   readonly faltaRelevar: readonly string[];
   readonly mensaje: string;
 }

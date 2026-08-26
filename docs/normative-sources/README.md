@@ -44,10 +44,15 @@ Los pasos 1 a 7 pueden asistirse con herramientas. **El paso 9 es humano y no es
 5. Ante duda no resoluble con fuente oficial, escribir literalmente:
    `NO VERIFICABLE CON FUENTE OFICIAL DISPONIBLE`.
 
-## Estado actual (2026-08-24)
+## Estado actual (2026-08-26)
 
-**21 documentos oficiales archivados en `originals/`, 27 MB, todos en nivel `V1`** con SHA-256
+**25 documentos oficiales archivados en `originals/`, todos en nivel `V1`** con SHA-256
 registrado en `registro-de-descargas.csv` y en `checksums.sha256`.
+
+Los cuatro últimos cerraron los tres bloqueos de fuente que arrastraba el roadmap: la **Ley de IVA
+(t.o. 1997)**, las fichas oficiales de los **Decretos 280/97 y 841/84** —que son de donde salen las
+fechas que los textos actualizados no declaran— y la **Res. P. N° 460/2024 del CPCECABA**, primer
+acto de adopción jurisdiccional del archivo.
 
 | Bloque | Documentos |
 |--------|-----------|

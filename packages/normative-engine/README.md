@@ -97,12 +97,19 @@ reorganiza su sitio; el hash del PDF que el sistema leyó ese día no cambia nun
 npm run norms:seed
 ```
 
-Carga el archivo de FASE 1 en `norms` / `norm_versions` / `norm_documents`. De los
-21 documentos archivados entran **8**: los que tienen fecha de emisión verificada
+Carga el archivo normativo en `norms` / `norm_versions` / `norm_documents`. De los
+25 documentos archivados entran **14**: los que tienen fecha de emisión verificada
 en [`vigencias.csv`](../../docs/normative-sources/vigencias.csv), donde cada fila
-cita el artículo del que surge. Los otros 13 se saltean y el script dice cuáles y
+cita el artículo del que surge. Los otros 11 se saltean y el script dice cuáles y
 por qué — completar `fecha_emision` con la de publicación sería afirmar un hecho
 que nadie verificó.
+
+El caso de la Ley 19.550 muestra para qué sirve esa terquedad. Estuvo meses fuera
+del motor porque su texto actualizado declara la publicación del Decreto 841/84
+y no su dictado, y sin fecha de emisión verificada la norma no se sembraba —
+`statement_templates` quedaba vacía río abajo. Se destrabó archivando **la ficha
+oficial del decreto**, que sí lo declara (20/03/1984). No completando el campo
+de memoria.
 
 El octavo lo agregó la FASE 6: el **Código Civil y Comercial (Ley 26.994)**, del
 que salen las formalidades del Libro Diario. Su fecha de vigencia —01/08/2015—

@@ -5,7 +5,7 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > **Estado: las 15 fases del roadmap están construidas.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
-> - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
+> - ✅ **25 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
 > - ✅ **Monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI** (FASE 1b)
 > - ✅ **API con autenticación, MFA, RBAC granular y tenancy** (FASE 2)
 > - ✅ **Integración con ARCA desacoplada, con mocks y datos de prueba** (FASE 3a)

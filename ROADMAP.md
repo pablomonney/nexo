@@ -8,14 +8,23 @@
 | Fase | Estado |
 |------|--------|
 | **FASE 0 — Investigación normativa y arquitectura** | ✅ **Entregada** |
-| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 21 documentos oficiales archivados con hash |
+| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 25 documentos oficiales archivados con hash |
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
 | **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
 | **FASE 4 — Motor de clasificación** | ✅ **Entregada** — la IA propone, la Validation Layer filtra, la persona aprueba |
 | **FASE 5 — Motor contable** | ✅ **Entregada** — once validaciones, numeración sin huecos, contraasientos, balance |
 | **FASE 5b — Motor normativo** | ✅ **Entregada** — no tenía fase asignada. Vigencia bitemporal, adopción jurisdiccional, citas |
-| FASE 6 → 14 | ⬜ |
+| **FASE 6 — Libro Diario** | ✅ **Entregada** — siete controles de forma, cada uno citando su artículo del CCyC |
+| **FASE 7 — Libro Mayor** | ✅ **Entregada** — proyección verificada contra el Diario, exportación canónica |
+| **FASE 8 — IVA** | ✅ **Entregada** — alícuotas desde el art. 28 archivado; el crédito fiscal sigue sin decir `COMPUTABLE`, y ahora por el motivo correcto |
+| **FASE 9 — Bancos** | ✅ **Entregada** — cero conciliaciones confirmadas sin intervención humana, con cinco candados en la base |
+| **FASE 10 — Estados contables** | 🟡 **Construida** — el motor funciona y la Ley 19.550 ya está sembrada; falta transcribir sus arts. 63 y 64 al árbol |
+| **FASE 11 — Notas** | ✅ **Entregada** — cada cifra referenciada al estado, ninguna escrita a mano |
+| **FASE 12 — Invariantes** | ✅ **Entregada** — A-1..A-8 como puerta de CI que devuelve filas, no cuentas |
+| **FASE 13 — Integraciones oficiales** | ✅ **Entregada** — habilitaciones que degradan sin romper; vigilancia que produce candidatos, nunca normas |
+| **FASE 14 — IA avanzada** | ✅ **Entregada** — auditoría determinística y un respondedor que no puede inventar un número |
+| **FASE 15 — Sandbox de simulación** | ✅ **Entregada** — el candado exige prueba de ser un sandbox en vez de sospechar de producción |
 
 ---
 
@@ -29,7 +38,7 @@ seguridad y pruebas, propuesta de MVP.
 
 ## FASE 1a — Carga normativa `V1` ✅
 
-21 documentos oficiales descargados, validados y archivados con SHA-256 en
+25 documentos oficiales descargados, validados y archivados con SHA-256 en
 `docs/normative-sources/originals/`, indexados en `registro-de-descargas.csv`.
 
 Resultado sustantivo, más allá del archivado:
@@ -38,7 +47,7 @@ Resultado sustantivo, más allá del archivado:
   normas distintas.
 - **C-03 cerrado** — el art. 3° de la RT 54 enumera las derogaciones. No deroga RT 16 ni RT 26.
 - **C-02 confirmado con texto oficial** — la IGJ remite a las RT adoptadas por el CPCECABA.
-- **FASE 8 (IVA) desbloqueada** — RG 4597 (T.O.) y RG 5707/2025 archivadas.
+- **FASE 8 (IVA) desbloqueada** — RG 4597 (T.O.) y RG 5707/2025 archivadas; la Ley de IVA (t.o. 1997) se sumó el 2026-08-26.
 - Dos hallazgos de método: el BO no sirve como fuente de texto; la documentación técnica de un
   organismo no prueba vigencia.
 
@@ -306,10 +315,11 @@ parámetro normativo y no una constante del código (ADR-005).
 4. **Lo que el intérprete no puede evaluar, falla; nunca vale `false`.** Una regla que deja de
    aplicarse sin que nadie se entere es peor que una que rompe.
 
-**Estado de los datos, declarado:** 9 de 21 documentos cargados —los que tienen fecha de emisión
-verificada—, **0 adopciones** y **0 reglas**. Para que el motor resuelva en CABA falta archivar la
-Res. CPCECABA 460/2024; para que haya reglas hay que transcribir articulado con revisión humana.
-Mientras tanto responde `FUENTE_NO_ENCONTRADA`, que es la verdad.
+**Estado de los datos, declarado:** 14 de 25 documentos cargados —los que tienen fecha de emisión
+verificada—, **1 adopción** (CABA, por la Res. P. N° 460/2024, archivada el 2026-08-26) y **0
+reglas**. Para que haya reglas hay que transcribir articulado con revisión humana. Mientras tanto el
+motor responde `FUENTE_NO_ENCONTRADA`, que es la verdad; y las jurisdicciones sin acto relevado
+siguen respondiendo `ADOPCION_NO_RELEVADA`, que también lo es.
 
 ---
 ## FASE 6 — Libro Diario · FASE 7 — Libro Mayor ✅
@@ -353,18 +363,32 @@ FASE 8) y exportación a PDF con formato de libro.
 
 ---
 
-## FASE 8 — IVA 🟡
+## FASE 8 — IVA ✅
 
 `tax-engine`: subdiarios IVA Compras / IVA Ventas, notas de crédito, evaluación del crédito fiscal
 y Libro de IVA Digital.
 
-**Bloqueante previo, cumplido:** RG 4597 T.O. y RG 5707/2025 están archivadas y cargadas al motor
-normativo. **Bloqueante que sigue abierto:** la **Ley 23.349** no está archivada, y sin ella no hay
-alícuotas ni requisitos de cómputo del crédito fiscal.
+**Bloqueantes previos, ambos cumplidos:** RG 4597 T.O. y RG 5707/2025 están archivadas y cargadas;
+y el 2026-08-26 se archivó la **Ley de Impuesto al Valor Agregado (t.o. 1997)**, que era el gap más
+caro del repositorio.
 
-Por eso la fase queda en 🟡: el motor funciona y sus controles corren, pero `tax_rates` está vacía
-y toda operación cae en `SIN_ALICUOTAS_RELEVADAS`. Es el caso que el pliego describe — "el sistema
-debe decir *no tengo fuente*" — y funciona así por diseño, no por falta de tiempo.
+La fase pasa a ✅. `tax_rates` tiene cinco filas sembradas desde el art. 28, cada una citando su
+párrafo, y el art. 12 aportó un control que antes no se podía hacer: la **regla de tope**, medida
+contra la alícuota más alta vigente y no contra la general — comparar contra el 21% convertiría en
+hallazgo toda factura de energía eléctrica al 27%, que es el caso legítimo del segundo párrafo.
+
+**Dos bordes que quedan, y son bordes reales, no pendientes de tiempo:**
+
+1. Para hechos imponibles **anteriores al 18/11/2002** el motor sigue respondiendo
+   `SIN_ALICUOTAS_RELEVADAS`. El texto archivado es un T.O. *actualizado*: lista sus antecedentes y
+   no los transcribe. Lo único afirmable sobre el pasado es la ventana del Decreto 2312/2002 (19%
+   hasta el 17/01/2003), que el propio art. 28 transcribe — y esa ventana cerrada es lo que ancla el
+   21%. Es la misma lección que dio la RG 4597.
+2. `EstadoCreditoFiscal` **sigue sin `COMPUTABLE`**, y el motivo mejoró. Ya no es que falte la ley:
+   es que el art. 12 condiciona el cómputo a la vinculación con operaciones gravadas, que es un hecho
+   del negocio. La misma factura de nafta es crédito para la empresa de fletes y no para el auto del
+   socio, y los dos comprobantes son idénticos. Archivar la ley no trajo ese dato — trajo poder
+   nombrarlo con precisión.
 
 **Las decisiones:**
 
@@ -436,8 +460,11 @@ todo renglón tiene `lineage` no nulo. **Cumplido**: hay un test que arma el mis
 plantillas y obtiene doce renglones contra siete, con los mismos totales; y el linaje no es opcional
 ni en los tipos ni en la base.
 
-Queda en 🟡 porque `statement_templates` está **vacía**: su `norm_version_id` es NOT NULL y la
-Ley 19.550 no está sembrada. `npm run statements:seed` dice qué falta y cómo se destraba.
+Queda en 🟡 porque `statement_templates` sigue **vacía**, pero el motivo cambió. La Ley 19.550 ya
+está sembrada —se destrabó archivando la ficha oficial del Decreto 841/84, que declara el dictado
+(20/03/1984) que el texto actualizado no trae—. Lo que falta es transcribir los arts. 63 y 64 al
+árbol de la plantilla, y eso es una decisión profesional: qué rubro va antes de cuál, qué se agrupa,
+qué inciso funda cada renglón. `npm run statements:seed` se niega a hacerlo solo y explica por qué.
 
 **Las decisiones:**
 
@@ -575,7 +602,7 @@ llena la bandeja de candidatos que nadie revisa.
 
 ---
 
-## FASE 14 — IA avanzada 🟡
+## FASE 14 — IA avanzada ✅
 
 Análisis de variaciones, detección de anomalías y el respondedor sobre datos reales.
 
