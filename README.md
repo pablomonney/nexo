@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: FASES 0 a 12 construidas. Quedan integraciones (13) e IA avanzada (14).**
+> **Estado: las 14 fases del roadmap están construidas.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -23,14 +23,17 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 >   (`npm run statements:seed` dice cómo)
 > - ✅ **Notas con cada cifra referenciada al estado, no escrita** (FASE 11)
 > - ✅ **Los ocho invariantes A-1..A-8 como puerta de CI que rompe el build** (FASE 12)
-> - ✅ **25 migraciones aplicadas y 602/602 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Habilitaciones de ARCA relevadas y vigilancia normativa que produce candidatos** (FASE 13)
+> - 🟡 **Auditoría determinística y respondedor que no puede inventar un número** (FASE 14) — falta
+>   el sandbox de simulación del §34
+> - ✅ **27 migraciones aplicadas y 679/679 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`). El certificado de ARCA ya está emitido; queda correr
 >   `npm run arca:check -- --cert … --key … --cuit …` para que el propio sistema confirme que la
 >   delegación funciona. El certificado **no entra al repositorio**: el script lo lee del disco
 > - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado y
 >   archivar la Res. CPCECABA 460/2024 (ver `packages/normative-engine/README.md`)
-> - ⬜ Integraciones oficiales ampliadas e IA avanzada (FASES 13 y 14 — ver `ROADMAP.md`)
+> - 🟡 Lo que falta ya no es código: son fuentes normativas por archivar. Ver `ROADMAP.md`
 
 ## Puesta en marcha
 

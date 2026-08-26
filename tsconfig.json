@@ -29,6 +29,9 @@
       "path": "./packages/financial-statements"
     },
     {
+      "path": "./packages/audit-engine"
+    },
+    {
       "path": "./packages/ai-engine"
     },
     {

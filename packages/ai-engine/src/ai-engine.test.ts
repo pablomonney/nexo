@@ -18,6 +18,10 @@ import {
   type CuentaDelPlan,
   type HechosDelComprobante,
   type NormaDisponible,
+  PREGUNTAS_QUE_NO_SE_CONTESTAN,
+  normalizarNumeral,
+  numeralesDe,
+  validarRespuesta,
 } from './index.js';
 
 // ---------------------------------------------------------------------------
@@ -607,3 +611,191 @@ function preferencia(ultimaConfirmacion: string) {
     ultimaConfirmacion,
   };
 }
+
+// ---------------------------------------------------------------------------
+// El respondedor — FASE 14
+// ---------------------------------------------------------------------------
+
+describe('ninguna cifra de la respuesta sale de la memoria del modelo', () => {
+  const contexto = {
+    companyId: 'co-1',
+    pregunta: '¿Cuánto vendí en marzo?',
+    datos: [
+      { etiqueta: 'Ventas del período', valor: '1.234.567,89', origen: 'Renglón 4.1.01 del ER' },
+      { etiqueta: 'IVA débito fiscal', valor: '259.259,26', origen: 'Subdiario IVA Ventas' },
+    ],
+    normas: [{ id: 'nv-1', etiqueta: 'RG ARCA 5616/2024' }],
+    periodo: '2026-03',
+  };
+
+  it('acepta una respuesta cuyos números están todos en el contexto', () => {
+    const resultado = validarRespuesta(
+      {
+        texto: 'En 2026-03 vendiste 1.234.567,89, con un IVA débito de 259.259,26.',
+        datosUsados: ['Ventas del período', 'IVA débito fiscal'],
+        normasCitadas: [],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    expect(resultado.advertencia).toMatch(/La interpretación profesional/);
+  });
+
+  it('rechaza entera una respuesta con una cifra que no le pasaron', () => {
+    const resultado = validarRespuesta(
+      {
+        // 987.654,00 no está en ningún lado. Es exactamente el caso peligroso:
+        // la frase se lee bien y nadie la verifica contra nada.
+        texto: 'Vendiste 1.234.567,89 y el margen fue de 987.654,00.',
+        datosUsados: ['Ventas del período'],
+        normasCitadas: [],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (resultado.ok) return;
+    expect(resultado.rechazos[0]?.codigo).toBe('CIFRA_INVENTADA');
+    expect(resultado.rechazos[0]?.esAlucinacion).toBe(true);
+    expect(resultado.rechazos[0]?.detalle).toMatch(/se rechaza entera/);
+    expect(resultado.rechazos[0]?.detalle).toMatch(/la frase que lo rodeaba/);
+  });
+
+  it('el formato del número no importa: se comparan los dígitos', () => {
+    const resultado = validarRespuesta(
+      {
+        // Mismo número, otra puntuación.
+        texto: 'Las ventas fueron 1234567.89 en el período.',
+        datosUsados: ['Ventas del período'],
+        normasCitadas: [],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(true);
+  });
+
+  it('los números de una o dos cifras no se exigen', () => {
+    // "las 2 cuentas", "el 30 de junio": aparecen naturalmente al redactar, y
+    // un control que rechaza lo correcto se apaga en una semana.
+    const resultado = validarRespuesta(
+      {
+        texto: 'Hay 2 conceptos y el total es 1.234.567,89.',
+        datosUsados: ['Ventas del período'],
+        normasCitadas: [],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(true);
+  });
+
+  it('un número de artículo inventado se rechaza igual que un importe', () => {
+    const resultado = validarRespuesta(
+      {
+        texto: 'Según el art. 471 de la RG ARCA 5616/2024, corresponde 1.234.567,89.',
+        datosUsados: ['Ventas del período'],
+        normasCitadas: ['nv-1'],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (resultado.ok) return;
+    expect(resultado.rechazos[0]?.detalle).toContain('471');
+  });
+
+  it('citar una norma que no está en el contexto es alucinación', () => {
+    const resultado = validarRespuesta(
+      {
+        texto: 'Corresponde 1.234.567,89.',
+        datosUsados: ['Ventas del período'],
+        normasCitadas: ['nv-inventada'],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (resultado.ok) return;
+    expect(resultado.rechazos[0]?.codigo).toBe('NORMA_NO_CITABLE');
+    expect(resultado.rechazos[0]?.detalle).toMatch(/no se puede abrir ni verificar/);
+  });
+
+  it('decir que usó un dato que no existe también', () => {
+    const resultado = validarRespuesta(
+      {
+        texto: 'Corresponde 1.234.567,89.',
+        datosUsados: ['Margen bruto'],
+        normasCitadas: [],
+        abstencion: false,
+      },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (resultado.ok) return;
+    expect(resultado.rechazos[0]?.codigo).toBe('DATO_INEXISTENTE');
+  });
+
+  it('responder sin que le hayan pasado ningún dato es alucinación por definición', () => {
+    const resultado = validarRespuesta(
+      {
+        texto: 'El IVA en Argentina es del 21%.',
+        datosUsados: [],
+        normasCitadas: [],
+        abstencion: false,
+      },
+      { ...contexto, datos: [], normas: [] },
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (resultado.ok) return;
+    expect(resultado.rechazos[0]?.codigo).toBe('SIN_DATOS_Y_SIN_ABSTENERSE');
+    expect(resultado.rechazos[0]?.detalle).toMatch(/sale de su memoria/);
+  });
+
+  it('abstenerse es una salida prevista y se acepta sin control', () => {
+    const resultado = validarRespuesta(
+      { texto: '', datosUsados: [], normasCitadas: [], abstencion: true },
+      { ...contexto, datos: [] },
+    );
+
+    expect(resultado.ok).toBe(true);
+  });
+
+  it('una respuesta vacía sin abstenerse no pasa', () => {
+    const resultado = validarRespuesta(
+      { texto: '   ', datosUsados: [], normasCitadas: [], abstencion: false },
+      contexto,
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (resultado.ok) return;
+    expect(resultado.rechazos.map((r) => r.codigo)).toContain('RESPUESTA_VACIA');
+  });
+
+  it('normaliza los numerales descartando puntuación y ceros a la izquierda', () => {
+    expect(normalizarNumeral('1.234.567,89')).toBe('123456789');
+    expect(normalizarNumeral('007')).toBe('7');
+    expect(numeralesDe('Son 1.234 y 56, más el 0.')).toEqual(['1234', '56']);
+  });
+
+  it('las preguntas que no se contestan están enumeradas con su motivo', () => {
+    const categorias = PREGUNTAS_QUE_NO_SE_CONTESTAN.map((p) => p.categoria);
+
+    expect(categorias).toContain('CONSEJO_FISCAL');
+    expect(categorias).toContain('NORMATIVA_NO_ARCHIVADA');
+    // Cada una explica por qué, no solo que no.
+    for (const pregunta of PREGUNTAS_QUE_NO_SE_CONTESTAN) {
+      expect(pregunta.motivo.length).toBeGreaterThan(40);
+    }
+  });
+});

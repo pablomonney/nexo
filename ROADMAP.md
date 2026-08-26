@@ -529,20 +529,92 @@ alertas del §22 más allá de las ya implementadas.
 
 ---
 
-## FASE 13 — Integraciones oficiales
+## FASE 13 — Integraciones oficiales ✅
 
-Ampliación de servicios ARCA según habilitaciones reales, `Normative Update Service` con CKAN de
-datos.gob.ar, monitoreo del Boletín Oficial, exportaciones a formatos de organismos.
+Relevamiento de habilitaciones de ARCA y vigilancia normativa.
 
-**Advertencia:** el alcance real depende de qué servicios tenga habilitado cada CUIT. Se diseña
-para degradar sin romper.
+**La advertencia del roadmap —"se diseña para degradar sin romper"— se convirtió en una distinción
+que atraviesa toda la fase:**
+
+    NO ESTÁ DELEGADO  ≠  NO SE PUDO AVERIGUAR
+
+Un servicio que el contribuyente no delegó es un hecho estable. Uno que no respondió porque el
+organismo estaba caído es un hecho de hace treinta segundos. Tratarlos igual hace que **una caída de
+veinte minutos deje el sistema creyendo, para siempre, que el estudio no tiene habilitado el
+padrón**: nadie vuelve a intentarlo porque la tabla dice que no está.
+
+**Las decisiones:**
+
+1. **`NO_VERIFICABLE` no se persiste.** `esPersistible()` devuelve `false`, y la base lo refuerza:
+   `enabled = false` exige `verified_at`, y una caída no tiene fecha.
+2. **Una habilitación vence a los 30 días.** Un relevamiento viejo no es evidencia sobre hoy — las
+   delegaciones se revocan. `VENCIDO` es una tercera respuesta, no un `NO_DELEGADO`.
+3. **No saber no es motivo para no intentar.** `VENCIDO`, `NO_RELEVADO` y `NO_VERIFICABLE` permiten
+   la llamada; `NO_DELEGADO` y `SIN_CREDENCIAL` la frenan. Insistir contra un servicio no delegado
+   es cómo un CUIT termina bloqueado por el organismo.
+4. **El relevamiento informa consecuencias, no servicios.** "Falta el A13" no le dice nada a nadie;
+   "no vas a poder verificar la condición del emisor frente al IVA" sí.
+5. **La vigilancia produce candidatos, nunca normas.** `norm_candidates` no tiene `norm_version_id`
+   ni texto, y no hay FK ni trigger que promueva. El camino de candidato a norma pasa por bajar el
+   documento oficial, calcular su sha256 y registrarlo a mano.
+6. **El Boletín Oficial se trata como un aviso, no como una fuente** (R-22). Se detecta que un
+   número apareció; sacar de ahí el articulado es adivinar con buena presentación.
+7. **La identificación es conservadora.** Sin organismo en el título no se identifica: la RG 9/2026
+   de ARCA y la de IGJ son normas distintas, y un identificador equivocado manda a alguien a buscar
+   la que no es.
+
+```bash
+npm run arca:capabilities -- --cert … --key … --cuit … --company <uuid>
+npm run norms:watch
+```
+
+**Lo que queda declarado:** las exportaciones a formatos de organismos siguen bloqueadas por lo que
+encontró la FASE 8 — los diseños de registro del Libro de IVA Digital no están en la norma (RG 4597
+art. 8°). Y `norm_watch_sources` queda vacía: activar un vigilante contra una URL que nadie miró
+llena la bandeja de candidatos que nadie revisa.
 
 ---
 
-## FASE 14 — IA avanzada
+## FASE 14 — IA avanzada 🟡
 
-`Contador IA` conversacional sobre datos reales, análisis de variaciones, `Audit Agent`, detección
-de anomalías, sandbox de simulación (§34) completo.
+Análisis de variaciones, detección de anomalías y el respondedor sobre datos reales.
+
+**La decisión de fondo: dos de las cuatro piezas no usan IA, y usarla sería peor.**
+
+Un hallazgo de auditoría tiene que poder explicarse ante un tercero. *Este gasto subió 340%*, *este
+asiento se cargó seis meses después de su fecha*: son afirmaciones aritméticas sobre datos que el
+sistema tiene, y un modelo que las produzca agrega una capa no auditable a cambio de nada. El
+`audit-engine` es determinístico entero.
+
+**El respondedor y su control central.** Es la pieza más peligrosa del producto: un clasificador que
+se equivoca produce una propuesta que alguien revisa contra un comprobante; un respondedor que se
+equivoca produce **una frase con un número adentro** que se lee, se copia a un mail y se manda al
+cliente. Nadie la revisa contra nada, porque no se ve como una propuesta.
+
+El control no es una instrucción del prompt —"no inventes cifras" no es un control— sino una
+verificación mecánica: **se extraen todos los numerales de la respuesta y se comparan con los que se
+le pasaron al modelo**. Cualquiera que no esté es una alucinación y la respuesta se rechaza
+**entera** — tachar el número dejaría la frase que lo rodeaba, y esa frase afirmaba algo.
+
+Un número de artículo inventado se rechaza igual que un importe: citar el "art. 471" de una norma de
+doce artículos es inventar lo mismo.
+
+**Otras decisiones:**
+
+1. **Una anomalía dice qué se observó y qué mirar, nunca qué significa.** Sin severidad ni puntaje:
+   priorizar exigiría un número de riesgo que el software no puede fundar.
+2. **El análisis de variaciones no elige entre porcentaje e importe.** Y el cero no es un porcentaje
+   muy grande: una cuenta que pasó de cero a saldo **apareció**.
+3. **Sin umbrales configurados, el detector de "justo bajo el tope" no inventa ninguno.** Los
+   umbrales salen de normas que este repositorio no tiene archivadas.
+4. **El auditor no recibe `assistant:ask`.** Un auditor que consulta al asistente sobre los datos
+   que audita mete en su papel de trabajo una afirmación generada (§42).
+5. **Las respuestas rechazadas se guardan.** Son el insumo de la métrica de alucinación; borrarlas
+   haría que el indicador se vea mejor de lo que es.
+
+Queda en 🟡: el **sandbox de simulación del §34** no está. Simular sobre un esquema aislado es una
+pieza de infraestructura, no de IA, y merece su propio diseño — con el cuidado de que una simulación
+nunca pueda escribir en el esquema real.
 
 ---
 

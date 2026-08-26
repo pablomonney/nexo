@@ -51,6 +51,14 @@ export default defineConfig({
           functions: 95,
           branches: 88,
         },
+        // El motor de auditoría no usa IA: sus hallazgos son aritmética explicable
+        // ante un tercero. Por eso se le puede exigir el mismo umbral que a los
+        // demás motores determinísticos.
+        'packages/audit-engine/src/**': {
+          lines: 95,
+          functions: 95,
+          branches: 90,
+        },
         'packages/bank-engine/src/**': {
           lines: 95,
           functions: 95,

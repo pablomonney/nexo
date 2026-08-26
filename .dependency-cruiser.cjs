@@ -61,7 +61,7 @@ module.exports = {
         'Los paquetes de dominio son funciones puras sobre datos: sin red, sin disco, ' +
         'sin base. Es la condición para poder testearlos de forma exhaustiva.',
       severity: 'error',
-      from: { path: '^packages/(accounting-engine|tax-engine|normative-engine|bank-engine|shared)' },
+      from: { path: '^packages/(accounting-engine|tax-engine|normative-engine|bank-engine|audit-engine|financial-statements|shared)' },
       to: { path: `${CLIENTE_DE_BASE}|${CLIENTE_DE_RED}` },
     },
     {

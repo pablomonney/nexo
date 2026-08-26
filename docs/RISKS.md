@@ -464,6 +464,89 @@ primera vez que alguien confía en ese verde, confía en nada.
 *Residual:* bajo mientras la distinción se mantenga. El riesgo real es que alguien "simplifique" el
 resumen a un booleano.
 
+### 🔴 R-36 — La caída del organismo que se registra como falta de habilitación *(nuevo, 2026-08-26)*
+
+Un relevamiento de servicios de ARCA distingue dos resultados que se parecen y no son lo mismo: el
+contribuyente no delegó el servicio, o el servicio no respondió. Si el segundo se guarda como el
+primero, **una caída de veinte minutos deja el sistema creyendo, para siempre, que el estudio no
+tiene habilitado el padrón**.
+
+*Por qué importa:* el dato queda congelado y nadie vuelve a intentarlo, porque la tabla dice que no
+está habilitado. La degradación se vuelve permanente por una indisponibilidad transitoria, y la
+única forma de descubrirlo es que alguien sospeche y releve a mano.
+
+*Mitigaciones:*
+
+1. **`NO_VERIFICABLE` no es persistible.** `esPersistible()` lo devuelve en `false`, y no hay otro
+   camino de escritura.
+2. **La base lo refuerza**: `enabled = false` exige `verified_at`, y un fallo de transporte no
+   produce fecha.
+3. **Un relevamiento vence a los 30 días.** `VENCIDO` es una tercera respuesta, no un `NO_DELEGADO`:
+   las delegaciones se revocan y los certificados vencen.
+4. **No saber permite reintentar.** Solo `NO_DELEGADO` y `SIN_CREDENCIAL` frenan la llamada — donde
+   el sistema sí sabe que va a fallar, e insistir es cómo un CUIT termina bloqueado.
+
+*Residual:* bajo. Queda la heurística que separa un error de transporte de un rechazo de WSAA, que
+es una expresión regular sobre el mensaje de error y puede clasificar mal un caso nuevo. Cuando lo
+haga, el efecto es un `NO_DELEGADO` espurio — que vence a los 30 días y se vuelve a preguntar.
+
+### 🔴 R-37 — La norma que se carga sola *(nuevo, 2026-08-26)*
+
+Un servicio que monitorea el Boletín Oficial y datos.gob.ar puede, con muy poco código de más,
+empezar a cargar normas por su cuenta. Y funcionaría: el 95% de las veces el texto que baja es el
+texto correcto.
+
+El 5% restante son títulos truncados, PDF escaneados, anexos publicados aparte y resoluciones que se
+rectifican al día siguiente. **Una norma mal cargada no se ve mal: se ve como una norma.** El sistema
+la cita, el contador la lee citada, y la cadena de trazabilidad —que existe justamente para evitar
+eso— la avala.
+
+*Por qué importa:* es la violación directa del §2 y del §30, y llega por la puerta de una mejora
+razonable ("ya que lo detectamos, ¿por qué no cargarlo?").
+
+*Mitigaciones:*
+
+1. **`vigilar()` produce candidatos, nunca normas.** Es una función pura sobre listas: no descarga,
+   no lee texto y no toca `norms`.
+2. **`norm_candidates` no tiene `norm_version_id` ni columna de texto**, y no hay FK ni trigger que
+   promueva. La separación está en el esquema, no en un documento.
+3. **`loQueUnCandidatoNoHabilita()` enumera los límites** para que la UI y la API los digan con las
+   mismas palabras.
+4. **La identificación es conservadora**: sin organismo en el título, `null`. Un identificador
+   equivocado manda a alguien a buscar la norma que no es.
+
+*Residual:* medio, y es presión de producto. La defensa técnica está; la que falta es que nadie
+agregue la promoción "para agilizar".
+
+### 🔴 R-38 — La frase con un número adentro *(nuevo, 2026-08-26)*
+
+Un clasificador que se equivoca produce una propuesta que alguien revisa contra un comprobante. Un
+respondedor que se equivoca produce **una frase**, y esa frase se lee, se copia a un mail y se manda
+al cliente. Nadie la verifica contra nada, porque no se ve como una propuesta: se ve como una
+respuesta.
+
+*Por qué importa:* es el único artefacto del sistema que sale hacia afuera sin pasar por una
+revisión estructurada. Y una cifra inventada dentro de una oración bien redactada es indistinguible
+de una correcta.
+
+*Mitigaciones:*
+
+1. **Verificación mecánica de cifras**: se extraen los numerales de la respuesta y se comparan con
+   los del contexto. "No inventes cifras" en el prompt no es un control.
+2. **Se rechaza entera**, no se tacha el número: la frase que lo rodeaba afirmaba algo.
+3. **Los números de artículo se verifican igual que los importes.** Citar el "art. 471" de una norma
+   de doce artículos es inventar lo mismo.
+4. **Responder sin datos en el contexto es alucinación por definición**, aunque lo que diga sea
+   cierto: sale de la memoria del modelo, no de la contabilidad de esa empresa.
+5. **Las respuestas rechazadas se guardan** y alimentan `ai_answer_metrics`, que separa alucinación
+   de otros rechazos.
+6. **El auditor no tiene `assistant:ask`**: un papel de trabajo no lleva afirmaciones generadas.
+
+*Residual:* medio. El control detecta cifras inventadas, no afirmaciones cualitativas equivocadas —
+"el saldo mejoró" sobre datos que dicen otra cosa pasa el filtro. Por eso toda respuesta lleva la
+advertencia del §42, y por eso el respondedor no calcula: solo redacta números que el sistema ya
+computó.
+
 ---
 
 ## Riesgo de proyecto

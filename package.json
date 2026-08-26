@@ -34,7 +34,9 @@
     "norms:seed": "node scripts/seed-norms.mjs",
     "ledger:verify": "node scripts/verify-ledger.mjs",
     "statements:seed": "node scripts/seed-statement-templates.mjs",
-    "audit:invariants": "node scripts/check-invariants.mjs"
+    "audit:invariants": "node scripts/check-invariants.mjs",
+    "arca:capabilities": "node scripts/arca-capabilities.mjs",
+    "norms:watch": "node scripts/norms-watch.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
