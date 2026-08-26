@@ -1,0 +1,28 @@
+{
+  "nombre": "CSV de comprobantes con encabezados en español",
+  "descripcion": "Mapeo declarado para exportaciones con encabezados del tipo 'Codigo Tipo', 'Nro Comprobante', 'Subtotal', 'IVA 21%'. Las columnas se declaran; no se adivinan.",
+  "separador": ",",
+  "decimal": ".",
+  "columnas": {
+    "codigoTipo": "Codigo Tipo",
+    "numero": "Nro Comprobante",
+    "fecha": "Fecha Emision",
+    "cuitEmisor": "CUIT Emisor",
+    "razonSocialEmisor": "Emisor",
+    "cuitReceptor": "CUIT Receptor",
+    "razonSocialReceptor": "Receptor",
+    "condicionReceptor": "Condicion IVA Receptor",
+    "neto": "Subtotal",
+    "iva": "IVA 21%",
+    "total": "Total",
+    "moneda": "Moneda",
+    "cae": "CAE (Falso)"
+  },
+  "condiciones": {
+    "Responsable Inscripto": "RESPONSABLE_INSCRIPTO",
+    "Monotributo": "MONOTRIBUTO",
+    "Exento": "EXENTO",
+    "Consumidor Final": "CONSUMIDOR_FINAL",
+    "No Categorizado": "NO_CATEGORIZADO"
+  }
+}

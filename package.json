@@ -40,7 +40,8 @@
     "tax:seed": "node scripts/seed-tax-rates.mjs",
     "sandbox:create": "node scripts/sandbox.mjs create",
     "sandbox:run": "node scripts/sandbox.mjs run",
-    "sandbox:status": "node scripts/sandbox.mjs status"
+    "sandbox:status": "node scripts/sandbox.mjs status",
+    "comprobantes:revisar": "node scripts/revisar-comprobantes.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
