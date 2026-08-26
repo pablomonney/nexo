@@ -23,6 +23,7 @@ import { acotarConfianza } from '../types.js';
 import { parseImporteAr } from '../parsers/importe.js';
 import { parseFechaAr } from '../parsers/fecha.js';
 import {
+  PATRON_ETIQUETADO,
   parseCodigoAutorizacion,
   parseLetraComprobante,
   parsePuntoVentaYNumero,
@@ -108,7 +109,17 @@ const REGLAS: readonly ReglaCampo[] = [
   {
     fieldPath: 'comprobante.identificacion',
     etiquetas: [/(?:comp\.?|comprobante|factura|nro\.?|n[°º]|punto\s*de\s*venta)/i],
-    valor: /(\d{4,5}\s*[-–—]\s*\d{6,8})/,
+    // Dos formas, y la segunda es la que emite ARCA:
+    //
+    //     0010-00000001                              ← un solo bloque con guión
+    //     Punto de Venta: 0010   Comp. Nro: 00000001  ← dos campos etiquetados
+    //
+    // La segunda tiene que capturar **la etiqueta incluida**, porque es lo que
+    // `parsePuntoVentaYNumero` necesita para saber cuál número es cuál. Como el
+    // motor de reglas prueba primero el texto que sigue a la etiqueta y recién
+    // después la línea entera, esta alternativa matchea en el segundo intento —
+    // que es exactamente para lo que ese fallback existe.
+    valor: new RegExp(`(\\d{4,5}\\s*[-–—]\\s*\\d{6,8}|${PATRON_ETIQUETADO.source})`, 'i'),
     confianzaRegla: 0.85,
     interpretar: (bruto) => {
       const resultado = parsePuntoVentaYNumero(bruto);

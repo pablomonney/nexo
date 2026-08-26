@@ -39,6 +39,27 @@ const FACTURA_LINEAS = [
   'CAE N°: 75123456789012',
 ];
 
+/**
+ * El encabezado tal como lo imprime un comprobante de ARCA.
+ *
+ * La diferencia con `FACTURA_LINEAS` es una sola línea, y es la que importa:
+ * ARCA **no** imprime `0010-00000001`. Imprime punto de venta y número como dos
+ * campos etiquetados en la misma línea.
+ */
+const FACTURA_LINEAS_ARCA = [
+  'LIBRERÍA CENTRAL SRL',
+  'FACTURA',
+  'B',
+  'Cod. 06',
+  'Punto de Venta:   0010      Comp. Nro:   00000001',
+  'Fecha de Emisión:   27/06/2025',
+  `CUIT:   ${CUIT_VALIDO}`,
+  'Subtotal:  $ 1,015,000.00',
+  'Importe Total:  $ 1,015,000.00',
+  'CAE:   65169642435761',
+  'Fecha de Vto. de CAE:   07/07/2025',
+];
+
 function pdfDePrueba(marca: string, extra = ''): Buffer {
   return Buffer.from(`%PDF-1.4 ${marca}${extra}`);
 }
@@ -164,6 +185,30 @@ describe('pipeline de ingesta', () => {
     expect(resultado.extraccion.disponible).toBe(false);
     expect(resultado.extraccion.motivoNoDisponible).toBe('SIN_MOTOR_OCR');
     expect(resultado.extraccion.campos).toHaveLength(0);
+  });
+
+  it('lee el punto de venta y el número tal como los imprime ARCA', async () => {
+    // Este test existe por un defecto que encontró un lote de cincuenta
+    // comprobantes con el layout real: los cincuenta dieron
+    // `comprobante.identificacion` sin leer.
+    //
+    // Lo llamativo era dónde estaba la falla. `parsePuntoVentaYNumero` sabía leer
+    // esta forma desde el primer día; el que no la reconocía era el **lector**,
+    // cuyo patrón exigía un guión y por lo tanto nunca le entregaba la línea al
+    // parser. Un parser correcto detrás de un lector que no lo llama se ve, desde
+    // afuera, igual que un parser roto.
+    const resultado = await ingerir(entrada(pdfDePrueba('ok'), 'factura-arca.pdf'), {
+      store: new InMemoryDocumentStore(),
+      ocr: ocrCon(FACTURA_LINEAS_ARCA, 'ok'),
+    });
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+
+    expect(campo(resultado.extraccion.campos, 'comprobante.identificacion').parsedValue).toEqual({
+      kind: 'TEXT',
+      value: '00010-00000001',
+    });
   });
 
   it('extrae los campos de una factura legible', async () => {

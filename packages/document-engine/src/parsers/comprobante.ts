@@ -40,6 +40,24 @@ export const LIMITES = {
 } as const;
 
 /**
+ * Punto de venta y número como **dos campos etiquetados por separado**.
+ *
+ * Es la forma del comprobante que genera ARCA, y por lejos la más común en un
+ * PDF real:
+ *
+ *     Punto de Venta:   0010      Comp. Nro:   00000001
+ *
+ * Se exporta porque el lector de `readers/texto.ts` necesita reconocer la misma
+ * forma para saber **qué región de la línea** entregarle a este parser. Tener el
+ * patrón en los dos lados fue justamente el defecto: el parser sabía leer esta
+ * forma desde el primer día y el lector nunca se la pasaba, porque su regex
+ * exigía un guión. Cincuenta comprobantes con el formato de ARCA dieron cincuenta
+ * `comprobante.identificacion` sin leer.
+ */
+export const PATRON_ETIQUETADO =
+  /(?:p(?:to|unto)?\.?\s*(?:de\s*)?v(?:ta|enta)?\.?)\D{0,4}(\d{1,5})\D{1,20}?(?:n(?:ro|úm(?:ero)?|um(?:ero)?)?\.?|#)\D{0,4}(\d{1,8})/i;
+
+/**
  * Interpreta `0001-00001234`, `0001 00001234`, `00010000123 4`, `PV 1 Nro 1234`.
  *
  * No intenta adivinar cuando hay un solo bloque de dígitos: `000100001234`
@@ -57,10 +75,7 @@ export function parsePuntoVentaYNumero(
     return construir(Number(dosBloques[1]), Number(dosBloques[2]), entrada, 1, undefined);
   }
 
-  const conEtiquetas =
-    /(?:p(?:to|unto)?\.?\s*(?:de\s*)?v(?:ta|enta)?\.?)\D{0,4}(\d{1,5})\D{1,20}?(?:n(?:ro|úm(?:ero)?|um(?:ero)?)?\.?|#)\D{0,4}(\d{1,8})/i.exec(
-      texto,
-    );
+  const conEtiquetas = PATRON_ETIQUETADO.exec(texto);
   if (conEtiquetas !== null) {
     return construir(Number(conEtiquetas[1]), Number(conEtiquetas[2]), entrada, 0.95, undefined);
   }
