@@ -14,8 +14,8 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **Motor contable: once validaciones, numeración sin huecos, contraasientos, balance** (FASE 5)
 > - ✅ **Motor normativo: vigencia bitemporal, adopción jurisdiccional, citas verificables** (FASE 5b)
 > - ✅ **Libro Diario con los controles de forma del CCyC y Mayor como proyección** (FASES 6 y 7)
-> - 🟡 **IVA: subdiarios, notas de crédito y Libro de IVA Digital** (FASE 8) — el motor funciona,
->   pero `tax_rates` está vacía hasta archivar la Ley 23.349, así que responde
+> - ✅ **IVA: subdiarios, notas de crédito y Libro de IVA Digital** (FASE 8) — alícuotas desde el
+>   art. 28 de la Ley de IVA (t.o. 1997), archivada; antes del 18/11/2002 responde
 >   `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%
 > - ✅ **Bancos: importación con mapeo declarado y conciliación asistida** (FASE 9)
 > - ✅ **Estados contables: ESP y ER transcriptos de los arts. 63 y 64, cada cifra con su origen**
@@ -25,11 +25,14 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **Habilitaciones de ARCA relevadas y vigilancia normativa que produce candidatos** (FASE 13)
 > - ✅ **Auditoría determinística y respondedor que no puede inventar un número** (FASE 14)
 > - ✅ **Sandbox que exige prueba de ser un sandbox en vez de sospechar de producción** (FASE 15)
-> - ✅ **30 migraciones aplicadas y 710/710 tests en verde contra PostgreSQL 18.6**
-> - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
->   (ver `corpus/README.md`). El certificado de ARCA ya está emitido; queda correr
->   `npm run arca:check -- --cert … --key … --cuit …` para que el propio sistema confirme que la
->   delegación funciona. El certificado **no entra al repositorio**: el script lo lee del disco
+> - ✅ **30 migraciones aplicadas y 715/715 tests en verde contra PostgreSQL 18.6**
+> - 🟡 **Único criterio de salida abierto** — FASE 3 espera el corpus de 100 comprobantes reales
+>   anonimizados. La herramienta de anonimización de CUIT ya está
+>   (`npm run cuit:anonimizar`); lo que falta son los comprobantes, que son datos del estudio y no
+>   se pueden fabricar. Ver `corpus/README.md`
+> - 🟡 El certificado de ARCA está emitido pero nadie corrió `npm run arca:check` ni
+>   `npm run arca:capabilities` con él, así que la delegación no está confirmada contra el
+>   organismo. El certificado **no entra al repositorio**: los scripts lo leen del disco
 > - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado
 >   (ver `packages/normative-engine/README.md`). La adopción de CABA ya está: la Res. P. N° 460/2024
 >   está archivada y cargada en `norm_adoptions`
