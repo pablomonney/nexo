@@ -39,6 +39,18 @@ export default defineConfig({
         // match plausible aprobado sin mirar deja los saldos cerrando y la
         // cuenta de un proveedor mal para siempre. Las tres reglas duras del
         // motor tienen que estar todas ejercitadas.
+        // Los estados contables son afirmaciones sobre la situación patrimonial:
+        // sus controles de cobertura son lo único que separa un balance correcto
+        // de uno que cierra por casualidad.
+        // Ramas en 88 y no en 90: quedan dos `?? 0n` defensivos que hoy son
+        // inalcanzables —un guard anterior ya garantiza que el valor existe— y
+        // contorsionar el código para eliminarlos lo dejaría peor de leer que el
+        // punto de cobertura que se gana.
+        'packages/financial-statements/src/**': {
+          lines: 95,
+          functions: 95,
+          branches: 88,
+        },
         'packages/bank-engine/src/**': {
           lines: 95,
           functions: 95,

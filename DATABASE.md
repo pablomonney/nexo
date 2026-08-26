@@ -293,16 +293,41 @@ guardarlo con signo obliga a fijar de quién es la óptica.
 
 | Tabla | Campos clave |
 |-------|--------------|
-| `statement_templates` | `id`, `framework`, `entity_type`, `regulator`, `statement_kind`, `version`, `valid_from`, `valid_to`, `structure jsonb`, `norm_version_id` |
-| `financial_statements` | `company_id`, `fiscal_year_id`, `template_id`, `status` (`BORRADOR`\|`EMITIDO`), `issued_at`, `comparative_year_id` |
-| `financial_statement_lines` | `statement_id`, `line_code`, `label`, `amount`, `comparative_amount`, `note_ref`, `lineage_id` |
-| `notes` | `statement_id`, `number`, `title`, `body_blocks jsonb`, `status`, `generated_by` (`RULE`\|`AI`\|`HUMAN`) |
-| `note_figures` | `note_id`, `label`, `amount`, `lineage_id` ← **cada cifra de cada nota tiene respaldo** |
-| `annexes` | anexos (bienes de uso, inversiones, previsiones, costos) con la misma mecánica |
+| `statement_templates` | `framework`, `entity_type`, `regulator`, `statement_kind`, `version`, `valid_from`, `valid_to`, `structure jsonb`, `norm_version_id`, `articulo` |
+| `financial_statements` | `fiscal_year_id`, `template_id`, `status` (`BORRADOR`\|`EMITIDO`\|`ANULADO`), `controles jsonb`, `content_sha256`, `issued_by`, `comparative_year_id` |
+| `financial_statement_lines` | `line_code`, `label`, `line_type`, `nivel`, `amount`, `comparative_amount`, `note_ref`, `fundamento`, **`lineage jsonb NOT NULL`** |
+| `notes`, `note_figures`, `annexes` | diseñadas, **no implementadas**: FASE 11 |
 
-`financial_statement_lines.lineage_id` y `note_figures.lineage_id` son `NOT NULL`. Consecuencia
-directa: **una nota no puede contener una cifra sin origen** (§38).
+### 10.1 El invariante de la fase
 
+```sql
+lineage jsonb NOT NULL
+CHECK (jsonb_typeof(lineage) = 'array')
+CHECK (line_type <> 'RENGLON' OR amount = 0 OR jsonb_array_length(lineage) > 0)
+```
+
+Una cifra sin origen no se puede insertar. El array vacío es legítimo —un rubro sin cuentas vale
+cero— pero tiene que estar: la diferencia entre *se preguntó y no hubo cuentas* y *alguien escribió
+un número* es exactamente lo que el §38 protege.
+
+Es `jsonb` embebido y no un FK a `accounts` porque un estado emitido tiene que poder reproducirse
+aunque el plan de cuentas cambie después. Un FK diría qué cuenta es hoy; esto dice cuál era.
+
+### 10.2 La estructura es dato
+
+`structure jsonb` es el árbol de rubros, renglones y totales. Agregar un marco contable es insertar
+una fila, no escribir un módulo — que es el criterio de la fase.
+
+Y por eso se valida con `validarPlantilla()` antes de cada uso: viene de la base, igual que las
+condiciones del motor normativo.
+
+`norm_version_id NOT NULL` es la razón por la que la tabla está **vacía**: la estructura del ESP sale
+de la Ley 19.550 arts. 63 y 64, y esa ley no está sembrada.
+
+### 10.3 Emitido significa firmado
+
+`fs_emitido_firmado` exige persona, fecha y hash. Y un estado emitido tiene sus renglones congelados:
+se corrige emitiendo otro, con el anterior anulado y a la vista — igual que un contraasiento.
 ---
 
 ## 11. Motor normativo (§5)

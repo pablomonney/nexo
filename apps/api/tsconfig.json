@@ -34,6 +34,9 @@
     },
     {
       "path": "../../packages/bank-engine"
+    },
+    {
+      "path": "../../packages/financial-statements"
     }
   ]
 }

@@ -371,6 +371,48 @@ importes distintos, no una revisión de código.
 observador— puede repetirse en cualquier módulo nuevo; la defensa es nombrar el efecto, no la
 partida.
 
+### 🔴 R-32 — La cuenta que desaparece del balance *(nuevo, 2026-08-26)*
+
+Un estado contable armado con plantilla toma sus cifras de las cuentas que los selectores capturan.
+Si el plan tiene una cuenta que **ningún** selector captura, su saldo simplemente no aparece — y a
+veces el balance igual cierra, porque dos cuentas huérfanas se compensan. Ahí nadie lo nota nunca.
+
+*Por qué importa:* es el modo de falla específico de este diseño, y es invisible por construcción. El
+estado se ve completo, la ecuación patrimonial da bien, los totales son razonables. Lo único que
+falta es una cuenta, y no hay nada en la salida que lo sugiera.
+
+*Mitigaciones:*
+
+1. **`CUENTA_SIN_RUBRO` bloquea la emisión**, no advierte. Hay un test que reproduce el caso
+   peligroso: dos huérfanas que se compensan, ecuación en verde, `emisible: false`.
+2. **`CUENTA_EN_DOS_RUBROS`** cubre el error simétrico: un selector demasiado ancho.
+3. **Los dos corren sobre las dos columnas**, actual y comparativa.
+4. **El linaje viaja con cada renglón**: la suma de los aportes tiene que dar el importe, y eso se
+   puede verificar renglón por renglón desde la UI.
+
+*Residual:* bajo mientras el control siga siendo bloqueante. El día que alguien lo convierta en una
+advertencia para poder emitir un balance apurado, el riesgo vuelve entero.
+
+### 🟠 R-33 — El control que se apaga con un error de tipeo *(nuevo, 2026-08-26)*
+
+La ecuación patrimonial se declara por códigos de nodo. Con un `?? 0n` defensivo, un código mal
+escrito daba `undefined` para los tres términos y el control informaba "0 = 0 + 0": **cumplía**. Un
+control desactivado por un typo produce exactamente la misma salida que uno que verifica y da bien.
+
+*Por qué importa:* la clase es general. Cualquier control que resuelva sus operandos por nombre y use
+un default numérico ante la ausencia puede pasar de verificar a no verificar sin que cambie nada
+visible.
+
+*Mitigaciones:*
+
+1. **Si un nodo declarado no existe, el control falla** con el nombre del que falta.
+2. **El mismo criterio en el motor normativo**: un hecho ausente hace fallar la evaluación, nunca
+   vale `false`.
+3. **Y en el motor de IVA**: sin alícuota relevada no se supone la general.
+
+*Residual:* bajo acá, medio como patrón. La regla es: ante un operando ausente, fallar; nunca
+sustituir por un neutro que haga pasar la comprobación.
+
 ---
 
 ## Riesgo de proyecto

@@ -426,13 +426,42 @@ Documentado en [BANKS.md](BANKS.md).
 
 ---
 
-## FASE 10 — Estados contables
+## FASE 10 — Estados contables 🟡
 
-`statement_templates` versionadas por `(framework, entity_type, regulator, period)`; ESP, ER, EEPN,
-EFE; información comparativa; anexos.
+`statement_templates` versionadas por `(framework, entity_type, regulator, period)`; ESP y ER;
+información comparativa.
 
 **Criterio:** dos empresas con marcos distintos generan estructuras distintas **sin cambiar código**;
-todo renglón tiene `lineage_id` no nulo.
+todo renglón tiene `lineage` no nulo. **Cumplido**: hay un test que arma el mismo balance con dos
+plantillas y obtiene doce renglones contra siete, con los mismos totales; y el linaje no es opcional
+ni en los tipos ni en la base.
+
+Queda en 🟡 porque `statement_templates` está **vacía**: su `norm_version_id` es NOT NULL y la
+Ley 19.550 no está sembrada. `npm run statements:seed` dice qué falta y cómo se destraba.
+
+**Las decisiones:**
+
+1. **La estructura es dato, no código.** Un árbol declarativo, no un módulo por marco con un `if`
+   por regulador. Y por eso se valida antes de usarla: viene de la base.
+2. **El selector es cerrado**: prefijos, tipos, códigos, exclusiones. Un lenguaje de expresiones
+   sería más flexible y nadie podría auditar qué cuentas caen en cada rubro.
+3. **Ninguna cifra existe sin origen.** No hay ningún tipo ni columna donde escribir un importe;
+   todo renglón se deriva de cuentas y sale con las que lo formaron.
+4. **Una cuenta que ningún renglón captura bloquea la emisión.** Su saldo desaparece del estado, y a
+   veces el estado igual cierra porque dos huérfanas se compensan: ahí nadie lo nota nunca.
+5. **Un estado que no cierra no se emite** — a diferencia del Libro Diario, que sí se emite con sus
+   observaciones. El Diario registra lo que pasó; el estado contable afirma.
+
+> **Tres defectos que encontraron los tests durante la fase.** Un selector con solo `codigos`
+> capturaba todo el plan, porque los otros criterios "no declarados" no filtraban y su conjunción era
+> verdadera. El recorrido del árbol cortaba en el nivel 6, así que una plantilla más profunda quedaba
+> truncada en silencio y el control que existía para rechazarla nunca corría. Y la ecuación
+> patrimonial se desactivaba con un error de tipeo: un código inexistente daba "0 = 0 + 0" y pasaba.
+>
+> Además, `TipoEnte` tenía seis valores inventados desde la intuición en vez de los doce de
+> `companies.entity_type`, y `Regulador` no contemplaba `PROVINCIAL` ni el `NULL` de la base.
+
+Documentado en [STATEMENTS.md](STATEMENTS.md).
 
 ---
 
