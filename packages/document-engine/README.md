@@ -104,9 +104,10 @@ escaneo (`0/O`, `1/l`, `5/S`, `8/B`).
 
 ## Lo que este paquete no hace
 
-- **No valida alícuotas de IVA.** Son normativa (Ley 23.349 y modificatorias) y
-  no están archivadas como fuente V1 en este repositorio. Inferirlas de la
-  aritmética del propio comprobante sería usar el dato para validarse a sí mismo.
+- **No valida alícuotas de IVA.** Están archivadas y sembradas desde el art. 28
+  de la Ley de IVA (t.o. 1997), pero las resuelve `@aai/tax-engine`, que conoce la
+  fecha del hecho imponible. Este paquete solo ve el documento, e inferir la
+  alícuota de su propia aritmética sería usar el dato para validarse a sí mismo.
 - **No traduce la letra impresa a `CbteTipo`.** Ver abajo.
 
 ## El catálogo de tipos de comprobante es normativa, no una constante

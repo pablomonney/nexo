@@ -4,8 +4,10 @@
 > Registro maestro de fuentes normativas. Cada afirmación lleva un **nivel de verificación**.
 > El sistema no puede usar como regla activa nada que no esté en nivel `V1`.
 >
-> **Estado: 21 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
-> SHA-256.** Índice completo en `docs/normative-sources/registro-de-descargas.csv`.
+> **Estado: 25 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
+> SHA-256.** Los cuatro últimos (Ley de IVA t.o. 1997, fichas de los Decretos 280/97 y 841/84,
+> y la Res. P. CPCECABA 460/2024) se archivaron el **2026-08-26** y cerraron los tres bloqueos
+> de fuente que arrastraba el roadmap. Índice completo en `docs/normative-sources/registro-de-descargas.csv`.
 
 ## 0. Niveles de verificación
 
@@ -169,12 +171,20 @@ Esto cierra el conflicto C-03 y desbloquea la determinación de marco aplicable.
 
 | Consejo | Acto | Vigencia declarada |
 |---------|------|--------------------|
-| **CPCECABA** | Resolución 460/2024 (Consejo Directivo, 21/08/2024, Acta 1302) adopta RT 54 (T.O. RT 59) | Obligatoria para ejercicios **iniciados desde 01/01/2025**; **anticipada para ejercicios finalizados desde 30/09/2024** |
+| **CPCECABA** | **Resolución P. N° 460/2024** (Presidencia, CABA, **11/07/2024**) aprueba la RT 59 FACPCE y la declara norma profesional obligatoria en CABA · **archivada** | Art. 5° inc. a): ejercicios **iniciados desde 01/01/2025**, sin exigir aplicación a los períodos intermedios del primer ejercicio. Art. 5° inc. b): anticipada para ejercicios **finalizados desde 30/09/2024** |
 | **CPCECABA** | Resolución CD 70/2025 adopta la RT 62 | Desde su publicación en el BO de CABA: **26/12/2025** |
 | **CPCE Córdoba** | Resolución 35/24 adopta RT 54, 56, 59 y Res. JG FACPCE 608/22 | A confirmar en el texto · `V2` |
 
-Pendiente: el texto de la Resolución 460/2024 en sí. La vigencia está confirmada por la guía
-oficial del CPCECABA (archivada, jerarquía P4); el acto de adopción sigue en `V2`.
+El acto está archivado y cargado en `norm_adoptions` (`npm run norms:seed`), con el documento
+como evidencia y el artículo del que sale cada fecha. Es la primera adopción jurisdiccional del
+sistema: hasta que existió, el motor respondía `ADOPCION_NO_RELEVADA` para CABA.
+
+> **Corrección.** Hasta que se archivó el documento, esta tabla decía *"Resolución 460/2024
+> (Consejo Directivo, 21/08/2024, Acta 1302)"*. Las tres cosas son incorrectas y venían de
+> material secundario. El documento dice **Resolución P. N° 460/2024**, la firman la Presidenta
+> y la Secretaria el **11 de julio de 2024**, y su art. 8° ordena *"elévese al Consejo
+> Directivo"* — es decir, no fue dictada por él. Es el §2 en un caso concreto: el resumen era
+> plausible, estaba en todos lados, y era falso en el organismo y en la fecha.
 
 Portal de normas: <https://normasweb.facpce.org.ar/>
 
@@ -303,17 +313,38 @@ Pendiente: extracción artículo por artículo a `norm_articles`.
 
 ---
 
-### 5.4 Ley 23.349 (IVA) — **NO ARCHIVADA**. Bloqueante de FASE 8.
+### 5.4 Ley de Impuesto al Valor Agregado (t.o. 1997) · `V1` — **archivada**
 
-Es el gap más caro que tiene el repositorio hoy. Sin ella no hay:
+Era el gap más caro del repositorio. Ya no lo es.
 
-- **alícuotas** (art. 28 y sus reducciones) → `tax_rates` está vacía y el motor responde
-  `SIN_ALICUOTAS_RELEVADAS`;
-- **requisitos del crédito fiscal** (arts. 12 y 13: vinculación con operaciones gravadas, regla de
-  tope, prorrateo) → `EstadoCreditoFiscal` no tiene `COMPUTABLE`.
+Lo archivado es el **texto actualizado** que publica InfoLeg del *"Ley de Impuesto al Valor
+Agregado, texto ordenado en 1997"*, aprobado por el **Decreto 280/97** (Bs. As., 26/03/1997;
+B.O. 15/04/1997) sobre el texto sustituido por el art. 1° de la Ley 23.349. Se archivó además la
+ficha oficial del decreto, que es de donde sale su fecha de publicación.
 
-Hasta que se archive, el motor de IVA verifica **la forma** —constatación, apócrifos,
-discriminación, coherencia del total— y devuelve `NO_DETERMINABLE` sobre el fondo. Ver
+**Lo que destrabó:**
+
+- **Alícuotas** (art. 28) → `tax_rates` tiene cinco filas, todas citando su artículo. Se siembran
+  con `npm run tax:seed`.
+- **Regla de tope del crédito fiscal** (art. 12 inc. a, primer párrafo) → el motor ahora rechaza
+  un IVA que ninguna alícuota vigente a la fecha podría producir.
+
+**Lo que NO destrabó, y conviene tener claro:**
+
+`EstadoCreditoFiscal` **sigue sin tener `COMPUTABLE`**, y el motivo cambió para mejor. Ya no es
+que falte la ley: es que el art. 12 condiciona el cómputo a que la compra *"se vincule con las
+operaciones gravadas"*, y eso no es un dato del comprobante sino un hecho del negocio. La misma
+factura de nafta es crédito para la empresa de fletes y no lo es para el auto del socio. Archivar
+la ley no trajo ese dato — trajo poder nombrar con precisión cuál falta.
+
+**Límite temporal del documento.** Es un texto *actualizado*: sus antecedentes normativos están
+listados pero **no transcriptos**. Que el art. 28 diga hoy "veintiuno por ciento" no prueba qué
+decía en 2010. Lo único que el documento permite afirmar sobre el pasado es lo que él mismo
+transcribe: la Nota Infoleg del art. 1° del **Decreto N° 2312/2002**, que fijó 19% entre el
+**18/11/2002 y el 17/01/2003** inclusive. Esa ventana cerrada es lo que ancla el 21% desde el
+18/01/2003. Para hechos imponibles anteriores el motor responde `SIN_ALICUOTAS_RELEVADAS`.
+
+Es la misma lección que la RG 4597: un T.O. dice qué rige hoy, no qué regía. Ver
 [TAX_ENGINE.md](TAX_ENGINE.md).
 
 ---
@@ -395,7 +426,6 @@ El Boletín Oficial sirve para **datar y citar** el aviso; no para obtener el te
 
 | # | Documento | Bloquea | Nivel |
 |---|-----------|---------|-------|
-| 1 | Resolución CPCECABA 460/2024 (acto de adopción) | Carga formal de `norm_adoptions` para CABA | `V2` |
 | 2 | Resolución CPCE Córdoba 35/24 y adopciones de otras jurisdicciones | Empresas fuera de CABA | `V2` |
 | 3 | Ley 27.349 (SAS) | Entes SAS | `V2` |
 | 4 | RG de percepciones y retenciones por régimen | Módulo de retenciones | No relevado |
@@ -405,9 +435,9 @@ El Boletín Oficial sirve para **datar y citar** el aviso; no para obtener el te
 | 8 | Manuales ARCA restantes (wsmtxca, wsfexv1, padrón a4/a10) | Integraciones de FASE 13 | `V2` |
 | 9 | RG 1415, 3561, 4291 y 5198 (textos actualizados) | Reglas finas de comprobantes | `V2` |
 | 10 | Vigencias de la tabla de tipos de comprobante (`FEParamGetTiposCbte`) | Interpretar comprobantes por fecha | **Gap declarado** — ver 8.1 |
-| 11 | Alícuotas de IVA (Ley 23.349 y modificatorias, texto actualizado) | Control de coherencia de IVA | No relevado |
+| 11 | Antecedentes normativos del art. 28 de la Ley de IVA (textos anteriores al 18/11/2002) | Alícuotas para hechos imponibles previos a esa fecha | **Gap declarado** |
 
-Los 10 ítems del backlog original de FASE 0 están **cerrados**: 21 documentos en `V1`.
+Los 10 ítems del backlog original de FASE 0 están **cerrados**: 25 documentos en `V1`.
 
 ### 8.1 Hallazgo de FASE 3b — el catálogo de comprobantes es normativa versionada
 

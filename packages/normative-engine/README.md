@@ -110,9 +110,15 @@ sale del art. 7°, y la edición archivada trae además la nota al pie que dice 
 ese texto lo sustituyó el art. 1° de la ley 27.077. Todo verificable en el mismo
 documento que el sistema leyó.
 
-**Adopciones cargadas: cero.** Para que el motor resuelva normas profesionales en
-CABA falta archivar la Res. CPCECABA 460/2024. Hasta entonces responde
-`ADOPCION_NO_RELEVADA`, que es lo correcto.
+**Adopciones cargadas: una.** La Res. **P.** N° 460/2024 del CPCECABA está
+archivada y cargada: adopta la RT 59 (T.O. de la RT 54) en CABA para ejercicios
+iniciados desde el 01/01/2025, con aplicación anticipada para ejercicios
+*finalizados* desde el 30/09/2024 — anclada al cierre y no al inicio, que es el
+caso raro para el que existe `early_anchor`.
+
+Las demás jurisdicciones siguen respondiendo `ADOPCION_NO_RELEVADA`, y eso es
+una respuesta: la vigencia que fija la FACPCE y la que fija cada consejo son
+hechos distintos.
 
 **Reglas cargadas: cero.** Cargar una regla exige transcribir el articulado que
 la funda, con revisión humana. No es trabajo de un script.

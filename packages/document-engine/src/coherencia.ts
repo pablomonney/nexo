@@ -11,10 +11,12 @@
  * el score de la extracción.
  *
  * Lo que este módulo **no** hace, y conviene que quede escrito: no valida que la
- * alícuota de IVA aplicada sea la que corresponde. Las alícuotas son normativa
- * (Ley 23.349 y sus modificatorias) y no están archivadas como fuente V1 en este
- * repositorio. Inferirlas de la aritmética del propio comprobante sería usar el
- * dato para validarse a sí mismo. Queda declarado como brecha.
+ * alícuota de IVA aplicada sea la que corresponde. Las alícuotas ya están
+ * archivadas y sembradas —art. 28 de la Ley de IVA (t.o. 1997)— pero viven en
+ * `tax_rates` y las resuelve el motor de IVA, que sabe la fecha del hecho
+ * imponible. Este módulo solo ve el documento: inferir la alícuota de la
+ * aritmética del propio comprobante sería usar el dato para validarse a sí mismo.
+ * No es una brecha de fuente, es una división de responsabilidades.
  */
 
 import type { Currency, Money } from '@aai/shared';

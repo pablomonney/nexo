@@ -36,24 +36,49 @@ suite('Candados del IVA', () => {
     await client?.end();
   });
 
-  it('el sistema no trae ninguna alícuota de fábrica', async () => {
-    // Se excluyen las que cargan los tests de más abajo. La afirmación es sobre
-    // las que carga el *sistema*: ninguna migración ni ningún seed inserta una
-    // alícuota de IVA, porque la Ley 23.349 no está archivada.
+  it('ninguna migración inserta una alícuota: las siembra un script, desde una norma', async () => {
+    // Este test decía otra cosa hasta que se archivó la Ley de IVA: afirmaba que
+    // `tax_rates` estaba vacía. Ya no lo está, y actualizar el número esperado de
+    // 0 a 5 habría sido convertir un candado en un contador.
     //
-    // No es "todavía no lo hicimos". Es que el motor prefiere responder
-    // SIN_ALICUOTAS_RELEVADAS antes que suponer 21%.
-    const result = await client.query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM tax_rates WHERE created_by <> 'tester'`,
+    // Lo que hay que sostener no es la cantidad. Es de dónde salen: ninguna
+    // migración las escribe —para que agregar una alícuota nunca sea un efecto
+    // secundario de un cambio de esquema— y cada una cita el documento archivado
+    // del que se leyó.
+    const deMigraciones = await client.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM tax_rates
+        WHERE created_by NOT IN ('tester', 'seed-tax-rates')`,
     );
+    expect(deMigraciones.rows[0]?.n).toBe('0');
 
-    expect(result.rows[0]?.n).toBe('0');
+    const sinDocumento = await client.query<{ label: string }>(
+      `SELECT r.label
+         FROM tax_rates r
+         LEFT JOIN norm_documents d ON d.norm_version_id = r.norm_version_id
+        WHERE r.created_by = 'seed-tax-rates' AND d.id IS NULL`,
+    );
+    expect(sinDocumento.rows).toEqual([]);
 
-    // Y el impuesto sí existe: lo que falta es su alícuota, no el impuesto.
     const impuesto = await client.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM taxes WHERE code = 'IVA'`,
     );
     expect(impuesto.rows[0]?.n).toBe('1');
+  });
+
+  it('no hay alícuota vigente antes del 18/11/2002, y eso es a propósito', async () => {
+    // El texto ordenado archivado no transcribe sus antecedentes normativos. La
+    // única ventana histórica que el documento permite afirmar es la del Decreto
+    // 2312/2002, transcripta en la Nota Infoleg del propio art. 28.
+    //
+    // Si algún día aparece una fila que empieza antes, va a ser porque alguien
+    // completó una fecha de memoria — que es exactamente lo que este proyecto no
+    // hace.
+    const anteriores = await client.query<{ label: string; valid_from: string }>(
+      `SELECT label, valid_from::text FROM tax_rates
+        WHERE created_by = 'seed-tax-rates' AND valid_from < DATE '2002-11-18'`,
+    );
+
+    expect(anteriores.rows).toEqual([]);
   });
 
   it('una alícuota sin norma no se puede insertar', async () => {

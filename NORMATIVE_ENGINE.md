@@ -25,7 +25,7 @@ El caso está **verificado empíricamente** en `OFFICIAL_SOURCES.md` §3:
 | Fuente | Vigencia de la RT 54 |
 |--------|----------------------|
 | FACPCE | Ejercicios iniciados desde **01/07/2024** |
-| CPCECABA (Res. CD 460/2024) | Ejercicios iniciados desde **01/01/2025** |
+| CPCECABA (Res. **P.** N° 460/2024, 11/07/2024) | Ejercicios iniciados desde **01/01/2025** |
 
 Una sociedad inscripta en CABA con cierre 30/11 no aplica RT 54 por primera vez en el mismo
 ejercicio que un ente de otra jurisdicción. Además:
@@ -199,7 +199,7 @@ La RT 54 tuvo tres fechas de vigencia sucesivas, todas verificables en fuente of
 |-------|--------|
 | Ejercicios iniciados desde **01/01/2024** | Art. 2° del texto original de la RT 54 (01/07/2022) |
 | Ejercicios iniciados desde **01/07/2024** | Tras la RT 56 (30/06/2023) |
-| Ejercicios iniciados desde **01/01/2025** | Adopción del CPCECABA (Res. 460/2024), con anticipada para ejercicios *finalizados* desde 30/09/2024 |
+| Ejercicios iniciados desde **01/01/2025** | Adopción del CPCECABA (Res. P. N° 460/2024, art. 5°), con anticipada para ejercicios *finalizados* desde 30/09/2024 |
 
 Tres valores para "la vigencia de la RT 54", y el correcto depende de a quién se le pregunte y
 dónde esté inscripta la empresa. Nótese además que el tercero se ancla en el **cierre** y no en el

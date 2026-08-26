@@ -231,8 +231,14 @@ La alícuota se guarda como **razón entera** (`numerator`/`denominator`), no co
 `21/100` es exacto y `0.21` no lo es en binario. Un factor con error de representación que
 multiplica millones de pesos corre el subdiario de a centavos.
 
-**La tabla está vacía**, y es una afirmación, no un pendiente: la Ley 23.349 no está archivada, así
-que el motor responde `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%.
+La tabla **estuvo vacía** hasta que se archivó la Ley de IVA (t.o. 1997), y esa vacancia era una
+afirmación, no un pendiente. Hoy tiene cinco filas —21%, 27%, la reducida al 50%, y la ventana del
+19% del Decreto 2312/2002— sembradas con `npm run tax:seed`, cada una citando su artículo.
+
+Lo que no cambió es el borde: para hechos imponibles **anteriores al 18/11/2002** el motor sigue
+respondiendo `SIN_ALICUOTAS_RELEVADAS`. El texto archivado es un T.O. actualizado y no transcribe
+sus antecedentes; nadie relevó qué decía el art. 28 en 1999, y suponerlo se vería idéntico a
+saberlo.
 
 ### 8.2 Importes sin signo en la operación, con signo en el libro
 
@@ -321,8 +327,13 @@ una fila, no escribir un módulo — que es el criterio de la fase.
 Y por eso se valida con `validarPlantilla()` antes de cada uso: viene de la base, igual que las
 condiciones del motor normativo.
 
-`norm_version_id NOT NULL` es la razón por la que la tabla está **vacía**: la estructura del ESP sale
-de la Ley 19.550 arts. 63 y 64, y esa ley no está sembrada.
+`norm_version_id NOT NULL` fue la razón por la que la tabla estuvo **vacía**: la estructura del ESP
+sale de la Ley 19.550 arts. 63 y 64, y esa ley no se sembraba porque su fecha de emisión no surgía
+del documento archivado — el texto actualizado solo declara la publicación del Decreto 841/84.
+
+Se destrabó archivando la **ficha oficial del Decreto 841/84**, que sí declara la fecha de dictado
+(20/03/1984). La ley ya está sembrada; transcribir los arts. 63 y 64 al árbol de la plantilla sigue
+siendo trabajo profesional con revisión humana, y `npm run statements:seed` dice exactamente eso.
 
 ### 10.3 Emitido significa firmado
 

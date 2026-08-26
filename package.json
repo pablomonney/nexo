@@ -25,7 +25,7 @@
     "norms:verify": "node scripts/verify-norm-archive.mjs",
     "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run ledger:verify && npm run audit:invariants && npm run test:coverage",
     "db:create": "node scripts/db-create.mjs",
-    "db:setup": "npm run db:create && npm run db:migrate && npm run build && npm run catalog:seed && npm run prompts:register && npm run norms:seed && npm run statements:seed",
+    "db:setup": "npm run db:create && npm run db:migrate && npm run build && npm run catalog:seed && npm run prompts:register && npm run norms:seed && npm run tax:seed && npm run statements:seed",
     "arca:check": "node scripts/arca-check.mjs",
     "catalog:seed": "node scripts/seed-comprobante-types.mjs",
     "metrics:extraction": "node scripts/extraction-metrics.mjs",
@@ -36,7 +36,8 @@
     "statements:seed": "node scripts/seed-statement-templates.mjs",
     "audit:invariants": "node scripts/check-invariants.mjs",
     "arca:capabilities": "node scripts/arca-capabilities.mjs",
-    "norms:watch": "node scripts/norms-watch.mjs"
+    "norms:watch": "node scripts/norms-watch.mjs",
+    "tax:seed": "node scripts/seed-tax-rates.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

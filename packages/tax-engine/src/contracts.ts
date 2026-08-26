@@ -121,7 +121,18 @@ export type CodigoHallazgoIva =
   | 'EMISOR_APOCRIFO'
   | 'EMISOR_SIN_VERIFICAR'
   | 'CONDICION_CONTRAPARTE_DESCONOCIDA'
-  | 'TIPO_COMPROBANTE_DESCONOCIDO';
+  | 'TIPO_COMPROBANTE_DESCONOCIDO'
+  /**
+   * Art. 12 inc. a), primer párrafo: el crédito se computa *"hasta el límite del
+   * importe que surja de aplicar sobre los montos totales netos [...] la alícuota
+   * a la que dichas operaciones hubieran estado sujetas"*.
+   *
+   * El motor no sabe qué alícuota correspondía —eso depende de qué se compró—,
+   * pero sí sabe cuál es la mayor vigente a esa fecha. Un IVA que la supera no
+   * puede ser crédito fiscal bajo ninguna lectura del artículo, y eso sí es
+   * determinable.
+   */
+  | 'CREDITO_EXCEDE_EL_TOPE';
 
 export interface HallazgoIva {
   readonly codigo: CodigoHallazgoIva;
@@ -134,10 +145,20 @@ export interface HallazgoIva {
 /**
  * Lo que el motor puede decir sobre un crédito fiscal.
  *
- * No hay `COMPUTABLE`. Es deliberado y es la afirmación central del módulo: la
- * computabilidad la deciden los arts. 12 y 13 de la Ley 23.349 —vinculación con
- * operaciones gravadas, regla de tope, prorrateo—, y esa ley no está archivada.
- * Un motor que devolviera `COMPUTABLE` estaría afirmando algo que no verificó.
+ * No hay `COMPUTABLE`, y **sigue sin haberlo aunque la ley ya esté archivada**.
+ *
+ * Esa es la parte que conviene no malinterpretar. Durante la FASE 8 la ausencia
+ * de `COMPUTABLE` se explicaba diciendo que la Ley 23.349 no estaba en el
+ * archivo. Ya está: es el texto ordenado en 1997, con hash, y su art. 12 se lee
+ * completo. El estado no cambió, porque el motivo real era otro y más difícil de
+ * arreglar.
+ *
+ * El art. 12 condiciona el cómputo a que la compra *"se vincule con las
+ * operaciones gravadas"*. Eso no es un dato del comprobante: es un hecho del
+ * negocio. La misma factura de nafta es crédito para la empresa de fletes y no lo
+ * es para el auto del socio, y ningún campo del comprobante distingue una de la
+ * otra. Archivar la ley no la trajo; lo que trajo fue poder decir con precisión
+ * qué falta.
  */
 export type EstadoCreditoFiscal =
   | 'NO_DETERMINABLE'

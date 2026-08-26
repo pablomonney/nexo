@@ -65,7 +65,7 @@ export function identificarAlicuota(
         {
           codigo: 'SIN_ALICUOTAS_RELEVADAS',
           mensaje:
-            'No hay alícuotas de IVA relevadas para esta fecha. La Ley 23.349 no está archivada: cargá las alícuotas con su norma antes de registrar IVA. El sistema no supone 21%.',
+            'No hay alícuotas de IVA relevadas para esta fecha. Si la base está vacía, corré `npm run tax:seed`. Si la fecha es anterior al 18/11/2002, no hay nada que correr: el texto ordenado archivado no transcribe sus antecedentes, así que nadie relevó qué decía el art. 28 entonces. El sistema no supone 21%.',
           bloquea: true,
         },
       ],

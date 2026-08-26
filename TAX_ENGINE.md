@@ -5,8 +5,12 @@
 > `docs/normative-sources/originals/INFOLEG_AFIP_RG_4597_2019_texto_actualizado.htm`,
 > con su sha256 en `checksums.sha256`. Cargada al motor normativo.
 >
-> **Fuente que NO está archivada, y que cambia todo:** la **Ley 23.349 (IVA)**.
-> Sin ella no hay alícuotas ni requisitos de cómputo del crédito fiscal.
+> **Fuente archivada el 2026-08-26, que cambió la mitad de este documento:** la
+> **Ley de Impuesto al Valor Agregado, texto ordenado en 1997** (Decreto 280/97,
+> Bs. As. 26/03/1997, B.O. 15/04/1997), sobre el texto sustituido por el art. 1°
+> de la Ley 23.349.
+> `docs/normative-sources/originals/INFOLEG_LEY_IVA_23349_TO_1997_texto_actualizado.htm`.
+> De su art. 28 salen las alícuotas; de su art. 12, la regla de tope.
 
 ## 1. Las dos negativas
 
@@ -16,8 +20,16 @@ El módulo se sostiene en dos cosas que **no** hace. Cada una tiene su test.
 
 No hay un `21` en el código, ni un `0.21`, ni una constante `IVA_GENERAL`. Las
 alícuotas llegan de `tax_rates`, que tiene `norm_version_id NOT NULL` — ADR-005
-convertido en constraint. Hoy la tabla está **vacía**, así que el motor responde
-`SIN_ALICUOTAS_RELEVADAS`.
+convertido en constraint. La tabla tiene hoy cinco filas, sembradas con
+`npm run tax:seed` desde el art. 28, y cada una cita su párrafo.
+
+La reducida se guarda como **21/200**, no como 105/1000. No es capricho: el art.
+28 no dice "diez coma cinco por ciento", dice *"una alícuota equivalente al
+cincuenta por ciento (50%) de la establecida en el primer párrafo"*. La razón
+entera 21/200 **es** esa frase; 0,105 es una traducción nuestra.
+
+Para hechos imponibles anteriores al **18/11/2002** el motor sigue respondiendo
+`SIN_ALICUOTAS_RELEVADAS`. Ver §9.
 
 Suponer 21% sería la decisión más tentadora del proyecto: es la alícuota general
 en Argentina desde hace décadas y acertaría casi siempre. Y por eso mismo es la
@@ -31,13 +43,30 @@ bienes de capital— falla en operaciones grandes, y falla en silencio.
 | Estado | Qué significa |
 |---|---|
 | `IMPEDIDO_POR_FORMA` | Falló un control verificable. Ni se llega a la cuestión de fondo |
-| `NO_DETERMINABLE` | Los controles de forma pasan. La computabilidad depende de la Ley 23.349 |
+| `NO_DETERMINABLE` | Los controles de forma pasan y el IVA no excede el tope. La computabilidad depende de un hecho del negocio |
 | `FUENTE_NO_ENCONTRADA` | No hay norma relevada para el caso |
 
-La computabilidad la deciden los arts. 12 y 13 de la Ley 23.349: vinculación con
-operaciones gravadas, regla de tope, prorrateo, exclusiones por tipo de bien. Un
-motor que devolviera `COMPUTABLE` estaría afirmando algo que no verificó, y el
-usuario no tendría cómo notarlo — la respuesta se vería igual que si sí.
+Y sigue sin haberlo **aunque la ley ya esté archivada**. Es la parte que más
+fácil se malinterpreta.
+
+Antes la explicación era simple: faltaba la fuente. Ya no falta. El motivo real
+era otro y es peor de resolver: el art. 12 solo admite el cómputo *"en la medida
+en que se vinculen con las operaciones gravadas"*, y eso no está en el
+comprobante — está en el negocio. La misma factura de nafta es crédito para la
+empresa de fletes y no lo es para el auto del socio, y los dos comprobantes son
+idénticos. Un motor que devolviera `COMPUTABLE` estaría afirmando algo que no
+verificó, y el usuario no tendría cómo notarlo: la respuesta se vería igual que
+si sí.
+
+**Lo que la ley archivada sí agregó** es un control que antes no se podía hacer:
+la **regla de tope** del art. 12 inc. a), primer párrafo. El crédito se computa
+*"hasta el límite del importe que surja de aplicar sobre los montos totales netos
+[…] la alícuota a la que dichas operaciones hubieran estado sujetas"*. El motor no
+sabe cuál era la aplicable —depende de qué se compró— pero sabe cuál es la mayor
+vigente a esa fecha, y un IVA por encima de ese techo no es crédito bajo ninguna
+lectura. Se mide contra la más alta y no contra la general a propósito: comparar
+contra el 21% convertiría en hallazgo toda factura de energía eléctrica al 27%,
+que es el caso legítimo que el segundo párrafo contempla.
 
 Es el **§11** aplicado: *validación fiscal ≠ validación contable ≠ validación
 económica*. Que la factura exista en ARCA no dice nada sobre si el gasto es del
@@ -173,14 +202,21 @@ redondeo.
 | | Estado |
 |---|---|
 | `taxes` | 1 fila: IVA |
-| `tax_rates` | **vacía** — falta archivar la Ley 23.349 |
-| Subdiarios | funcionan; sin alícuotas, todo cae en `SIN_ALICUOTAS_RELEVADAS` |
+| `tax_rates` | 5 filas desde el art. 28: 21%, 27%, 21/200, y la ventana del 19% (18/11/2002–17/01/2003) |
+| Subdiarios | funcionan; antes del 18/11/2002 todo cae en `SIN_ALICUOTAS_RELEVADAS` |
 | Libro de IVA Digital | se arma; no se exporta a ARCA ni se presenta |
 
 ## 9. Gaps declarados
 
-- **Ley 23.349** — alícuotas (art. 28), crédito fiscal (arts. 12 y 13), prorrateo.
-  Es el bloqueante principal.
+- **Antecedentes normativos del art. 28** anteriores al 18/11/2002. El texto
+  archivado es un T.O. *actualizado*: los lista y no los transcribe. Que hoy diga
+  "veintiuno por ciento" no prueba qué decía en 1999, y la única ventana histórica
+  que el documento sí transcribe es la del Decreto 2312/2002. Es la misma lección
+  que dio la RG 4597.
+- **Qué operación va a qué alícuota.** El art. 28 enumera bienes y servicios;
+  mapearlos a un plan de cuentas es trabajo normativo con revisión humana. El
+  motor identifica la alícuota desde el IVA que el comprobante discrimina — no la
+  elige por el rubro.
 - **Diseños de registro** del micrositio IVA de ARCA.
 - **RG 5133/2021** — texto anterior del art. 2° de la RG 4597.
 - **Percepciones y retenciones**: se registran como importe y entran al total; no

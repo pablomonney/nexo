@@ -31,8 +31,11 @@ const pesos = (centavos: bigint): Money => money(centavos, 'ARS');
 /**
  * Un catálogo de prueba.
  *
- * Existe SOLO en los tests. En producción `tax_rates` está vacía hasta que
- * alguien archive la Ley 23.349, y ese es el punto de la mitad de este archivo.
+ * Existe SOLO en los tests, y sigue existiendo por una razón: en producción las
+ * alícuotas salen de `tax_rates`, que se siembra desde el art. 28 del texto
+ * ordenado archivado. Un test que leyera la base probaría la siembra, no el
+ * motor — y el motor tiene que comportarse igual con un catálogo de tres
+ * alícuotas que con uno vacío.
  */
 const GENERAL: AlicuotaRelevada = {
   id: 'rate-general',
@@ -52,7 +55,18 @@ const REDUCIDA: AlicuotaRelevada = {
   etiqueta: '10,5%',
 };
 
+const INCREMENTADA: AlicuotaRelevada = {
+  ...GENERAL,
+  id: 'rate-incrementada',
+  numerador: 27n,
+  denominador: 100n,
+  etiqueta: '27%',
+};
+
 const CATALOGO = [GENERAL, REDUCIDA];
+
+/** Con la incrementada adentro. La regla de tope se mide contra la más alta. */
+const CATALOGO_COMPLETO = [GENERAL, REDUCIDA, INCREMENTADA];
 
 function renglon(overrides: Partial<RenglonIva> = {}): RenglonIva {
   return {
@@ -111,7 +125,11 @@ describe('el motor no supone la alícuota general', () => {
     expect(resultado.hallazgos[0]?.codigo).toBe('SIN_ALICUOTAS_RELEVADAS');
     expect(resultado.hallazgos[0]?.bloquea).toBe(true);
     expect(resultado.hallazgos[0]?.mensaje).toMatch(/no supone 21%/);
-    expect(resultado.hallazgos[0]?.mensaje).toMatch(/Ley 23\.349/);
+    // El mensaje dejó de decir "la ley no está archivada" el día que la ley entró
+    // al archivo. Lo que queda es lo que sigue siendo cierto: hay un comando que
+    // siembra las alícuotas, y hay un tramo de la historia que nadie relevó.
+    expect(resultado.hallazgos[0]?.mensaje).toMatch(/tax:seed/);
+    expect(resultado.hallazgos[0]?.mensaje).toMatch(/18\/11\/2002/);
   });
 
   it('con catálogo identifica la alícuota exacta', () => {
@@ -236,7 +254,11 @@ describe('el motor nunca dice que un crédito fiscal sea computable', () => {
     expect(evaluacion.estado).toBe('NO_DETERMINABLE');
     expect(evaluacion.hallazgos).toEqual([]);
     expect(evaluacion.ivaDiscriminado.amount).toBe(21_000n);
-    expect(evaluacion.faltaRelevar.join(' ')).toMatch(/Ley 23\.349/);
+    // Lo que falta ya no es la ley: es un hecho del negocio que ningún archivo
+    // normativo va a traer. La lista tiene que decir eso y no prometer una fuente.
+    expect(evaluacion.faltaRelevar.join(' ')).toMatch(/vinculación con operaciones gravadas/);
+    expect(evaluacion.faltaRelevar.join(' ')).toMatch(/RG 1415/);
+    expect(evaluacion.faltaRelevar.join(' ')).not.toMatch(/no está archivada/);
     expect(evaluacion.mensaje).toMatch(/NO está determinada/);
     expect(evaluacion.mensaje).toMatch(/Lo decide el profesional/);
   });
@@ -623,5 +645,77 @@ describe('Libro de IVA Digital (RG 4597 T.O. por RG 5707/2025)', () => {
     expect(negativa.motivo).toMatch(/Clave Fiscal Nivel 3/);
     expect(negativa.motivo).toMatch(/no pide, no almacena y no usa/);
     expect(negativa.fundamento).toMatch(/Art\. 6°/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lo único que la ley archivada agregó: la regla de tope del art. 12
+// ---------------------------------------------------------------------------
+
+describe('la regla de tope del art. 12 inc. a)', () => {
+  it('un IVA que ninguna alícuota vigente puede producir no es crédito', () => {
+    const evaluacion = evaluarCreditoFiscal(
+      comprobante({
+        renglones: [renglon({ neto: pesos(100_000n), iva: pesos(50_000n) })],
+      }),
+      CATALOGO_COMPLETO,
+    );
+
+    const tope = evaluacion.hallazgos.find((h) => h.codigo === 'CREDITO_EXCEDE_EL_TOPE');
+    expect(tope?.bloquea).toBe(true);
+    expect(tope?.mensaje).toMatch(/27%/);
+    expect(tope?.mensaje).toMatch(/27000/);
+    expect(evaluacion.estado).toBe('IMPEDIDO_POR_FORMA');
+  });
+
+  it('se mide contra la alícuota más alta, no contra la general', () => {
+    // Una factura de energía eléctrica al 27% es el caso legítimo que el segundo
+    // párrafo del art. 28 contempla. Comparar contra el 21% la convertiría en
+    // hallazgo, y sería el motor inventando una infracción.
+    const evaluacion = evaluarCreditoFiscal(
+      comprobante({
+        renglones: [renglon({ neto: pesos(100_000n), iva: pesos(27_000n) })],
+      }),
+      CATALOGO_COMPLETO,
+    );
+
+    expect(evaluacion.hallazgos.map((h) => h.codigo)).not.toContain('CREDITO_EXCEDE_EL_TOPE');
+    expect(evaluacion.estado).toBe('NO_DETERMINABLE');
+  });
+
+  it('sin alícuotas relevadas no agrega un tope calculado sobre nada', () => {
+    const evaluacion = evaluarCreditoFiscal(
+      comprobante({
+        renglones: [renglon({ neto: pesos(100_000n), iva: pesos(50_000n) })],
+      }),
+      [],
+    );
+
+    // Ya hay un hallazgo que dice que no hay catálogo. Un segundo hallazgo
+    // derivado del mismo hueco haría parecer que son dos problemas distintos.
+    expect(evaluacion.hallazgos.map((h) => h.codigo)).toEqual(['SIN_ALICUOTAS_RELEVADAS']);
+  });
+
+  it('no se aplica a las ventas: el art. 12 habla de crédito, no de débito', () => {
+    const evaluacion = evaluarCreditoFiscal(
+      comprobante({
+        direccion: 'VENTAS',
+        renglones: [renglon({ neto: pesos(100_000n), iva: pesos(50_000n) })],
+      }),
+      CATALOGO_COMPLETO,
+    );
+
+    expect(evaluacion.hallazgos.map((h) => h.codigo)).not.toContain('CREDITO_EXCEDE_EL_TOPE');
+  });
+
+  it('tolera el centavo de redondeo del emisor, igual que el resto del motor', () => {
+    const evaluacion = evaluarCreditoFiscal(
+      comprobante({
+        renglones: [renglon({ neto: pesos(100_000n), iva: pesos(27_001n) })],
+      }),
+      CATALOGO_COMPLETO,
+    );
+
+    expect(evaluacion.hallazgos.map((h) => h.codigo)).not.toContain('CREDITO_EXCEDE_EL_TOPE');
   });
 });

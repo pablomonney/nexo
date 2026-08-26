@@ -261,10 +261,11 @@ export async function vatRoutes(app: FastifyInstance): Promise<void> {
 /**
  * Alícuotas vigentes, con su norma.
  *
- * Devuelve un array vacío cuando `tax_rates` está vacía, que es el estado real
- * de hoy: la Ley 23.349 no está archivada. El motor lo traduce a
- * `SIN_ALICUOTAS_RELEVADAS`; no hay ningún camino por el que acá aparezca un 21%
- * de la nada.
+ * Devuelve un array vacío cuando `tax_rates` no tiene nada vigente a esa fecha —
+ * porque nadie corrió `npm run tax:seed`, o porque el comprobante es anterior al
+ * 18/11/2002, que es el borde hasta donde llega el texto ordenado archivado. El
+ * motor lo traduce a `SIN_ALICUOTAS_RELEVADAS`; no hay ningún camino por el que
+ * acá aparezca un 21% de la nada.
  */
 async function cargarAlicuotas(tx: Tx): Promise<AlicuotaRelevada[]> {
   const result = await tx.query<{
