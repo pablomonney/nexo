@@ -64,6 +64,15 @@ export default defineConfig({
           functions: 95,
           branches: 88,
         },
+        // El candado del sandbox falla cerrado, y una rama del candado que no se
+        // ejercita es una rama que nadie sabe de qué lado falla. Es el único
+        // paquete donde el número no mide calidad de código sino cuántos caminos
+        // hacia "sí, escribí" quedaron sin probar.
+        'packages/sandbox/src/**': {
+          lines: 95,
+          functions: 95,
+          branches: 90,
+        },
       },
     },
   },

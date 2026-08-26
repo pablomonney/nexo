@@ -549,6 +549,39 @@ computó.
 
 ---
 
+### 🔴 R-39 — El sandbox que apunta a producción *(nuevo, 2026-08-26)*
+
+Un modo simulación existe para que alguien pruebe sin miedo. Toda su utilidad depende de una sola
+cosa: que el destino no sea la contabilidad real de nadie. Y el destino es una cadena de conexión en
+una variable de entorno — copiada de un chat, heredada de otra terminal, editada a las siete de la
+tarde.
+
+*Por qué importa:* el modo de falla no se ve. Una simulación mal apuntada escribe asientos correctos,
+balanceados, con su comprobante — en los libros de un cliente. La interfaz sigue diciendo
+"SIMULACIÓN" y la base no dice nada. Se descubre cuando alguien pregunta qué es esa compra a EJEMPLO
+SIMULADO S.A.
+
+*Mitigaciones:*
+
+1. **El candado pregunta al revés.** No comprueba que el destino no sea producción: comprueba que sí
+   sea un sandbox. Una lista de bases prohibidas falla abierta —la base nueva que nadie agregó pasa,
+   la de otro cliente pasa—; exigir prueba falla cerrada.
+2. **La prueba es una tabla que ninguna migración de producción crea.**
+   `0001_marca_de_sandbox.sql` vive fuera del directorio de migraciones a propósito: adentro,
+   producción la recibiría en el próximo deploy y el control se habría autodestruido solo.
+3. **El tipo hace cumplir el orden.** `simular()` recibe el aislamiento ya probado en su firma, y
+   ese tipo no se puede construir sin pasar por el candado.
+4. **Variable aparte.** `SANDBOX_DATABASE_URL` y no un valor distinto en `DATABASE_URL`: un sandbox
+   que se configura cambiando la misma variable se convierte en producción con un olvido.
+5. **La marca no se saca.** Un trigger rechaza UPDATE y DELETE sobre ella. Una base que dejó de ser
+   sandbox no existe: o lo es, o se borra.
+
+*Residual:* bajo para la escritura, **medio para los datos**. Nada de esto impide que alguien copie
+un dump de producción a un sandbox: es un problema de datos personales, no de aislamiento de
+escritura, y lo cubre `SECURITY.md` junto con la prohibición de usar datos reales en desarrollo.
+
+---
+
 ## Riesgo de proyecto
 
 ### 🟠 R-19 — Alcance

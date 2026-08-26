@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    { "path": "../shared" },
+    { "path": "../accounting-engine" },
+    { "path": "../tax-engine" }
+  ]
+}

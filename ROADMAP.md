@@ -612,15 +612,59 @@ doce artículos es inventar lo mismo.
 5. **Las respuestas rechazadas se guardan.** Son el insumo de la métrica de alucinación; borrarlas
    haría que el indicador se vea mejor de lo que es.
 
-Queda en 🟡: el **sandbox de simulación del §34** no está. Simular sobre un esquema aislado es una
-pieza de infraestructura, no de IA, y merece su propio diseño — con el cuidado de que una simulación
-nunca pueda escribir en el esquema real.
+---
+
+## FASE 15 — Sandbox de simulación (§34)
+
+**Estado: ✅**
+
+Era la última pieza de código pendiente, y quedó separada de la FASE 14 con razón: simular sobre un
+esquema aislado es infraestructura, no IA.
+
+### La decisión: el candado pregunta al revés
+
+La forma intuitiva de garantizar *"una simulación nunca escribe en el esquema real"* es preguntar si
+el destino **es** producción: compararlo con `DATABASE_URL`, mantener una lista de bases prohibidas,
+mirar si el nombre dice `prod`.
+
+Todas esas comprobaciones fallan abiertas. La base nueva que nadie agregó a la lista pasa. La de otro
+cliente pasa. La que alguien renombró pasa. Y lo que pasa cuando fallan no es un error visible: es
+una simulación escribiendo asientos en la contabilidad real de alguien, con la etiqueta de "prueba"
+puesta en la interfaz y en ningún otro lado.
+
+`verificarAislamiento` pregunta lo contrario: **¿hay prueba de que esto es un sandbox?** La prueba es
+una tabla que solo existe si alguien corrió, a propósito, la migración de sandbox sobre esa base.
+Producción es rechazada no porque esté en una lista, sino porque no puede demostrar lo que se le pide.
+
+El detalle que sostiene todo: `0001_marca_de_sandbox.sql` **no vive en el directorio de migraciones**.
+Si viviera, producción recibiría la marca en el próximo deploy y el control se habría autodestruido
+sin que nadie escribiera una línea de más.
+
+### Lo que se construyó
+
+1. **`@aai/sandbox`** — el candado y el corredor de escenarios, funciones puras. El lint de
+   arquitectura le prohíbe abrir conexiones: el módulo que juzga el aislamiento no puede escribir en
+   el destino que juzga.
+2. **`simular()` pide el aislamiento probado en su firma.** El tipo no se puede construir desde
+   afuera del candado, así que la garantía no depende de que alguien se acuerde de llamarlo primero.
+3. **Las mismas migraciones y los mismos motores.** `sandbox:create` invoca el runner de producción;
+   `simular` importa `@aai/accounting-engine` y `@aai/tax-engine` tal cual los usa la aplicación. Un
+   sandbox con esquema propio deriva hasta que "anduvo en el sandbox" deja de significar algo.
+4. **El sello viaja en el dato**, no solo en la pantalla: un resultado copiado a un mail sigue
+   diciendo qué es.
+5. **El escenario de fábrica muestra una negativa.** La compra pasa todos los controles de forma y
+   el crédito fiscal igual sale `NO_DETERMINABLE`. Mostrar "crédito computable: $ 21.000" sería más
+   lindo de demostrar y estaría enseñando a confiar en una afirmación que el sistema no hace.
+
+Un hallazgo del camino: `construirLibroMayor` no filtra por estado —confía en que quien llama le pase
+los registrables— mientras el Diario sí. El paso MAYOR del simulador compara los totales de los dos y
+lo dice. En producción esa divergencia se descubre meses después, cuando el balance no cierra.
 
 ---
 
 ## Orden de trabajo recomendado
 
-Fases 1 → 2 → 3 → 5 → 6 → 7 → 4 → 8 → 9 → 10 → 11 → 12 → 13 → 14.
+Fases 1 → 2 → 3 → 5 → 6 → 7 → 4 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15.
 
 **Diferencia con el pliego, deliberada y explicada:** conviene construir el motor contable (5) y
 los libros (6, 7) **antes** del clasificador de IA (4). Motivo: el clasificador necesita un destino

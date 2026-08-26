@@ -32,6 +32,9 @@
       "path": "./packages/audit-engine"
     },
     {
+      "path": "./packages/sandbox"
+    },
+    {
       "path": "./packages/ai-engine"
     },
     {

@@ -50,7 +50,7 @@ honesta de arrancar, dado que la vigencia normativa es jurisdiccional (R-02).
 | Trazabilidad | Bidireccional completa, botón "¿de dónde salió este importe?" |
 | Auditoría | Bitácora encadenada + alertas críticas |
 | Normativa | `Normative Engine` con las normas del backlog en `V1`; citas en UI |
-| Sandbox | Simulación sobre esquema aislado |
+| Sandbox | Simulación sobre esquema aislado, con candado que exige prueba de aislamiento |
 
 ### Explícitamente fuera del MVP
 

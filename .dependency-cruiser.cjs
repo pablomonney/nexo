@@ -61,7 +61,19 @@ module.exports = {
         'Los paquetes de dominio son funciones puras sobre datos: sin red, sin disco, ' +
         'sin base. Es la condición para poder testearlos de forma exhaustiva.',
       severity: 'error',
-      from: { path: '^packages/(accounting-engine|tax-engine|normative-engine|bank-engine|audit-engine|financial-statements|shared)' },
+      from: { path: '^packages/(accounting-engine|tax-engine|normative-engine|bank-engine|audit-engine|financial-statements|sandbox|shared)' },
+      to: { path: `${CLIENTE_DE_BASE}|${CLIENTE_DE_RED}` },
+    },
+    {
+      name: 'sandbox-no-abre-conexiones',
+      comment:
+        'El candado del §34 decide si un destino probó ser un sandbox; no es quien ' +
+        'lo consulta. Si este paquete abriera la conexión, el mismo módulo que ' +
+        'juzga el aislamiento podría escribir en el destino que está juzgando, y la ' +
+        'garantía se sostendría en que nadie agregue una línea. La conexión la abre ' +
+        '`scripts/sandbox.mjs` y le pasa lo que observó. Ver packages/sandbox/src/aislamiento.ts.',
+      severity: 'error',
+      from: { path: '^packages/sandbox' },
       to: { path: `${CLIENTE_DE_BASE}|${CLIENTE_DE_RED}` },
     },
     {

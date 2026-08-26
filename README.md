@@ -2,7 +2,7 @@
 
 Plataforma de contabilidad asistida por IA para empresas y estudios contables argentinos.
 
-> **Estado: las 14 fases del roadmap están construidas.**
+> **Estado: las 15 fases del roadmap están construidas.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
 > - ✅ **21 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
@@ -19,20 +19,22 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 >   `SIN_ALICUOTAS_RELEVADAS` en vez de suponer 21%
 > - ✅ **Bancos: importación con mapeo declarado y conciliación asistida** (FASE 9)
 > - 🟡 **Estados contables: plantilla versionada, cada cifra con su origen** (FASE 10) — el motor
->   funciona, pero `statement_templates` está vacía hasta sembrar la Ley 19.550
+>   funciona y la Ley 19.550 ya está sembrada; falta transcribir sus arts. 63 y 64 al árbol de la
+>   plantilla, que es trabajo profesional y no una corrida de script
 >   (`npm run statements:seed` dice cómo)
 > - ✅ **Notas con cada cifra referenciada al estado, no escrita** (FASE 11)
 > - ✅ **Los ocho invariantes A-1..A-8 como puerta de CI que rompe el build** (FASE 12)
 > - ✅ **Habilitaciones de ARCA relevadas y vigilancia normativa que produce candidatos** (FASE 13)
-> - 🟡 **Auditoría determinística y respondedor que no puede inventar un número** (FASE 14) — falta
->   el sandbox de simulación del §34
-> - ✅ **27 migraciones aplicadas y 679/679 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Auditoría determinística y respondedor que no puede inventar un número** (FASE 14)
+> - ✅ **Sandbox que exige prueba de ser un sandbox en vez de sospechar de producción** (FASE 15)
+> - ✅ **29 migraciones aplicadas y 700/700 tests en verde contra PostgreSQL 18.6**
 > - 🟡 Criterio de salida de FASE 3: falta el corpus de 100 comprobantes reales anonimizados
 >   (ver `corpus/README.md`). El certificado de ARCA ya está emitido; queda correr
 >   `npm run arca:check -- --cert … --key … --cuit …` para que el propio sistema confirme que la
 >   delegación funciona. El certificado **no entra al repositorio**: el script lo lee del disco
-> - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado y
->   archivar la Res. CPCECABA 460/2024 (ver `packages/normative-engine/README.md`)
+> - 🟡 El motor normativo funciona pero no tiene reglas cargadas: falta transcribir articulado
+>   (ver `packages/normative-engine/README.md`). La adopción de CABA ya está: la Res. P. N° 460/2024
+>   está archivada y cargada en `norm_adoptions`
 > - 🟡 Lo que falta ya no es código: son fuentes normativas por archivar. Ver `ROADMAP.md`
 
 ## Puesta en marcha

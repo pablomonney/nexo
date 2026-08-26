@@ -8,8 +8,8 @@
  * peor.
  *
  * Un hallazgo de auditoría tiene que poder explicarse ante un tercero: *este
- * gasto subió 340% contra el ejercicio anterior*, *esta cuenta tuvo movimientos
- * el 31 de diciembre a las 23:50*, *este proveedor factura siempre 999 pesos por
+ * gasto subió 340% contra el ejercicio anterior*, *este asiento se cargó seis
+ * meses después de su fecha*, *este proveedor factura siempre unos pesos por
  * debajo del tope*. Las tres son afirmaciones aritméticas sobre datos que el
  * sistema tiene, y un modelo que las produzca introduce una capa que no se puede
  * auditar a cambio de nada.

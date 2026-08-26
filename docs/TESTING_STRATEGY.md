@@ -137,6 +137,17 @@ Corre contra un esquema aislado, con los mismos motores y las mismas reglas que 
 contador puede validar el comportamiento del sistema antes de confiarle contabilidad real — y el
 equipo puede reproducir cualquier caso reportado.
 
+**Construido en FASE 15.** `npm run sandbox:create` levanta la base aislada aplicándole el runner de
+migraciones de producción, y `npm run sandbox:run` corre el escenario.
+
+Lo que hay que entender antes de tocarlo: el candado **no comprueba que el destino no sea
+producción**. Comprueba que sí sea un sandbox, exigiendo una marca que ninguna migración de
+producción crea. Una lista de bases prohibidas falla abierta —la base nueva que nadie agregó pasa—;
+exigir prueba falla cerrada. Ver `packages/sandbox/README.md`.
+
+El escenario de fábrica termina con el crédito fiscal en `NO_DETERMINABLE` a propósito: un sandbox
+que mostrara una afirmación que el sistema no hace enseñaría a confiar en ella.
+
 ---
 
 ## 5. Puertas de CI
