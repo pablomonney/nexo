@@ -79,9 +79,12 @@ for (const [etiqueta, ruta] of [['cert', certPath], ['key', keyPath]]) {
 }
 
 const endpoints = endpointsFor(ambiente);
+// El campo es `endpointWsfev1`. Pasarlo como `endpoint` deja el destino en
+// `undefined` y el candado corta con ENDPOINT_NO_DECLARADO — que es lo que
+// corresponde, pero por el motivo equivocado.
 const permiso = verificarDestinoDeEmision({
   ambiente,
-  endpoint: endpoints.wsfev1,
+  endpointWsfev1: endpoints.wsfev1,
   endpointWsaa: endpoints.wsaa,
 });
 if (!permiso.permitido) {
