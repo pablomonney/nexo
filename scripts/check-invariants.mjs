@@ -180,6 +180,35 @@ const INVARIANTES = [
         FROM accounting_rules r
        WHERE r.status = 'ACTIVE' AND r.approved_by IS NULL`,
   },
+  {
+    id: 'A-9',
+    enunciado: 'Toda aplicación de regla congeló el hash del documento que citó',
+    universo: 'SELECT count(*)::int AS n FROM rule_applications',
+    // A-4 comprueba que la derivación `regla → norma → documento` exista HOY.
+    // Esto es distinto: que la aplicación haya guardado el hash del día en que
+    // se aplicó. Sin eso, un documento vuelto a archivar cambiaría en silencio
+    // el texto que un asiento viejo dice haber usado para decidirse.
+    //
+    // Deliberadamente NO se compara contra el hash actual: que difieran es
+    // legítimo —el documento se rearchivó— y es justamente lo que congelar
+    // permite ver.
+    sql: `
+      SELECT ra.id::text AS violacion,
+             format('aplicación de la regla %s v%s sin hash congelado', ra.rule_id, ra.rule_version) AS detalle
+        FROM rule_applications ra
+       WHERE coalesce(btrim(ra.norm_document_sha256), '') = ''`,
+  },
+  {
+    id: 'A-10',
+    enunciado: 'Ningún asiento aprobado se funda en una decisión de ambiente PRUEBA',
+    universo: "SELECT count(*)::int AS n FROM journal_entries WHERE decision_id IS NOT NULL",
+    sql: `
+      SELECT e.id::text AS violacion,
+             format('%s #%s', e.journal_code, e.entry_number) AS detalle
+        FROM journal_entries e
+        JOIN accounting_decisions d ON d.id = e.decision_id
+       WHERE d.ambiente = 'PRUEBA'`,
+  },
 ];
 
 const MAX_EJEMPLOS = 5;
