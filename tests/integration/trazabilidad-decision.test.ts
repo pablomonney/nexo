@@ -86,7 +86,8 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
     periodId = p.rows[0]!.id;
 
     const impuesto = await db.query<{ id: string }>("SELECT id FROM taxes WHERE code = 'IVA' LIMIT 1");
-    const total = BigInt(Math.round(c.impTotal * 100)).toString();
+    // numeric(18,2) son pesos, no centavos.
+    const total = c.impTotal.toFixed(2);
     const op = await db.query<{ id: string }>(
       `INSERT INTO tax_transactions
          (company_id, tax_id, period_id, direction, cbte_tipo, punto_venta, cbte_numero,

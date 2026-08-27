@@ -12,6 +12,7 @@ import { bankRoutes } from './routes/banks.js';
 import { statementRoutes } from './routes/statements.js';
 import { bookRoutes } from './routes/books.js';
 import { journalEntryRoutes } from './routes/journal-entries.js';
+import { decisionRoutes } from './routes/decisions.js';
 import { vatRoutes } from './routes/vat.js';
 import { periodRoutes } from './routes/periods.js';
 import { predictionRoutes } from './routes/predictions.js';
@@ -103,6 +104,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
   await app.register(journalEntryRoutes);
+  await app.register(decisionRoutes);
   await app.register(bookRoutes);
   await app.register(vatRoutes);
   await app.register(bankRoutes);

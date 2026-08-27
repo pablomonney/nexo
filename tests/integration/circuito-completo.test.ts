@@ -98,6 +98,8 @@ suite('circuito completo — de un comprobante al Libro Diario', () => {
     // VENTA: el CUIT emisor es el nuestro.
     const impuesto = await db.query<{ id: string }>("SELECT id FROM taxes WHERE code = 'IVA' LIMIT 1");
     const totalCentavos = BigInt(Math.round(DEL_CORPUS.impTotal * 100));
+    // La columna es numeric(18,2): pesos. El objeto Money sí lleva centavos.
+    const totalPesos = DEL_CORPUS.impTotal.toFixed(2);
     const fechaIso = `${DEL_CORPUS.cbteFch.slice(0, 4)}-${DEL_CORPUS.cbteFch.slice(4, 6)}-${DEL_CORPUS.cbteFch.slice(6, 8)}`;
     const anio = fechaIso.slice(0, 4);
 
@@ -145,7 +147,7 @@ suite('circuito completo — de un comprobante al Libro Diario', () => {
         // Sin receptor identificado: `docTipo 99` es consumidor final sin
         // identificar. Se conserva el CUIT del emisor, que es el dato que hay.
         DEL_CORPUS.cuitEmisor,
-        totalCentavos.toString(),
+        totalPesos,
       ],
     );
     opId = op.rows[0]!.id;

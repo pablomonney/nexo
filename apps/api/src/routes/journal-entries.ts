@@ -100,6 +100,14 @@ const asientoSchema = z.object({
    */
   fxRoundingMode: z.enum(MODOS_REDONDEO).optional(),
   aiPredictionId: z.string().uuid().optional(),
+  /**
+   * La decisión que funda este asiento.
+   *
+   * Opcional: los asientos manuales de siempre siguen entrando sin ella, con su
+   * `manualJustification`. La base comprueba que sea de la misma empresa y que
+   * NO sea de ambiente PRUEBA — `assert_entry_decision_coherente`, migración 0034.
+   */
+  decisionId: z.string().uuid().optional(),
   /** `PROPUESTO` lo somete a aprobación; `BORRADOR` lo deja editable. */
   status: z.enum(['BORRADOR', 'PROPUESTO']).default('PROPUESTO'),
 });
@@ -142,8 +150,8 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
         `INSERT INTO journal_entries
            (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
             description, kind, status, currency, total_debit, total_credit,
-            source_type, source_id, ai_prediction_id, manual_justification, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            source_type, source_id, ai_prediction_id, decision_id, manual_justification, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
          RETURNING id`,
         [
           tenant.companyId,
@@ -161,6 +169,7 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
           draft.source.type,
           draft.source.id,
           body.aiPredictionId ?? null,
+          body.decisionId ?? null,
           draft.manualJustification ?? null,
           actorId,
         ],
