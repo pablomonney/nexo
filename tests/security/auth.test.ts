@@ -12,6 +12,7 @@ import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from '../integration/helpers/db.js';
+import { sufijoUnico } from '../integration/helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 
@@ -36,7 +37,7 @@ suite('S-2 — autenticación y segundo factor', () => {
     await app.ready();
     raw = await connect();
 
-    stamp = `${process.pid}${Date.now()}`.replace(/\D/g, '').slice(-8);
+    stamp = await sufijoUnico(raw);
     contadorEmail = `contador-${stamp}@estudio.test`;
     cargadorEmail = `cargador-${stamp}@estudio.test`;
 

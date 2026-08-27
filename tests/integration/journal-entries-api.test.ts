@@ -13,6 +13,7 @@ import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, expectFailure, hasDatabase, type Client } from './helpers/db.js';
+import { sufijoUnico } from './helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 
@@ -51,7 +52,7 @@ suite('Libro Diario por HTTP', () => {
     await app.ready();
     raw = await connect();
 
-    const stamp = `${process.pid}${Date.now()}`.replace(/\D/g, '').slice(-8);
+    const stamp = await sufijoUnico(raw);
     const email = `contador-diario-${stamp}@estudio.test`;
     const { hash: argonHash } = await import('@node-rs/argon2');
     const passwordHash = await argonHash(PASSWORD, {

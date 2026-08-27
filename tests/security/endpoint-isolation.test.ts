@@ -18,6 +18,7 @@ import { buildServer } from '@aai/api/server';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from '../integration/helpers/db.js';
+import { sufijoUnico } from '../integration/helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 
@@ -86,7 +87,7 @@ suite('S-1 HTTP — aislamiento sobre todos los endpoints', () => {
     await app.ready();
     raw = await connect();
 
-    const stamp = `${process.pid}${Date.now()}`.slice(-8);
+    const stamp = await sufijoUnico(raw);
     const ownerEmail = `owner-${stamp}@estudio.test`;
     const userEmail = `usuario-${stamp}@estudio.test`;
 

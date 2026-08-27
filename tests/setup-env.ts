@@ -17,3 +17,39 @@ if (existsSync(envFile)) {
 // el desarrollador. Se fija acá y no en la suite porque `config` se evalúa al
 // importarse, y los imports se elevan por encima de cualquier línea del test.
 process.env.DOCUMENT_STORAGE_PATH = join(raiz, 'var', 'test-documents');
+
+/**
+ * La base de los tests tampoco es la del desarrollo.
+ *
+ * Mismo argumento que el directorio de documentos, y bastante más grave: las
+ * suites de integración escriben filas que **no se pueden borrar** —los triggers
+ * `forbid_delete` están puestos para eso—, así que todo lo que insertan queda.
+ * El 2026-08-27 se midió el resultado: 126 de 143 filas de `norms` eran "Norma
+ * de prueba", y las 84 de `accounting_rules` eran fixtures sin una sola regla
+ * real. El registro normativo era en un 88% ficción de tests.
+ *
+ * Se redirige acá, en el `setupFile`, y no en cada suite: vitest lo ejecuta
+ * antes de importar los archivos de test, así que `helpers/db.ts` —que lee
+ * `DATABASE_URL` al cargarse— ya ve el valor correcto. Cambiarlo en trece
+ * archivos habría dejado el catorceavo escribiendo en la base equivocada.
+ *
+ * Si no hay base de tests configurada **no se cae al desarrollo**: se deja
+ * `DATABASE_URL` vacía y las suites de integración se saltean, que es lo que ya
+ * hacen cuando no hay base. Es preferible no correrlas a correrlas ensuciando.
+ */
+const urlDePruebas = process.env.TEST_DATABASE_URL ?? derivarUrlDePruebas(process.env.DATABASE_URL);
+process.env.DATABASE_URL = urlDePruebas ?? '';
+
+function derivarUrlDePruebas(base: string | undefined): string | undefined {
+  if (base === undefined || base === '') return undefined;
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return undefined;
+  }
+  const nombre = decodeURIComponent(url.pathname.replace(/^\//, ''));
+  if (nombre === '') return undefined;
+  url.pathname = `/${nombre.endsWith('_test') ? nombre : `${nombre}_test`}`;
+  return url.toString();
+}

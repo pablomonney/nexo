@@ -1,5 +1,9 @@
 # Corpus de evaluación
 
+> **Estado: `REQUIRES_EXTERNAL_INPUT`.** No se puede cerrar desde el repositorio.
+> Los 47 comprobantes con CAE real de `var/corpus-homologacion/` **no cuentan**: los generamos
+> nosotros, así que medirían nuestro generador y no el sistema.
+
 Acá van los comprobantes reales anonimizados con los que se mide la extracción.
 
 **Está vacío a propósito.** El criterio de salida de la FASE 3b pide 100

@@ -208,8 +208,19 @@ versionada en el tiempo. Ver `OFFICIAL_SOURCES.md` §8.1.
 | | |
 |---|---|
 | Métricas de extracción por campo publicadas | ✅ instrumento listo y probado |
-| Constatación en ARCA en homologación | 🟡 transporte, parseo y WSAA verificados con certificado real; falta autorizar `wscdc` en WSASS — el certificado hoy solo tiene `wsfe` |
-| 100 comprobantes reales anonimizados procesados | ⬜ **requiere el corpus** |
+| Constatación en ARCA en homologación | 🟡 **`REQUIRES_EXTERNAL_INPUT`** — transporte, parseo y WSAA verificados con certificado real; falta autorizar `wscdc` en WSASS. Ver [`docs/api/wscdc-pendiente.md`](docs/api/wscdc-pendiente.md) |
+| 100 comprobantes reales anonimizados procesados | ⬜ **`REQUIRES_EXTERNAL_INPUT`** — ver [`corpus/README.md`](corpus/README.md) |
+
+> **`REQUIRES_EXTERNAL_INPUT`** marca lo que **no se puede cerrar desde el repositorio**, por mucho
+> código que se escriba. Los dos casos de arriba dependen de algo que aporta una persona: un trámite
+> ante ARCA y un conjunto de comprobantes reales.
+>
+> El marcador existe para que nadie los confunda con trabajo pendiente. La tentación en los dos casos
+> es la misma —fabricar los comprobantes, simular la autorización— y en los dos convierte un criterio
+> de salida en una ceremonia: mediríamos nuestro propio generador y nuestro propio simulador.
+>
+> Los 47 comprobantes de `var/corpus-homologacion/` tienen CAE real y **no cierran el segundo
+> criterio**: siguen siendo datos generados por nosotros.
 
 El tercero no se puede cerrar desde acá: un conjunto de facturas sintéticas mide la calidad del
 generador, no la del sistema. El instrumento está construido y probado; los documentos los aporta

@@ -1,6 +1,6 @@
 # Métricas de extracción por campo
 
-Corpus: **46 documentos**. Generado: 2026-08-27T20:06:07.446Z
+Corpus: **46 documentos**. Generado: 2026-08-27T21:29:47.133Z
 
 La columna que hay que mirar es **error silencioso**: campos interpretados con
 seguridad y equivocados. Una abstención cuesta un minuto; un error silencioso

@@ -7,6 +7,7 @@
  */
 
 import pg from 'pg';
+import { sufijoUnico } from './identificadores.js';
 
 export const DATABASE_URL = process.env.DATABASE_URL ?? '';
 export const hasDatabase = DATABASE_URL.length > 0;
@@ -95,15 +96,12 @@ export interface Fixture {
  * es texto libre. Las suites corren en paralelo, así que la unicidad tiene que
  * contemplar varios procesos.
  */
-let seedCounter = 0;
-function numericSuffix(): string {
-  seedCounter += 1;
-  const base = `${process.pid}${Date.now()}${seedCounter}`.replace(/\D/g, '');
-  return base.slice(-8).padStart(8, '0');
-}
-
 export async function seed(client: pg.Client, label: string): Promise<Fixture> {
-  const suffix = numericSuffix();
+  // El sufijo sale de una secuencia de PostgreSQL. La fórmula anterior
+  // —`${process.pid}${Date.now()}${contador}` recortado a ocho dígitos— perdía
+  // el PID en el recorte: el contador daba unicidad dentro del proceso, pero dos
+  // procesos en paralelo seguían pudiendo chocar. Ver `identificadores.ts`.
+  const suffix = await sufijoUnico(client);
 
   const org = await client.query<{ id: string }>(
     `INSERT INTO organizations (name, tax_id) VALUES ($1, $2) RETURNING id`,
