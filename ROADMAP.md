@@ -156,11 +156,22 @@ Entregada y **desacoplada**: el certificado X.509 no bloquea el desarrollo del r
   (`0015_arca_integration.sql`).
 - `npm run arca:check` diagnostica en qué paso está la configuración.
 
-**Verificado contra homologación real** (2026-08-24): los endpoints del manual archivado responden
-y `ComprobanteDummy` devolvió `app=OK db=OK auth=OK` — el sobre SOAP que arma el cliente lo entiende
-ARCA y la respuesta se parsea bien. La firma CMS del TRA se verificó con un certificado autofirmado
-generado en el test. **Falta únicamente** el intercambio certificado → ticket de acceso, que
-requiere el trámite.
+**Verificado contra homologación real, con certificado de ARCA** (2026-08-26/27):
+
+- `ComprobanteDummy` → `app=OK db=OK auth=OK`: el sobre SOAP se entiende y la respuesta se parsea.
+- **La firma CMS del TRA la acepta el organismo.** Se mandó el mismo CMS íntegro y con ocho bytes
+  de la firma invertidos: contestó `coe.notAuthorized` al primero y `cms.bad` al segundo. Que los
+  distinga es la prueba — con un autofirmado de test eso no se podía saber.
+- **El intercambio certificado → ticket de acceso funciona**, con un TA real parseado del servicio.
+
+**El permiso del WSAA es por servicio, y eso cambia qué está verificado.** El certificado está
+autorizado a `wsfe`; `wscdc` —el de constatación— es un trámite aparte en WSASS y sigue sin hacerse.
+Tener uno no implica el otro: `npm run arca:check -- --servicio wsfe,wscdc` los informa por separado
+justamente para que la diferencia no se pierda.
+
+**El WSAA emite UN ticket por CUIT y servicio** y niega el segundo hasta que el primero venza, horas
+después. Por eso `TicketCacheFs` guarda el TA en disco fuera del repositorio y los comandos comparten
+la carpeta: sin eso, verificar la conexión deja sin ticket al comando que emite.
 
 Trámite documentado paso a paso en [`docs/api/arca-onboarding.md`](docs/api/arca-onboarding.md).
 
@@ -197,7 +208,7 @@ versionada en el tiempo. Ver `OFFICIAL_SOURCES.md` §8.1.
 | | |
 |---|---|
 | Métricas de extracción por campo publicadas | ✅ instrumento listo y probado |
-| Constatación en ARCA en homologación | 🟡 transporte y parseo verificados; falta el certificado |
+| Constatación en ARCA en homologación | 🟡 transporte, parseo y WSAA verificados con certificado real; falta autorizar `wscdc` en WSASS — el certificado hoy solo tiene `wsfe` |
 | 100 comprobantes reales anonimizados procesados | ⬜ **requiere el corpus** |
 
 El tercero no se puede cerrar desde acá: un conjunto de facturas sintéticas mide la calidad del

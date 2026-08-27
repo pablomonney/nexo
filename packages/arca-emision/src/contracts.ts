@@ -87,6 +87,20 @@ export interface ErrorArca {
   readonly Msg: string;
 }
 
+/**
+ * `CbteTipo` de `FEParamGetTiposCbte`, con los nombres del WSDL.
+ *
+ * Las fechas vienen en `yyyyMMdd` y `FchHasta` puede llegar como `NULL`: el tipo
+ * sigue vigente. Se modela `null` y no una fecha lejana, porque "no tiene fecha
+ * de baja" y "se da de baja en el año 9999" no son la misma afirmación.
+ */
+export interface TipoDeComprobanteArca {
+  readonly Id: number;
+  readonly Desc: string;
+  readonly FchDesde: string | null;
+  readonly FchHasta: string | null;
+}
+
 /** `FECAEDetResponse`. `Resultado` es `A` (aprobado), `R` (rechazado) o `P` (parcial). */
 export interface RespuestaComprobante {
   readonly Concepto: number;

@@ -514,8 +514,21 @@ permitidos"— se transcribieron como semilla `V1` y viven en `arca_comprobante_
 `vigencia_verificada = false`. Saber qué significa el código 1 y saber desde cuándo significa eso
 son dos afirmaciones distintas, y el sistema solo hace la primera.
 
-**Qué queda pendiente.** Sincronizar la tabla con vigencias contra el organismo. Requiere el
-certificado (FASE 3a), así que está atado al mismo trámite.
+**Qué queda pendiente, y por qué cambió el motivo.** `npm run comprobantes:tipos` implementa
+`FEParamGetTiposCbte` y trae `Id`, `Desc`, `FchDesde` y `FchHasta`. Ya no está atado al certificado.
+
+Pero **sigue sin levantar `vigencia_verificada`**, y ahora por una razón distinta: lo que hay es un
+certificado de **homologación**, y homologación es el ambiente de prueba del organismo. Que su tabla
+de parámetros coincida con la de producción es plausible y **no está escrito en ningún documento
+archivado**. Copiar esas fechas y marcarlas "verificadas contra el organismo" convertiría una
+suposición razonable en una cita — que es lo único que el §30 prohíbe sin excepción.
+
+El comando trae las fechas igual, las guarda con el ambiente anotado en `fuente`, y deja la bandera
+en `false`. Con un certificado de producción, el mismo comando la sube a `true`. Mientras tanto sirve
+para comparar lo que enumera el manual contra lo que devuelve el servicio, y mostrar en qué difieren.
+
+Por defecto simula: hay que pasar `--aplicar` para escribir. Datos normativos que entran a la base
+sin que nadie mire el diff son datos normativos que nadie revisó.
 
 **Lo que no se hizo, deliberadamente.** El manual menciona otros códigos —5, 34, 39, 40, 60, 61,
 88, 991— entre los comprobantes asociables, pero **nunca dice qué son**. No se les inventó

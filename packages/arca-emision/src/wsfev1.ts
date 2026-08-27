@@ -20,6 +20,7 @@ import type {
   Observacion,
   RespuestaComprobante,
   RespuestaLote,
+  TipoDeComprobanteArca,
 } from './contracts.js';
 import type { PermisoDeEmision } from './homologacion.js';
 
@@ -118,6 +119,39 @@ export class ClienteWsfev1 {
     return Number(r['CbteNro'] ?? 0);
   }
 
+  /**
+   * `FEParamGetTiposCbte` — el catálogo de tipos de comprobante **con vigencias**.
+   *
+   * Es el método que vuelve honesta a `arca_comprobante_types`. Hasta ahora esa
+   * tabla se sembró con los códigos que el manual enumera, marcados
+   * `vigencia_verificada = false`: sabíamos qué significa el código 1, no desde
+   * cuándo lo significa. Son dos afirmaciones distintas y el §6 depende de la
+   * segunda — interpretar un comprobante de 2019 con la tabla de 2026 es
+   * exactamente lo que prohíbe.
+   *
+   * Estructura según el WSDL archivado (`ArrayOfCbteTipo` → `CbteTipo`):
+   * `Id: int`, `Desc: string`, `FchDesde: string`, `FchHasta: string`.
+   */
+  async tiposDeComprobante(auth: Autenticacion): Promise<readonly TipoDeComprobanteArca[]> {
+    const r = await this.#llamar('FEParamGetTiposCbte', autenticacionXml(auth));
+
+    const errores = listaDe(r['Errors'], 'Err').map(comoError);
+    if (errores.length > 0) {
+      throw new Error(
+        `FEParamGetTiposCbte: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join(' · ')}`,
+      );
+    }
+
+    return listaDe(r['ResultGet'], 'CbteTipo').map((n) => ({
+      Id: Number(n['Id']),
+      Desc: n['Desc'] === undefined || n['Desc'] === null ? '' : String(n['Desc']),
+      // ARCA usa `NULL` textual para "sin fecha de fin". Se conserva como null,
+      // que es lo que significa: sigue vigente, no "vence el día NULL".
+      FchDesde: textoODesconocido(n['FchDesde']),
+      FchHasta: textoODesconocido(n['FchHasta']),
+    }));
+  }
+
   /** `FECAESolicitar`. Un solo comprobante por llamada, por elección — ver el script. */
   async solicitarCae(
     auth: Autenticacion,
@@ -203,6 +237,20 @@ function detalleXml(d: DetalleComprobante): string {
         '</ar:Iva>') +
     '</ar:FECAEDetRequest>'
   );
+}
+
+/**
+ * ARCA manda `NULL` como texto para las fechas abiertas.
+ *
+ * Pasarlo tal cual produciría la cadena "NULL" en una columna `date`, y
+ * convertirlo a la fecha de hoy sería peor: un tipo sin fecha de baja pasaría a
+ * tener una. `null` dice lo que el organismo dice.
+ */
+function textoODesconocido(valor: unknown): string | null {
+  if (valor === undefined || valor === null) return null;
+  const texto = String(valor).trim();
+  if (texto === '' || texto.toUpperCase() === 'NULL') return null;
+  return texto;
 }
 
 function escapar(valor: string): string {

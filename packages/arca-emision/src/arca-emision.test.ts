@@ -304,3 +304,82 @@ describe('el sobre del WSFEv1 respeta el contrato del WSDL', () => {
     });
   });
 });
+
+describe('FEParamGetTiposCbte — la tabla de tipos es normativa con fechas', () => {
+  const permiso = verificarDestinoDeEmision({
+    ambiente: 'homologacion',
+    endpoint: HOMO.wsfev1,
+    endpointWsaa: HOMO.wsaa,
+  });
+
+  function responder(cuerpoResultGet: string) {
+    return (async () =>
+      new Response(
+        '<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">' +
+          '<soap:Body><FEParamGetTiposCbteResponse><FEParamGetTiposCbteResult>' +
+          `<ResultGet>${cuerpoResultGet}</ResultGet>` +
+          '</FEParamGetTiposCbteResult></FEParamGetTiposCbteResponse></soap:Body></soap:Envelope>',
+        { status: 200, headers: { 'Content-Type': 'text/xml' } },
+      )) as unknown as typeof fetch;
+  }
+
+  const auth = { Token: 't', Sign: 's', Cuit: '20452148324' };
+
+  it('lee Id, Desc y las dos fechas de vigencia', async () => {
+    const fetchImpl = responder(
+      '<CbteTipo><Id>1</Id><Desc>Factura A</Desc><FchDesde>20100917</FchDesde><FchHasta>NULL</FchHasta></CbteTipo>' +
+        '<CbteTipo><Id>11</Id><Desc>Factura C</Desc><FchDesde>20110301</FchDesde><FchHasta>NULL</FchHasta></CbteTipo>',
+    );
+    const tipos = await new ClienteWsfev1({ permiso, fetchImpl }).tiposDeComprobante(auth);
+
+    expect(tipos).toHaveLength(2);
+    expect(tipos[0]).toEqual({ Id: 1, Desc: 'Factura A', FchDesde: '20100917', FchHasta: null });
+    expect(tipos[1]?.Id).toBe(11);
+  });
+
+  it('el "NULL" de ARCA es ausencia de fecha, no la cadena NULL', async () => {
+    // Guardar "NULL" en una columna `date` explota; convertirlo a hoy sería
+    // peor: un tipo sin fecha de baja pasaría a tener una.
+    const fetchImpl = responder(
+      '<CbteTipo><Id>2</Id><Desc>Nota de Débito A</Desc><FchDesde>20100917</FchDesde><FchHasta>NULL</FchHasta></CbteTipo>',
+    );
+    const [tipo] = await new ClienteWsfev1({ permiso, fetchImpl }).tiposDeComprobante(auth);
+    expect(tipo?.FchHasta).toBeNull();
+    expect(tipo?.FchDesde).toBe('20100917');
+  });
+
+  it('una fecha de baja real se conserva', async () => {
+    const fetchImpl = responder(
+      '<CbteTipo><Id>39</Id><Desc>Otros comprobantes</Desc><FchDesde>20100917</FchDesde><FchHasta>20180331</FchHasta></CbteTipo>',
+    );
+    const [tipo] = await new ClienteWsfev1({ permiso, fetchImpl }).tiposDeComprobante(auth);
+    expect(tipo?.FchHasta).toBe('20180331');
+  });
+
+  it('un solo tipo devuelto no se lee como si fuera ninguno', async () => {
+    // fast-xml-parser colapsa un nodo único en objeto en vez de array. Es el
+    // error clásico de este parseo y no se nota hasta producción.
+    const fetchImpl = responder(
+      '<CbteTipo><Id>11</Id><Desc>Factura C</Desc><FchDesde>20110301</FchDesde><FchHasta>NULL</FchHasta></CbteTipo>',
+    );
+    const tipos = await new ClienteWsfev1({ permiso, fetchImpl }).tiposDeComprobante(auth);
+    expect(tipos).toHaveLength(1);
+  });
+
+  it('un Errors en la respuesta corta con el mensaje de ARCA, no devuelve tabla vacía', async () => {
+    const fetchImpl = (async () =>
+      new Response(
+        '<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">' +
+          '<soap:Body><FEParamGetTiposCbteResponse><FEParamGetTiposCbteResult>' +
+          '<Errors><Err><Code>600</Code><Msg>Token invalido</Msg></Err></Errors>' +
+          '</FEParamGetTiposCbteResult></FEParamGetTiposCbteResponse></soap:Body></soap:Envelope>',
+        { status: 200, headers: { 'Content-Type': 'text/xml' } },
+      )) as unknown as typeof fetch;
+
+    // Devolver `[]` acá haría que el sincronizador informara "ARCA devolvió 0
+    // tipos" y siguiera adelante como si la tabla estuviera vacía.
+    await expect(
+      new ClienteWsfev1({ permiso, fetchImpl }).tiposDeComprobante(auth),
+    ).rejects.toThrow(/600.*Token invalido/);
+  });
+});

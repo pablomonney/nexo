@@ -43,7 +43,8 @@
     "sandbox:status": "node scripts/sandbox.mjs status",
     "comprobantes:revisar": "node scripts/revisar-comprobantes.mjs",
     "cuit:anonimizar": "node scripts/anonimizar-cuit.mjs",
-    "comprobantes:generar": "node scripts/generar-comprobantes-homologacion.mjs"
+    "comprobantes:generar": "node scripts/generar-comprobantes-homologacion.mjs",
+    "comprobantes:tipos": "node scripts/sincronizar-tipos-comprobante.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
