@@ -1,20 +1,49 @@
 {
-  "_": "PLANTILLA SIN COMPLETAR. Mientras `campos` esté vacío, el generador emite los PDF sin QR y lo dice — en la salida y en el propio PDF.",
-  "_por_que_esta_vacio": "Los nombres de campo del JSON del QR los define ARCA_QR_especificaciones.pdf, archivado con hash en docs/normative-sources/originals/. Su contenido está como imagen y no se pudo extraer en esta máquina, así que no se transcribieron. Escribirlos de memoria produciría un QR que se imprime bien y que ARCA no valida — y eso solo se descubre escaneando un comprobante ya emitido.",
-  "_como_completarlo": [
-    "1. Abrir https://www.afip.gob.ar/fe/qr/documentos/QRespecificaciones.pdf (dos páginas).",
-    "2. Copiar la tabla de campos: para cada uno, el nombre exacto que exige ARCA y su tipo.",
-    "3. Completar `version` con la versión del formato de datos que indica el documento.",
-    "4. Completar `fuente` con la página de la que se transcribió, para poder volver a chequearlo.",
-    "5. Llenar `campos` en el ORDEN en que van en el JSON.",
-    "6. `origen` es el nombre del campo en `ComprobanteAutorizado` (packages/arca-emision/src/contracts.ts), o la palabra `version`."
-  ],
-  "_campos_disponibles_en_ComprobanteAutorizado": [
-    "cuitEmisor", "ptoVta", "cbteTipo", "cbteNro", "cbteFch", "docTipo", "docNro",
-    "impTotal", "moneda", "cotizacion", "cae", "caeFchVto", "concepto"
-  ],
-  "_tipos": ["NUMERICO", "DECIMAL", "ALFANUMERICO", "FECHA"],
-  "version": 0,
-  "fuente": "",
-  "campos": []
+  "_fuente": "Transcripto de docs/normative-sources/originals/ARCA_QR_especificaciones.pdf (sha256 a6d0f71e…), páginas 1 y 2. El documento trae al final un JSON de ejemplo completo, que es lo que permite verificar esta transcripción campo por campo en vez de confiar en ella.",
+  "_ejemplo_del_documento": "{\"ver\":1,\"fecha\":\"2020-10-13\",\"cuit\":30000000007,\"ptoVta\":10,\"tipoCmp\":1,\"nroCmp\":94,\"importe\":12100,\"moneda\":\"DOL\",\"ctz\":65,\"tipoDocRec\":80,\"nroDocRec\":20000000001,\"tipoCodAut\":\"E\",\"codAut\":70417054367476}",
+  "_conflicto_de_url": "El documento dice `{URL}=https://www.arca.gob.ar/fe/qr/` en la especificación técnica, y su propio ejemplo del pie usa `https://www.afip.gob.ar/fe/qr/`. El ABC de ARCA (consulta 26035850) dice que al escanear se llega a `https://serviciosweb.afip.gob.ar/genericos/comprobantes/cae.aspx`. Se codifica la que el documento declara como {URL}; las otras dos quedan anotadas porque el conflicto es del documento, no nuestro.",
+
+  "version": 1,
+  "url": "https://www.arca.gob.ar/fe/qr/",
+
+  "campos": [
+    { "nombreArca": "ver", "origen": "version", "tipo": "NUMERICO", "obligatorio": true,
+      "_doc": "Numérico 1 dígito. OBLIGATORIO — versión del formato de los datos del comprobante" },
+
+    { "nombreArca": "fecha", "origen": "cbteFch", "tipo": "FECHA", "obligatorio": true,
+      "_doc": "full-date (RFC 3339). OBLIGATORIO — fecha de emisión del comprobante" },
+
+    { "nombreArca": "cuit", "origen": "cuitEmisor", "tipo": "NUMERICO", "obligatorio": true,
+      "_doc": "Numérico 11 dígitos. OBLIGATORIO — CUIT del emisor del comprobante" },
+
+    { "nombreArca": "ptoVta", "origen": "ptoVta", "tipo": "NUMERICO", "obligatorio": true,
+      "_doc": "Numérico hasta 5 dígitos. OBLIGATORIO — punto de venta utilizado para emitir" },
+
+    { "nombreArca": "tipoCmp", "origen": "cbteTipo", "tipo": "NUMERICO", "obligatorio": true,
+      "_doc": "Numérico hasta 3 dígitos. OBLIGATORIO — tipo de comprobante, según tablas del sistema" },
+
+    { "nombreArca": "nroCmp", "origen": "cbteNro", "tipo": "NUMERICO", "obligatorio": true,
+      "_doc": "Numérico hasta 8 dígitos. OBLIGATORIO — número del comprobante" },
+
+    { "nombreArca": "importe", "origen": "impTotal", "tipo": "DECIMAL", "obligatorio": true,
+      "_doc": "Decimal hasta 13 enteros y 2 decimales. OBLIGATORIO — importe total, en la moneda en que fue emitido" },
+
+    { "nombreArca": "moneda", "origen": "moneda", "tipo": "ALFANUMERICO", "obligatorio": true,
+      "_doc": "3 caracteres. OBLIGATORIO — moneda del comprobante, según tablas del sistema" },
+
+    { "nombreArca": "ctz", "origen": "cotizacion", "tipo": "DECIMAL", "obligatorio": true,
+      "_doc": "Decimal hasta 13 enteros y 6 decimales. OBLIGATORIO — cotización en pesos argentinos de la moneda utilizada" },
+
+    { "nombreArca": "tipoDocRec", "origen": "docTipo", "tipo": "NUMERICO", "obligatorio": false,
+      "_doc": "Numérico hasta 2 dígitos. DE CORRESPONDER — código del tipo de documento del receptor (tablas del sistema)" },
+
+    { "nombreArca": "nroDocRec", "origen": "docNro", "tipo": "NUMERICO", "obligatorio": false,
+      "_doc": "Numérico hasta 20 dígitos. DE CORRESPONDER — número de documento del receptor" },
+
+    { "nombreArca": "tipoCodAut", "origen": "tipoCodAut", "tipo": "ALFANUMERICO", "obligatorio": true,
+      "_doc": "string. OBLIGATORIO — \"A\" para comprobante autorizado por CAEA, \"E\" por CAE" },
+
+    { "nombreArca": "codAut", "origen": "cae", "tipo": "NUMERICO", "obligatorio": true,
+      "_doc": "Numérico 14 dígitos. OBLIGATORIO — código de autorización otorgado por ARCA" }
+  ]
 }

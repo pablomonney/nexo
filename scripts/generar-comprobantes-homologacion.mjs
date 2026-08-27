@@ -163,11 +163,18 @@ if (existsSync(rutaSpec)) {
   if (Array.isArray(crudo.campos) && crudo.campos.length > 0) especificacionQr = crudo;
 }
 
-if (especificacionQr === null) {
+if (especificacionQr !== null) {
+  console.log('');
+  console.log(`QR: versión ${especificacionQr.version}, ${especificacionQr.campos.length} campos.`);
+  console.log(`  URL: ${especificacionQr.url}`);
+  console.log('  Transcripto de ARCA_QR_especificaciones.pdf. Hay un test que reproduce el JSON');
+  console.log('  de ejemplo del propio documento byte por byte: si un nombre está mal copiado,');
+  console.log('  el test se cae antes de que salga un solo comprobante.');
+} else {
   const prueba = construirQr(
     { cuitEmisor: cuit, ptoVta, cbteTipo, cbteNro: 1, cbteFch: '20260101', docTipo: 99,
       docNro: '0', impTotal: 1, moneda: 'PES', cotizacion: 1, cae: '0', caeFchVto: '20260101',
-      concepto: '' },
+      concepto: '', tipoCodAut: 'E' },
     null,
   );
   console.log('');
@@ -224,6 +231,8 @@ for (const plan of planeados) {
     cae: detalle.CAE,
     caeFchVto: detalle.CAEFchVto ?? '',
     concepto: plan.descripcion,
+    // El WSFEv1 autoriza con CAE; CAEA es otro circuito y otro campo.
+    tipoCodAut: 'E',
   };
 
   const qr = construirQr(comprobante, especificacionQr);

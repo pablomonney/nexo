@@ -6,6 +6,8 @@
  * no sea exactamente el destino de homologación que el repositorio declara**.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { endpointsFor } from '@aai/arca';
 import {
@@ -99,61 +101,107 @@ describe('el candado de emisión prueba que el destino es homologación', () => 
   });
 });
 
-describe('el QR no se arma sin su especificación', () => {
-  const comprobante: ComprobanteAutorizado = {
-    cuitEmisor: '30712345671',
-    ptoVta: 1,
-    cbteTipo: 11,
-    cbteNro: 45,
-    cbteFch: '20260305',
-    docTipo: 99,
-    docNro: '0',
-    impTotal: 1234,
-    moneda: 'PES',
-    cotizacion: 1,
-    cae: '75123456789012',
-    caeFchVto: '20260315',
-    concepto: 'Servicios',
+describe('el QR se arma con la especificación transcripta del documento', () => {
+  /**
+   * La especificación real, leída del archivo que usa el generador.
+   *
+   * No se re-declara acá: si el test trajera su propia copia, probaría una
+   * transcripción que nadie usa. Lo que interesa verificar es **el archivo**.
+   */
+  const spec = JSON.parse(
+    readFileSync(join(import.meta.dirname, '..', '..', '..', 'scripts', 'especificacion-qr.json'), 'utf8'),
+  ) as EspecificacionQr;
+
+  /**
+   * El comprobante del ejemplo que trae el propio PDF de ARCA, en su página 2.
+   *
+   * Es lo que convierte a estos tests en una verificación de la transcripción y
+   * no en una comprobación de que el código hace lo que el código hace: si un
+   * nombre de campo está mal copiado, el JSON no coincide.
+   */
+  const DEL_DOCUMENTO: ComprobanteAutorizado = {
+    cuitEmisor: '30000000007',
+    ptoVta: 10,
+    cbteTipo: 1,
+    cbteNro: 94,
+    cbteFch: '20201013',
+    docTipo: 80,
+    docNro: '20000000001',
+    impTotal: 12100,
+    moneda: 'DOL',
+    cotizacion: 65,
+    cae: '70417054367476',
+    caeFchVto: '20201023',
+    concepto: 'ejemplo del documento',
+    tipoCodAut: 'E',
   };
 
-  it('sin especificación devuelve una negativa que dice qué hacer', () => {
-    const resultado = construirQr(comprobante, null);
+  const ESPERADO_DEL_DOCUMENTO =
+    '{"ver":1,"fecha":"2020-10-13","cuit":30000000007,"ptoVta":10,"tipoCmp":1,"nroCmp":94,' +
+    '"importe":12100,"moneda":"DOL","ctz":65,"tipoDocRec":80,"nroDocRec":20000000001,' +
+    '"tipoCodAut":"E","codAut":70417054367476}';
+
+  it('reproduce exactamente el JSON de ejemplo del documento oficial', () => {
+    const resultado = construirQr(DEL_DOCUMENTO, spec);
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    expect(Buffer.from(resultado.payload, 'base64').toString('utf8')).toBe(ESPERADO_DEL_DOCUMENTO);
+  });
+
+  it('los enteros largos no pasan por Number', () => {
+    // `nroDocRec` admite hasta 20 dígitos y `codAut` tiene 14. Convertirlos con
+    // `Number` perdería precisión arriba de 2^53, y el error se vería como un QR
+    // que apunta a otro receptor — no como un error.
+    const largo = { ...DEL_DOCUMENTO, docNro: '99999999999999999999' };
+    const resultado = construirQr(largo, spec);
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    expect(Buffer.from(resultado.payload, 'base64').toString('utf8')).toContain(
+      '"nroDocRec":99999999999999999999',
+    );
+  });
+
+  it('sin receptor identificado omite los campos DE CORRESPONDER', () => {
+    // El documento marca `tipoDocRec` y `nroDocRec` como "DE CORRESPONDER".
+    // Con DocTipo 99 —consumidor final sin identificar— no corresponden, y
+    // mandar `tipoDocRec: 99` afirmaría que el receptor es de ese tipo.
+    const sinReceptor = { ...DEL_DOCUMENTO, docTipo: 99, docNro: '0' };
+    const resultado = construirQr(sinReceptor, spec);
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    const json = Buffer.from(resultado.payload, 'base64').toString('utf8');
+    expect(json).not.toContain('tipoDocRec');
+    expect(json).not.toContain('nroDocRec');
+    // Y los obligatorios siguen todos.
+    expect(json).toContain('"tipoCodAut":"E"');
+    expect(json).toContain('"codAut":70417054367476');
+  });
+
+  it('la URL es la que el documento declara como {URL}', () => {
+    const resultado = construirQr(DEL_DOCUMENTO, spec);
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    // El documento se contradice: su especificación técnica dice arca.gob.ar y
+    // su propio ejemplo usa afip.gob.ar. Se codifica la declarada, y el
+    // conflicto queda anotado en el archivo de especificación en vez de
+    // resuelto en silencio adentro del código.
+    expect(resultado.url.startsWith('https://www.arca.gob.ar/fe/qr/?p=')).toBe(true);
+  });
+
+  it('sin especificación no arma nada, y dice qué falta', () => {
+    const resultado = construirQr(DEL_DOCUMENTO, null);
 
     expect(resultado.ok).toBe(false);
     if (resultado.ok) return;
-    expect(resultado.motivo).toMatch(/imagen/);
-    expect(resultado.queHacer).toMatch(/QRespecificaciones\.pdf/);
-    // El punto entero: por qué no se escribe de memoria.
-    expect(resultado.queHacer).toMatch(/se imprime bien y que ARCA no valida/);
+    expect(resultado.queHacer).toMatch(/especificacion-qr\.json/);
   });
 
-  it('una especificación vacía tampoco alcanza', () => {
-    const vacia: EspecificacionQr = { version: 1, fuente: 'x', campos: [] };
-    expect(construirQr(comprobante, vacia).ok).toBe(false);
-  });
-
-  it('con especificación arma la URL oficial con el JSON en base64', () => {
-    const spec: EspecificacionQr = {
-      version: 1,
-      fuente: 'fixture del test, no la especificación real',
-      campos: [
-        { nombreArca: 'ver', origen: 'version', tipo: 'NUMERICO' },
-        { nombreArca: 'fecha', origen: 'cbteFch', tipo: 'FECHA' },
-        { nombreArca: 'cuit', origen: 'cuitEmisor', tipo: 'NUMERICO' },
-        { nombreArca: 'importe', origen: 'impTotal', tipo: 'DECIMAL' },
-      ],
-    };
-
-    const resultado = construirQr(comprobante, spec);
-    expect(resultado.ok).toBe(true);
-    if (!resultado.ok) return;
-
-    expect(resultado.url).toMatch(
-      /^https:\/\/serviciosweb\.afip\.gob\.ar\/genericos\/comprobantes\/cae\.aspx\?p=/,
-    );
-    const datos = JSON.parse(Buffer.from(resultado.payload, 'base64').toString('utf8'));
-    // La fecha del WSFEv1 viene AAAAMMDD y el QR la lleva con guiones.
-    expect(datos).toEqual({ ver: 1, fecha: '2026-03-05', cuit: 30712345671, importe: 1234 });
+  it('una especificación sin campos tampoco alcanza', () => {
+    expect(construirQr(DEL_DOCUMENTO, { ...spec, campos: [] }).ok).toBe(false);
   });
 });
 

@@ -130,4 +130,12 @@ export interface ComprobanteAutorizado {
   readonly cae: string;
   readonly caeFchVto: string;
   readonly concepto: string;
+  /**
+   * `E` para comprobante autorizado por CAE, `A` por CAEA.
+   *
+   * Lo exige el campo `tipoCodAut` del QR. Va acá y no como literal en la
+   * especificación porque es una propiedad del comprobante —de cómo se
+   * autorizó—, no del formato del código.
+   */
+  readonly tipoCodAut: 'E' | 'A';
 }

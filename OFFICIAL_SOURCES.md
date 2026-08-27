@@ -4,10 +4,11 @@
 > Registro maestro de fuentes normativas. Cada afirmación lleva un **nivel de verificación**.
 > El sistema no puede usar como regla activa nada que no esté en nivel `V1`.
 >
-> **Estado: 25 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
-> SHA-256.** Los cuatro últimos (Ley de IVA t.o. 1997, fichas de los Decretos 280/97 y 841/84,
-> y la Res. P. CPCECABA 460/2024) se archivaron el **2026-08-26** y cerraron los tres bloqueos
-> de fuente que arrastraba el roadmap. Índice completo en `docs/normative-sources/registro-de-descargas.csv`.
+> **Estado: 28 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
+> SHA-256.** Los siete últimos se archivaron el **2026-08-26**: la Ley de IVA (t.o. 1997) y las
+> fichas de los Decretos 280/97 y 841/84, la Res. P. CPCECABA 460/2024 —que cerraron los tres
+> bloqueos de fuente del roadmap— y después la ficha de la RG 4892/2020, las especificaciones del
+> QR y el WSDL del wsfev1. Índice completo en `docs/normative-sources/registro-de-descargas.csv`.
 
 ## 0. Niveles de verificación
 
@@ -346,6 +347,57 @@ transcribe: la Nota Infoleg del art. 1° del **Decreto N° 2312/2002**, que fij�
 
 Es la misma lección que la RG 4597: un T.O. dice qué rige hoy, no qué regía. Ver
 [TAX_ENGINE.md](TAX_ENGINE.md).
+
+---
+
+## 5ter. Código QR de la RG 4892/2020 · `V1` — **archivado y transcripto**
+
+| Documento | Qué aporta |
+|---|---|
+| Ficha de InfoLeg de la **RG 4892/2020** | Emitida 22/12/2020, B.O. 24/12/2020 N° 34548 pág. 55. El articulado completo **no** está archivado: esta ficha solo da las fechas |
+| **`ARCA_QR_especificaciones.pdf`** | La tabla de campos del JSON, y un ejemplo completo en la página 2 |
+| **`ARCA_wsfev1_homologacion.wsdl`** | El contrato SOAP del servicio de emisión, bajado del propio endpoint |
+
+### Un PDF que parecía escaneado y no lo era
+
+El primer intento de extraer el texto del PDF del QR devolvió basura, y la
+conclusión —razonable y equivocada— fue que el contenido era una imagen. Se
+declaró así en el registro y el generador quedó emitiendo PDF sin QR.
+
+No era una imagen. El documento usa fuentes con *subset* y **códigos de glifo de
+un byte**; el extractor los leía de a dos y componía pares inexistentes. Con el
+CMap aplicado por fuente el texto sale entero.
+
+Vale anotarlo porque el error es del tipo que se propaga: una herramienta que
+falla en silencio produce una conclusión sobre el mundo —"ARCA publica esto como
+escaneo"— que después se cita como si fuera un hecho.
+
+### La transcripción se verifica contra el propio documento
+
+El PDF trae en su página 2 el JSON de ejemplo completo:
+
+```json
+{"ver":1,"fecha":"2020-10-13","cuit":30000000007,"ptoVta":10,"tipoCmp":1,"nroCmp":94,
+ "importe":12100,"moneda":"DOL","ctz":65,"tipoDocRec":80,"nroDocRec":20000000001,
+ "tipoCodAut":"E","codAut":70417054367476}
+```
+
+Hay un test que arma el QR de ese comprobante y compara el resultado **byte por
+byte** con esa cadena. Es lo que convierte la transcripción de `especificacion-qr.json`
+en algo verificado y no en algo copiado con cuidado.
+
+### El documento se contradice sobre la URL
+
+- Especificación técnica: `{URL}=https://www.arca.gob.ar/fe/qr/`
+- Su propio ejemplo del pie: `https://www.afip.gob.ar/fe/qr/?p=…`
+- ABC de ARCA (consulta 26035850): al escanear se llega a
+  `https://serviciosweb.afip.gob.ar/genericos/comprobantes/cae.aspx`
+
+Las tres pueden ser ciertas —el organismo migró de `afip` a `arca` y `/fe/qr/`
+redirige al servicio de constatación— pero **cuál se codifica es una decisión**.
+Se codifica la que el documento declara como `{URL}`, y el conflicto queda
+anotado al lado en `scripts/especificacion-qr.json` en vez de resuelto en
+silencio adentro del código.
 
 ---
 
