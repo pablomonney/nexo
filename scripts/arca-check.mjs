@@ -8,6 +8,12 @@
  * validación fiscal devuelve NO_VERIFICABLE.
  *
  *   node scripts/arca-check.mjs --env homologacion --cert ./cert.crt --key ./key.pem --cuit 30xxxxxxxx9
+ *   node scripts/arca-check.mjs --env homologacion --cert … --key … --cuit … --servicio wsfe,wscdc
+ *
+ * `--servicio` acepta una lista separada por comas. Por defecto prueba solo
+ * `wscdc`. El permiso de WSAA es POR SERVICIO: un certificado autorizado para
+ * constatar comprobantes no necesariamente puede emitirlos, y descubrirlo recién
+ * al emitir cuesta una vuelta entera.
  *
  * Sin argumentos hace lo que puede sin credenciales: comprueba que los endpoints
  * respondan y que el servicio esté arriba.
@@ -97,19 +103,45 @@ try {
   process.exit(1);
 }
 
-try {
-  const authenticator = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
-  const ticket = await authenticator.login(certificate, SERVICE_NAMES.wscdc);
-  ok('Ticket de acceso obtenido', `vence ${ticket.expirationTime.toISOString()}`);
-  console.log('\n  El certificado está emitido, asociado al servicio wscdc y la delegación funciona.');
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  fail('WSAA rechazó la autenticación', message);
+/**
+ * Qué servicios verificar.
+ *
+ * El ticket de WSAA es **por servicio**: un certificado autorizado para `wscdc`
+ * y no para `wsfe` obtiene ticket para constatar y falla al emitir. Hasta ahora
+ * este script probaba solo `wscdc` y decía "la delegación funciona" — cierto
+ * para constatar, y engañoso para cualquier otra cosa.
+ *
+ * Se prueban todos los pedidos y se informa **uno por uno**: que uno ande no
+ * dice nada de los demás.
+ */
+const servicios =
+  args.get('servicio') !== undefined
+    ? args.get('servicio').split(',').map((s) => s.trim())
+    : [SERVICE_NAMES.wscdc];
+
+const authenticator = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
+let algunoFallo = false;
+
+for (const servicio of servicios) {
+  try {
+    const ticket = await authenticator.login(certificate, servicio);
+    ok(`Ticket obtenido para "${servicio}"`, `vence ${ticket.expirationTime.toISOString()}`);
+  } catch (error) {
+    algunoFallo = true;
+    fail(`WSAA rechazó la autenticación para "${servicio}"`, error instanceof Error ? error.message : String(error));
+  }
+}
+
+if (algunoFallo) {
   console.log('\n  Causas habituales, en orden de frecuencia:');
-  console.log('   · El certificado no está asociado al servicio wscdc');
+  console.log('   · El certificado no está asociado a ESE servicio en particular');
   console.log('     → Administrador de Relaciones de Clave Fiscal (producción) o WSASS (homologación)');
+  console.log('     El permiso es por servicio: tener wscdc no implica tener wsfe');
   console.log('   · El certificado es de producción y se está usando en homologación, o al revés');
   console.log('   · El reloj del equipo está desfasado respecto del organismo');
   console.log('   · El certificado venció');
   process.exit(1);
 }
+
+console.log(`\n  El certificado está emitido y autorizado para: ${servicios.join(', ')}.`);
+console.log('  Eso NO dice nada sobre los servicios que no se probaron.');

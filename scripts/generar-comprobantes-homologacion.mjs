@@ -68,7 +68,25 @@ const cuit = args.get('cuit');
 const ptoVta = Number(args.get('pto-vta') ?? 1);
 const cantidad = Number(args.get('cantidad') ?? 50);
 const cbteTipo = Number(args.get('cbte-tipo') ?? 11); // 11 = Factura C
-const salida = args.get('salida') ?? join(RAIZ, 'var', 'comprobantes-homologacion');
+/**
+ * La salida usa la MISMA forma que espera `extraction-metrics.mjs`:
+ *
+ *     <salida>/ground-truth.json
+ *     <salida>/documentos/00000041.pdf
+ *     <salida>/documentos/00000041.pdf.txt
+ *
+ * Así el lote se mide con `npm run metrics:extraction -- --corpus <salida>` sin
+ * mover un archivo. Escribirlo plano y dejar que alguien lo reacomode después es
+ * el paso donde se pierde la correspondencia entre el PDF y su verdad conocida.
+ *
+ * Por defecto NO va a `corpus/`, y es deliberado: ese directorio es el del
+ * criterio de salida de la FASE 3b, que pide comprobantes **reales**
+ * anonimizados. Estos tienen CAE real y contenido generado por nosotros —sirven
+ * para encontrar huecos del lector, no para cerrar ese criterio— así que viven
+ * aparte y se miden aparte.
+ */
+const salida = args.get('salida') ?? join(RAIZ, 'var', 'corpus-homologacion');
+const documentos = join(salida, 'documentos');
 
 if (certPath === undefined || keyPath === undefined || cuit === undefined) {
   console.error('Faltan --cert, --key o --cuit.');
@@ -192,7 +210,7 @@ console.log('');
 console.log(`Último autorizado en ${ptoVta}/${cbteTipo}: ${ultimo}. Se sigue desde ${ultimo + 1}.`);
 
 // --- El lote ----------------------------------------------------------------
-mkdirSync(salida, { recursive: true });
+mkdirSync(documentos, { recursive: true });
 
 const planeados = generarComprobantes({ cantidad, cbteTipo, desdeNumero: ultimo + 1 });
 const autorizados = [];
@@ -237,7 +255,7 @@ for (const plan of planeados) {
 
   const qr = construirQr(comprobante, especificacionQr);
   const nombre = `${String(comprobante.cbteNro).padStart(8, '0')}.pdf`;
-  const archivo = join(salida, nombre);
+  const archivo = join(documentos, nombre);
   await armarPdf(archivo, { comprobante, emisor: plan.emisor, items: plan.items, qr });
 
   // La transcripción, al lado del PDF y con el nombre que espera
@@ -274,7 +292,7 @@ process.stdout.write('\n');
 
 // --- Resultado --------------------------------------------------------------
 console.log('');
-console.log(`Autorizados: ${autorizados.length} · PDF en ${salida}`);
+console.log(`Autorizados: ${autorizados.length} · PDF en ${documentos}`);
 
 if (rechazados.length > 0) {
   console.log('');
