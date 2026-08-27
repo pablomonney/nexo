@@ -44,7 +44,9 @@ if (environment === 'mock') {
 
 const { endpointsFor, SERVICE_NAMES } = await import('../packages/arca/dist/environment.js');
 const { SoapArcaClient } = await import('../packages/arca/dist/soap/soap-client.js');
-const { WsaaAuthenticator } = await import('../packages/arca/dist/soap/wsaa.js');
+const { WsaaAuthenticator, loginConCache } = await import('../packages/arca/dist/soap/wsaa.js');
+const { TicketCacheFs } = await import('../packages/arca/dist/ticket-cache-fs.js');
+const { contarDeDondeSalio, directorioDeTickets } = await import('./cache-de-tickets.mjs');
 
 const endpoints = endpointsFor(environment);
 const ok = (label, detail = '') => console.log(`  ✔ ${label}${detail ? ` — ${detail}` : ''}`);
@@ -120,6 +122,21 @@ const servicios =
     : [SERVICE_NAMES.wscdc];
 
 const authenticator = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
+
+/**
+ * Este script comparte la caché con `comprobantes:generar`.
+ *
+ * Verificar la conexión no puede dejar sin ticket al comando que emite. El WSAA
+ * da uno solo por CUIT y servicio, así que "comprobar que anda" y "usarlo" tienen
+ * que hablar del mismo ticket o se pisan.
+ */
+const cacheTickets = new TicketCacheFs({
+  directorio: directorioDeTickets(args),
+  ambiente: environment,
+  raizRepositorio: join(HERE, '..'),
+});
+console.log(`  caché de tickets: ${cacheTickets.directorio}`);
+
 let algunoFallo = false;
 /**
  * ¿Quedó alguna falla SIN causa identificada?
@@ -133,8 +150,8 @@ let algunaSinLectura = false;
 
 for (const servicio of servicios) {
   try {
-    const ticket = await authenticator.login(certificate, servicio);
-    ok(`Ticket obtenido para "${servicio}"`, `vence ${ticket.expirationTime.toISOString()}`);
+    const obtenido = await loginConCache(authenticator, cacheTickets, certificate, servicio);
+    ok(`Ticket para "${servicio}"`, contarDeDondeSalio(obtenido));
   } catch (error) {
     algunoFallo = true;
     if (error?.name !== 'WsaaFaultError' || error.lectura === null) algunaSinLectura = true;

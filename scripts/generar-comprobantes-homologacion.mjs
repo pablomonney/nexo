@@ -42,7 +42,13 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import forge from 'node-forge';
-import { SERVICE_NAMES, WsaaAuthenticator, endpointsFor } from '@aai/arca';
+import {
+  SERVICE_NAMES,
+  TicketCacheFs,
+  WsaaAuthenticator,
+  endpointsFor,
+  loginConCache,
+} from '@aai/arca';
 import {
   ClienteWsfev1,
   construirQr,
@@ -52,6 +58,7 @@ import {
 
 import { armarPdf, lineasDelComprobante } from './pdf-comprobante.mjs';
 import { generarComprobantes } from './comprobantes-sinteticos.mjs';
+import { contarDeDondeSalio, directorioDeTickets } from './cache-de-tickets.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = resolve(join(AQUI, '..'));
@@ -145,25 +152,13 @@ console.log('  El candado prueba a DÓNDE se emite, no con QUÉ credencial. Si e
 console.log('  la autoridad certificante de homologación, cortá acá.');
 console.log('');
 
-// --- Autenticación ---------------------------------------------------------
-const autenticador = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
-const ticket = await autenticador.login(
-  {
-    companyId: 'generador-homologacion',
-    cuit,
-    certificatePem,
-    privateKeyPem,
-    notAfter: x509.validity.notAfter,
-  },
-  SERVICE_NAMES.wsfev1,
-);
-
-console.log(`Ticket obtenido, vence ${ticket.expirationTime.toISOString()}`);
-
 const cliente = new ClienteWsfev1({ permiso });
-const auth = { Token: ticket.token, Sign: ticket.sign, Cuit: cuit };
 
 // --- Candado 4: ¿está vivo? ------------------------------------------------
+// Va ANTES de autenticar. `FEDummy` no pide credenciales, y el ticket del WSAA
+// es un recurso escaso: dura horas y no se puede pedir otro hasta que venza. Si
+// el servicio está caído, averiguarlo después de sacar el ticket significa
+// quedarse sin ticket Y sin comprobantes hasta la noche.
 const estado = await cliente.dummy();
 console.log(`FEDummy → app ${estado.appServer} · db ${estado.dbServer} · auth ${estado.authServer}`);
 if ([estado.appServer, estado.dbServer, estado.authServer].some((v) => v !== 'OK')) {
@@ -203,6 +198,53 @@ if (especificacionQr !== null) {
   console.log('  Los PDF salen sin QR y con esa leyenda impresa. Un PDF sin QR es un PDF');
   console.log('  incompleto y se nota; uno con un QR inventado parece completo.');
 }
+
+// --- Autenticación ----------------------------------------------------------
+// Recién acá, con el servicio ya confirmado sano y la especificación del QR
+// resuelta. El WSAA emite UN ticket por CUIT y servicio y niega el segundo
+// mientras el primero viva: sin caché, correr `arca:check` y después este script
+// en la misma jornada es imposible — que es exactamente lo que pasó la primera
+// vez que se corrieron en fila.
+const autenticador = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
+const cacheTickets = new TicketCacheFs({
+  directorio: directorioDeTickets(args),
+  ambiente: 'homologacion',
+  raizRepositorio: RAIZ,
+});
+
+let obtenido;
+try {
+  obtenido = await loginConCache(
+    autenticador,
+    cacheTickets,
+    {
+      companyId: 'generador-homologacion',
+      cuit,
+      certificatePem,
+      privateKeyPem,
+      notAfter: x509.validity.notAfter,
+    },
+    SERVICE_NAMES.wsfev1,
+  );
+} catch (error) {
+  // Un stack trace de node-forge no le dice a nadie qué hacer. El WSAA ya
+  // explicó el problema; el trabajo acá es no taparlo con ruido.
+  console.error('');
+  console.error(`No se pudo autenticar: ${error.message}`);
+  if (error?.code === 'ns1:coe.alreadyAuthenticated') {
+    console.error('');
+    console.error(`  La caché de este comando es ${cacheTickets.directorio}`);
+    console.error('  Si está vacía, el ticket vivo lo pidió algo que no lo guardó. No hay forma');
+    console.error('  de recuperarlo: hay que esperar a que venza. Los TA de ARCA duran horas.');
+    console.error('  No sirve reintentar: cada pedido de más acerca un bloqueo del organismo.');
+  }
+  process.exit(1);
+}
+const ticket = obtenido.ticket;
+const auth = { Token: ticket.token, Sign: ticket.sign, Cuit: cuit };
+
+console.log('');
+console.log(contarDeDondeSalio(obtenido));
 
 // --- Numeración -------------------------------------------------------------
 const ultimo = await cliente.ultimoAutorizado(auth, ptoVta, cbteTipo);

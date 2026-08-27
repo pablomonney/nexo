@@ -9,3 +9,4 @@ export * from './mock/mock-client.js';
 export * from './mock/fixtures.js';
 export * from './soap/soap-client.js';
 export * from './soap/wsaa.js';
+export * from './ticket-cache-fs.js';

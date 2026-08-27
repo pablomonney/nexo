@@ -16,18 +16,19 @@
  *     distinga los dos casos es la prueba: el WSAA validó nuestra firma y la
  *     aceptó. El rechazo del íntegro es de permiso, no de criptografía.
  *
- *   ✘ SIN VERIFICAR — `parseLoginResponse`. Nunca se recibió un TA real, porque
- *     el certificado todavía no está autorizado a ningún servicio en WSASS. El
- *     camino feliz sigue probado solo contra respuestas construidas a mano.
+ *   ✔ VERIFICADO (2026-08-27) — `parseLoginResponse`. Autorizado el certificado
+ *     al servicio `wsfe` en WSASS, el login devolvió un TA real y el parseo
+ *     sacó token, sign y vencimiento de la respuesta del servicio. Hasta el día
+ *     anterior esto estaba probado solo contra XML escrito a mano.
  *
- * La distinción importa: "la firma anda" y "el login anda" no son lo mismo, y
- * declarar lo segundo por haber probado lo primero sería exactamente el error
- * que este archivo venía evitando.
+ * La distinción entre las dos líneas importa: "la firma anda" y "el login anda"
+ * no son lo mismo, y durante un día fue cierta la primera y no la segunda. Se
+ * escribieron por separado para poder tachar una sin arrastrar la otra.
  */
 
 import forge from 'node-forge';
 import { XMLParser } from 'fast-xml-parser';
-import type { AccessTicket, CompanyCertificate } from '../credentials.js';
+import type { AccessTicket, CompanyCertificate, TicketCache } from '../credentials.js';
 import type { ServiceName } from '../environment.js';
 
 export interface WsaaOptions {
@@ -156,6 +157,13 @@ const LECTURAS_OBSERVADAS: ReadonlyMap<string, string> = new Map([
       'No es un problema del código ni del certificado. [observado 2026-08-26]',
   ],
   [
+    'coe.alreadyAuthenticated',
+    'Ya hay un ticket vivo para ese CUIT y ese servicio, y el WSAA no emite un segundo ' +
+      'mientras el primero no venza. No es un rechazo: es que el ticket que se pidió antes ' +
+      'sigue siendo válido y hay que reusarlo. Para eso está `TicketCacheFs`; si el ticket ' +
+      'se perdió, hay que esperar a que venza. [observado 2026-08-27]',
+  ],
+  [
     'cms.bad',
     'El servicio no pudo validar la firma CMS: llegó mal armada, corrompida en tránsito, ' +
       'o firmada con una clave que no corresponde al certificado. [observado 2026-08-26]',
@@ -199,6 +207,28 @@ export function describirFallaWsaa(status: number, cuerpo: string): Error {
   // El prefijo de namespace (`ns1:`) lo elige el servidor y puede cambiar.
   const desnudo = falla.code.replace(/^[^:]*:/, '');
   return new WsaaFaultError(falla.code, falla.message, LECTURAS_OBSERVADAS.get(desnudo) ?? null);
+}
+
+/**
+ * Login que primero mira la caché.
+ *
+ * Pedir un TA cuando ya hay uno vivo no es una ineficiencia: el WSAA lo rechaza
+ * con `coe.alreadyAuthenticated`, y el propio organismo advierte que pedir
+ * tickets de más es motivo de bloqueo. La caché no es una optimización, es la
+ * forma correcta de usar el servicio.
+ */
+export async function loginConCache(
+  authenticator: WsaaAuthenticator,
+  cache: TicketCache,
+  certificate: CompanyCertificate,
+  service: ServiceName,
+): Promise<{ ticket: AccessTicket; deLaCache: boolean }> {
+  const guardado = await cache.get(certificate.cuit, service);
+  if (guardado !== null) return { ticket: guardado, deLaCache: true };
+
+  const ticket = await authenticator.login(certificate, service);
+  await cache.put(ticket);
+  return { ticket, deLaCache: false };
 }
 
 const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false });
