@@ -7,12 +7,22 @@
  *              →  LoginCms(in0 = CMS en base64)
  *              →  TA con {token, sign} y vigencia acotada
  *
- * ⚠️  ESTA IMPLEMENTACIÓN NO ESTÁ VERIFICADA CONTRA EL SERVICIO REAL.
- *     Se escribió siguiendo el manual oficial, pero no se pudo ejecutar de punta
- *     a punta porque requiere un certificado emitido por ARCA. El script
- *     `npm run arca:check` hace esa verificación en homologación el día que el
- *     certificado exista. Hasta entonces el sistema opera con `MockArcaClient` y
- *     la falta de verificación está declarada, no disimulada.
+ * ESTADO DE VERIFICACIÓN CONTRA EL SERVICIO REAL (2026-08-26, homologación,
+ * certificado emitido por `CN=Computadores Test, O=AFIP, C=AR`):
+ *
+ *   ✔ VERIFICADO — `buildTra` + `signTra`. Se mandó el mismo CMS dos veces, una
+ *     íntegro y una con ocho bytes de la firma invertidos. El servicio contestó
+ *     `ns1:coe.notAuthorized` al íntegro y `ns1:cms.bad` al corrompido. Que
+ *     distinga los dos casos es la prueba: el WSAA validó nuestra firma y la
+ *     aceptó. El rechazo del íntegro es de permiso, no de criptografía.
+ *
+ *   ✘ SIN VERIFICAR — `parseLoginResponse`. Nunca se recibió un TA real, porque
+ *     el certificado todavía no está autorizado a ningún servicio en WSASS. El
+ *     camino feliz sigue probado solo contra respuestas construidas a mano.
+ *
+ * La distinción importa: "la firma anda" y "el login anda" no son lo mismo, y
+ * declarar lo segundo por haber probado lo primero sería exactamente el error
+ * que este archivo venía evitando.
  */
 
 import forge from 'node-forge';
@@ -121,11 +131,74 @@ export class WsaaAuthenticator {
 
     const text = await response.text();
     if (!response.ok) {
-      throw new Error(`WSAA respondió ${response.status}: ${text.slice(0, 500)}`);
+      throw describirFallaWsaa(response.status, text);
     }
 
     return parseLoginResponse(text, certificate.cuit, service);
   }
+}
+
+/**
+ * Lecturas de `faultcode` **observadas directamente** contra el WSAA.
+ *
+ * ARCA no publica una tabla de estos códigos, y el manual del WSAA no está
+ * archivado en `docs/normative-sources/`. Por eso acá solo hay códigos que se
+ * vieron con los ojos, con la fecha en que se vieron. Un código que no esté en
+ * esta tabla se muestra crudo: inventarle un significado a un error es la forma
+ * más silenciosa de mandar a alguien a arreglar lo que no está roto.
+ */
+const LECTURAS_OBSERVADAS: ReadonlyMap<string, string> = new Map([
+  [
+    'coe.notAuthorized',
+    'El certificado es válido y la firma fue aceptada, pero ese certificado no está ' +
+      'autorizado a ESE servicio. Falta el paso de asociar servicio y certificado ' +
+      '(WSASS en homologación; Administrador de Relaciones en producción). ' +
+      'No es un problema del código ni del certificado. [observado 2026-08-26]',
+  ],
+  [
+    'cms.bad',
+    'El servicio no pudo validar la firma CMS: llegó mal armada, corrompida en tránsito, ' +
+      'o firmada con una clave que no corresponde al certificado. [observado 2026-08-26]',
+  ],
+]);
+
+/** Extrae `faultcode` y `faultstring` de un SOAP Fault, si los hay. */
+export function leerFallaSoap(cuerpo: string): { code: string; message: string } | null {
+  const code = /<faultcode[^>]*>([^<]*)<\/faultcode>/.exec(cuerpo)?.[1];
+  if (code === undefined) return null;
+  const message = /<faultstring[^>]*>([^<]*)<\/faultstring>/.exec(cuerpo)?.[1] ?? '';
+  return { code: code.trim(), message: message.trim() };
+}
+
+/**
+ * Falla del WSAA con el `faultcode` accesible como dato.
+ *
+ * Quien la atrapa no tiene que leerle el mensaje con una expresión regular para
+ * saber si la causa está identificada: `lectura` es `null` cuando no lo está, y
+ * ahí —y solo ahí— tiene sentido ofrecer una lista de sospechas.
+ */
+export class WsaaFaultError extends Error {
+  readonly code: string;
+  readonly lectura: string | null;
+
+  constructor(code: string, faultstring: string, lectura: string | null) {
+    super(
+      `WSAA rechazó el login [${code}]${faultstring ? `: ${faultstring}` : ''}` +
+        (lectura === null ? '' : `\n    → ${lectura}`),
+    );
+    this.name = 'WsaaFaultError';
+    this.code = code;
+    this.lectura = lectura;
+  }
+}
+
+export function describirFallaWsaa(status: number, cuerpo: string): Error {
+  const falla = leerFallaSoap(cuerpo);
+  if (falla === null) return new Error(`WSAA respondió ${status}: ${cuerpo.slice(0, 500)}`);
+
+  // El prefijo de namespace (`ns1:`) lo elige el servidor y puede cambiar.
+  const desnudo = falla.code.replace(/^[^:]*:/, '');
+  return new WsaaFaultError(falla.code, falla.message, LECTURAS_OBSERVADAS.get(desnudo) ?? null);
 }
 
 const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false });

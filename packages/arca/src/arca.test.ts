@@ -6,7 +6,13 @@ import { endpointsFor } from './environment.js';
 import { MockArcaClient } from './mock/mock-client.js';
 import { COMPROBANTES_PRUEBA, CUIT_PRUEBA } from './mock/fixtures.js';
 import { parseConstatacion } from './soap/soap-client.js';
-import { buildTra, parseLoginResponse, signTra } from './soap/wsaa.js';
+import {
+  buildTra,
+  describirFallaWsaa,
+  parseLoginResponse,
+  signTra,
+  WsaaFaultError,
+} from './soap/wsaa.js';
 import type { ComprobanteAConstatar } from './types.js';
 import { aSelloFiscal, bloqueaAprobacionAutomatica } from './validation.js';
 
@@ -375,5 +381,60 @@ describe('WSAA — construcción y firma del TRA', () => {
     expect(() => parseLoginResponse('<soapenv:Envelope/>', '30710000001', 'wscdc')).toThrow(
       /loginCmsReturn/,
     );
+  });
+});
+
+/**
+ * Los dos cuerpos de abajo son respuestas REALES del WSAA de homologación,
+ * capturadas el 2026-08-26 con un certificado de `CN=Computadores Test`.
+ * No están construidas a mano: por eso sirven.
+ */
+describe('WSAA — leer la falla en vez de adivinarla', () => {
+  const falla = (code: string, str: string) =>
+    '<?xml version="1.0" encoding="utf-8"?><soapenv:Envelope ' +
+    'xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body><soapenv:Fault>' +
+    `<faultcode xmlns:ns1="http://xml.apache.org/axis/">${code}</faultcode>` +
+    `<faultstring>${str}</faultstring>` +
+    '</soapenv:Fault></soapenv:Body></soapenv:Envelope>';
+
+  const NO_AUTORIZADO = falla('ns1:coe.notAuthorized', 'Computador no autorizado a acceder al servicio');
+  const CMS_MALO = falla('ns1:cms.bad', 'El CMS no es valido');
+
+  it('distingue el permiso faltante de la firma inválida', () => {
+    const permiso = describirFallaWsaa(500, NO_AUTORIZADO);
+    const firma = describirFallaWsaa(500, CMS_MALO);
+
+    expect(permiso).toBeInstanceOf(WsaaFaultError);
+    expect(firma).toBeInstanceOf(WsaaFaultError);
+    expect((permiso as WsaaFaultError).code).toBe('ns1:coe.notAuthorized');
+    expect((firma as WsaaFaultError).code).toBe('ns1:cms.bad');
+
+    // El de permiso tiene que decir que el código NO es el problema: es la
+    // conclusión equivocada más cara de todo este camino.
+    expect((permiso as WsaaFaultError).lectura).toMatch(/no está autorizado a ESE servicio/);
+    expect((permiso as WsaaFaultError).lectura).not.toBeNull();
+    expect((firma as WsaaFaultError).lectura).toMatch(/firma CMS/);
+  });
+
+  it('un faultcode desconocido se muestra crudo y se declara sin lectura', () => {
+    const error = describirFallaWsaa(500, falla('ns1:algo.que.nadie.vio', 'Mensaje nuevo'));
+    expect(error).toBeInstanceOf(WsaaFaultError);
+    expect((error as WsaaFaultError).code).toBe('ns1:algo.que.nadie.vio');
+    // Sin lectura inventada: quien lo atrape sabe que todavía no sabemos.
+    expect((error as WsaaFaultError).lectura).toBeNull();
+    expect(error.message).toContain('algo.que.nadie.vio');
+    expect(error.message).toContain('Mensaje nuevo');
+  });
+
+  it('el prefijo de namespace lo elige el servidor, así que no forma parte de la clave', () => {
+    const otroPrefijo = describirFallaWsaa(500, falla('zz42:coe.notAuthorized', 'x'));
+    expect((otroPrefijo as WsaaFaultError).lectura).not.toBeNull();
+  });
+
+  it('una respuesta que no es un SOAP Fault no se fuerza a serlo', () => {
+    const error = describirFallaWsaa(502, '<html><body>Bad Gateway</body></html>');
+    expect(error).not.toBeInstanceOf(WsaaFaultError);
+    expect(error.message).toContain('502');
+    expect(error.message).toContain('Bad Gateway');
   });
 });

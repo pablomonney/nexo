@@ -121,6 +121,15 @@ const servicios =
 
 const authenticator = new WsaaAuthenticator({ endpoint: endpoints.wsaa });
 let algunoFallo = false;
+/**
+ * ¿Quedó alguna falla SIN causa identificada?
+ *
+ * La lista de sospechas de abajo es para cuando no sabemos. Imprimirla igual
+ * cuando el servicio ya dijo exactamente qué pasa manda a revisar cuatro cosas
+ * de las cuales tres están bien — que fue justo lo que hizo este script la
+ * primera vez que se corrió con un certificado de verdad.
+ */
+let algunaSinLectura = false;
 
 for (const servicio of servicios) {
   try {
@@ -128,11 +137,12 @@ for (const servicio of servicios) {
     ok(`Ticket obtenido para "${servicio}"`, `vence ${ticket.expirationTime.toISOString()}`);
   } catch (error) {
     algunoFallo = true;
-    fail(`WSAA rechazó la autenticación para "${servicio}"`, error instanceof Error ? error.message : String(error));
+    if (error?.name !== 'WsaaFaultError' || error.lectura === null) algunaSinLectura = true;
+    fail(`WSAA rechazó "${servicio}"`, error instanceof Error ? error.message : String(error));
   }
 }
 
-if (algunoFallo) {
+if (algunoFallo && algunaSinLectura) {
   console.log('\n  Causas habituales, en orden de frecuencia:');
   console.log('   · El certificado no está asociado a ESE servicio en particular');
   console.log('     → Administrador de Relaciones de Clave Fiscal (producción) o WSASS (homologación)');
@@ -140,8 +150,9 @@ if (algunoFallo) {
   console.log('   · El certificado es de producción y se está usando en homologación, o al revés');
   console.log('   · El reloj del equipo está desfasado respecto del organismo');
   console.log('   · El certificado venció');
-  process.exit(1);
 }
+
+if (algunoFallo) process.exit(1);
 
 console.log(`\n  El certificado está emitido y autorizado para: ${servicios.join(', ')}.`);
 console.log('  Eso NO dice nada sobre los servicios que no se probaron.');
