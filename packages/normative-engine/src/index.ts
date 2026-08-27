@@ -8,6 +8,7 @@
 export * from './contracts.js';
 export * from './ast.js';
 export * from './applicability.js';
+export * from './carga-de-reglas.js';
 export * from './resolve.js';
 export * from './citation.js';
 export * from './vigilancia.js';

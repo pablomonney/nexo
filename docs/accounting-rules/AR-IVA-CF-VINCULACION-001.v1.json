@@ -1,0 +1,74 @@
+{
+  "_lea_esto_primero": [
+    "Esta regla está en DRAFT y NO se aplica. Existe para demostrar que el cargador",
+    "puede incorporar una regla real, verificable y trazable — no para resolver el",
+    "tratamiento del crédito fiscal, que es más amplio que lo que dice acá.",
+    "",
+    "PUNTOS QUE REQUIEREN REVISIÓN DE UN CONTADOR, antes de cualquier aprobación:",
+    "",
+    "1. El art. 12 enuncia una condición NECESARIA ('Sólo darán lugar a cómputo ... en",
+    "   la medida en que se vinculen con las operaciones gravadas'), no una suficiente.",
+    "   Por eso la regla codifica únicamente la negativa: si NO se vincula, NO computa.",
+    "   No dice nada sobre cuándo sí computa, y no debe leerse como si lo dijera.",
+    "2. El mismo artículo sigue con una lista de exclusiones numeradas (automóviles,",
+    "   locaciones del inc. e) pto. 21, etc.) que esta regla NO codifica.",
+    "3. La fecha de vigencia no está relevada en el corpus: norm_versions.fecha_vigencia",
+    "   es NULL para esta norma. Se usa la fecha de PUBLICACIÓN del t.o., que sí está",
+    "   registrada, y queda declarado en vigencia.fundamento. Un contador tiene que",
+    "   confirmar desde cuándo rige el texto vigente de este artículo.",
+    "4. El hecho 'vinculadaConOperacionesGravadas' hoy no lo produce ningún módulo.",
+    "   Quién lo determina y con qué evidencia es una decisión profesional pendiente."
+  ],
+
+  "fuente": {
+    "organismo": "CONGRESO",
+    "tipo": "LEY",
+    "numero": "23349",
+    "anio": 1997,
+    "documento": {
+      "archivo": "INFOLEG_LEY_IVA_23349_TO_1997_texto_actualizado.htm",
+      "sha256": "180b1380c820cbabc572b707b540e9299e074423fcad4f69b920b06167eb3244"
+    }
+  },
+
+  "regla": {
+    "clave": "AR-IVA-CF-VINCULACION-001",
+    "version": 1,
+    "dominio": "tax",
+    "jurisdiccion": "AR",
+    "tiposDeEnte": [],
+    "marcos": [],
+    "prioridad": 100,
+    "propuestaPor": "cargador:carga-inicial"
+  },
+
+  "condiciones": {
+    "hechosRequeridos": [
+      { "campo": "vinculadaConOperacionesGravadas", "tipo": "BOOLEANO" }
+    ],
+    "ast": {
+      "op": "eq",
+      "field": "vinculadaConOperacionesGravadas",
+      "value": false
+    }
+  },
+
+  "accion": {
+    "tipo": "MARCAR_CREDITO_FISCAL",
+    "resultado": "NO_COMPUTABLE"
+  },
+
+  "cita": {
+    "articulo": "12",
+    "inciso": "a)",
+    "texto": "Sólo darán lugar a cómputo del crédito fiscal las compras o importaciones definitivas, las locaciones y las prestaciones de servicios en la medida en que se vinculen con las operaciones gravadas, cualquiera fuese la etapa de su aplicación"
+  },
+
+  "vigencia": {
+    "desde": "1997-04-15",
+    "hasta": null,
+    "fundamento": "Fecha de publicación del texto ordenado 1997 registrada en el corpus (norm_versions.fecha_publicacion = 1997-04-15, nivel V1). NO es la fecha de vigencia del artículo: norm_versions.fecha_vigencia está en NULL porque no fue relevada. Requiere confirmación profesional antes de activar."
+  },
+
+  "estado": "DRAFT"
+}

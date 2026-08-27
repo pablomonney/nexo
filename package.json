@@ -45,7 +45,9 @@
     "cuit:anonimizar": "node scripts/anonimizar-cuit.mjs",
     "comprobantes:generar": "node scripts/generar-comprobantes-homologacion.mjs",
     "comprobantes:tipos": "node scripts/sincronizar-tipos-comprobante.mjs",
-    "test:db": "node scripts/test-db.mjs"
+    "test:db": "node scripts/test-db.mjs",
+    "reglas:cargar": "node scripts/cargar-reglas-contables.mjs",
+    "reglas:aprobar": "node scripts/aprobar-regla.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
