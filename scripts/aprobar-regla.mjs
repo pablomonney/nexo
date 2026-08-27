@@ -134,14 +134,20 @@ try {
 
   // La bitácora encadenada por hash. Sin esto la activación sería un UPDATE que
   // nadie puede reconstruir después.
+  // Los nombres de columna salen de la 0008, no de la memoria: `object_type` y
+  // `old_value`/`new_value`, no `entity`/`before`/`after`. `prev_hash` y `hash`
+  // van vacíos porque los completa el trigger de encadenamiento.
   await db.query(
-    `INSERT INTO audit_logs (company_id, actor_id, action, entity, entity_id, before, after)
-     VALUES (NULL, $1, 'RULE_APPROVED', 'accounting_rules', $2, $3, $4)`,
+    `INSERT INTO audit_logs
+       (company_id, actor_type, actor_id, action, object_type, object_id,
+        old_value, new_value, motivo, prev_hash, hash)
+     VALUES (NULL, 'USER', $1, 'RULE_APPROVED', 'accounting_rules', $2, $3, $4, $5, '', '')`,
     [
       aprobador,
       regla.id,
       JSON.stringify({ status: regla.status }),
-      JSON.stringify({ status: 'ACTIVE', approved_by: aprobador, constancia: constancia.trim() }),
+      JSON.stringify({ status: 'ACTIVE', approved_by: aprobador }),
+      constancia.trim(),
     ],
   );
   await db.query('COMMIT');

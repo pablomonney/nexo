@@ -121,6 +121,10 @@ if (invocadoDirectamente) {
     ['normas', ['scripts/seed-norms.mjs']],
     ['alícuotas', ['scripts/seed-tax-rates.mjs']],
     ['plantillas de estados', ['scripts/seed-statement-templates.mjs']],
+    // Las reglas entran como DRAFT, igual que en desarrollo. Sin esto, un
+    // `--reset` dejaría la base sin la regla y la suite que la ejercita fallaría
+    // por un motivo que no tiene nada que ver con lo que prueba.
+    ['reglas contables (DRAFT)', ['scripts/cargar-reglas-contables.mjs', '--aplicar']],
   ]) {
     const r = spawnSync(process.execPath, argumentos, { cwd: RAIZ, env: entorno, stdio: 'pipe' });
     if (r.status !== 0) {

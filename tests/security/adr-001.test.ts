@@ -87,4 +87,32 @@ describe('ADR-001 — la IA no puede alcanzar el motor contable', () => {
     expect(result.code).not.toBe(0);
     expect(result.output).toContain('adr-001-ai-no-escribe-contabilidad');
   }, 60_000);
+
+  /**
+   * El hecho `vinculadaConOperacionesGravadas` lo declara una persona, y el
+   * modelo que lo traduce vive en `@aai/tax-engine`. Que la IA no pueda tocarlo
+   * no es una promesa del diseño: es que `tax-engine` está dentro de
+   * `MOTOR_CONTABLE` y `@aai/db` dentro de `CLIENTE_DE_BASE`, así que no hay
+   * import posible ni hacia el modelo ni hacia la tabla.
+   *
+   * Se prueba con el módulo concreto porque una regla que cubre un paquete
+   * entero puede dejar de cubrir un archivo si alguien reordena los patrones.
+   */
+  it('el lint FALLA si ai-engine importa el modelo de afectación fiscal', () => {
+    writeFileSync(
+      VIOLATION_FILE,
+      [
+        '// Archivo temporal generado por tests/security/adr-001.test.ts.',
+        "import { proveerVinculacion } from '@aai/tax-engine';",
+        'export const probe = proveerVinculacion;',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = runArchLint();
+
+    expect(result.code).not.toBe(0);
+    expect(result.output).toContain('adr-001-ai-no-escribe-contabilidad');
+  }, 60_000);
 });
