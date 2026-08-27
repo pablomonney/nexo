@@ -54,6 +54,30 @@ interface ReglaCampo {
   readonly confianzaRegla: number;
 }
 
+/**
+ * Un importe: signo o paréntesis opcional, y **al menos un dígito**.
+ *
+ * El dígito no es un detalle. La versión anterior era `[-(]?[\d.,]{1,20}\)?`, que
+ * matchea con cero dígitos: un punto suelto le alcanzaba. Sobre un comprobante
+ * con el encabezado de tabla
+ *
+ *     Producto / Servicio  Cant.  Precio Unit.  Subtotal
+ *
+ * la etiqueta `subtotal` matcheaba, el resto de la línea quedaba vacío, y el
+ * motor caía a probar la línea entera — donde lo primero de la clase `[\d.,]`
+ * es el punto de "Cant.". Resultado: `importes.neto` con `rawValue: "."`.
+ *
+ * El daño no era el `null` que salía después: era la lectura basura que quedaba
+ * a la vista de quien revisa, y que en otra línea podría haber capturado un
+ * número parcial en vez de un punto. Con el dígito obligatorio, la línea de
+ * encabezado deja de matchear y la regla sigue buscando — o informa que no
+ * encontró la etiqueta, que para una Factura C es la respuesta correcta.
+ *
+ * Lo encontró un lote de comprobantes generados con el layout de ARCA, no una
+ * lectura del código.
+ */
+const PATRON_IMPORTE = /([-(]?\d[\d.,]{0,19}\)?)/;
+
 const importe =
   (): Interprete =>
   (bruto, contexto) => {
@@ -165,21 +189,21 @@ const REGLAS: readonly ReglaCampo[] = [
   {
     fieldPath: 'importes.neto',
     etiquetas: [/(?:importe\s*)?neto\s*(?:gravado)?/i, /subtotal/i],
-    valor: /([-(]?[\d.,]{1,20}\)?)/,
+    valor: PATRON_IMPORTE,
     confianzaRegla: 0.85,
     interpretar: importe(),
   },
   {
     fieldPath: 'importes.iva',
     etiquetas: [/iva(?:\s*\d{1,2}[.,]?\d{0,2}\s*%?)?/i],
-    valor: /([-(]?[\d.,]{1,20}\)?)/,
+    valor: PATRON_IMPORTE,
     confianzaRegla: 0.8,
     interpretar: importe(),
   },
   {
     fieldPath: 'importes.total',
     etiquetas: [/importe\s*total/i, /^total\b/i],
-    valor: /([-(]?[\d.,]{1,20}\)?)/,
+    valor: PATRON_IMPORTE,
     confianzaRegla: 0.9,
     interpretar: importe(),
   },

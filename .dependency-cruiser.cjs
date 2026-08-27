@@ -77,6 +77,18 @@ module.exports = {
       to: { path: `${CLIENTE_DE_BASE}|${CLIENTE_DE_RED}` },
     },
     {
+      name: 'la-emision-no-llega-a-la-aplicacion',
+      comment:
+        'packages/arca-emision solicita CAE: con un certificado de producción emite facturas ' +
+        'reales a nombre del contribuyente. La emisión está declarada fuera del MVP y este ' +
+        'paquete existe solo para generar datos de prueba en homologación, desde un script. ' +
+        'Que la API no pueda alcanzarlo tiene que ser una arista que no existe en el grafo, no ' +
+        'una decisión que alguien recuerde. Ver packages/arca-emision/src/homologacion.ts.',
+      severity: 'error',
+      from: { path: '^(apps|packages/(?!arca-emision))' },
+      to: { path: '^(packages/arca-emision|node_modules/@aai/arca-emision)' },
+    },
+    {
       name: 'dominio-no-depende-de-apps',
       comment: 'La dependencia va en un solo sentido: apps → packages, nunca al revés.',
       severity: 'error',

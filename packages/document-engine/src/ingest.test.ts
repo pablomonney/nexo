@@ -187,6 +187,46 @@ describe('pipeline de ingesta', () => {
     expect(resultado.extraccion.campos).toHaveLength(0);
   });
 
+  it('un encabezado de tabla no produce un importe con cero dígitos', async () => {
+    // El patrón de importe aceptaba un match sin ningún dígito, así que sobre
+    //
+    //     Producto / Servicio  Cant.  Precio Unit.  Subtotal
+    //
+    // la etiqueta `subtotal` matcheaba y el valor capturado era el punto de
+    // "Cant.". `importes.neto` salía con rawValue "." — basura a la vista de
+    // quien revisa, y en otra línea podría haber sido un número parcial.
+    //
+    // La respuesta correcta para una Factura C, que no discrimina neto, es que
+    // el campo no se encontró.
+    const resultado = await ingerir(entrada(pdfDePrueba('ok'), 'tabla.pdf'), {
+      store: new InMemoryDocumentStore(),
+      ocr: ocrCon(
+        [
+          'FACTURA',
+          'C',
+          'Producto / Servicio  Cant.  Precio Unit.  Subtotal',
+          'Cartuchos de tinta  3  $ 1.215,51  $ 3.646,53',
+          'Importe Total:  $ 3.646,53',
+        ],
+        'ok',
+      ),
+    });
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+
+    const neto = campo(resultado.extraccion.campos, 'importes.neto');
+    expect(neto.rawValue).toBeNull();
+    expect(neto.nota).toMatch(/No se encontró la etiqueta/);
+
+    // Y el total, que sí está etiquetado, se lee igual.
+    expect(campo(resultado.extraccion.campos, 'importes.total').parsedValue).toEqual({
+      kind: 'MONEY',
+      amount: '364653',
+      currency: 'ARS',
+    });
+  });
+
   it('lee el punto de venta y el número tal como los imprime ARCA', async () => {
     // Este test existe por un defecto que encontró un lote de cincuenta
     // comprobantes con el layout real: los cincuenta dieron

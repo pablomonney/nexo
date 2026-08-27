@@ -1,0 +1,20 @@
+{
+  "_": "PLANTILLA SIN COMPLETAR. Mientras `campos` esté vacío, el generador emite los PDF sin QR y lo dice — en la salida y en el propio PDF.",
+  "_por_que_esta_vacio": "Los nombres de campo del JSON del QR los define ARCA_QR_especificaciones.pdf, archivado con hash en docs/normative-sources/originals/. Su contenido está como imagen y no se pudo extraer en esta máquina, así que no se transcribieron. Escribirlos de memoria produciría un QR que se imprime bien y que ARCA no valida — y eso solo se descubre escaneando un comprobante ya emitido.",
+  "_como_completarlo": [
+    "1. Abrir https://www.afip.gob.ar/fe/qr/documentos/QRespecificaciones.pdf (dos páginas).",
+    "2. Copiar la tabla de campos: para cada uno, el nombre exacto que exige ARCA y su tipo.",
+    "3. Completar `version` con la versión del formato de datos que indica el documento.",
+    "4. Completar `fuente` con la página de la que se transcribió, para poder volver a chequearlo.",
+    "5. Llenar `campos` en el ORDEN en que van en el JSON.",
+    "6. `origen` es el nombre del campo en `ComprobanteAutorizado` (packages/arca-emision/src/contracts.ts), o la palabra `version`."
+  ],
+  "_campos_disponibles_en_ComprobanteAutorizado": [
+    "cuitEmisor", "ptoVta", "cbteTipo", "cbteNro", "cbteFch", "docTipo", "docNro",
+    "impTotal", "moneda", "cotizacion", "cae", "caeFchVto", "concepto"
+  ],
+  "_tipos": ["NUMERICO", "DECIMAL", "ALFANUMERICO", "FECHA"],
+  "version": 0,
+  "fuente": "",
+  "campos": []
+}
