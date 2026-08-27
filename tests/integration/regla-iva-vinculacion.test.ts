@@ -143,8 +143,13 @@ suite('AR-IVA-CF-VINCULACION-001 — conectada, en DRAFT', () => {
     );
     expect(r.rows[0]!.status).toBe('DRAFT');
 
+    // Se cuentan solo las reglas que entraron por el cargador. Otras suites de
+    // integración crean reglas de fixture en ACTIVE para ejercitar el motor, y
+    // contarlas hacía que este test dependiera del orden de ejecución: pasaba
+    // sobre una base recién creada y fallaba en la corrida completa.
     const activas = await db.query<{ n: string }>(
-      "SELECT count(*)::text AS n FROM accounting_rules WHERE status = 'ACTIVE'",
+      `SELECT count(*)::text AS n FROM accounting_rules
+        WHERE status = 'ACTIVE' AND proposed_by LIKE 'cargador:%'`,
     );
     expect(activas.rows[0]!.n).toBe('0');
   });
