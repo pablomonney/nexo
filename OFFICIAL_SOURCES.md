@@ -4,7 +4,7 @@
 > Registro maestro de fuentes normativas. Cada afirmación lleva un **nivel de verificación**.
 > El sistema no puede usar como regla activa nada que no esté en nivel `V1`.
 >
-> **Estado: 28 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
+> **Estado: 30 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
 > SHA-256.** Los siete últimos se archivaron el **2026-08-26**: la Ley de IVA (t.o. 1997) y las
 > fichas de los Decretos 280/97 y 841/84, la Res. P. CPCECABA 460/2024 —que cerraron los tres
 > bloqueos de fuente del roadmap— y después la ficha de la RG 4892/2020, las especificaciones del
@@ -485,7 +485,7 @@ El Boletín Oficial sirve para **datar y citar** el aviso; no para obtener el te
 | 6 | Régimen de ajuste por inflación (contable y fiscal) | Reexpresión | **Gap declarado** |
 | 7 | CNV T.O. de Normas; marco contable BCRA; INAES | Entes de esos regímenes | `V2` |
 | 8 | Manuales ARCA restantes (wsmtxca, wsfexv1, padrón a4/a10) | Integraciones de FASE 13 | `V2` |
-| 9 | RG 1415, 3561, 4291 y 5198 (textos actualizados) | Reglas finas de comprobantes | `V2` |
+| 9 | RG 3561 y 5198 (textos actualizados). **RG 1415 y RG 4291 archivadas el 2026-08-26** | Reglas finas de comprobantes | `V2` las dos que faltan |
 | 10 | Vigencias de la tabla de tipos de comprobante (`FEParamGetTiposCbte`) | Interpretar comprobantes por fecha | **Gap declarado** — ver 8.1 |
 | 11 | Antecedentes normativos del art. 28 de la Ley de IVA (textos anteriores al 18/11/2002) | Alícuotas para hechos imponibles previos a esa fecha | **Gap declarado** |
 

@@ -72,7 +72,7 @@ const FALTA_RELEVAR = [
   'La vinculación con operaciones gravadas (art. 12, inc. a, segundo párrafo). No está en el comprobante: es un hecho del negocio, y lo afirma quien lo conoce.',
   'Las exclusiones del art. 12 inc. a) puntos 1, 3 y 4 — automóviles por encima del tope, ciertos servicios del art. 3° inc. e), indumentaria que no sea ropa de trabajo. Dependen de QUÉ se compró, no de cuánto.',
   'El prorrateo del art. 13 cuando conviven operaciones gravadas y exentas. Depende del total del período, no de este comprobante.',
-  'RG 1415 y RG 4291 — qué tipos de comprobante habilitan crédito fiscal. Esas sí faltan archivar.',
+  'Qué régimen de emisión alcanza al emisor. La RG 1415 (arts. 15 y 16) y la RG 4291 ya están archivadas y dicen qué letra corresponde a cada operación; lo que no está relevado es a qué régimen quedó sujeto cada contribuyente, que sale de su situación y no del comprobante.',
 ] as const;
 
 export function evaluarCreditoFiscal(

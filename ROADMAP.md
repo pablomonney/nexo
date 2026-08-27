@@ -8,7 +8,7 @@
 | Fase | Estado |
 |------|--------|
 | **FASE 0 — Investigación normativa y arquitectura** | ✅ **Entregada** |
-| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 25 documentos oficiales archivados con hash |
+| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 30 documentos oficiales archivados con hash |
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
 | **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
@@ -38,7 +38,7 @@ seguridad y pruebas, propuesta de MVP.
 
 ## FASE 1a — Carga normativa `V1` ✅
 
-25 documentos oficiales descargados, validados y archivados con SHA-256 en
+30 documentos oficiales descargados, validados y archivados con SHA-256 en
 `docs/normative-sources/originals/`, indexados en `registro-de-descargas.csv`.
 
 Resultado sustantivo, más allá del archivado:
@@ -706,6 +706,37 @@ lo dice. En producción esa divergencia se descubre meses después, cuando el ba
 ## Orden de trabajo recomendado
 
 Fases 1 → 2 → 3 → 5 → 6 → 7 → 4 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15.
+
+---
+
+## Fuera de fase — Generación de datos de prueba contra ARCA
+
+No es una fase del pliego: es la herramienta que la FASE 3 necesitaba para poder medirse.
+
+`npm run comprobantes:generar` autentica con el WSAA que ya existía, pide CAE al WSFEv1 en
+**homologación** y arma un PDF por comprobante con el layout de ARCA, su transcripción `.txt` y
+un `ground-truth.json`. Homologación existe para esto: CAE real, numeración correlativa real,
+sin efecto fiscal.
+
+**Emitir es distinto de consultar, y por eso vive aparte.** `@aai/arca` solo lee —constata,
+consulta padrón, revisa apócrifos—. `@aai/arca-emision` pide CAE, y con un certificado de
+producción eso es un acto fiscal a nombre del contribuyente. El lint de arquitectura prohíbe
+que `apps/` lo alcance: la separación es una arista que no existe en el grafo, no una decisión
+que alguien recuerde.
+
+El candado repite la inversión del §34: no comprueba que el destino no sea producción,
+comprueba que **sea exactamente** el endpoint de homologación que el repositorio declara. Y
+declara lo que no prueba —con qué certificado se emite—, que se imprime para que lo mire una
+persona.
+
+**Dos hallazgos del camino, los dos sobre lecturas mías equivocadas:**
+
+1. Declaré que el PDF de especificaciones del QR era un escaneo. No lo era: usa códigos de
+   glifo de un byte y mi extractor los leía de a dos. Una herramienta que falla en silencio
+   produjo una conclusión sobre el mundo que quedó escrita en el registro de fuentes.
+2. El revisor de comprobantes marcaba toda Factura A emitida a un monotributista. Al archivar
+   la RG 1415 resultó que su art. 15 inc. a) —desde el 2021-07-01— la habilita expresamente.
+   El control no solo pasó a tener fundamento: cambió de contenido.
 
 **Diferencia con el pliego, deliberada y explicada:** conviene construir el motor contable (5) y
 los libros (6, 7) **antes** del clasificador de IA (4). Motivo: el clasificador necesita un destino

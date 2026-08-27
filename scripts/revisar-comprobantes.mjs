@@ -21,16 +21,26 @@
  * siempre — hasta el archivo donde "Importe" era el total. Sin `--mapeo` el
  * script imprime los encabezados que encontró y una plantilla, y no procesa nada.
  *
- * ## Las tres categorías de la salida, y por qué están separadas
+ * ## Las cuatro categorías de la salida, y por qué están separadas
  *
  * 1. **Errores de forma**: dígito verificador de CUIT, aritmética, duplicados.
  *    Son verificables sin ninguna norma.
- * 2. **Lo que dice el motor de IVA**: alícuota identificada contra `tax_rates`
- *    vigentes a la fecha del comprobante, y estado del crédito fiscal.
- * 3. **Observaciones SIN fuente archivada**: cosas que se ven mal y que este
- *    repositorio **no puede afirmar** que estén mal, porque la norma que las
- *    regula no está archivada. Van aparte y dicen qué falta archivar. Mezclarlas
- *    con las dos primeras convertiría una sospecha en un veredicto.
+ * 2. **Hallazgos con fuente archivada**: cada uno cita su artículo. Hoy es la
+ *    letra del comprobante contra la condición del receptor, por la RG 1415.
+ * 3. **Lo que dice el motor de IVA**: alícuota identificada contra `tax_rates`
+ *    vigentes a la fecha del comprobante.
+ * 4. **Observaciones SIN fuente archivada**: cosas que se ven mal y que este
+ *    repositorio **no puede afirmar** que estén mal. Van aparte. Mezclarlas con
+ *    las anteriores convertiría una sospecha en un veredicto.
+ *
+ * La 2 nació en la 4. Cuando se archivó la RG 1415, el control no solo cambió de
+ * lista: **cambió de contenido**. La versión anterior marcaba toda Factura A
+ * emitida a un monotributista, y el art. 15 inc. a) —texto vigente desde el
+ * 2021-07-01— la habilita expresamente. Se estaba señalando como sospechoso
+ * justamente lo que la norma permite.
+ *
+ * Es el §2 en un caso concreto: la regla que uno "sabe" suele ser la de hace
+ * unos años, y suena igual de razonable.
  */
 
 import { readFileSync } from 'node:fs';
@@ -205,7 +215,83 @@ if (DATABASE_URL !== '') {
 
 const forma = [];
 const iva = [];
+const normativos = [];
 const sinFuente = [];
+
+/**
+ * Qué letra corresponde según la condición del receptor.
+ *
+ * **RG 1415/2003, Capítulo E, arts. 15 y 16** — archivada con hash el 2026-08-26.
+ * Hasta ese día este control vivía en la lista de "observaciones sin fuente", y
+ * archivar la norma no solo lo fundó: lo corrigió.
+ *
+ * El art. 15 inc. a), en su texto vigente desde el 2021-07-01, dice que la letra
+ * A corresponde a operaciones con otros responsables inscriptos **o con sujetos
+ * adheridos al Monotributo**. La versión anterior de este script marcaba toda
+ * Factura A emitida a un monotributista como observación — es decir, señalaba
+ * como sospechoso justamente lo que la norma habilita.
+ *
+ * Es el argumento entero del §2 en un caso concreto: la regla que yo "sabía" era
+ * la de antes de 2021, y sonaba igual de razonable.
+ *
+ * ## Por qué el control no corre para comprobantes anteriores al 2021-07-01
+ *
+ * El texto archivado es un **texto actualizado**. Sus notas dicen que la RG
+ * 5003/2021 sustituyó el inciso a) y que la RG 5198/2022 sustituyó el art. 16,
+ * pero **no transcriben lo que decían antes**. Aplicar la regla de hoy a un
+ * comprobante de 2019 es el §6 al revés.
+ */
+const VIGENCIA_ART_15 = '2021-07-01';
+
+const RECEPTORES_ADMITIDOS = {
+  // Art. 15 inc. a): responsables inscriptos o adheridos al Monotributo.
+  A: new Set(['RESPONSABLE_INSCRIPTO', 'MONOTRIBUTO']),
+  // Art. 15 inc. b): exentos, no responsables, consumidores finales y no categorizados.
+  B: new Set(['EXENTO', 'CONSUMIDOR_FINAL', 'NO_CATEGORIZADO']),
+};
+
+function controlarLetra(tipo, r) {
+  if (tipo === undefined) return [];
+
+  // El art. 16 define quién EMITE clase C —exentos y monotributistas— y no pone
+  // condición sobre el receptor. No hay nada que controlar de este lado.
+  const admitidos = RECEPTORES_ADMITIDOS[tipo.letra];
+  if (admitidos === undefined) return [];
+
+  if (r.condicionReceptor === 'DESCONOCIDA') {
+    return [
+      {
+        codigo: 'CONDICION_RECEPTOR_DESCONOCIDA',
+        detalle: `${tipo.descripcion}: el archivo no declara la condición del receptor, así que la letra no se puede controlar.`,
+        fundamento: 'RG 1415/2003, art. 15',
+      },
+    ];
+  }
+
+  if (r.fecha < VIGENCIA_ART_15) {
+    return [
+      {
+        codigo: 'LETRA_NO_DETERMINABLE',
+        detalle:
+          `Comprobante del ${r.fecha}: el art. 15 inc. a) fue sustituido por la RG 5003/2021 con ` +
+          `vigencia ${VIGENCIA_ART_15}, y el texto anterior no está transcripto en el documento archivado.`,
+        fundamento: 'RG 1415/2003, art. 15 — texto actualizado sin antecedentes',
+      },
+    ];
+  }
+
+  if (admitidos.has(r.condicionReceptor)) return [];
+
+  return [
+    {
+      codigo: 'LETRA_NO_CORRESPONDE',
+      detalle:
+        `${tipo.descripcion} emitida a un receptor ${r.condicionReceptor}. La letra ${tipo.letra} ` +
+        `corresponde a: ${[...admitidos].join(', ')}.`,
+      fundamento: `RG 1415/2003, art. 15 inc. ${tipo.letra === 'A' ? 'a)' : 'b)'}`,
+    },
+  ];
+}
 
 const vistos = new Map();
 const identificadas = new Map();
@@ -270,29 +356,10 @@ for (const r of registros) {
     }
   }
 
-  // --- 4. Observaciones sin fuente archivada --------------------------------
-  //
-  // Qué letra de comprobante corresponde a cada condición del receptor lo fija
-  // la RG 1415, que NO está archivada en este repositorio. Se observa el hecho y
-  // se dice que no hay fuente: afirmarlo como incumplimiento sería exactamente lo
-  // que el §30 prohíbe.
-  if (tipo !== undefined) {
-    if (tipo.letra === 'A' && r.condicionReceptor !== 'RESPONSABLE_INSCRIPTO') {
-      sinFuente.push({
-        id,
-        codigo: 'LETRA_Y_CONDICION',
-        detalle: `${tipo.descripcion} emitida a un receptor ${r.condicionReceptor}.`,
-      });
-    }
-    if (tipo.letra === 'B' && r.condicionReceptor === 'RESPONSABLE_INSCRIPTO') {
-      sinFuente.push({
-        id,
-        codigo: 'LETRA_Y_CONDICION',
-        detalle: `${tipo.descripcion} emitida a un Responsable Inscripto.`,
-      });
-    }
-  }
+  // --- 4. La letra del comprobante, según la RG 1415 -------------------------
+  for (const hallazgo of controlarLetra(tipo, r)) normativos.push({ id, ...hallazgo });
 
+  // --- 5. Observaciones sin fuente archivada --------------------------------
   if (r.razonSocialEmisor === r.razonSocialReceptor && r.cuitEmisor !== r.cuitReceptor) {
     sinFuente.push({
       id,
@@ -326,6 +393,21 @@ console.log(`Emisores distintos por CUIT: ${new Set(registros.map((r) => r.cuitE
 console.log(`Emisores distintos por razón social: ${new Set(registros.map((r) => r.razonSocialEmisor)).size}`);
 
 resumir('Errores de forma (verificables sin ninguna norma)', forma);
+
+// Los hallazgos con norma detrás van con su artículo: es la diferencia entre
+// "esto se ve raro" y "esto incumple el art. 15 inc. a)".
+console.log('');
+console.log(`Hallazgos con fuente archivada: ${normativos.length}`);
+if (normativos.length > 0) {
+  const porCodigo = new Map();
+  for (const h of normativos) porCodigo.set(h.codigo, [...(porCodigo.get(h.codigo) ?? []), h]);
+  for (const [codigo, lista] of porCodigo) {
+    console.log(`  ${codigo}: ${lista.length}  (${lista[0].fundamento})`);
+    for (const h of lista.slice(0, 4)) console.log(`      ${h.id} — ${h.detalle}`);
+    if (lista.length > 4) console.log(`      … y ${lista.length - 4} más`);
+  }
+}
+
 console.log('');
 console.log(`Comprobantes con IVA discriminado: ${conIva} de ${registros.length}`);
 for (const [etiqueta, n] of identificadas) {
@@ -348,10 +430,10 @@ if (sinFuente.length > 0) {
     if (lista.length > 3) console.log(`      … y ${lista.length - 3} más`);
   }
   console.log('');
-  console.log('  Estas NO son incumplimientos declarados: qué letra corresponde a cada condición');
-  console.log('  del receptor lo fija la RG 1415, que este repositorio no tiene archivada. Se');
-  console.log('  informa el hecho y se dice qué falta. Afirmar la infracción sin la norma es lo');
-  console.log('  que el §30 prohíbe, y es la razón por la que van en su propia lista.');
+  console.log('  Estas NO son incumplimientos declarados: no hay norma archivada que las funde.');
+  console.log('  Se informa el hecho y nada más. Afirmar la infracción sin la norma es lo que el');
+  console.log('  §30 prohíbe, y es la razón por la que tienen su propia lista, separada de los');
+  console.log('  hallazgos que sí citan un artículo.');
 }
 
 if (catalogo.size > 0 && [...catalogo.values()].some((t) => t.vigencia_verificada === false)) {

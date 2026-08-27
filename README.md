@@ -5,7 +5,7 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > **Estado: las 15 fases del roadmap están construidas.**
 >
 > - ✅ Documentación técnica y arquitectura (FASE 0)
-> - ✅ **25 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
+> - ✅ **30 documentos normativos oficiales archivados con SHA-256** (FASE 1a)
 > - ✅ **Monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI** (FASE 1b)
 > - ✅ **API con autenticación, MFA, RBAC granular y tenancy** (FASE 2)
 > - ✅ **Integración con ARCA desacoplada, con mocks y datos de prueba** (FASE 3a)
@@ -25,7 +25,11 @@ Plataforma de contabilidad asistida por IA para empresas y estudios contables ar
 > - ✅ **Habilitaciones de ARCA relevadas y vigilancia normativa que produce candidatos** (FASE 13)
 > - ✅ **Auditoría determinística y respondedor que no puede inventar un número** (FASE 14)
 > - ✅ **Sandbox que exige prueba de ser un sandbox en vez de sospechar de producción** (FASE 15)
-> - ✅ **30 migraciones aplicadas y 715/715 tests en verde contra PostgreSQL 18.6**
+> - ✅ **Generación de comprobantes con CAE real en homologación**, con el QR de la RG 4892
+>   incrustado y su especificación verificada contra el ejemplo del documento oficial
+>   (`npm run comprobantes:generar`). Vive en un paquete aparte que el lint impide que la
+>   API alcance: emitir es un acto fiscal, consultar no
+> - ✅ **30 migraciones aplicadas y 732/732 tests en verde contra PostgreSQL 18.6**
 > - 🟡 **Único criterio de salida abierto** — FASE 3 espera el corpus de 100 comprobantes reales
 >   anonimizados. La herramienta de anonimización de CUIT ya está
 >   (`npm run cuit:anonimizar`); lo que falta son los comprobantes, que son datos del estudio y no
