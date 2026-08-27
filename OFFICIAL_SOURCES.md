@@ -4,8 +4,10 @@
 > Registro maestro de fuentes normativas. Cada afirmación lleva un **nivel de verificación**.
 > El sistema no puede usar como regla activa nada que no esté en nivel `V1`.
 >
-> **Estado: 30 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
-> SHA-256.** Los siete últimos se archivaron el **2026-08-26**: la Ley de IVA (t.o. 1997) y las
+> **Estado: 32 documentos oficiales archivados en `docs/normative-sources/originals/` con hash
+> SHA-256.** Los dos últimos, el **2026-08-27**: los textos actualizados de la **RG 3561/2013**
+> (controladores fiscales) y la **RG 5198/2022** ("Facturador"), que cerraron el último gap del
+> régimen de comprobantes. Los siete anteriores se archivaron el **2026-08-26**: la Ley de IVA (t.o. 1997) y las
 > fichas de los Decretos 280/97 y 841/84, la Res. P. CPCECABA 460/2024 —que cerraron los tres
 > bloqueos de fuente del roadmap— y después la ficha de la RG 4892/2020, las especificaciones del
 > QR y el WSDL del wsfev1. Índice completo en `docs/normative-sources/registro-de-descargas.csv`.
@@ -401,6 +403,42 @@ silencio adentro del código.
 
 ---
 
+## 5quater. Las cuatro normas del régimen de comprobantes · `V1` — **completo**
+
+Con la RG 3561/2013 y la RG 5198/2022 archivadas el **2026-08-27**, las cuatro normas que la
+RG 5616/2024 modifica están las cuatro en el archivo, con hash.
+
+### Lo que confirmó la RG 5198
+
+La ficha de la RG 1415 anotaba, de sus notas al pie, que *"el art. 16 lo sustituyó la RG 5198/2022
+con vigencia 2022-06-01"*. Al archivar la 5198 se pudo verificar con su texto, y además precisar
+**cuál artículo** hace la sustitución, que la nota de la 1415 no dice:
+
+- **Art. 10, punto 2** sustituye el art. 16 de la RG 1415.
+- **Art. 14** fija la vigencia: *"entrarán en vigencia el día 1 de junio de 2022"*. Coincide.
+
+El texto sustituido dice que llevan letra **C** los comprobantes del art. 8° inc. a) —excepto la
+factura de exportación y los tiques de Controlador Fiscal— emitidos por **a)** sujetos exentos o no
+responsables ante el IVA y **b)** adheridos al Monotributo.
+
+**La letra C se define por el emisor, no por el receptor.** Eso funda algo que en
+`revisar-comprobantes.mjs` ya estaba escrito como decisión y ahora tiene texto detrás:
+`controlarLetra()` no controla nada del lado del receptor para la clase C, porque la norma no pone
+condición sobre el receptor. Es una abstención fundada, no un olvido.
+
+### Una diferencia de método entre las dos
+
+La RG 3561 trae sección **"Antecedentes Normativos"** y **sí transcribe los textos anteriores** de
+los artículos sustituidos. La RG 1415 no. Por eso el control de letra no corre para comprobantes
+anteriores al 2021-07-01 —no sabemos qué decía el art. 15 antes— y sobre la 3561, en cambio, sí se
+podría reconstruir la historia si hiciera falta.
+
+Dato cruzado que aparece ahí: el art. 22 pto. 1 de la RG 5003/2021 sustituyó el art. 19 de la
+RG 3561 con vigencia **2021-07-01**, la misma fecha en que esa RG sustituyó el art. 15 inc. a) de la
+RG 1415. Las dos modificaciones son del mismo acto y del mismo día.
+
+---
+
 ## 5bis. Régimen del Libro de IVA Digital · `V1`
 
 ### RG AFIP 4597/2019 — texto actualizado
@@ -485,7 +523,7 @@ El Boletín Oficial sirve para **datar y citar** el aviso; no para obtener el te
 | 6 | Régimen de ajuste por inflación (contable y fiscal) | Reexpresión | **Gap declarado** |
 | 7 | CNV T.O. de Normas; marco contable BCRA; INAES | Entes de esos regímenes | `V2` |
 | 8 | Manuales ARCA restantes (wsmtxca, wsfexv1, padrón a4/a10) | Integraciones de FASE 13 | `V2` |
-| 9 | RG 3561 y 5198 (textos actualizados). **RG 1415 y RG 4291 archivadas el 2026-08-26** | Reglas finas de comprobantes | `V2` las dos que faltan |
+| ~~9~~ | ~~RG 3561 y 5198~~ **Cerrado el 2026-08-27.** Con RG 1415 y RG 4291 (2026-08-26), las cuatro normas del régimen de comprobantes están archivadas | Reglas finas de comprobantes | ✅ `V1` |
 | 10 | Vigencias de la tabla de tipos de comprobante (`FEParamGetTiposCbte`) | Interpretar comprobantes por fecha | **Gap declarado** — ver 8.1 |
 | 11 | Antecedentes normativos del art. 28 de la Ley de IVA (textos anteriores al 18/11/2002) | Alícuotas para hechos imponibles previos a esa fecha | **Gap declarado** |
 

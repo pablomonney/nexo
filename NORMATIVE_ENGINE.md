@@ -186,7 +186,6 @@ dependiente finja estar respaldada.
 | Actos de adopción de consejos distintos de CABA | Empresas de otras jurisdicciones. El motor **rechaza resolver** sin la adopción cargada |
 | Régimen de ajuste por inflación (contable y fiscal) | Reexpresión en moneda homogénea |
 | Percepciones, retenciones e IIBB por régimen y jurisdicción | Módulos fiscales correspondientes |
-| Textos actualizados de RG 1415, 3561, 4291 y 5198 | Reglas finas de validación de comprobantes |
 
 Un gap abierto no rompe el sistema: **degrada la funcionalidad a "requiere revisión profesional"**,
 que es el comportamiento correcto según el §52.

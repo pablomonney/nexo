@@ -8,7 +8,7 @@
 | Fase | Estado |
 |------|--------|
 | **FASE 0 — Investigación normativa y arquitectura** | ✅ **Entregada** |
-| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 30 documentos oficiales archivados con hash |
+| **FASE 1a — Carga normativa `V1`** | ✅ **Entregada** — 32 documentos oficiales archivados con hash |
 | **FASE 1b — Fundaciones técnicas** | ✅ **Entregada** — monorepo, esquema SQL con los candados, `@aai/shared`, puertas de CI |
 | **FASE 2 — Empresas, usuarios, plan de cuentas** | ✅ **Entregada** — API con autenticación, MFA, RBAC y tenancy |
 | **FASE 3 — Ingesta y lectura de comprobantes** | 🟡 **Construida** — ARCA, ingesta, extracción y duplicados operativos. El criterio de salida espera el corpus real |
@@ -38,7 +38,7 @@ seguridad y pruebas, propuesta de MVP.
 
 ## FASE 1a — Carga normativa `V1` ✅
 
-30 documentos oficiales descargados, validados y archivados con SHA-256 en
+32 documentos oficiales descargados, validados y archivados con SHA-256 en
 `docs/normative-sources/originals/`, indexados en `registro-de-descargas.csv`.
 
 Resultado sustantivo, más allá del archivado:
@@ -51,7 +51,7 @@ Resultado sustantivo, más allá del archivado:
 - Dos hallazgos de método: el BO no sirve como fuente de texto; la documentación técnica de un
   organismo no prueba vigencia.
 
-**Criterio de salida:** cumplido. `sha256sum -c ../checksums.sha256` verifica los 21 archivos.
+**Criterio de salida:** cumplido. `sha256sum -c ../checksums.sha256` verifica los 32 archivos.
 
 **Deuda declarada:** actos de adopción de consejos fuera de CABA, ajuste por inflación,
 percepciones/retenciones e IIBB. Ver `OFFICIAL_SOURCES.md` §8.

@@ -64,7 +64,7 @@ Estado al 2026-08-26, tras la descarga y archivado de 25 documentos oficiales.
 | Primera aplicación de la NUA | Res. JG FACPCE 660/2026 + Apéndice A | Ente en transición | ✅ `V1` |
 | Transición desde NIIF a la NUA | RT 59 art. 4° (sustituye punto 7 de RT 26) | Ente que abandona NIIF | ✅ `V1` |
 | Categoría de ente por ingresos | Tabla de montos FACPCE (act. 2025-11) | Ingresos del ejercicio | ✅ `V1` — parámetro versionado |
-| Comprobantes válidos y CAE | RG 1415 (arts. 15 a 17); RG 4291; RG 5616/2024; RG 5866/2026 | Tipo de comprobante, condición del receptor, fecha | ✅ `V1` — falta el T.O. de 3561 y 5198 |
+| Comprobantes válidos y CAE | RG 1415 (arts. 15 a 17); RG 3561; RG 4291; RG 5198; RG 5616/2024; RG 5866/2026 | Tipo de comprobante, condición del receptor, fecha | ✅ `V1` — completo: los T.O. de 3561 y 5198 se archivaron el 2026-08-27 |
 | Condición IVA del receptor | RG 5616/2024 art. 5° | Fecha (WS obligatorio 15/04/2025) | ✅ `V1` — conflicto cerrado |
 | Cronograma de nuevos obligados | RG 5866/2026 | Actividad, fecha (hasta 01/03/2027) | ✅ `V1` |
 | Constatación de comprobantes recibidos | `wscdcv1` | Habilitación del CUIT | ✅ `V1` |
