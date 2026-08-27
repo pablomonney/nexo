@@ -254,7 +254,21 @@ console.log(`Último autorizado en ${ptoVta}/${cbteTipo}: ${ultimo}. Se sigue de
 // --- El lote ----------------------------------------------------------------
 mkdirSync(documentos, { recursive: true });
 
-const planeados = generarComprobantes({ cantidad, cbteTipo, desdeNumero: ultimo + 1 });
+// El piso de fecha. `FECompUltimoAutorizado` da el número y nada más, pero la
+// fecha tampoco puede retroceder dentro de un punto de venta: si el último
+// autorizado es del 25/08, un comprobante nuevo del 23/08 se rechaza con 10016.
+// En un punto de venta virgen no hay piso, y eso no es un error.
+const fechaPiso = ultimo === 0 ? undefined : await cliente.fechaDeComprobante(auth, ptoVta, cbteTipo, ultimo);
+if (fechaPiso !== undefined && fechaPiso !== null) {
+  console.log(`Fecha del último autorizado: ${fechaPiso}. Ninguno nuevo puede ser anterior.`);
+}
+
+const planeados = generarComprobantes({
+  cantidad,
+  cbteTipo,
+  desdeNumero: ultimo + 1,
+  ...(fechaPiso === null || fechaPiso === undefined ? {} : { fechaMinima: fechaPiso }),
+});
 const autorizados = [];
 const verdad = [];
 const rechazados = [];

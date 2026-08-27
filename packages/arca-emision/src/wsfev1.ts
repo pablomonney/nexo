@@ -21,6 +21,7 @@ import type {
   RespuestaComprobante,
   RespuestaLote,
   TipoDeComprobanteArca,
+  CondicionIvaReceptor,
 } from './contracts.js';
 import type { PermisoDeEmision } from './homologacion.js';
 
@@ -150,6 +151,78 @@ export class ClienteWsfev1 {
       FchDesde: textoODesconocido(n['FchDesde']),
       FchHasta: textoODesconocido(n['FchHasta']),
     }));
+  }
+
+  /**
+   * `FEParamGetCondicionIvaReceptor` — condiciones de IVA admitidas por clase.
+   *
+   * La RG 5616/2024 hizo obligatorio declarar la condición frente al IVA del
+   * receptor, y ARCA rechaza con código 10246 el comprobante que no la trae.
+   * Los valores no se cablean: los enumera el organismo, por clase de
+   * comprobante, y una clase C no admite las mismas que una A.
+   *
+   * `ClaseCmp` es la letra: `'A'`, `'B'`, `'C'`… Sin ella devuelve todas.
+   */
+  async condicionesIvaReceptor(
+    auth: Autenticacion,
+    claseCmp?: string,
+  ): Promise<readonly CondicionIvaReceptor[]> {
+    const r = await this.#llamar(
+      'FEParamGetCondicionIvaReceptor',
+      autenticacionXml(auth) +
+        (claseCmp === undefined ? '' : `<ar:ClaseCmp>${escapar(claseCmp)}</ar:ClaseCmp>`),
+    );
+
+    const errores = listaDe(r['Errors'], 'Err').map(comoError);
+    if (errores.length > 0) {
+      throw new Error(
+        `FEParamGetCondicionIvaReceptor: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join(' · ')}`,
+      );
+    }
+
+    return listaDe(r['ResultGet'], 'CondicionIvaReceptor').map((n) => ({
+      Id: Number(n['Id']),
+      Desc: n['Desc'] === undefined || n['Desc'] === null ? '' : String(n['Desc']),
+      Cmp_Clase: n['Cmp_Clase'] === undefined || n['Cmp_Clase'] === null ? '' : String(n['Cmp_Clase']),
+    }));
+  }
+
+  /**
+   * `FECompConsultar` — la fecha del último comprobante ya autorizado.
+   *
+   * Hace falta porque `FECompUltimoAutorizado` devuelve el número y nada más, y
+   * la numeración no es la única cosa que tiene que avanzar: dentro de un punto
+   * de venta y un tipo, **la fecha tampoco puede retroceder**. Un lote que
+   * arranca con fecha anterior a la del último autorizado se rechaza con el
+   * código 10016, que nombra "numero o fecha" sin decir cuál de las dos.
+   *
+   * Devuelve `null` si el comprobante no existe: en un punto de venta virgen no
+   * hay piso de fecha, y eso no es un error.
+   */
+  async fechaDeComprobante(
+    auth: Autenticacion,
+    ptoVta: number,
+    cbteTipo: number,
+    cbteNro: number,
+  ): Promise<string | null> {
+    const r = await this.#llamar(
+      'FECompConsultar',
+      autenticacionXml(auth) +
+        '<ar:FeCompConsReq>' +
+        `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+        `<ar:CbteNro>${cbteNro}</ar:CbteNro>` +
+        `<ar:PtoVta>${ptoVta}</ar:PtoVta>` +
+        '</ar:FeCompConsReq>',
+    );
+
+    // Un comprobante inexistente vuelve como error, no como respuesta vacía. No
+    // se propaga: para quien pregunta "¿qué fecha tiene?", la respuesta honesta
+    // es "no hay tal comprobante", y eso es `null`.
+    if (listaDe(r['Errors'], 'Err').length > 0) return null;
+
+    const resultado = (r['ResultGet'] ?? {}) as Record<string, unknown>;
+    const fecha = resultado['CbteFch'];
+    return fecha === undefined || fecha === null ? null : String(fecha);
   }
 
   /** `FECAESolicitar`. Un solo comprobante por llamada, por elección — ver el script. */

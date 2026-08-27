@@ -94,6 +94,19 @@ export interface ErrorArca {
  * sigue vigente. Se modela `null` y no una fecha lejana, porque "no tiene fecha
  * de baja" y "se da de baja en el año 9999" no son la misma afirmación.
  */
+/**
+ * `CondicionIvaReceptor` de `FEParamGetCondicionIvaReceptor`, con los nombres del
+ * WSDL — incluido `Cmp_Clase`, con guion bajo, que es como lo publica el servicio.
+ *
+ * Cada condición vale para ciertas clases de comprobante: la lista de una
+ * Factura C no es la de una A. Por eso los valores se preguntan y no se cablean.
+ */
+export interface CondicionIvaReceptor {
+  readonly Id: number;
+  readonly Desc: string;
+  readonly Cmp_Clase: string;
+}
+
 export interface TipoDeComprobanteArca {
   readonly Id: number;
   readonly Desc: string;

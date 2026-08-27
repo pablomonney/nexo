@@ -67,7 +67,7 @@ function generador(semilla) {
 const aaaammdd = (fecha) =>
   `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, '0')}${String(fecha.getDate()).padStart(2, '0')}`;
 
-export function generarComprobantes({ cantidad, cbteTipo, desdeNumero, semilla = 'homologacion', hoy = new Date() }) {
+export function generarComprobantes({ cantidad, cbteTipo, desdeNumero, fechaMinima, semilla = 'homologacion', hoy = new Date() }) {
   if (!CLASE_C.has(cbteTipo)) {
     throw new Error(
       `Este generador solo arma comprobantes clase C (${[...CLASE_C].join(', ')}), y se pidió ${cbteTipo}. ` +
@@ -77,10 +77,69 @@ export function generarComprobantes({ cantidad, cbteTipo, desdeNumero, semilla =
   }
 
   const azar = generador(semilla);
+
+  /**
+   * Las fechas se sortean **todas juntas y se ordenan** antes de repartirlas.
+   *
+   * Dentro de un punto de venta y un tipo, ARCA exige que la fecha no retroceda
+   * al avanzar la numeración. Sortear una fecha por comprobante dentro del bucle
+   * produce series como 25/08 → 23/08, y el organismo las rechaza con el código
+   * **10016** — "El numero o fecha del comprobante no se corresponde con el
+   * proximo a autorizar"—, que nombra las dos cosas y no dice cuál de las dos es.
+   *
+   * Pasó en la primera corrida real: el comprobante 1 entró con fecha 25/08 y el
+   * 2 rebotó. Ordenarlas conserva la variedad de fechas, que es lo que le
+   * interesa al lector de documentos, y respeta la correlatividad, que es lo que
+   * le interesa a ARCA.
+   */
+  // `fechaMinima` (AAAAMMDD) es la fecha del último comprobante ya autorizado en
+  // este punto de venta. Ninguna fecha nueva puede ser anterior. Sin ese piso,
+  // un segundo lote sobre un punto de venta ya usado vuelve a chocar con 10016.
+  // El piso se arma en hora **local**, no con `Date.UTC`, porque `aaaammdd` usa
+  // getters locales. Mezclarlos hace que en UTC−3 un piso de "20260827" se
+  // imprima como 26/08 — un día menos, y de vuelta el rechazo que se quería
+  // evitar. Es el mismo error de zona horaria que `CalendarDate` existe para
+  // impedir en el resto del sistema.
+  const piso =
+    fechaMinima === undefined
+      ? 0
+      : new Date(
+          Number(fechaMinima.slice(0, 4)),
+          Number(fechaMinima.slice(4, 6)) - 1,
+          Number(fechaMinima.slice(6, 8)),
+        ).getTime();
+
+  const fechas = Array.from({ length: cantidad }, () => {
+    const sorteada = hoy.getTime() - Math.floor(azar() * 5) * 86_400_000;
+    return new Date(Math.max(sorteada, piso));
+  }).sort((a, b) => a.getTime() - b.getTime());
+
   const comprobantes = [];
 
+  const hoyTexto = aaaammdd(hoy);
+
   for (let i = 0; i < cantidad; i += 1) {
-    const plantilla = CONCEPTOS[Math.floor(azar() * CONCEPTOS.length)];
+    /**
+     * La fecha elige el concepto, y no al revés.
+     *
+     * Observado contra homologación el 2026-08-27, con pruebas controladas sobre
+     * el mismo número y el mismo día: un comprobante de **productos**
+     * (`Concepto` 1) con fecha anterior a hoy se rechaza con el código 10016; el
+     * mismo comprobante con fecha de hoy entra, y uno de **servicios**
+     * (`Concepto` 2) con fecha retroactiva también entra.
+     *
+     * No se cita una norma ni un manual: el manual del wsfev1 está archivado
+     * como imagen y no se pudo leer. Esto es comportamiento observado, con la
+     * fecha en que se observó, y así queda dicho.
+     *
+     * Como el generador quiere variedad de fechas —el lector de documentos tiene
+     * que ver más de una—, se resuelve al revés de lo intuitivo: primero la
+     * fecha, y después un concepto compatible con esa fecha.
+     */
+    const fechaTexto = aaaammdd(fechas[i]);
+    const admitidos =
+      fechaTexto === hoyTexto ? CONCEPTOS : CONCEPTOS.filter((c) => c.concepto !== 1);
+    const plantilla = admitidos[Math.floor(azar() * admitidos.length)];
 
     // Tres órdenes de magnitud, con centavos que no son redondos.
     const magnitud = [1_000, 10_000, 100_000][Math.floor(azar() * 3)];
@@ -104,8 +163,9 @@ export function generarComprobantes({ cantidad, cbteTipo, desdeNumero, semilla =
       total += subtotalCentavos;
     }
 
-    // ARCA no acepta comprobantes con fecha muy anterior a hoy. Los últimos días.
-    const fecha = new Date(hoy.getTime() - Math.floor(azar() * 5) * 86_400_000);
+    // Ya sorteada y ordenada arriba: ARCA no acepta fecha muy anterior a hoy, ni
+    // que retroceda respecto del comprobante previo.
+    const fecha = fechas[i];
     const requiereFechasDeServicio = plantilla.concepto === 2 || plantilla.concepto === 3;
 
     const detalle = {
@@ -126,6 +186,20 @@ export function generarComprobantes({ cantidad, cbteTipo, desdeNumero, semilla =
       ImpIVA: 0,
       MonId: 'PES',
       MonCotiz: 1,
+      // RG 5616/2024: declarar la condición del receptor frente al IVA es
+      // obligatorio. Sin esto ARCA rechaza con el código 10246, que fue lo que
+      // pasó en la primera corrida real contra homologación.
+      //
+      // El 5 no se eligió: se deduce del `DocTipo`. Con 99 —consumidor final sin
+      // identificar— la única condición coherente es "Consumidor Final". Poner
+      // cualquier otra sería declarar algo sobre un receptor que no existe.
+      //
+      // El valor sale de `FEParamGetCondicionIvaReceptor`, consultado el
+      // 2026-08-27: id 5, "Consumidor Final", clases `C/49`. Está cableado acá
+      // —y solo acá, en el generador de datos de prueba— porque estos
+      // comprobantes son inventados. Un emisor de verdad tiene que preguntarle
+      // la tabla al organismo, no confiar en este número.
+      CondicionIVAReceptorId: 5,
       ...(requiereFechasDeServicio
         ? {
             FchServDesde: aaaammdd(fecha),
