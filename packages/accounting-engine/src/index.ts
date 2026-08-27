@@ -15,3 +15,4 @@ export * from './diario-resumido.js';
 export * from './book-export.js';
 export * from './trial-balance.js';
 export * from './periods.js';
+export * from './decision-de-comprobante.js';

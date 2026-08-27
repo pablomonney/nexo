@@ -47,7 +47,8 @@
     "comprobantes:tipos": "node scripts/sincronizar-tipos-comprobante.mjs",
     "test:db": "node scripts/test-db.mjs",
     "reglas:cargar": "node scripts/cargar-reglas-contables.mjs",
-    "reglas:aprobar": "node scripts/aprobar-regla.mjs"
+    "reglas:aprobar": "node scripts/aprobar-regla.mjs",
+    "circuito:demo": "node scripts/circuito-demo.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
