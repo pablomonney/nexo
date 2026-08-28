@@ -59,6 +59,7 @@ const CHECKS = [
   ['tax_transactions', 'tt_constatacion_coherente', 'Un resultado de constatación sin procedencia no entra'],
   ['tax_transactions', 'tt_constatacion_arca_con_consulta', 'Una constatación de ARCA muestra la consulta que la produjo'],
   ['tax_transactions', 'tt_constatacion_declarada_firmada', 'Una constatación declarada lleva firma y fecha'],
+  ['accounting_decisions', 'decision_correccion_con_motivo', 'Corregir una decisión exige decir qué cambió'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -88,6 +89,8 @@ const TRIGGERS = [
   ['tax_transactions', 'tax_transactions_constatacion_coherente', 'La consulta ARCA que respalda es de esta empresa y del servicio wscdc'],
   ['tax_transactions', 'tax_transactions_constatacion_no_degrada', 'Una declaración no reemplaza una respuesta del organismo'],
   ['user_company_roles', 'user_company_roles_audit', 'Dar o quitar acceso a una empresa deja su entrada en la bitácora'],
+  ['accounting_decisions', 'accounting_decisions_supersede_coherente', 'Una corrección es de la misma empresa y del mismo comprobante'],
+  ['arca_query_log', 'arca_query_log_credencial_coherente', 'La credencial que firmó una consulta es de esa empresa'],
 ];
 
 /** Índices únicos que sostienen una unicidad de negocio. */

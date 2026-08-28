@@ -28,6 +28,7 @@
  */
 
 import { createArcaClient, parseEnvironment } from '@aai/arca';
+import { DbCapabilityStore, DbCredentialStore } from '../arca/credential-store.js';
 import { recordAudit, withCompany, type Tx } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -421,9 +422,23 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
         );
       }
 
+      // El ambiente `mock` no lleva credenciales ni capacidades: el simulador
+      // responde por sí mismo y agregarle un store lo haría contestar
+      // `SIN_CREDENCIAL` en desarrollo, que no es lo que se está simulando.
+      //
+      // Fuera de `mock` van los dos. Sin certificado vigente, el cliente real
+      // contesta `NO_VERIFICABLE / SIN_CREDENCIAL`; sin `wscdc` habilitado en
+      // WSASS, `SERVICIO_NO_HABILITADO`. Las dos son respuestas visibles y
+      // distintas de «el comprobante está mal», que es lo que importa.
+      const ambiente = parseEnvironment(config.arca.environment);
+      const credenciales = ambiente === 'mock' ? undefined : new DbCredentialStore(actorId);
+
       const cliente = createArcaClient({
-        environment: parseEnvironment(config.arca.environment),
+        environment: ambiente,
         timeoutMs: config.arca.timeoutMs,
+        ...(credenciales === undefined
+          ? {}
+          : { credentials: credenciales, capabilities: new DbCapabilityStore(actorId) }),
       });
 
       const comenzo = Date.now();
@@ -451,8 +466,8 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
         const consulta = await tx.query<{ id: string }>(
           `INSERT INTO arca_query_log
              (company_id, environment, service, operation, request_key, outcome, reason,
-              response_raw, duration_ms)
-           VALUES ($1, $2, 'wscdc', 'ComprobanteConstatar', $3, $4, $5, $6::jsonb, $7)
+              response_raw, duration_ms, credential_id)
+           VALUES ($1, $2, 'wscdc', 'ComprobanteConstatar', $3, $4, $5, $6::jsonb, $7, $8)
            RETURNING id`,
           [
             tenant.companyId,
@@ -467,6 +482,9 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
               consultadoEn: resultado.consultadoEn,
             }),
             duracion,
+            // Con qué certificado se firmó, para poder acotar el alcance de uno
+            // comprometido. Nulo en mock, donde no se firma nada.
+            credenciales?.ultimaCredencialUsada ?? null,
           ],
         );
 

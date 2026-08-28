@@ -20,17 +20,19 @@ import {
   MockOcrEngine,
   NullOcrEngine,
   claveEsDeEmpresa,
+  extraer,
   ingerir,
   paginaDeTexto,
   type CampoExtraido,
   type HuellaDocumento,
   type OcrEngine,
+  type TipoContenido,
 } from '@aai/document-engine';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { badRequest, conflict, notFound } from '../http/errors.js';
+import { badRequest, conflict, conflictoTipado, notFound } from '../http/errors.js';
 
 const store = new FilesystemDocumentStore(config.documents.storagePath);
 
@@ -403,6 +405,143 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       return actualizado.rows[0];
     });
   });
+
+  /**
+   * Volver a extraer sobre un documento ya archivado.
+   *
+   * ## Por qué hace falta
+   *
+   * La extracción corre **una sola vez**, al subir. Con el motor nulo —el estado
+   * por defecto, sin OCR configurado— eso significa que todo documento cargado
+   * hasta hoy quedó con una extracción vacía y `SIN_MOTOR_OCR`, y que configurar
+   * un motor mañana no serviría de nada para lo ya archivado. Un estudio que
+   * cargó seiscientas facturas tendría que volver a subirlas, y el candado de
+   * duplicados —correctamente— no se lo permitiría.
+   *
+   * ## Lo que NO cambia
+   *
+   * La extracción anterior **no se pisa**: se agrega otra. `document_extractions`
+   * admite varias por documento y `GET /documents/:id` las devuelve de la más
+   * nueva a la más vieja. Así se puede comparar qué leyó cada motor, que es
+   * justamente lo que uno quiere mirar cuando cambia de motor.
+   *
+   * Y las correcciones manuales tampoco: viven en la extracción en la que se
+   * hicieron. La lectura nueva no las contradice ni las borra; queda al lado.
+   *
+   * ## OCR ≠ verdad
+   *
+   * Nada de lo que sale de acá es un hecho fiscal. Cada campo se guarda con su
+   * `method` —`OCR`, `XML`, `REGEX`— y su confianza, y ninguno de esos valores
+   * puede convertirse solo en una `tax_transaction`: los importes los declara
+   * una persona y el sistema los cruza contra lo leído, cortando si difieren.
+   * Que un motor lea `121000.00` no lo hace cierto; lo hace *legible*.
+   */
+  app.post('/documents/:documentId/extract', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    // Mismo permiso que subir: volver a leer un documento propio es parte de
+    // cargarlo, no un acto contable aparte.
+    requirePermission(tenant, 'document:upload');
+    const auth = requireAuth(request);
+    const actorId = `user:${auth.user.userId}`;
+    const params = z.object({ documentId: z.string().uuid() }).parse(request.params);
+
+    const documento = await withCompany({ companyId: tenant.companyId, actorId }, (tx) =>
+      tx.query<{ id: string; storage_key: string; content_type: string }>(
+        'SELECT id, storage_key, content_type FROM documents WHERE id = $1',
+        [params.documentId],
+      ),
+    );
+    if (documento.rowCount === 0) throw notFound('Documento no encontrado');
+
+    let bytes: Buffer;
+    try {
+      bytes = await store.get(tenant.companyId, documento.rows[0]!.storage_key);
+    } catch {
+      throw conflictoTipado(
+        'ARCHIVO_NO_DISPONIBLE',
+        'El documento está registrado pero su archivo no está en el almacén. No se inventa una ' +
+          'extracción sobre un contenido que no se pudo leer.',
+      );
+    }
+
+    const extraccion = await extraer(
+      bytes,
+      documento.rows[0]!.content_type as TipoContenido,
+      { store, ocr: motorOcr(), maxBytes: config.documents.maxBytes },
+    );
+
+    return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+      const fila = await tx.query<{ id: string }>(
+        `INSERT INTO document_extractions
+           (company_id, document_id, engine, engine_version, available, unavailable_reason,
+            overall_confidence, raw_payload, finished_at, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
+         RETURNING id`,
+        [
+          tenant.companyId,
+          params.documentId,
+          extraccion.motor,
+          extraccion.motorVersion,
+          extraccion.disponible,
+          extraccion.motivoNoDisponible ?? null,
+          extraccion.disponible ? extraccion.confianzaGlobal : null,
+          extraccion.payloadCrudo === undefined ? null : JSON.stringify(extraccion.payloadCrudo),
+          actorId,
+        ],
+      );
+      const extractionId = fila.rows[0]!.id;
+
+      for (const campo of extraccion.campos) {
+        await insertarCampo(tx, tenant.companyId, extractionId, campo);
+      }
+
+      // El estado del documento sube si la lectura sirvió, y no baja si no: un
+      // documento que ya estaba EXTRAIDO no vuelve a RECIBIDO porque un motor
+      // peor no encontró nada.
+      if (extraccion.disponible) {
+        await tx.query(
+          `UPDATE documents SET status = 'EXTRAIDO' WHERE id = $1 AND status = 'RECIBIDO'`,
+          [params.documentId],
+        );
+      }
+
+      await recordAudit(tx, tenant.companyId, {
+        actorType: 'USER',
+        actorId,
+        action: 'REEXTRAER_DOCUMENTO',
+        objectType: 'document',
+        objectId: params.documentId,
+        newValue: {
+          extractionId,
+          motor: extraccion.motor,
+          motorVersion: extraccion.motorVersion,
+          disponible: extraccion.disponible,
+          motivoNoDisponible: extraccion.motivoNoDisponible ?? null,
+          campos: extraccion.campos.length,
+        },
+        ip: clientIp(request),
+        userAgent: request.headers['user-agent'] ?? null,
+      });
+
+      reply.code(201);
+      return {
+        extractionId,
+        motor: extraccion.motor,
+        disponible: extraccion.disponible,
+        /**
+         * Cuando no hay motor, esto dice `SIN_MOTOR_OCR` y no «no se encontró
+         * ningún campo». Son cosas distintas: la primera es un sistema sin
+         * configurar, la segunda un documento ilegible.
+         */
+        motivoNoDisponible: extraccion.motivoNoDisponible ?? null,
+        campos: extraccion.campos.length,
+        confianza: extraccion.disponible ? extraccion.confianzaGlobal : null,
+        alcance:
+          'Lo leído es una propuesta con su método y su confianza. No es un hecho fiscal ni un ' +
+          'importe declarado: para eso hace falta que una persona lo confirme.',
+      };
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -593,4 +732,5 @@ function campoDeTexto(fields: unknown, nombre: string): string | undefined {
 /** El nombre viaja en una cabecera: se le sacan comillas, saltos y rutas. */
 function sanitizarNombre(nombre: string): string {
   return nombre.replace(/[^\w.\- ]+/g, '_').slice(0, 120);
+
 }

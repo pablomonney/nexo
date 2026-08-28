@@ -55,8 +55,14 @@ function apiDesdeElFuente(): Plugin {
     name: 'aai-api-desde-el-fuente',
     enforce: 'pre',
     resolveId(source, importer) {
-      if (source === '@aai/api/server') return `${API_SRC}server.ts`;
+      // `@aai/api/loquesea` → el archivo fuente equivalente. Cubre `./server` y
+      // los submódulos que los tests importan directamente, como el store de
+      // credenciales: sin esto cargarían el `dist` y su cobertura volvería a
+      // quedar sin medir, que es el defecto que este plugin vino a arreglar.
       if (source === '@aai/api') return `${API_SRC}index.ts`;
+      if (source.startsWith('@aai/api/')) {
+        return `${API_SRC}${source.slice('@aai/api/'.length)}.ts`;
+      }
 
       // Solo los relativos, y solo si el que importa ya está en el fuente de la
       // API. Sin las dos condiciones esto sería el alias global que arriba se

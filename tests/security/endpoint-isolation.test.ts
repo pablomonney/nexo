@@ -37,6 +37,20 @@ interface Actor {
  */
 const STUDIO_SCOPED = new Set(['GET /organizations', 'POST /organizations']);
 
+/**
+ * Rutas que sirven contenido sin ningún dato y por eso no se autentican.
+ *
+ * Hoy hay una sola: la consola operativa, que es un archivo estático. Excluirla
+ * del barrido es una excepción declarada, no un olvido — y no se sostiene con
+ * esta línea sino con `mvp-fronteras.test.ts`, que comprueba que el HTML no
+ * lleve credenciales, ni identificadores de empresa, ni una consulta a la base,
+ * y que su CSP no admita recursos externos.
+ *
+ * Autenticar la página de login sería circular. Lo que importa es que no
+ * contenga nada, y eso se prueba aparte.
+ */
+const SIN_DATOS = new Set(['GET /consola']);
+
 suite('S-1 HTTP — aislamiento sobre todos los endpoints', () => {
   let app: FastifyInstance;
   let raw: Client;
@@ -192,6 +206,7 @@ suite('S-1 HTTP — aislamiento sobre todos los endpoints', () => {
       // Los endpoints de sesión, de salud y los del estudio no son company-scoped.
       if (route.url.startsWith('/auth/') || route.url.startsWith('/health')) continue;
       if (STUDIO_SCOPED.has(`${route.method} ${route.url}`)) continue;
+      if (SIN_DATOS.has(`${route.method} ${route.url}`)) continue;
 
       const response = await app.inject({
         method: route.method as 'GET',
@@ -261,6 +276,7 @@ suite('S-1 HTTP — aislamiento sobre todos los endpoints', () => {
       if (route.url.startsWith('/health')) continue;
       if (route.url === '/auth/login' || route.url === '/auth/register-first-admin') continue;
       if (route.url === '/auth/logout') continue;
+      if (SIN_DATOS.has(`${route.method} ${route.url}`)) continue;
 
       const response = await app.inject({
         method: route.method as 'GET',

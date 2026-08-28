@@ -67,6 +67,26 @@ export const config = {
      */
     environment: process.env.ARCA_ENVIRONMENT ?? 'mock',
     timeoutMs: Number(process.env.ARCA_TIMEOUT_MS ?? 15_000),
+
+    /**
+     * La llave con que se envuelve la clave privada del certificado **fuera de
+     * producción**.
+     *
+     * En producción esto no se usa: `desenvolver()` se niega a abrir un sobre
+     * `local:` con `NODE_ENV=production`, porque una KEK en una variable de
+     * entorno vive en el mismo lugar que el ciphertext y no protege de nada más
+     * que de un volcado de la base. El sobre de verdad —DEK por empresa envuelta
+     * con la KEK del KMS, SECURITY.md §5— necesita un cliente de KMS que todavía
+     * no existe, y hacer de cuenta que sí sería peor que no tenerlo.
+     *
+     * Se deriva igual que `mfaEncryptionKey`: efímera en desarrollo, para no
+     * obligar a configurar nada, con el costo asumido de que las credenciales
+     * cargadas dejan de abrirse al reiniciar.
+     */
+    localKeyEncryptionKey: Buffer.from(
+      process.env.ARCA_LOCAL_KEK ?? randomBytes(32).toString('base64'),
+      'base64',
+    ),
   },
 
   ai: {

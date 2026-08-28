@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEXO — consola operativa</title>
+<style>
+:root{
+  --papel:#f7f7f5; --alto:#fff; --hund:#eeeeea;
+  --tinta:#14181d; --tinta2:#3d454e; --tinta3:#6b7480;
+  --linea:#dcdcd6; --acento:#1f5f5b; --acento-cl:#e3efed;
+  --mal:#a4243b; --mal-bg:#f8e7ea; --bien:#2f6b3f; --bien-bg:#e4f0e6;
+  --ojo:#a85a12; --ojo-bg:#fbeddd;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --papel:#12151a; --alto:#1a1e25; --hund:#0d1014;
+  --tinta:#e6e8ea; --tinta2:#b3bac2; --tinta3:#838d99;
+  --linea:#2b313a; --acento:#6fbdb4; --acento-cl:#16302f;
+  --mal:#e8919f; --mal-bg:#35191f; --bien:#7fc08e; --bien-bg:#16281a;
+  --ojo:#dfa663; --ojo-bg:#33230f;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--papel);color:var(--tinta);
+ font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{border-bottom:1px solid var(--linea);padding:.9rem 1.4rem;display:flex;
+ gap:1rem;align-items:baseline;flex-wrap:wrap;background:var(--alto)}
+header h1{font-size:1.05rem;margin:0;letter-spacing:-.01em}
+header .sub{color:var(--tinta3);font-size:.8rem}
+header .quien{margin-left:auto;font-family:var(--mono);font-size:.75rem;color:var(--tinta3)}
+main{max-width:1180px;margin:0 auto;padding:1.4rem}
+section{background:var(--alto);border:1px solid var(--linea);border-radius:6px;
+ padding:1.1rem 1.2rem;margin-bottom:1rem}
+section[hidden]{display:none}
+h2{font-size:.95rem;margin:0 0 .2rem;letter-spacing:.01em}
+h2 .n{font-family:var(--mono);font-size:.72rem;color:var(--acento);margin-right:.5rem}
+.ayuda{color:var(--tinta3);font-size:.82rem;margin:.15rem 0 .9rem;max-width:74ch}
+label{display:block;font-size:.78rem;color:var(--tinta2);margin:.55rem 0 .2rem}
+input,select,textarea{width:100%;padding:.45rem .55rem;border:1px solid var(--linea);
+ border-radius:4px;background:var(--papel);color:var(--tinta);font:inherit}
+input[type=file]{padding:.3rem}
+textarea{min-height:4.5rem;resize:vertical}
+.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 .8rem}
+button{margin-top:.8rem;padding:.45rem .9rem;border:1px solid var(--acento);
+ border-radius:4px;background:var(--acento);color:var(--alto);font:inherit;cursor:pointer}
+button.sec{background:transparent;color:var(--acento)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button+button{margin-left:.5rem}
+pre{background:var(--hund);border:1px solid var(--linea);border-radius:4px;
+ padding:.7rem;overflow:auto;max-height:22rem;font-family:var(--mono);font-size:.76rem;margin:.7rem 0 0}
+table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:.7rem}
+th{text-align:left;font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
+ letter-spacing:.07em;color:var(--tinta3);padding:.45rem .5rem;border-bottom:1px solid var(--linea)}
+td{padding:.4rem .5rem;border-bottom:1px solid var(--linea);vertical-align:top}
+tr:hover td{background:var(--hund)}
+.p{display:inline-block;font-family:var(--mono);font-size:.66rem;letter-spacing:.04em;
+ padding:.1em .45em;border-radius:3px;border:1px solid}
+.p-bien{background:var(--bien-bg);color:var(--bien);border-color:var(--bien)}
+.p-mal{background:var(--mal-bg);color:var(--mal);border-color:var(--mal)}
+.p-ojo{background:var(--ojo-bg);color:var(--ojo);border-color:var(--ojo)}
+.p-neu{background:var(--hund);color:var(--tinta3);border-color:var(--linea)}
+.aviso{border-left:3px solid var(--ojo);background:var(--ojo-bg);color:var(--tinta);
+ padding:.6rem .8rem;border-radius:4px;font-size:.82rem;margin:.7rem 0}
+.error{border-left-color:var(--mal);background:var(--mal-bg)}
+.clic{cursor:pointer;color:var(--acento);text-decoration:underline}
+.mono{font-family:var(--mono);font-size:.76rem}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>NEXO</h1>
+  <span class="sub">consola operativa — recorre el circuito, no lo reemplaza</span>
+  <span class="quien" id="quien"></span>
+</header>
+
+<main>
+
+<!-- ══ 0 · Sesión ══════════════════════════════════════════════════════════ -->
+<section id="s-login">
+  <h2><span class="n">00</span>Ingresar</h2>
+  <p class="ayuda">El mismo login que usa la API: contraseña y segundo factor. La
+    consola no guarda credenciales; la sesión vive en la cookie que emite el servidor.</p>
+  <div class="fila">
+    <div><label>Correo</label><input id="email" type="email" autocomplete="username"></div>
+    <div><label>Contraseña</label><input id="pass" type="password" autocomplete="current-password"></div>
+    <div><label>Código MFA (6 dígitos)</label><input id="mfa" inputmode="numeric" maxlength="6"></div>
+  </div>
+  <button id="b-login">Ingresar</button>
+  <div id="login-msg"></div>
+</section>
+
+<!-- ══ 1 · Empresa ═════════════════════════════════════════════════════════ -->
+<section id="s-empresa" hidden>
+  <h2><span class="n">01</span>Empresa</h2>
+  <p class="ayuda">Todo lo que sigue ocurre dentro de la empresa elegida. No es una
+    preferencia de la pantalla: es la cabecera <span class="mono">X-Company-Id</span>,
+    y el servidor la rechaza si no tenés rol en ella.</p>
+  <label>Empresa</label>
+  <select id="empresa"></select>
+  <button id="b-empresa" class="sec">Usar esta empresa</button>
+  <div id="empresa-msg"></div>
+</section>
+
+<!-- ══ 2 · Documentos ══════════════════════════════════════════════════════ -->
+<section id="s-doc" hidden>
+  <h2><span class="n">02</span>Documentos</h2>
+  <p class="ayuda">Subir archiva y calcula el hash. La extracción corre sola; sin motor
+    de OCR configurado responde <span class="mono">SIN_MOTOR_OCR</span>, que no es lo
+    mismo que «no se encontró nada».</p>
+  <label>Archivo (PDF, JPG, PNG, XML, CSV, XLSX)</label>
+  <input id="archivo" type="file">
+  <button id="b-subir">Subir</button>
+  <button id="b-listar" class="sec">Actualizar lista</button>
+  <div id="doc-msg"></div>
+  <table id="t-doc"><thead><tr>
+    <th>Nombre</th><th>Tipo</th><th>Estado</th><th>SHA-256</th><th></th>
+  </tr></thead><tbody></tbody></table>
+</section>
+
+<!-- ══ 3 · El documento elegido ════════════════════════════════════════════ -->
+<section id="s-detalle" hidden>
+  <h2><span class="n">03</span>Lo que se leyó del documento</h2>
+  <p class="ayuda">Cada campo trae su método y su confianza. Un valor leído es una
+    propuesta, no un hecho: los importes de la operación fiscal los declarás vos abajo
+    y el sistema corta si no coinciden con lo leído.</p>
+  <button id="b-reextraer" class="sec">Volver a extraer</button>
+  <div id="detalle-msg"></div>
+  <table id="t-campos"><thead><tr>
+    <th>Campo</th><th>Valor leído</th><th>Método</th><th>Confianza</th>
+  </tr></thead><tbody></tbody></table>
+</section>
+
+<!-- ══ 4 · Operación fiscal ════════════════════════════════════════════════ -->
+<section id="s-tt" hidden>
+  <h2><span class="n">04</span>Operación fiscal</h2>
+  <p class="ayuda">Los importes los declara una persona. La operación nace en
+    <span class="mono">NO_CONSULTADO</span>: no hay forma de afirmar acá que ARCA la
+    validó.</p>
+  <div class="fila">
+    <div><label>Sentido</label><select id="tt-dir"><option>COMPRAS</option><option>VENTAS</option></select></div>
+    <div><label>Tipo cbte.</label><input id="tt-tipo" type="number" value="1"></div>
+    <div><label>Punto de venta</label><input id="tt-pv" type="number" value="1"></div>
+    <div><label>Número</label><input id="tt-nro" type="number"></div>
+    <div><label>Fecha</label><input id="tt-fecha" type="date"></div>
+    <div><label>CUIT contraparte</label><input id="tt-cuit" maxlength="11"></div>
+  </div>
+  <div class="fila">
+    <div><label>Neto</label><input id="tt-neto" value="0"></div>
+    <div><label>IVA</label><input id="tt-iva" value="0"></div>
+    <div><label>No gravado</label><input id="tt-ng" value="0"></div>
+    <div><label>Exento</label><input id="tt-ex" value="0"></div>
+    <div><label>Percepciones</label><input id="tt-perc" value="0"></div>
+    <div><label>Total</label><input id="tt-total" value="0"></div>
+  </div>
+  <button id="b-tt">Registrar operación</button>
+  <div id="tt-msg"></div>
+</section>
+
+<!-- ══ 5 · Constatación ════════════════════════════════════════════════════ -->
+<section id="s-arca" hidden>
+  <h2><span class="n">05</span>Constatación</h2>
+  <p class="ayuda">Preguntarle a ARCA y declarar que verificaste por tu cuenta son dos
+    cosas distintas, y quedan distinguidas en la fila. El CAE no está en la operación:
+    va acá porque está impreso en el comprobante.</p>
+  <div class="fila">
+    <div><label>CAE</label><input id="cae"></div>
+    <div><label>Modalidad</label><select id="modalidad"><option>CAE</option><option>CAEA</option><option>CAI</option></select></div>
+    <div><label>Doc. receptor (tipo)</label><input id="doctipo" value="80"></div>
+    <div><label>Doc. receptor (número)</label><input id="docnro"></div>
+  </div>
+  <button id="b-constatar">Consultar a ARCA</button>
+  <div id="arca-msg"></div>
+</section>
+
+<!-- ══ 6 · Afectación ══════════════════════════════════════════════════════ -->
+<section id="s-afec" hidden>
+  <h2><span class="n">06</span>Afectación fiscal</h2>
+  <p class="ayuda">Es una declaración profesional y queda firmada con tu usuario. La
+    evidencia tiene que apuntar a objetos reales de esta empresa: un texto suelto explica,
+    no respalda.</p>
+  <div class="fila">
+    <div><label>Afectación</label><select id="afec">
+      <option>GRAVADAS</option><option>EXENTAS</option><option>NO_GRAVADAS</option>
+      <option>MIXTA</option><option>NO_DETERMINADA</option></select></div>
+    <div><label>Proporción gravada (solo MIXTA, en centésimas de %)</label>
+      <input id="afec-prop" type="number" placeholder="6550 = 65,50 %"></div>
+  </div>
+  <label>Evidencia — cuentas del plan (se pueden elegir varias)</label>
+  <select id="afec-cuentas" multiple size="5"></select>
+  <label>Nota (opcional, mínimo 10 caracteres)</label>
+  <textarea id="afec-nota"></textarea>
+  <button id="b-afec">Declarar</button>
+  <div id="afec-msg"></div>
+</section>
+
+<!-- ══ 7 · Decisión ════════════════════════════════════════════════════════ -->
+<section id="s-dec" hidden>
+  <h2><span class="n">07</span>Decisión contable</h2>
+  <p class="ayuda">Sin reglas ACTIVE, la vía determinística devuelve
+    <span class="mono">REQUIERE_REVISION</span> y nombra qué falta. Resolver por tu
+    cuenta exige justificación escrita, y esa decisión no cita ninguna regla.</p>
+  <button id="b-dec-auto" class="sec">Pedir decisión del motor</button>
+  <div class="fila">
+    <div><label>Resultado (manual)</label><select id="dec-res">
+      <option>PROPUESTA_DE_ASIENTO</option><option>SIN_EFECTO</option></select></div>
+  </div>
+  <label>Justificación (mínimo 30 caracteres)</label>
+  <textarea id="dec-just"></textarea>
+  <button id="b-dec-manual">Decidir a mano</button>
+  <button id="b-dec-hist" class="sec">Ver historial</button>
+  <div id="dec-msg"></div>
+  <table id="t-dec" hidden><thead><tr>
+    <th>Decisión</th><th>Estado</th><th>Origen</th><th>Resultado</th><th>Asientos</th><th>Corrige a</th><th></th>
+  </tr></thead><tbody></tbody></table>
+</section>
+
+<!-- ══ 8 · Corrección ══════════════════════════════════════════════════════ -->
+<section id="s-corr" hidden>
+  <h2><span class="n">08</span>Corregir la decisión</h2>
+  <p class="ayuda">La anterior no se borra ni se edita: queda
+    <span class="mono">SUPERSEDIDA</span>, encadenada, y deja de poder fundar asientos
+    nuevos. El asiento que ya la citó la sigue mostrando.</p>
+  <div class="fila">
+    <div><label>Nuevo resultado</label><select id="corr-res">
+      <option>SIN_EFECTO</option><option>PROPUESTA_DE_ASIENTO</option><option>REQUIERE_REVISION</option></select></div>
+  </div>
+  <label>Motivo (mínimo 30 caracteres: qué cambió)</label>
+  <textarea id="corr-motivo"></textarea>
+  <button id="b-corr">Corregir</button>
+  <div id="corr-msg"></div>
+</section>
+
+<!-- ══ 9 · Asiento ═════════════════════════════════════════════════════════ -->
+<section id="s-asiento" hidden>
+  <h2><span class="n">09</span>Asiento</h2>
+  <p class="ayuda">Se funda en la decisión vigente. La aprobación es humana siempre, y
+    recién al aprobar se proyecta al Mayor.</p>
+  <div class="fila">
+    <div><label>Libro</label><input id="as-libro" value="COMPRAS"></div>
+    <div><label>Fecha</label><input id="as-fecha" type="date"></div>
+  </div>
+  <label>Descripción</label><input id="as-desc">
+  <div class="fila">
+    <div><label>Cuenta al Debe</label><select id="as-debe"></select></div>
+    <div><label>Cuenta al Haber</label><select id="as-haber"></select></div>
+    <div><label>Importe</label><input id="as-importe"></div>
+  </div>
+  <button id="b-asiento">Registrar</button>
+  <button id="b-aprobar" class="sec" disabled>Aprobar</button>
+  <div id="asiento-msg"></div>
+</section>
+
+<!-- ══ 10 · Libros y trazabilidad ══════════════════════════════════════════ -->
+<section id="s-libros" hidden>
+  <h2><span class="n">10</span>Libros y trazabilidad</h2>
+  <p class="ayuda">Diario, Mayor y Balance describen el mismo universo: asientos
+    aprobados y anulados. Nada de lo que se ve acá lo calcula esta pantalla.</p>
+  <div class="fila">
+    <div><label>Desde</label><input id="lib-desde" type="date"></div>
+    <div><label>Hasta</label><input id="lib-hasta" type="date"></div>
+  </div>
+  <button id="b-diario" class="sec">Diario</button>
+  <button id="b-mayor" class="sec">Mayor</button>
+  <button id="b-balance" class="sec">Balance</button>
+  <button id="b-traza" class="sec">Trazar la operación</button>
+  <pre id="libros-out"></pre>
+</section>
+
+</main>
+
+<script>
+'use strict';
+/**
+ * La consola no sabe contabilidad.
+ *
+ * No calcula un saldo, no decide si un crédito es computable, no valida una
+ * afectación. Todo lo que muestra viene de una respuesta de la API, y todo lo
+ * que envía lo valida el servidor. Es deliberado: una segunda implementación de
+ * las reglas contables acá sería una que nadie revisó y que puede divergir.
+ *
+ * Lo único que hace es recorrer el circuito en orden y mostrar lo que cada paso
+ * devolvió, incluidos los rechazos —que son la parte interesante—.
+ */
+
+const E = (id) => document.getElementById(id);
+const estado = { empresa: null, documento: null, tt: null, decision: null, asiento: null, cuentas: [] };
+
+/** Un solo lugar por el que sale un pedido. La cabecera de empresa se pone acá. */
+async function api(metodo, ruta, cuerpo, esArchivo) {
+  const cabeceras = {};
+  if (estado.empresa) cabeceras['x-company-id'] = estado.empresa;
+  if (!esArchivo && cuerpo !== undefined) cabeceras['content-type'] = 'application/json';
+
+  const r = await fetch(ruta, {
+    method: metodo,
+    credentials: 'same-origin',
+    headers: cabeceras,
+    body: cuerpo === undefined ? undefined : (esArchivo ? cuerpo : JSON.stringify(cuerpo)),
+  });
+
+  let datos = null;
+  try { datos = await r.json(); } catch { /* 204 y similares */ }
+  return { ok: r.ok, status: r.status, datos };
+}
+
+/**
+ * Muestra la respuesta tal cual.
+ *
+ * Los errores del sistema explican qué corregir —es una de las cosas que más
+ * cuidado tiene la API— así que se muestran enteros en vez de traducirlos a un
+ * "algo salió mal".
+ */
+function decir(destino, resultado, exito) {
+  const caja = E(destino);
+  if (resultado.ok) {
+    caja.innerHTML = '<div class="aviso"><strong>' + (exito || 'Listo') + '</strong>' +
+      '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre></div>';
+  } else {
+    caja.innerHTML = '<div class="aviso error"><strong>' + resultado.status + '</strong> ' +
+      '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre></div>';
+  }
+}
+const escapar = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const ver = (id, s) => { E(id).hidden = !s; };
+
+// ── 0 · Sesión ────────────────────────────────────────────────────────────
+E('b-login').onclick = async () => {
+  const login = await api('POST', '/auth/login', { email: E('email').value, password: E('pass').value });
+  if (!login.ok) return decir('login-msg', login);
+
+  if (E('mfa').value.trim() !== '') {
+    const mfa = await api('POST', '/auth/mfa/verify', { code: E('mfa').value.trim() });
+    if (!mfa.ok) return decir('login-msg', mfa);
+  }
+
+  const yo = await api('GET', '/auth/me');
+  if (!yo.ok) return decir('login-msg', yo);
+  E('quien').textContent = (yo.datos.user && yo.datos.user.email) || '';
+
+  const orgs = await api('GET', '/organizations');
+  const sel = E('empresa');
+  sel.innerHTML = '';
+  for (const org of (orgs.datos.organizations || orgs.datos.organizaciones || [])) {
+    const empresas = await api('GET', '/organizations/' + org.id + '/companies');
+    for (const c of (empresas.datos.companies || empresas.datos.empresas || [])) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.legalName + ' — ' + c.cuit;
+      sel.appendChild(o);
+    }
+  }
+  ver('s-login', false); ver('s-empresa', true);
+};
+
+// ── 1 · Empresa ───────────────────────────────────────────────────────────
+E('b-empresa').onclick = async () => {
+  estado.empresa = E('empresa').value;
+  const c = await api('GET', '/companies/current');
+  if (!c.ok) return decir('empresa-msg', c);
+
+  const cuentas = await api('GET', '/accounts');
+  estado.cuentas = (cuentas.datos && cuentas.datos.accounts) || [];
+  for (const id of ['afec-cuentas', 'as-debe', 'as-haber']) {
+    const sel = E(id); sel.innerHTML = '';
+    for (const a of estado.cuentas) {
+      const o = document.createElement('option');
+      o.value = id === 'afec-cuentas' ? a.id : a.code;
+      o.textContent = a.code + ' — ' + a.name;
+      sel.appendChild(o);
+    }
+  }
+  decir('empresa-msg', c, 'Empresa en contexto');
+  for (const s of ['s-doc', 's-libros']) ver(s, true);
+  listar();
+};
+
+// ── 2 · Documentos ────────────────────────────────────────────────────────
+async function listar() {
+  const r = await api('GET', '/documents');
+  const cuerpo = E('t-doc').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const d of ((r.datos && r.datos.documentos) || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(d.nombre) + '</td><td class="mono">' + escapar(d.tipo) + '</td>' +
+      '<td><span class="p p-neu">' + escapar(d.status) + '</span></td>' +
+      '<td class="mono">' + escapar(String(d.sha256).slice(0, 12)) + '…</td>' +
+      '<td><span class="clic">elegir</span></td>';
+    tr.querySelector('.clic').onclick = () => elegir(d.id);
+    cuerpo.appendChild(tr);
+  }
+}
+E('b-listar').onclick = listar;
+
+E('b-subir').onclick = async () => {
+  const f = E('archivo').files[0];
+  if (!f) return;
+  const forma = new FormData();
+  forma.append('file', f);
+  const r = await api('POST', '/documents', forma, true);
+  decir('doc-msg', r, 'Documento archivado');
+  if (r.ok) { await listar(); elegir(r.datos.id); }
+};
+
+// ── 3 · Detalle ───────────────────────────────────────────────────────────
+async function elegir(id) {
+  estado.documento = id;
+  const r = await api('GET', '/documents/' + id);
+  if (!r.ok) return decir('doc-msg', r);
+
+  const cuerpo = E('t-campos').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of (r.datos.campos || [])) {
+    const tr = document.createElement('tr');
+    // El método es lo que separa un dato leído de uno declarado. Se muestra
+    // siempre, no como detalle avanzado.
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.fieldPath) + '</td>' +
+      '<td>' + escapar(c.rawValue == null ? '—' : c.rawValue) + '</td>' +
+      '<td><span class="p ' + (c.method === 'MANUAL' ? 'p-bien' : 'p-ojo') + '">' +
+        escapar(c.method) + '</span></td>' +
+      '<td class="mono">' + escapar(c.confidence) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  const ext = (r.datos.extracciones || [])[0];
+  E('detalle-msg').innerHTML = ext && !ext.disponible
+    ? '<div class="aviso">Sin extracción disponible: <span class="mono">' +
+      escapar(ext.motivoNoDisponible) + '</span>. No es que no se haya encontrado nada; ' +
+      'es que no hubo con qué leerlo.</div>'
+    : '';
+
+  for (const s of ['s-detalle', 's-tt']) ver(s, true);
+
+  const tt = await api('GET', '/documents/' + id + '/tax-transaction');
+  if (tt.ok && tt.datos && tt.datos.id) {
+    estado.tt = tt.datos.id;
+    decir('tt-msg', tt, 'Esta operación ya estaba registrada');
+    trasOperacion();
+  }
+}
+
+E('b-reextraer').onclick = async () => {
+  const r = await api('POST', '/documents/' + estado.documento + '/extract');
+  decir('detalle-msg', r, 'Se volvió a leer');
+  if (r.ok) elegir(estado.documento);
+};
+
+// ── 4 · Operación fiscal ──────────────────────────────────────────────────
+E('b-tt').onclick = async () => {
+  const r = await api('POST', '/documents/' + estado.documento + '/tax-transaction', {
+    direction: E('tt-dir').value,
+    cbteTipo: Number(E('tt-tipo').value),
+    puntoVenta: Number(E('tt-pv').value),
+    numero: Number(E('tt-nro').value),
+    fecha: E('tt-fecha').value,
+    cuitContraparte: E('tt-cuit').value.trim() === '' ? null : E('tt-cuit').value.trim(),
+    razonSocial: null,
+    condicionIva: 'RESPONSABLE_INSCRIPTO',
+    neto: E('tt-neto').value, iva: E('tt-iva').value, noGravado: E('tt-ng').value,
+    exento: E('tt-ex').value, percepciones: E('tt-perc').value, total: E('tt-total').value,
+  });
+  decir('tt-msg', r, 'Operación registrada');
+  if (r.ok) { estado.tt = r.datos.taxTransactionId; trasOperacion(); }
+};
+
+function trasOperacion() {
+  for (const s of ['s-arca', 's-afec', 's-dec', 's-asiento']) ver(s, true);
+}
+
+// ── 5 · ARCA ──────────────────────────────────────────────────────────────
+E('b-constatar').onclick = async () => {
+  const r = await api('POST', '/tax-transactions/' + estado.tt + '/constatar', {
+    modalidad: E('modalidad').value,
+    cae: E('cae').value.trim(),
+    tipoDocReceptor: E('doctipo').value.trim(),
+    nroDocReceptor: E('docnro').value.trim(),
+  });
+  decir('arca-msg', r, 'ARCA contestó');
+};
+
+// ── 6 · Afectación ────────────────────────────────────────────────────────
+E('b-afec').onclick = async () => {
+  const evidencia = Array.from(E('afec-cuentas').selectedOptions)
+    .map((o) => ({ tipo: 'CUENTA', id: o.value }));
+  if (estado.documento) evidencia.push({ tipo: 'DOCUMENTO', id: estado.documento });
+  const nota = E('afec-nota').value.trim();
+  if (nota.length >= 10) evidencia.push({ tipo: 'NOTA', texto: nota });
+
+  const cuerpo = { afectacion: E('afec').value, evidencia };
+  if (E('afec').value === 'MIXTA' && E('afec-prop').value !== '') {
+    cuerpo.proporcionGravada = Number(E('afec-prop').value);
+  }
+  decir('afec-msg', await api('POST', '/tax-transactions/' + estado.tt + '/afectacion', cuerpo),
+    'Afectación declarada');
+};
+
+// ── 7 · Decisión ──────────────────────────────────────────────────────────
+E('b-dec-auto').onclick = async () => {
+  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision');
+  decir('dec-msg', r, 'Decisión del motor');
+  if (r.ok) { estado.decision = r.datos.decisionId; ver('s-corr', true); }
+};
+
+E('b-dec-manual').onclick = async () => {
+  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision', {
+    manual: { justificacion: E('dec-just').value, resultado: E('dec-res').value },
+  });
+  decir('dec-msg', r, 'Decisión registrada');
+  if (r.ok) { estado.decision = r.datos.decisionId; ver('s-corr', true); }
+};
+
+E('b-dec-hist').onclick = async () => {
+  const r = await api('GET', '/comprobantes/' + estado.tt + '/decision/historial');
+  if (!r.ok) return decir('dec-msg', r);
+  const t = E('t-dec'); t.hidden = false;
+  const cuerpo = t.querySelector('tbody'); cuerpo.innerHTML = '';
+  for (const d of r.datos.historial) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(d.id.slice(0, 8)) + '…</td>' +
+      '<td><span class="p ' + (d.estado === 'SUPERSEDIDA' ? 'p-neu' : 'p-bien') + '">' +
+        escapar(d.estado) + '</span></td>' +
+      '<td class="mono">' + escapar(d.origen) + '</td>' +
+      '<td class="mono">' + escapar(d.resultado) + '</td>' +
+      '<td class="mono">' + escapar(d.asientos) + '</td>' +
+      '<td class="mono">' + escapar(d.supersede ? d.supersede.slice(0, 8) + '…' : '—') + '</td>' +
+      '<td>' + (d.estado === 'SUPERSEDIDA' ? '' : '<span class="clic">usar</span>') + '</td>';
+    const clic = tr.querySelector('.clic');
+    if (clic) clic.onclick = () => { estado.decision = d.id; ver('s-corr', true); };
+    cuerpo.appendChild(tr);
+  }
+};
+
+// ── 8 · Corrección ────────────────────────────────────────────────────────
+E('b-corr').onclick = async () => {
+  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision/supersede', {
+    supersedeId: estado.decision,
+    resultado: E('corr-res').value,
+    motivo: E('corr-motivo').value,
+  });
+  decir('corr-msg', r, 'Decisión corregida — la anterior queda SUPERSEDIDA');
+  if (r.ok) estado.decision = r.datos.decisionId;
+};
+
+// ── 9 · Asiento ───────────────────────────────────────────────────────────
+E('b-asiento').onclick = async () => {
+  const importe = E('as-importe').value;
+  const r = await api('POST', '/journal-entries', {
+    journalCode: E('as-libro').value,
+    entryDate: E('as-fecha').value,
+    description: E('as-desc').value,
+    currency: 'ARS',
+    lines: [
+      { accountCode: E('as-debe').value, debit: importe, credit: '0' },
+      { accountCode: E('as-haber').value, debit: '0', credit: importe },
+    ],
+    source: { type: 'INVOICE', id: estado.tt },
+    decisionId: estado.decision,
+  });
+  decir('asiento-msg', r, 'Asiento registrado (todavía sin aprobar)');
+  if (r.ok && r.datos.id) { estado.asiento = r.datos.id; E('b-aprobar').disabled = false; }
+};
+
+E('b-aprobar').onclick = async () => {
+  decir('asiento-msg', await api('POST', '/journal-entries/' + estado.asiento + '/approve'),
+    'Aprobado: recién ahora se proyecta al Mayor');
+};
+
+// ── 10 · Libros ───────────────────────────────────────────────────────────
+const rango = () => 'desde=' + E('lib-desde').value + '&hasta=' + E('lib-hasta').value;
+const mostrar = (r) => { E('libros-out').textContent = JSON.stringify(r.datos, null, 2); };
+
+E('b-diario').onclick = async () => mostrar(await api('GET', '/books/diario?' + rango()));
+E('b-mayor').onclick = async () => mostrar(await api('GET', '/books/mayor?' + rango()));
+E('b-balance').onclick = async () => mostrar(await api('GET', '/reports/trial-balance?' + rango()));
+E('b-traza').onclick = async () => {
+  const partes = {};
+  partes.operacion = (await api('GET', '/documents/' + estado.documento + '/tax-transaction')).datos;
+  partes.afectacion = (await api('GET', '/tax-transactions/' + estado.tt + '/afectacion')).datos;
+  partes.decisiones = (await api('GET', '/comprobantes/' + estado.tt + '/decision/historial')).datos;
+  E('libros-out').textContent = JSON.stringify(partes, null, 2);
+};
+
+// Fechas por defecto: el ejercicio corriente, para no tipear en cada prueba.
+const hoy = new Date().toISOString().slice(0, 10);
+E('tt-fecha').value = hoy; E('as-fecha').value = hoy;
+E('lib-desde').value = hoy.slice(0, 4) + '-01-01';
+E('lib-hasta').value = hoy.slice(0, 4) + '-12-31';
+</script>
+</body>
+</html>

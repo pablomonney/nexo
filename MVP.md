@@ -26,6 +26,7 @@ activar nada.
 | Constatación | `POST /tax-transactions/:id/constatar` | **ARCA**, vía WSCDC |
 | Afectación | `POST /tax-transactions/:id/afectacion` | una persona matriculada, con evidencia |
 | Decisión | `POST /comprobantes/:id/decision` | el motor si hay regla; una persona si no |
+| Corrección | `POST /comprobantes/:id/decision/supersede` | una persona, con motivo escrito |
 | Asiento | `POST /journal-entries` + `/approve` | una persona, siempre |
 | Libros y estados | `GET /books/*`, `POST /statements/issue` | derivados, sin intervención |
 
@@ -87,43 +88,56 @@ extracción cuando la hay, cortando si difieren.
 | Afectación fiscal | **decisión profesional** | conectado; no se puede inferir y no se infiere |
 | Condición IVA del receptor | del padrón de ARCA | no conectado |
 
-## 5. Operaciones mínimas que necesita la interfaz
+## 5. La consola operativa
 
-No hay frontend: `apps/web` tiene un README y nada más. Lo que sigue no es un
-diseño, es la lista de lo que la API ya sostiene y que una persona necesita para
-completar el circuito. Todas existen.
+`GET /consola` sirve una página estática —`apps/web/consola.html`— que recorre el
+circuito completo: login, empresa, documento, operación, constatación,
+afectación, decisión, corrección, asiento, libros y trazabilidad.
+
+**No es el frontend del roadmap.** Es la interfaz mínima con la que se opera y se
+demuestra el circuito mientras esa aplicación no exista, y está construida para
+no poder convertirse en otra cosa:
+
+- no tiene build, ni framework, ni dependencias;
+- **no calcula nada**: muestra lo que la API devolvió, incluidos los rechazos;
+- no habla con la base —hay un test que lo comprueba—;
+- su CSP es `default-src 'none'` con `connect-src 'self'`;
+- no lleva ningún dato adentro: ni credenciales, ni tokens, ni un id de empresa.
+
+Se sirve sin autenticar porque no contiene nada, y esa excepción está **declarada**
+en el barrido de aislamiento (`SIN_DATOS`) en vez de ser un agujero silencioso.
+
+### Las operaciones que sostiene
 
 | # | Operación | Ruta |
 |---|---|---|
 | 1 | Subir o elegir un documento | `POST /documents`, `GET /documents` |
 | 2 | Ver el estado del documento y sus hallazgos | `GET /documents/:id` |
-| 3 | Registrar la operación fiscal | `POST /documents/:id/tax-transaction` |
-| 4 | Ver la operación y su constatación | `GET /documents/:id/tax-transaction` |
-| 5 | Constatar contra ARCA | `POST /tax-transactions/:id/constatar` |
-| 6 | Ver qué evidencia hay disponible | `GET /accounts`, `GET /documents` |
+| 3 | Volver a leer un documento archivado | `POST /documents/:id/extract` |
+| 4 | Registrar la operación fiscal | `POST /documents/:id/tax-transaction` |
+| 5 | Ver la operación y su constatación | `GET /documents/:id/tax-transaction` |
+| 6 | Constatar contra ARCA | `POST /tax-transactions/:id/constatar` |
 | 7 | Declarar la afectación con su evidencia | `POST /tax-transactions/:id/afectacion` |
 | 8 | Revisar la afectación declarada | `GET /tax-transactions/:id/afectacion` |
 | 9 | Emitir o consultar la decisión | `POST` / `GET /comprobantes/:id/decision` |
-| 10 | Cargar y aprobar el asiento | `POST /journal-entries`, `/approve` |
-| 11 | Ver Diario, Mayor y Balance | `GET /books/diario`, `/books/mayor`, `/reports/trial-balance` |
-| 12 | Trazar un movimiento hasta su origen | `GET /books/trace/:movementId` |
-| 13 | Emitir estados y notas | `POST /statements/issue`, `/notes/generate` |
-| 14 | Trazar un renglón de un estado | `GET /statements/trace/:lineId` |
-
-**Falta para el circuito, y no existe:** una ruta para **corregir una decisión ya
-emitida**. Una operación admite una sola decisión vigente, y superseder la
-anterior hoy solo se puede por SQL. Es el gap que el test E2E rodea explícitamente
-en vez de disimular.
+| 10 | Corregir la decisión vigente | `POST /comprobantes/:id/decision/supersede` |
+| 11 | Ver el historial de decisiones | `GET /comprobantes/:id/decision/historial` |
+| 12 | Cargar y aprobar el asiento | `POST /journal-entries`, `/approve` |
+| 13 | Ver Diario, Mayor y Balance | `GET /books/diario`, `/books/mayor`, `/reports/trial-balance` |
+| 14 | Trazar un movimiento o un renglón | `GET /books/trace/:id`, `/statements/trace/:id` |
+| 15 | Administrar certificados de ARCA | `POST`/`GET /companies/current/arca/credentials` |
+| 16 | Ver qué servicios de ARCA están habilitados | `GET /companies/current/arca/capabilities` |
 
 ## 6. Gaps que siguen abiertos
 
 | Gap | Tipo | Qué lo destraba |
 |---|---|---|
-| No hay interfaz de usuario | producto | decisión de producto |
-| Sin motor de OCR real | producto | elegir motor; el puerto ya existe |
-| `wscdc` no autorizado en WSASS | externo | trámite del estudio ante ARCA |
-| Sin `CredentialStore` contra la base | técnico | el certificado no entra al repo (§27); falta el sobre con KMS |
-| Corregir una decisión emitida | técnico | ruta de supersesión |
-| Padrón de ARCA no consultado | técnico | `consultarPadron` existe y no se llama |
-| `banks.ts` y `vat.ts` con baja cobertura | deuda | tests de ruta, no solo de motor |
-| Reglas ACTIVE = 0 | normativo + profesional | Decreto 280/1997 y una firma |
+| **Sin motor de OCR real** | `PRODUCT_DECISION` | elegir un motor. El puerto, los parsers, la persistencia con procedencia y la re-extracción ya están: falta el motor |
+| **Cliente de KMS** | técnico | hoy el sobre es `local:dev` y **se niega a funcionar en producción**. Sin KMS, NEXO no opera con certificados reales |
+| **`wscdc` no autorizado en WSASS** | `REQUIRES_EXTERNAL_INPUT` | trámite del estudio ante ARCA con clave fiscal. El sistema no lo puede hacer solo |
+| **Alta de certificado sin test del camino feliz** | deuda | exige un X.509 real; guardar un par de claves en el repo violaría el §27 |
+| Padrón de ARCA no consultado | `FUTURE_DEVELOPMENT` | `consultarPadron` existe en el cliente y ninguna ruta lo llama |
+| Aplicación del estudio (`apps/web`) | `PRODUCT_DECISION` | la consola cubre el circuito; una aplicación con densidad de ERP es otro producto |
+| `banks.ts` y `vat.ts` con baja cobertura | deuda | **fuera del circuito MVP**, declarado; tests de ruta, no solo de motor |
+| Reglas ACTIVE = 0 | `REQUIRES_EXTERNAL_INPUT` + `PROFESSIONAL_REVIEW` | Decreto 280/1997 completo y una firma del §32 |
+| Liquidación de sueldos | `PRODUCT_DECISION` | ver [ADR-012](docs/adr/ADR-012-liquidacion-de-sueldos.md). No implementado, y los límites ya están escritos |

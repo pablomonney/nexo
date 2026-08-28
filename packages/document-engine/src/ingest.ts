@@ -169,7 +169,7 @@ export async function ingerir(
   return { ok: true, documento, extraccion, hallazgos, duplicados };
 }
 
-async function extraer(
+export async function extraer(
   bytes: Buffer,
   tipo: TipoContenido,
   opciones: OpcionesIngesta,

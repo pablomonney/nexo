@@ -1,5 +1,8 @@
 /** Nivel estudio: organizaciones, alta de empresas y asignación de roles. */
 
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { recordAudit, withCompany, withoutCompany } from '@aai/db';
 import { isValidCuit, normalizeCuit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
@@ -17,6 +20,9 @@ const cuitField = z
   .string()
   .transform(normalizeCuit)
   .refine(isValidCuit, 'CUIT inválido: el dígito verificador no cierra');
+
+/** La raíz de `apps/web`, relativa a este archivo compilado o fuente. */
+const RAIZ_WEB = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'web');
 
 export async function studioRoutes(app: FastifyInstance): Promise<void> {
   app.post('/organizations', async (request) => {
@@ -277,6 +283,42 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
       );
       return { users: result.rows };
     });
+  });
+
+  /**
+   * La consola operativa.
+   *
+   * DECISIÓN: un archivo estático servido por la propia API, no una aplicación
+   * aparte. Tres razones, en orden de peso:
+   *
+   * 1. **No puede tener lógica contable propia.** Es una página sin build ni
+   *    dependencias: lo único que hace es llamar a la API y mostrar la respuesta.
+   *    Una SPA con estado y modelos habría sido el lugar natural donde alguien
+   *    recalcula un saldo «para no pedirlo dos veces», y esa segunda
+   *    implementación es la que después nadie revisa.
+   * 2. **Mismo origen.** La sesión vive en una cookie `SameSite`; servida desde
+   *    otro puerto haría falta CORS y credenciales cruzadas, que es superficie
+   *    nueva a cambio de nada.
+   * 3. **No sustituye al frontend del roadmap.** `apps/web` sigue siendo el
+   *    lugar de la aplicación del estudio. Esto es la consola con la que se
+   *    opera y se demuestra el circuito mientras esa no exista.
+   *
+   * No lleva autenticación propia: no contiene datos. Todo lo que muestra lo
+   * pide autenticado, y el servidor decide qué puede ver.
+   */
+  app.get('/consola', async (_request, reply) => {
+    const archivo = join(RAIZ_WEB, 'consola.html');
+    const html = await readFile(archivo, 'utf8');
+    return reply
+      .type('text/html; charset=utf-8')
+      // Sin recursos externos: todo el CSS y el JS están en el archivo. La
+      // política lo hace explícito en vez de confiar en que siga siendo así.
+      .header(
+        'content-security-policy',
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+          "connect-src 'self'; img-src 'self' data:; form-action 'none'",
+      )
+      .send(html);
   });
 
   app.get('/health', async () => ({ status: 'ok' }));

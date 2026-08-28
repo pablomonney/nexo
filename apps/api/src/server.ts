@@ -7,6 +7,7 @@ import { HttpError } from './http/errors.js';
 import { attachContext } from './http/context.js';
 import { accountRoutes } from './routes/accounts.js';
 import { afectacionRoutes } from './routes/afectaciones.js';
+import { arcaRoutes } from './routes/arca.js';
 import { authRoutes } from './routes/auth.js';
 import { documentRoutes } from './routes/documents.js';
 import { bankRoutes } from './routes/banks.js';
@@ -111,6 +112,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(decisionRoutes);
   await app.register(comprobanteRoutes);
   await app.register(afectacionRoutes);
+  await app.register(arcaRoutes);
   await app.register(bookRoutes);
   await app.register(closureRoutes);
   await app.register(vatRoutes);

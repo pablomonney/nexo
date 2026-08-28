@@ -39,8 +39,8 @@ import { moneyFromDecimalString } from '@aai/shared';
 import { HECHO_VINCULACION, proveerVinculacion, type DeclaracionDeAfectacion } from '@aai/tax-engine';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { conflict, notFound } from '../http/errors.js';
+import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
+import { conflict, conflictoTipado, notFound } from '../http/errors.js';
 
 const cuerpo = z
   .object({
@@ -402,4 +402,213 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
       },
     );
   });
+
+  /**
+   * Corregir una decisión: emitir la que la reemplaza.
+   *
+   * Hasta esta fase el modelo soportaba la corrección —`supersedes_id`, el
+   * estado `SUPERSEDIDA`, el índice de una sola vigente— y **no había ruta**:
+   * el único camino era un UPDATE a mano. Una operación quedaba con la decisión
+   * que se le hubiera puesto primero, para siempre, salvo que alguien entrara
+   * por `psql`.
+   *
+   * ## Corregir no es editar
+   *
+   * La decisión anterior no se toca en su contenido: pasa a `SUPERSEDIDA` y
+   * queda encadenada. El asiento que la citó sigue mostrando exactamente lo que
+   * citó, que es lo que un tercero necesita para entender por qué se asentó lo
+   * que se asentó **entonces**.
+   *
+   * Lo que sí cambia es hacia adelante: desde la 0044 una decisión supersedida
+   * **no puede fundar un asiento nuevo**. Sin ese candado la corrección era una
+   * anotación optativa.
+   *
+   * ## El orden importa, y lo impone la base
+   *
+   * Primero se apaga la anterior, después entra la nueva. Al revés choca contra
+   * `accounting_decisions_una_vigente`, y el mensaje sería una violación de
+   * unicidad en vez de decir qué pasó. Es el mismo orden que las notas
+   * aprendieron en su momento.
+   */
+  app.post<{ Params: { taxTransactionId: string } }>(
+    '/comprobantes/:taxTransactionId/decision/supersede',
+    async (request, reply) => {
+      const tenant = await requireCompany(request);
+      requirePermission(tenant, 'decision:supersede');
+      const auth = requireAuth(request);
+      const actorId = `user:${auth.user.userId}`;
+      const { taxTransactionId } = z
+        .object({ taxTransactionId: z.string().uuid() })
+        .parse(request.params);
+
+      const body = z
+        .object({
+          /**
+           * Qué cambió y por qué. Mínimo 30 caracteres, igual que la constancia
+           * del §32: «se corrigió» no dice nada que sirva dentro de dos años.
+           */
+          motivo: z.string().min(30, 'El motivo tiene que decir qué cambió, no "se corrigió"'),
+          resultado: z.enum(['PROPUESTA_DE_ASIENTO', 'SIN_EFECTO', 'REQUIERE_REVISION']),
+          /** La decisión que se corrige. Se exige para no corregir la equivocada. */
+          supersedeId: z.string().uuid(),
+        })
+        .parse(request.body);
+
+      return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+        const vigente = await tx.query<{
+          id: string;
+          estado: string;
+          origen: string;
+          resultado: string;
+          hechos: unknown;
+          evidencia: unknown;
+          motivos: unknown;
+        }>(
+          `SELECT id, estado, origen, resultado, hechos, evidencia, motivos
+             FROM accounting_decisions
+            WHERE tax_transaction_id = $1 AND estado <> 'SUPERSEDIDA'`,
+          [taxTransactionId],
+        );
+        if (vigente.rowCount === 0) {
+          throw notFound('Esa operación no tiene una decisión vigente que corregir');
+        }
+
+        // Se corrige la que quien pide dice corregir, o no se corrige nada. Sin
+        // esta comparación, dos personas trabajando a la vez podrían pisar una
+        // decisión que la otra acaba de emitir sin haberla visto.
+        if (vigente.rows[0]!.id !== body.supersedeId) {
+          throw conflictoTipado(
+            'DECISION_CAMBIO',
+            `La decisión vigente de esa operación es ${vigente.rows[0]!.id} y el pedido dice ` +
+              `corregir la ${body.supersedeId}. Volvé a leerla antes de corregirla.`,
+            { vigente: vigente.rows[0]!.id },
+          );
+        }
+
+        // 1 · Apagar la anterior. El trigger de inmutabilidad admite este cambio
+        //     de estado y ningún otro si la decisión ya fundamenta un asiento.
+        await tx.query(
+          `UPDATE accounting_decisions SET estado = 'SUPERSEDIDA' WHERE id = $1`,
+          [body.supersedeId],
+        );
+
+        // 2 · Emitir la nueva. Es MANUAL por construcción: una corrección la
+        //     resuelve una persona. Si el motor volviera a resolver lo mismo,
+        //     no habría nada que corregir.
+        const nueva = await tx.query<{ id: string; decidida_at: string }>(
+          `INSERT INTO accounting_decisions
+             (company_id, tax_transaction_id, origen, resultado, motivos, hechos, evidencia,
+              ambiente, decidida_por, justificacion, supersedes_id)
+           VALUES ($1, $2, 'MANUAL', $3, $4::jsonb, $5::jsonb, $6::jsonb,
+                   'PRODUCTIVO', $7, $8, $9)
+           RETURNING id, decidida_at::text`,
+          [
+            tenant.companyId,
+            taxTransactionId,
+            body.resultado,
+            // Los motivos de la anterior no se arrastran: eran de otra decisión.
+            // Una corrección REQUIERE_REVISION lleva el suyo, que es el motivo.
+            body.resultado === 'REQUIERE_REVISION'
+              ? JSON.stringify([{ motivo: 'CORRECCION_PROFESIONAL', detalle: body.motivo }])
+              : '[]',
+            // Los hechos y la evidencia sí se conservan: son el contexto en que
+            // se decidió, y no cambiaron porque alguien haya cambiado de
+            // criterio. Copiarlos es más honesto que dejarlos vacíos.
+            JSON.stringify(vigente.rows[0]!.hechos),
+            JSON.stringify(vigente.rows[0]!.evidencia),
+            actorId,
+            body.motivo,
+            body.supersedeId,
+          ],
+        );
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId,
+          action: 'DECISION_CORREGIDA',
+          objectType: 'accounting_decisions',
+          objectId: nueva.rows[0]!.id,
+          oldValue: {
+            id: body.supersedeId,
+            estado: vigente.rows[0]!.estado,
+            resultado: vigente.rows[0]!.resultado,
+            origen: vigente.rows[0]!.origen,
+          },
+          newValue: {
+            id: nueva.rows[0]!.id,
+            estado: 'EMITIDA',
+            resultado: body.resultado,
+            origen: 'MANUAL',
+            supersedes: body.supersedeId,
+          },
+          motivo: body.motivo,
+          ip: clientIp(request),
+          userAgent: request.headers['user-agent'] ?? null,
+        });
+
+        reply.code(201);
+        return {
+          decisionId: nueva.rows[0]!.id,
+          supersede: body.supersedeId,
+          resultado: body.resultado,
+          decididaAt: nueva.rows[0]!.decidida_at,
+          /**
+           * La anterior no desaparece. Se dice en la respuesta porque es la
+           * pregunta que sigue: «¿y la que estaba?».
+           */
+          anterior: {
+            id: body.supersedeId,
+            estado: 'SUPERSEDIDA',
+            nota:
+              'Se conserva. El asiento que la citó sigue mostrándola, y desde la 0044 ya no ' +
+              'puede fundar un asiento nuevo.',
+          },
+        };
+      });
+    },
+  );
+
+  /**
+   * El historial de decisiones de una operación, de la más nueva a la más vieja.
+   *
+   * Existe porque la corrección solo sirve si se puede leer: una cadena de
+   * `supersedes_id` guardada y no consultable es un dato que nadie va a mirar.
+   */
+  app.get<{ Params: { taxTransactionId: string } }>(
+    '/comprobantes/:taxTransactionId/decision/historial',
+    async (request) => {
+      const tenant = await requireCompany(request);
+      requirePermission(tenant, 'journal_entry:read');
+      const auth = requireAuth(request);
+      const { taxTransactionId } = z
+        .object({ taxTransactionId: z.string().uuid() })
+        .parse(request.params);
+
+      return withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const operacion = await tx.query('SELECT id FROM tax_transactions WHERE id = $1', [
+            taxTransactionId,
+          ]);
+          if (operacion.rowCount === 0) throw notFound('Operación fiscal no encontrada');
+
+          const filas = await tx.query(
+            `SELECT d.id, d.estado, d.origen, d.resultado, d.ambiente,
+                    d.decidida_por AS "decididaPor", d.decidida_at::text AS "decididaAt",
+                    d.justificacion, d.supersedes_id::text AS "supersede",
+                    (SELECT count(*)::int FROM journal_entries e WHERE e.decision_id = d.id) AS "asientos"
+               FROM accounting_decisions d
+              WHERE d.tax_transaction_id = $1
+              ORDER BY d.decidida_at DESC`,
+            [taxTransactionId],
+          );
+
+          return {
+            vigente: filas.rows.find((f) => (f as { estado: string }).estado !== 'SUPERSEDIDA') ?? null,
+            historial: filas.rows,
+          };
+        },
+      );
+    },
+  );
 }

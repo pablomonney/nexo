@@ -403,7 +403,8 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
            (company_id, tax_transaction_id, origen, resultado, motivos, hechos, evidencia,
             decidida_por, justificacion, supersedes_id)
          VALUES ($1,$2,'MANUAL','SIN_EFECTO','[]'::jsonb,'[]'::jsonb,'[]'::jsonb,
-                 'user:contadora','Corrige la decisión anterior', $3)
+                 'user:contadora',
+                 'Corrige la decisión anterior: el comprobante no tenía efecto contable', $3)
          RETURNING id`,
         [fx.companyA, opId, decisionId],
       );
