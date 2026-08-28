@@ -282,6 +282,9 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
            (company_id, tax_transaction_id, document_id, origen, resultado,
             motivos, hechos, evidencia, ambiente, decidida_por, justificacion)
          VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11)
+         ON CONFLICT (tax_transaction_id)
+           WHERE tax_transaction_id IS NOT NULL AND estado <> 'SUPERSEDIDA'
+           DO NOTHING
          RETURNING id`,
         [
           tenant.companyId,
@@ -297,6 +300,24 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
           esManual ? body.manual!.justificacion : null,
         ],
       );
+      // El conflicto lo ganó otro pedido concurrente. Antes de la 0036 esto no
+      // chocaba: quedaban dos decisiones vigentes, cada una diciendo ser "la"
+      // razón del asiento. Ahora la base lo impide y acá se contesta lo mismo
+      // que si el pedido hubiera llegado después.
+      if (Number(fila.rowCount) === 0) {
+        const ganadora = await tx.query<{ id: string; estado: string }>(
+          `SELECT id, estado FROM accounting_decisions
+            WHERE tax_transaction_id = $1 AND estado <> 'SUPERSEDIDA'`,
+          [taxTransactionId],
+        );
+        reply.code(200);
+        return {
+          decisionId: ganadora.rows[0]!.id,
+          yaExistia: true,
+          estado: ganadora.rows[0]!.estado,
+        };
+      }
+
       const decisionId = fila.rows[0]!.id;
 
       // ── Aplicaciones de regla ───────────────────────────────────────────

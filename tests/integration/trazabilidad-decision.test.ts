@@ -111,6 +111,40 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
     await db.end();
   });
 
+  /**
+   * Cada decisión sobre su propia operación fiscal.
+   *
+   * Antes de la 0036 todas apuntaban a `opId` y convivían: la base no impedía
+   * dos decisiones vigentes para la misma operación. La auditoría encontró ese
+   * agujero —dos filas diciendo, cada una, ser "la" razón del asiento— y ahora
+   * hay un índice único. Este helper deja de apoyarse en el defecto: los tests
+   * de abajo prueban variantes de decisión, no la regla de unicidad, que tiene
+   * su propio archivo.
+   */
+  let contador = 0;
+  async function operacionNueva(): Promise<string> {
+    contador += 1;
+    const impuesto = await db.query<{ id: string }>("SELECT id FROM taxes WHERE code = 'IVA' LIMIT 1");
+    const r = await db.query<{ id: string }>(
+      `INSERT INTO tax_transactions
+         (company_id, tax_id, period_id, direction, cbte_tipo, punto_venta, cbte_numero,
+          cbte_fecha, cuit_contraparte, razon_social, condicion_iva, neto, iva,
+          no_gravado, exento, percepciones, total, constatacion, created_by)
+       VALUES ($1,$2,$3,'VENTAS',11,1,$4,$5,$6,'Consumidor final','CONSUMIDOR_FINAL',
+               100,0,0,0,0,100,'OK','traza')
+       RETURNING id`,
+      [
+        fx.companyA,
+        impuesto.rows[0]!.id,
+        periodId,
+        920000 + contador,
+        fecha,
+        COMPROBANTE!.cuitEmisor,
+      ],
+    );
+    return r.rows[0]!.id;
+  }
+
   /** Emite una decisión y devuelve su id. */
   async function decidir(campos: Record<string, unknown> = {}): Promise<string> {
     const d = {
@@ -127,6 +161,7 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
       ai_prediction_id: null,
       ...campos,
     };
+    const sobre = (campos['tax_transaction_id'] as string | undefined) ?? (await operacionNueva());
     const r = await db.query<{ id: string }>(
       `INSERT INTO accounting_decisions
          (company_id, tax_transaction_id, origen, ai_prediction_id, resultado,
@@ -135,7 +170,7 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
        RETURNING id`,
       [
         fx.companyA,
-        opId,
+        sobre,
         d.origen,
         d.ai_prediction_id,
         d.resultado,
@@ -266,6 +301,7 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
       // El caso real: no hay regla activa, así que la decisión que funda el
       // asiento es MANUAL y lo dice. No se inventa una regla.
       decisionId = await decidir({
+        tax_transaction_id: opId,
         origen: 'MANUAL',
         resultado: 'PROPUESTA_DE_ASIENTO',
         motivos: [],
@@ -274,7 +310,7 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
           `${CLAVE} está en DRAFT y no funda el tratamiento; el asiento se decide a mano.`,
       });
 
-      const total = BigInt(Math.round(COMPROBANTE!.impTotal * 100)).toString();
+      const total = COMPROBANTE!.impTotal.toFixed(2);
       await db.query('BEGIN');
       const e = await db.query<{ id: string }>(
         `INSERT INTO journal_entries

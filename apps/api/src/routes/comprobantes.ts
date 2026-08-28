@@ -190,12 +190,21 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
+      // `ON CONFLICT DO NOTHING` sobre el índice único de la 0035.
+      //
+      // El SELECT de arriba resuelve el caso normal —un reintento después de que
+      // la primera terminó—, pero entre mirar y escribir hay una ventana. Dos
+      // pedidos concurrentes la atraviesan los dos y el segundo chocaba con un
+      // 23505 que salía como 500. La integridad nunca corrió peligro; lo que
+      // fallaba era la respuesta: un cliente que reintenta merece la operación
+      // que ya existe, no un error interno.
       const fila = await tx.query<{ id: string }>(
         `INSERT INTO tax_transactions
            (company_id, tax_id, document_id, period_id, direction, cbte_tipo, punto_venta,
             cbte_numero, cbte_fecha, cuit_contraparte, razon_social, condicion_iva,
             neto, iva, no_gravado, exento, percepciones, total, constatacion, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         ON CONFLICT (document_id) WHERE document_id IS NOT NULL DO NOTHING
          RETURNING id`,
         [
           tenant.companyId,
@@ -220,6 +229,18 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
           actorId,
         ],
       );
+      // Sin filas devueltas: el conflicto lo ganó otro pedido concurrente. Se
+      // contesta lo mismo que si hubiera llegado después, porque para el cliente
+      // es lo mismo.
+      if (Number(fila.rowCount) === 0) {
+        const ganadora = await tx.query<{ id: string }>(
+          'SELECT id FROM tax_transactions WHERE document_id = $1',
+          [documentId],
+        );
+        reply.code(200);
+        return { taxTransactionId: ganadora.rows[0]!.id, yaExistia: true };
+      }
+
       const taxTransactionId = fila.rows[0]!.id;
 
       await recordAudit(tx, tenant.companyId, {
