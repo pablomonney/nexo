@@ -221,19 +221,24 @@ no el libro que no cierra, sino el que cierra mal.
 
 ## 10. Gaps declarados
 
-- **Cierre de ejercicio.** No existe. La tabla `accounting_closures` está creada
-  desde la migración `0004` y **nadie escribe en ella**: no hay endpoint, no hay
-  asiento de refundición de resultados, no hay asiento de cierre ni de apertura
-  del ejercicio siguiente. Lo que sí existe es el cierre de **período**
-  (`POST /periods/:id/close`), que bloquea la registración y exige que no queden
-  asientos sin aprobar. Son cosas distintas y conviene no confundirlas: el
-  período cerrado impide escribir; el ejercicio cerrado además cancela las
-  cuentas de resultado contra el patrimonio neto. Lo segundo no está.
-- **El estado `BLOQUEADO` no se puede alcanzar por la API.** La migración `0004`
-  documenta la máquina `ABIERTO → BLOQUEADO → CERRADO` y el trigger
-  `assert_period_open` la respeta —en `BLOQUEADO` solo entran `AJUSTE` y
-  `CIERRE`—, pero `POST /periods/:id/close` va directo a `CERRADO`. El estado
-  intermedio existe en la base y no tiene puerta.
+- **El estado `BLOQUEADO` de los períodos no se puede alcanzar por la API.** La
+  migración `0004` documenta la máquina `ABIERTO → BLOQUEADO → CERRADO` y el
+  trigger `assert_period_open` la respeta, pero `POST /periods/:id/close` va
+  directo a `CERRADO`. El estado intermedio existe en la base y no tiene puerta.
+  El pre-cierre del **ejercicio** cubre la necesidad que motivaba a `BLOQUEADO`
+  —congelar la operación corriente mientras se cierra— a nivel de ejercicio, que
+  es donde corresponde; el de período quedó sin uso.
+- **Reapertura de un ejercicio cerrado.** No existe. Un período cerrado se
+  reabre con doble firma (`POST /periods/:id/reopen`); un ejercicio, no. El
+  trigger `je_fiscal_year_guard` rechaza todo asiento en un ejercicio `CERRADO`,
+  incluido un ajuste, así que la corrección de un ejercicio cerrado va en el
+  siguiente. Formalizar la reapertura es una decisión que excede al software.
+- **Cuentas con dimensión obligatoria y saldo al cierre.** El asiento de cierre
+  cancela saldos agregados, que por definición no tienen un tercero ni un centro
+  de costo únicos, y el CANDADO 7 exige la dimensión. El cierre lo detecta antes
+  de escribir y contesta `E_MISSING_DIMENSION` con la lista. Es un límite real
+  del modelo: la salida es imputar esas cuentas contra una de agregación antes de
+  cerrar, o no exigirles dimensión.
 - **Foliatura y rúbrica del art. 323.** El sistema numera folios para el listado;
   la individualización en el Registro Público es un trámite, no un dato que el
   software pueda producir.
@@ -244,3 +249,55 @@ no el libro que no cierra, sino el que cierra mal.
   lleva. Los subdiarios de IVA llegan en FASE 8.
 - **Exportación a PDF.** Hoy sale CSV y el texto del pie. El PDF con formato de
   libro rubricado no está.
+
+## 11. El ciclo del ejercicio
+
+```
+ABIERTO ──pre-close──► EN_CIERRE ──close──► CERRADO ──opening──► (N+1 con apertura)
+```
+
+**Cierre de ejercicio ≠ cierre de período**, y no comparten ni un candado. El
+período cerrado impide escribir en un mes (`assert_period_open`, CANDADO 4). El
+ejercicio gobierna qué *clase* de asiento admite en todo su rango
+(`je_fiscal_year_guard`, migración 0038). Un asiento tiene que pasar los dos.
+
+| Estado del ejercicio | Qué admite |
+|---|---|
+| `ABIERTO` | cualquier asiento |
+| `EN_CIERRE` | solo `AJUSTE`, `REFUNDICION` y `CIERRE` |
+| `CERRADO` | nada |
+
+### Dos asientos, no uno
+
+`REFUNDICION` cancela las cuentas de resultado contra la que la empresa designó
+como Resultado del ejercicio. `CIERRE` cancela lo que queda —lo patrimonial— y
+el ejercicio termina con todas las cuentas en cero.
+
+El cierre patrimonial no es opcional: sin él, el asiento de apertura de N+1
+**contaría dos veces**. Los saldos de arrastre salen de sumar todo lo anterior a
+la fecha, así que si N terminara con Caja en 1805 y la apertura de N+1 volviera
+a debitar 1805, el saldo inicial sería 3610. El par cierre/apertura es lo que
+mantiene esa suma cierta a través del corte — y lo de resultado, que no vuelve,
+es exactamente lo que no debe arrastrarse.
+
+### Qué cuenta recibe el resultado
+
+Ninguna que el sistema elija. `accounts.closing_role = 'RESULTADO_DEL_EJERCICIO'`
+la marca, la base admite una sola por empresa y exige que sea de PN imputable, y
+si no está designada el cierre se rechaza con `E_RESULT_ACCOUNT_MISSING`.
+
+Deducirla —«la primera PN», «la que se llame Resultado»— sería inventar
+contabilidad ajena. Es un marcador técnico del catálogo: no dice qué cuenta
+*debe* usarse según ninguna norma, dice cuál eligió esta empresa.
+
+### La apertura sale del cierre, no de un recálculo
+
+`accounting_closures.saldos` archiva los saldos patrimoniales posteriores a la
+refundición, y el asiento de apertura se arma **de ahí**. Recalcularlos
+permitiría que la apertura y el cierre que dice originarla no coincidan, y esa
+diferencia no la vería nadie: los dos cuadran por separado.
+
+El expediente —`GET /fiscal-years/:id/closure`— responde quién pre-cerró, quién
+cerró, con qué checklist, qué resultado se determinó, contra qué cuenta, qué dos
+asientos lo registraron, qué saldos quedaron y qué apertura derivó después. La
+relación es estructural, con FK: no es una frase en una descripción.

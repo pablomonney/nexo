@@ -23,7 +23,19 @@ export type JournalCode =
   | 'CIERRE'
   | 'APERTURA';
 
-export type EntryKind = 'NORMAL' | 'AJUSTE' | 'APERTURA' | 'CIERRE' | 'REVERSION';
+/**
+ * `REFUNDICION` es la cancelación de las cuentas de resultado contra la cuenta
+ * de Resultado del ejercicio; `CIERRE`, la del patrimonio. Son dos actos
+ * distintos del mismo cierre y tienen clase propia para que cada uno pueda
+ * llevar su índice de unicidad por ejercicio (migración 0038).
+ */
+export type EntryKind =
+  | 'NORMAL'
+  | 'AJUSTE'
+  | 'APERTURA'
+  | 'CIERRE'
+  | 'REVERSION'
+  | 'REFUNDICION';
 
 export interface FxDetail {
   readonly rate: { readonly numerator: bigint; readonly denominator: bigint };

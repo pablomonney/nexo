@@ -25,7 +25,41 @@ export type AccountingErrorCode =
    * código: 'citaste algo que no está' manda a revisar otra cosa.
    */
   | 'E_DECISION_NOT_FOUND'
-  | 'E_DUPLICATE_SOURCE';
+  | 'E_DUPLICATE_SOURCE'
+  /**
+   * El ejercicio no está en el estado que la operación pedida requiere.
+   *
+   * Cubre las cuatro formas de la misma equivocación —cerrar uno ya cerrado,
+   * cerrar uno que nunca pasó por pre-cierre, pre-cerrar uno en cierre, abrir
+   * sobre un ejercicio que sigue abierto—, y el mensaje dice cuál de las cuatro
+   * es. Separarlas en cuatro códigos no le daría a quien recibe el error ninguna
+   * decisión distinta: en los cuatro casos mira el estado y actúa.
+   */
+  | 'E_FISCAL_YEAR_STATE'
+  /**
+   * El checklist de cierre tiene ítems bloqueantes sin cumplir.
+   *
+   * Los ítems viajan en `details`. El sistema NO los arregla: un cierre que
+   * acomoda los datos para poder cerrar no es un cierre.
+   */
+  | 'E_CLOSURE_BLOCKED'
+  /**
+   * La empresa no designó qué cuenta recibe el resultado del ejercicio.
+   *
+   * Es su propio código porque no es un dato faltante más: elegir esa cuenta es
+   * una decisión del profesional sobre su plan de cuentas, y el sistema no la
+   * puede adivinar sin inventar contabilidad. Se marca con
+   * `accounts.closing_role`.
+   */
+  | 'E_RESULT_ACCOUNT_MISSING'
+  /**
+   * Se pidió la apertura de un ejercicio cuyo anterior no está cerrado, o cuyo
+   * cierre no dejó saldos archivados.
+   *
+   * La apertura no se calcula de nuevo: se deriva de los saldos que el cierre
+   * archivó. Sin ese cierre no hay de dónde derivarla.
+   */
+  | 'E_OPENING_WITHOUT_CLOSURE';
 
 export type NormativeErrorCode =
   /** No hay norma relevada para el caso. Nunca se infiere una. */

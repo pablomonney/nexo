@@ -85,14 +85,23 @@ const INVARIANTES = [
   },
   {
     id: 'A-3',
-    enunciado: 'Todo asiento aprobado tiene comprobante o justificación firmada',
+    enunciado: 'Todo asiento aprobado tiene comprobante, justificación firmada o decisión contable',
     universo: "SELECT count(*)::int AS n FROM journal_entries WHERE status = 'APROBADO'",
+    // Las tres vías, las mismas de `E_NO_TRACEABILITY` en el motor y de
+    // `je_trazabilidad_obligatoria` en la base (0037).
+    //
+    // Esta consulta conocía dos, y por eso denunciaba como sin respaldo a los
+    // ajustes de cierre fundados solo en una decisión. Pasó inadvertido porque
+    // `audit:invariants` corre contra la base de desarrollo, que después de un
+    // `db:reset` está vacía: el invariante daba VACUO y `verify` lo tomaba por
+    // bueno. Es el cuarto lugar donde vivía la misma disyunción de dos.
     sql: `
       SELECT e.id::text AS violacion,
              format('%s #%s del %s', e.journal_code, e.entry_number, e.entry_date) AS detalle
         FROM journal_entries e
        WHERE e.status = 'APROBADO'
          AND e.source_id IS NULL
+         AND e.decision_id IS NULL
          AND coalesce(btrim(e.manual_justification), '') = ''`,
   },
   {
@@ -208,6 +217,84 @@ const INVARIANTES = [
         FROM journal_entries e
         JOIN accounting_decisions d ON d.id = e.decision_id
        WHERE d.ambiente = 'PRUEBA'`,
+  },
+  // -------------------------------------------------------------------------
+  // Cierre de ejercicio
+  // -------------------------------------------------------------------------
+  // Los índices únicos de la 0038 impiden que estas situaciones se creen. Estos
+  // invariantes existen igual, y no son redundantes: un índice protege de acá en
+  // adelante, y esto verifica que lo que YA está en la base cumple. Es la
+  // diferencia entre «no puede pasar» y «no pasó», y una migración de datos
+  // futura puede romper la segunda sin tocar la primera.
+  {
+    id: 'A-11',
+    enunciado: 'Todo ejercicio CERRADO tiene su cierre completado, y viceversa',
+    universo: "SELECT count(*)::int AS n FROM fiscal_years WHERE status = 'CERRADO'",
+    sql: `
+      SELECT fy.id::text AS violacion,
+             format('ejercicio %s está CERRADO sin cierre COMPLETADO', fy.code) AS detalle
+        FROM fiscal_years fy
+       WHERE fy.status = 'CERRADO'
+         AND NOT EXISTS (
+           SELECT 1 FROM accounting_closures c
+            WHERE c.fiscal_year_id = fy.id AND c.status = 'COMPLETADO')
+      UNION ALL
+      SELECT c.id::text,
+             format('cierre COMPLETADO del ejercicio %s, que está %s', fy.code, fy.status)
+        FROM accounting_closures c
+        JOIN fiscal_years fy ON fy.id = c.fiscal_year_id
+       WHERE c.status = 'COMPLETADO' AND fy.status <> 'CERRADO'`,
+  },
+  {
+    id: 'A-12',
+    enunciado: 'Los asientos de cierre pertenecen al ejercicio que su expediente dice cerrar',
+    universo: "SELECT count(*)::int AS n FROM accounting_closures WHERE status = 'COMPLETADO'",
+    // Un asiento de cierre imputado a otro ejercicio es trazabilidad falsa: el
+    // recorrido se ve completo y señala el ejercicio equivocado.
+    sql: `
+      SELECT e.id::text AS violacion,
+             format('%s #%s es del ejercicio %s y cierra el %s',
+                    e.journal_code, e.entry_number, suyo.code, dice.code) AS detalle
+        FROM accounting_closures c
+        JOIN journal_entries e ON e.id IN (c.refundicion_entry_id, c.cierre_entry_id)
+        JOIN fiscal_years suyo ON suyo.id = e.fiscal_year_id
+        JOIN fiscal_years dice ON dice.id = c.fiscal_year_id
+       WHERE e.fiscal_year_id <> c.fiscal_year_id OR e.company_id <> c.company_id`,
+  },
+  {
+    id: 'A-13',
+    enunciado: 'Toda apertura deriva de un cierre completado del ejercicio anterior',
+    universo: "SELECT count(*)::int AS n FROM journal_entries WHERE kind = 'APERTURA'",
+    // Una apertura huérfana es un patrimonio que aparece sin venir de ningún
+    // lado. Cuadra —el asiento está balanceado— y no se puede explicar.
+    sql: `
+      SELECT e.id::text AS violacion,
+             format('apertura %s #%s sin cierre que la origine', e.journal_code, e.entry_number) AS detalle
+        FROM journal_entries e
+       WHERE e.kind = 'APERTURA'
+         AND e.status IN ('PROPUESTO', 'APROBADO')
+         AND NOT EXISTS (
+           SELECT 1 FROM accounting_closures c
+            WHERE c.apertura_entry_id = e.id AND c.status = 'COMPLETADO')`,
+  },
+  {
+    id: 'A-14',
+    enunciado: 'Ningún ejercicio cerrado tiene asientos que no sean de su propio cierre',
+    universo: "SELECT count(*)::int AS n FROM fiscal_years WHERE status = 'CERRADO'",
+    // El trigger `je_fiscal_year_guard` lo impide desde la 0038. Esto verifica
+    // que nada anterior a la migración —ni ninguna carga posterior con el
+    // trigger deshabilitado— haya dejado un asiento entrando después del cierre.
+    sql: `
+      SELECT e.id::text AS violacion,
+             format('%s #%s (%s) creado el %s en el ejercicio cerrado %s',
+                    e.journal_code, e.entry_number, e.kind, e.created_at::date, fy.code) AS detalle
+        FROM journal_entries e
+        JOIN fiscal_years fy ON fy.id = e.fiscal_year_id
+        JOIN accounting_closures c ON c.fiscal_year_id = fy.id AND c.status = 'COMPLETADO'
+       WHERE fy.status = 'CERRADO'
+         AND e.created_at > c.closed_at
+         AND e.id IS DISTINCT FROM c.refundicion_entry_id
+         AND e.id IS DISTINCT FROM c.cierre_entry_id`,
   },
 ];
 

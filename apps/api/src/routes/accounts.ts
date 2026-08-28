@@ -36,6 +36,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       const result = await tx.query(
         `SELECT id, code, name, parent_id AS "parentId", type, nature,
                 is_postable AS "isPostable", currency, tax_role AS "taxRole",
+                closing_role AS "closingRole",
                 requires_cost_center AS "requiresCostCenter",
                 requires_third_party AS "requiresThirdParty", status
            FROM accounts
@@ -141,6 +142,14 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         status: z.enum(['ACTIVE', 'ARCHIVED']).optional(),
         requiresCostCenter: z.boolean().optional(),
         requiresThirdParty: z.boolean().optional(),
+        /**
+         * Designa la cuenta que recibe el resultado del ejercicio.
+         *
+         * `null` la desmarca. La base impide que haya dos por empresa y que la
+         * marcada no sea de PN imputable (migración 0038): el sistema no elige
+         * esta cuenta, solo registra cuál eligió la empresa.
+         */
+        closingRole: z.enum(['RESULTADO_DEL_EJERCICIO']).nullish(),
         motivo: z.string().min(3).max(500),
       })
       .parse(request.body);
@@ -149,7 +158,8 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
         const before = await tx.query(
-          'SELECT id, name, status, requires_cost_center, requires_third_party FROM accounts WHERE id = $1',
+          `SELECT id, name, status, requires_cost_center, requires_third_party, closing_role
+             FROM accounts WHERE id = $1`,
           [params.accountId],
         );
         if (before.rowCount === 0) throw notFound('Cuenta no encontrada');
@@ -159,15 +169,21 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
               SET name = COALESCE($2, name),
                   status = COALESCE($3, status),
                   requires_cost_center = COALESCE($4, requires_cost_center),
-                  requires_third_party = COALESCE($5, requires_third_party)
+                  requires_third_party = COALESCE($5, requires_third_party),
+                  -- Distinto de los demás: acá NULL significa desmarcar, no
+                  -- "dejar como estaba". Por eso viaja aparte un booleano que
+                  -- dice si el campo vino en el cuerpo.
+                  closing_role = CASE WHEN $6 THEN $7 ELSE closing_role END
             WHERE id = $1
-            RETURNING id, name, status`,
+            RETURNING id, name, status, closing_role AS "closingRole"`,
           [
             params.accountId,
             body.name ?? null,
             body.status ?? null,
             body.requiresCostCenter ?? null,
             body.requiresThirdParty ?? null,
+            body.closingRole !== undefined,
+            body.closingRole ?? null,
           ],
         );
 

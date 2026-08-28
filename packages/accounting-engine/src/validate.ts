@@ -19,7 +19,7 @@
 
 import type { AccountingError, CalendarDate, Money } from '@aai/shared';
 import { accountingError, add, convert, formatAr, isZero, money, zero } from '@aai/shared';
-import type { JournalEntryDraft, JournalEntryLineDraft } from './contracts.js';
+import type { EntryKind, JournalEntryDraft, JournalEntryLineDraft } from './contracts.js';
 import type { AccountSnapshot, LedgerContext } from './ledger-context.js';
 import { accountByCode, fiscalYearById, periodFor, sourceKey } from './ledger-context.js';
 
@@ -45,6 +45,13 @@ export interface AsientoValidado {
 export type ResultadoValidacion =
   | { readonly ok: true; readonly value: AsientoValidado }
   | { readonly ok: false; readonly errors: readonly AccountingError[] };
+
+/**
+ * Clases de asiento que un ejercicio EN_CIERRE sigue admitiendo.
+ *
+ * APERTURA no está: pertenece al ejercicio siguiente, que está ABIERTO.
+ */
+const ADMITIDOS_EN_CIERRE: readonly EntryKind[] = ['AJUSTE', 'REFUNDICION', 'CIERRE'];
 
 export function validar(draft: JournalEntryDraft, context: LedgerContext): ResultadoValidacion {
   const errors: AccountingError[] = [];
@@ -230,6 +237,21 @@ export function validar(draft: JournalEntryDraft, context: LedgerContext): Resul
     } else if (year.status === 'CERRADO') {
       errors.push(
         accountingError('E_PERIOD_CLOSED', `El ejercicio ${year.code} está cerrado`),
+      );
+    } else if (year.status === 'EN_CIERRE' && !ADMITIDOS_EN_CIERRE.includes(draft.kind)) {
+      // Pre-cierre: el ejercicio dejó de recibir operación corriente y todavía
+      // no cerró. Es el estado para el que existe `EN_CIERRE`, y sin este
+      // control sería decorativo — la etapa duraría lo que dure, y entretanto
+      // seguirían entrando asientos que cambian el resultado que se está por
+      // determinar.
+      //
+      // El mismo criterio está en el trigger `je_fiscal_year_guard` (0038). Si
+      // divergen, manda la base.
+      errors.push(
+        accountingError(
+          'E_PERIOD_CLOSED',
+          `El ejercicio ${year.code} está en cierre: solo admite AJUSTE, REFUNDICION o CIERRE, y este es ${draft.kind}`,
+        ),
       );
     }
   }

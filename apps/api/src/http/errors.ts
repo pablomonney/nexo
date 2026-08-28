@@ -46,5 +46,24 @@ export const notFound = (message = 'No encontrado'): HttpError =>
 export const conflict = (message: string, details?: unknown): HttpError =>
   new HttpError(409, 'CONFLICT', message, details);
 
+/**
+ * 409 con un código del catálogo cerrado en vez del genérico `CONFLICT`.
+ *
+ * Existe porque hay conflictos que quien los recibe tiene que poder distinguir
+ * sin leer el mensaje: cerrar un ejercicio ya cerrado y pedir una apertura sobre
+ * uno que sigue abierto son los dos 409 y mandan a hacer cosas distintas.
+ */
+export const conflictoTipado = (code: string, message: string, details?: unknown): HttpError =>
+  new HttpError(409, code, message, details);
+
+/**
+ * 422 — la petición se entiende y las reglas del dominio la rechazan.
+ *
+ * Distinto de 400: los datos son válidos y están completos. Lo que falla es una
+ * regla contable, y el `code` dice cuál.
+ */
+export const unprocessable = (code: string, message: string, details?: unknown): HttpError =>
+  new HttpError(422, code, message, details);
+
 export const tooManyRequests = (message: string): HttpError =>
   new HttpError(429, 'TOO_MANY_REQUESTS', message);
