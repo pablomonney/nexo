@@ -58,7 +58,7 @@ export async function statementRoutes(app: FastifyInstance): Promise<void> {
 
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
-      async (tx) => serializar(await armar(tx, tenant.companyId, query)),
+      async (tx) => serializar(await armarEstado(tx, tenant.companyId, query)),
     );
   });
 
@@ -76,7 +76,7 @@ export async function statementRoutes(app: FastifyInstance): Promise<void> {
     const actorId = `user:${auth.user.userId}`;
 
     return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
-      const armado = await armar(tx, tenant.companyId, body);
+      const armado = await armarEstado(tx, tenant.companyId, body);
 
       if (!armado.estado.emisible) {
         return reply.code(409).send({
@@ -211,12 +211,18 @@ export async function statementRoutes(app: FastifyInstance): Promise<void> {
 // Armado
 // ---------------------------------------------------------------------------
 
-interface Armado {
+/**
+ * Un estado reconstruido desde el Mayor, con la plantilla que lo estructura.
+ *
+ * Se exporta para las notas: una nota se apoya en los renglones de un estado, y
+ * rearmarlo con otra consulta produciría dos verdades sobre la misma cifra.
+ */
+export interface Armado {
   readonly plantilla: PlantillaEstado;
   readonly estado: EstadoContable;
 }
 
-async function armar(
+export async function armarEstado(
   tx: Tx,
   companyId: string,
   pedido: { ejercicio: string; tipo: TipoEstado; comparativo?: string | undefined },

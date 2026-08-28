@@ -22,6 +22,8 @@ import {
   cifrasDeLasNotas,
   construirEstado,
   desagregarRenglon,
+  notasNoGenerables,
+  proponerNotas,
   remisiones,
   renglonDe,
   verificarNotas,
@@ -927,14 +929,34 @@ describe('una cifra de nota no se escribe: se referencia', () => {
     expect(resultado.errores.map((e) => e.codigo)).toContain('REMISION_SIN_NOTA');
   });
 
-  it('una nota a la que nadie remite también se detecta', () => {
+  it('una nota que no se apoya en nada de este estado se detecta', () => {
     // El control que casi nadie mira: delata la nota que quedó del ejercicio
     // anterior, con las cifras del ejercicio anterior adentro.
-    const resultado = verificarNotas(estado, [nota(), nota({ numero: 9, referidaPor: [] })]);
+    //
+    // Una nota está anclada si un renglón remite a ella O si alguna de sus
+    // cifras sale de este estado. La huérfana es la que no tiene ninguna de las
+    // dos: solo texto, sin nada de acá detrás.
+    const suelta = nota({
+      numero: 9,
+      referidaPor: [],
+      bloques: [{ tipo: 'TEXTO', contenido: 'Texto sin ninguna cifra de este estado.', origenTexto: 'HUMANO' }],
+    });
+    const resultado = verificarNotas(estado, [nota(), suelta]);
     const huerfana = resultado.errores.find((e) => e.codigo === 'NOTA_NO_REFERIDA');
 
     expect(huerfana?.nota).toBe(9);
     expect(huerfana?.mensaje).toMatch(/ejercicio anterior/);
+  });
+
+  it('una nota anclada por sus cifras no es huérfana aunque ningún renglón remita', () => {
+    // Las plantillas sembradas no declaran remisiones: el mecanismo existe en el
+    // modelo y ninguna lo usa. Con solo esa vía, toda nota real quedaba marcada
+    // como huérfana y el control pasaba a ser ruido — que es como un control
+    // deja de mirarse.
+    const porCifras = nota({ numero: 9, referidaPor: [] });
+    const resultado = verificarNotas(estado, [nota(), porCifras]);
+
+    expect(resultado.errores.map((e) => e.codigo)).not.toContain('NOTA_NO_REFERIDA');
   });
 
   it('una cifra que referencia un renglón inexistente se detecta', () => {
@@ -1030,5 +1052,160 @@ describe('una cifra de nota no se escribe: se referencia', () => {
     expect(
       renglonDe(estado, { ...cifra, renglonCodigo: 'NO_EXISTE' }),
     ).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Generación determinística de notas
+// ---------------------------------------------------------------------------
+
+describe('el sistema propone las notas que puede sostener, y nombra las que no', () => {
+  const estado = construirEstado(ESP_LGS, DATOS);
+  const contexto = {
+    marco: 'RT_FACPCE',
+    articulo: 'Ley 19.550 (T.O. 1984), art. 63',
+    moneda: 'ARS',
+    rubrosADesagregar: ['AC.CAJA'],
+  };
+
+  it('las bases de preparación citan datos declarados y piden revisión', () => {
+    // El marco, la norma y la moneda son datos ciertos; que sean los aplicables
+    // a este ente es una afirmación profesional. Por eso REQUIRES_REVIEW: no
+    // falta un dato, falta una firma.
+    const bases = proponerNotas(estado, contexto).find(
+      (n) => n.tipo === 'BASES_DE_PREPARACION',
+    )!;
+
+    expect(bases.evidencia).toBe('REQUIRES_REVIEW');
+    expect(bases.numero).toBe(1);
+    const texto = bases.bloques.find((b) => b.tipo === 'TEXTO');
+    expect(texto?.tipo === 'TEXTO' && texto.contenido).toContain('RT_FACPCE');
+    expect(texto?.tipo === 'TEXTO' && texto.origenTexto).toBe('PLANTILLA');
+    expect(bases.motivo).toMatch(/afirmación profesional/);
+  });
+
+  it('la composición de un rubro con cuentas detrás queda VERIFIED', () => {
+    // La única clase que llega a VERIFIED: cada fila del cuadro es una cuenta
+    // del origen del renglón, así que la suma ES el renglón por construcción.
+    const composicion = proponerNotas(estado, contexto).find(
+      (n) => n.tipo === 'COMPOSICION_DE_RUBRO',
+    )!;
+
+    expect(composicion.evidencia).toBe('VERIFIED');
+    const cuadro = composicion.bloques.find((b) => b.tipo === 'CUADRO');
+    expect(cuadro?.tipo === 'CUADRO' && cuadro.filas.length).toBeGreaterThan(0);
+    expect(composicion.motivo).toMatch(/linaje del renglón AC\.CAJA/);
+  });
+
+  it('un rubro que el estado no tiene sale sin evidencia, y SIN texto', () => {
+    // No se redacta lo que no se puede sostener. La nota existe para que el
+    // faltante quede a la vista, no para llenar el hueco con algo plausible.
+    const propuestas = proponerNotas(estado, {
+      ...contexto,
+      rubrosADesagregar: ['NO_EXISTE'],
+    });
+    const sinEvidencia = propuestas.find((n) => n.tipo === 'COMPOSICION_DE_RUBRO')!;
+
+    expect(sinEvidencia.evidencia).toBe('INSUFFICIENT_EVIDENCE');
+    expect(sinEvidencia.bloques).toEqual([]);
+    expect(sinEvidencia.motivo).toMatch(/no hay de dónde sacar su composición/);
+  });
+
+  it('un rubro sin ninguna cuenta detrás tampoco se inventa', () => {
+    const vacio: PlantillaEstado = {
+      ...ESP_LGS,
+      ecuacion: undefined,
+      raiz: [
+        {
+          codigo: 'A',
+          etiqueta: 'ACTIVO',
+          tipo: 'RUBRO',
+          fundamento: ART_63,
+          hijos: [
+            {
+              codigo: 'A.NADA',
+              etiqueta: 'Rubro sin cuentas',
+              tipo: 'RENGLON',
+              selector: { codigos: ['NO.HAY'] },
+            },
+          ],
+        },
+      ],
+    };
+    const propuestas = proponerNotas(construirEstado(vacio, DATOS), {
+      ...contexto,
+      rubrosADesagregar: ['A.NADA'],
+    });
+    const nota = propuestas.find((n) => n.tipo === 'COMPOSICION_DE_RUBRO')!;
+
+    expect(nota.evidencia).toBe('INSUFFICIENT_EVIDENCE');
+    expect(nota.bloques).toEqual([]);
+    expect(nota.motivo).toMatch(/no tiene ninguna cuenta detrás/);
+  });
+
+  it('el resultado del ejercicio sale del renglón que lo informa', () => {
+    const conResultado: PlantillaEstado = {
+      ...ESP_LGS,
+      ecuacion: undefined,
+      raiz: [
+        {
+          codigo: 'R',
+          etiqueta: 'Resultados',
+          tipo: 'RUBRO',
+          fundamento: ART_63,
+          hijos: [
+            {
+              codigo: 'RESULTADO_EJERCICIO',
+              etiqueta: 'Resultado del ejercicio',
+              tipo: 'RENGLON',
+              selector: { tipos: ['ACTIVO'] },
+            },
+          ],
+        },
+      ],
+    };
+    const nota = proponerNotas(construirEstado(conResultado, DATOS), {
+      ...contexto,
+      rubrosADesagregar: [],
+    }).find((n) => n.tipo === 'RESULTADO_DEL_EJERCICIO')!;
+
+    expect(nota.evidencia).toBe('VERIFIED');
+    const cifras = nota.bloques.find((b) => b.tipo === 'CIFRAS');
+    expect(cifras?.tipo === 'CIFRAS' && cifras.cifras[0]?.renglonCodigo).toBe(
+      'RESULTADO_EJERCICIO',
+    );
+  });
+
+  it('sin renglón de resultado no se propone esa nota', () => {
+    // El ESP de este fixture no lo tiene. No se fabrica una nota vacía para que
+    // el juego "quede completo".
+    expect(
+      proponerNotas(estado, contexto).some((n) => n.tipo === 'RESULTADO_DEL_EJERCICIO'),
+    ).toBe(false);
+  });
+
+  it('es determinística: dos corridas dan lo mismo', () => {
+    // Sin esto, "generado automáticamente" y "estimado" se vuelven lo mismo.
+    expect(proponerNotas(estado, contexto)).toEqual(proponerNotas(estado, contexto));
+  });
+
+  it('numera en orden y sin huecos', () => {
+    const propuestas = proponerNotas(estado, {
+      ...contexto,
+      rubrosADesagregar: ['AC.CAJA', 'NO_EXISTE'],
+    });
+    expect(propuestas.map((n) => n.numero)).toEqual([1, 2, 3]);
+  });
+
+  it('enumera lo que NO puede proponer, con lo que le falta a cada una', () => {
+    // Una nota ausente y una imposible se ven igual —no está— y mandan a hacer
+    // cosas distintas: buscar el generador, o cargar el dato que falta.
+    const faltantes = notasNoGenerables();
+
+    expect(faltantes.map((f) => f.tipo)).toContain('BIENES_DE_USO');
+    for (const faltante of faltantes) {
+      expect(faltante.motivo.length).toBeGreaterThan(20);
+      expect(faltante.falta.length).toBeGreaterThan(30);
+    }
   });
 });

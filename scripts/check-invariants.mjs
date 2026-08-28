@@ -84,12 +84,10 @@ const INVARIANTES = [
   {
     id: 'A-2',
     enunciado: 'Toda cifra de nota resuelve a ≥ 1 asiento aprobado',
-    // Las notas son un subsistema aparte (`notes.ts`): no las emite
-    // `/statements/issue` y no hay endpoint que las produzca. Cuando lo haya,
-    // esto pasa a REQUERIDO como pasó A-1.
-    vacuoPermitido:
-      'Las cifras de nota las produce el subsistema de notas, que no tiene endpoint de ' +
-      'emisión. No hay camino productivo que las cree, así que no hay forma de ejercitarlo.',
+    // Dejó de ser VACUO_PERMITIDO el 2026-08-28: ya hay camino productivo
+    // —`POST /statements/:id/notes/generate`— y el fixture lo recorre. Exige
+    // ejercicio como A-1: si dejara de generarlas, el gate corta.
+    ejercicio: 'REQUERIDO',
     universo: 'SELECT count(*)::int AS n FROM note_figures',
     sql: `
       SELECT f.id::text AS violacion,

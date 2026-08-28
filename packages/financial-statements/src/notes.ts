@@ -220,17 +220,50 @@ export function verificarNotas(estado: EstadoContable, notas: readonly Nota[]): 
   }
 
   // Y de las notas hacia el estado: el control que casi nadie mira.
+  //
+  // Una nota está **anclada** de dos maneras posibles, y le alcanza con una:
+  //
+  //   * un renglón del estado remite a ella (`nodo.nota` en la plantilla), o
+  //   * alguna de sus cifras sale de un renglón de este estado.
+  //
+  // La segunda vía se agregó al conectar las notas al circuito productivo. Las
+  // plantillas sembradas —arts. 63 y 64— **no declaran ninguna remisión**: el
+  // mecanismo existe en el modelo y ninguna plantilla lo usa todavía. Con solo
+  // la primera vía, toda nota real quedaba marcada como huérfana y el control
+  // pasaba a ser ruido de fondo, que es como un control deja de mirarse.
+  //
+  // Lo que sigue detectando, que es lo que importa: la nota que no se apoya en
+  // nada de este estado. Suele ser la que quedó del ejercicio anterior, con las
+  // cifras del ejercicio anterior adentro.
   const referidas = new Set(
     estado.renglones
       .map((renglon) => renglon.nota)
       .filter((numero): numero is number => numero !== null),
   );
   for (const nota of notas) {
-    if (!referidas.has(nota.numero)) {
+    const cifras = nota.bloques.flatMap((bloque) => cifrasDe(bloque));
+
+    // Una nota **con cifras** tiene que traer al menos una de este estado. Si
+    // todas vienen de otro lado, informa números que acá no significan nada —
+    // que es el caso que este control existe para encontrar.
+    //
+    // Una nota **sin cifras** no puede traer números viejos: es texto. A esa se
+    // le exige remisión solo cuando la plantilla usa el mecanismo, es decir
+    // cuando algún renglón remite a alguna nota. Con solo un lado declarado no
+    // hay inconsistencia que detectar, y marcarlas todas convertiría el control
+    // en ruido de fondo — que es como un control deja de mirarse. Las plantillas
+    // sembradas de los arts. 63 y 64 no declaran ninguna remisión todavía.
+    const anclada =
+      referidas.has(nota.numero) ||
+      (cifras.length > 0
+        ? cifras.some((cifra) => codigosDelEstado.has(cifra.renglonCodigo))
+        : referidas.size === 0);
+
+    if (!anclada) {
       errores.push({
         codigo: 'NOTA_NO_REFERIDA',
         nota: nota.numero,
-        mensaje: `Ningún renglón remite a la nota ${nota.numero}. Suele ser una nota que quedó del ejercicio anterior — con las cifras del ejercicio anterior adentro.`,
+        mensaje: `La nota ${nota.numero} no se apoya en ningún renglón de este estado: ni un renglón remite a ella, ni ninguna de sus cifras sale de acá. Suele ser una nota que quedó del ejercicio anterior — con las cifras del ejercicio anterior adentro.`,
       });
     }
   }
@@ -283,4 +316,240 @@ export function renglonDe(
   cifra: CifraDeNota,
 ): RenglonEmitido | undefined {
   return estado.renglones.find((renglon) => renglon.codigo === cifra.renglonCodigo);
+}
+
+// ---------------------------------------------------------------------------
+// Generación determinística
+// ---------------------------------------------------------------------------
+
+/**
+ * Tipos de nota que el sistema sabe tratar.
+ *
+ * No es una taxonomía contable: es la lista de lo que este sistema puede
+ * sostener con lo que tiene. Lo que no está acá se carga como `OTRA` y lo
+ * redacta una persona.
+ */
+export type TipoDeNota =
+  | 'BASES_DE_PREPARACION'
+  | 'COMPOSICION_DE_RUBRO'
+  | 'RESULTADO_DEL_EJERCICIO'
+  | 'OTRA';
+
+/**
+ * Qué sostiene la nota. Distinto de quién la firmó.
+ *
+ * - `VERIFIED`: las cifras salen de renglones del estado y el texto de datos
+ *   declarados. No hay nada que suponer.
+ * - `REQUIRES_REVIEW`: hay con qué proponerla, y lo que falta es juicio
+ *   profesional — no un dato.
+ * - `INSUFFICIENT_EVIDENCE`: el sistema no tiene la información. **No se redacta
+ *   texto y no se rellena con supuestos.**
+ */
+export type EstadoDeEvidencia = 'VERIFIED' | 'REQUIRES_REVIEW' | 'INSUFFICIENT_EVIDENCE';
+
+export interface NotaPropuesta {
+  readonly tipo: TipoDeNota;
+  readonly numero: number;
+  readonly titulo: string;
+  readonly bloques: readonly BloqueDeNota[];
+  readonly evidencia: EstadoDeEvidencia;
+  /**
+   * Por qué la evidencia es la que es.
+   *
+   * En `INSUFFICIENT_EVIDENCE` dice **qué falta**, que es lo único útil que se
+   * puede decir cuando no se puede decir nada más.
+   */
+  readonly motivo: string;
+  readonly fundamento: string;
+}
+
+/**
+ * Datos que el sistema ya declaró y que una nota puede citar sin suponer nada.
+ *
+ * Todo lo que entra acá está registrado en otra parte: el marco contable sale de
+ * `company_reporting_frameworks` y la norma de la plantilla del estado. Si
+ * mañana hiciera falta un criterio de valuación, **no se agrega acá con un valor
+ * por defecto**: se agrega cuando exista dónde declararlo, y hasta entonces la
+ * nota que lo necesite queda sin evidencia.
+ */
+export interface ContextoDeNotas {
+  readonly marco: string;
+  readonly articulo: string;
+  readonly moneda: string;
+  /** Renglones que se desagregan por cuenta. Los elige quien pide las notas. */
+  readonly rubrosADesagregar: readonly string[];
+}
+
+const ART_65 = 'Ley 19.550 (T.O. 1984), art. 65';
+
+/**
+ * Propone el juego de notas que el estado puede sostener.
+ *
+ * **Determinística**: mismas cifras, mismo texto, mismo orden. No estima, no
+ * infiere por el nombre de una cuenta y no completa lo que falta — cuando no
+ * alcanza devuelve `INSUFFICIENT_EVIDENCE` con lo que falta escrito.
+ *
+ * El texto que produce es de origen `PLANTILLA`: una frase armada con datos
+ * declarados. No es una redacción profesional, y por eso ninguna nota que
+ * afirme un *criterio* sale mejor que `REQUIRES_REVIEW`. Las que llegan a
+ * `VERIFIED` son las que solo afirman **composición**: qué cuentas forman un
+ * rubro y por cuánto, que es aritmética sobre el Mayor.
+ */
+export function proponerNotas(
+  estado: EstadoContable,
+  contexto: ContextoDeNotas,
+): NotaPropuesta[] {
+  const propuestas: NotaPropuesta[] = [];
+  let numero = 0;
+  const siguiente = (): number => (numero += 1);
+
+  // --- 1. Bases de preparación -------------------------------------------
+  //
+  // El marco y la norma están declarados; que sean los que corresponden al ente
+  // es una afirmación profesional. Por eso REQUIRES_REVIEW y no VERIFIED: el
+  // dato es cierto, la conclusión que se saca de él la firma una persona.
+  propuestas.push({
+    tipo: 'BASES_DE_PREPARACION',
+    numero: siguiente(),
+    titulo: 'Bases de preparación',
+    bloques: [
+      {
+        tipo: 'TEXTO',
+        origenTexto: 'PLANTILLA',
+        contenido:
+          `Los presentes estados contables fueron preparados conforme al marco ${contexto.marco} ` +
+          `declarado por el ente, con la estructura de ${contexto.articulo}, y se expresan en ` +
+          `${contexto.moneda}.`,
+      },
+    ],
+    evidencia: 'REQUIRES_REVIEW',
+    motivo:
+      'El marco contable, la norma de la estructura y la moneda están declarados en el sistema. ' +
+      'Que sean los aplicables a este ente es una afirmación profesional, no un dato.',
+    fundamento: ART_65,
+  });
+
+  // --- 2. Composición de los rubros pedidos -------------------------------
+  for (const codigo of contexto.rubrosADesagregar) {
+    const renglon = estado.renglones.find((fila) => fila.codigo === codigo);
+    if (renglon === undefined) {
+      propuestas.push({
+        tipo: 'COMPOSICION_DE_RUBRO',
+        numero: siguiente(),
+        titulo: `Composición de ${codigo}`,
+        // Sin texto y sin cifras: no hay nada que decir, y decir algo sería
+        // inventarlo. La nota existe para que el faltante quede a la vista.
+        bloques: [],
+        evidencia: 'INSUFFICIENT_EVIDENCE',
+        motivo: `El estado no tiene el renglón ${codigo}: no hay de dónde sacar su composición.`,
+        fundamento: ART_65,
+      });
+      continue;
+    }
+
+    const filas = desagregarRenglon(estado, codigo);
+    if (filas.length === 0) {
+      propuestas.push({
+        tipo: 'COMPOSICION_DE_RUBRO',
+        numero: siguiente(),
+        titulo: `Composición de ${renglon.etiqueta}`,
+        bloques: [],
+        evidencia: 'INSUFFICIENT_EVIDENCE',
+        motivo:
+          `El renglón ${codigo} no tiene ninguna cuenta detrás. Un rubro sin composición no se ` +
+          'explica: o está en cero, o la plantilla no lo está capturando.',
+        fundamento: ART_65,
+      });
+      continue;
+    }
+
+    propuestas.push({
+      tipo: 'COMPOSICION_DE_RUBRO',
+      numero: siguiente(),
+      titulo: `Composición de ${renglon.etiqueta}`,
+      bloques: [
+        {
+          tipo: 'TEXTO',
+          origenTexto: 'PLANTILLA',
+          contenido: `El rubro ${renglon.etiqueta} se compone de las siguientes cuentas:`,
+        },
+        { tipo: 'CUADRO', encabezados: ['Cuenta', 'Importe'], filas: filas.map((fila) => [fila]) },
+      ],
+      // La única clase que llega a VERIFIED: cada línea del cuadro es una cuenta
+      // del origen del renglón, así que la suma ES el renglón por construcción.
+      // No hay nada que revisar salvo la aritmética, y la aritmética está hecha.
+      evidencia: 'VERIFIED',
+      motivo: `Las ${filas.length} cuenta(s) salen del linaje del renglón ${codigo}.`,
+      fundamento: ART_65,
+    });
+  }
+
+  // --- 3. Resultado del ejercicio ----------------------------------------
+  const resultado = estado.renglones.find((fila) => fila.codigo === 'RESULTADO_EJERCICIO');
+  if (resultado !== undefined) {
+    const cifra = cifraDeRenglon(estado, resultado.codigo, 'Resultado del ejercicio');
+    propuestas.push({
+      tipo: 'RESULTADO_DEL_EJERCICIO',
+      numero: siguiente(),
+      titulo: 'Resultado del ejercicio',
+      bloques: [
+        {
+          tipo: 'TEXTO',
+          origenTexto: 'PLANTILLA',
+          contenido:
+            'El resultado del ejercicio surge de la diferencia entre los ingresos y los gastos ' +
+            'registrados, según el detalle del estado de resultados.',
+        },
+        ...(cifra === null ? [] : [{ tipo: 'CIFRAS' as const, cifras: [cifra] }]),
+      ],
+      evidencia: 'VERIFIED',
+      motivo: `Sale del renglón ${resultado.codigo} del estado, con su linaje.`,
+      fundamento: ART_65,
+    });
+  }
+
+  return propuestas;
+}
+
+/**
+ * Notas que el sistema **no** puede proponer, con lo que le falta a cada una.
+ *
+ * Se devuelven en vez de omitirse. Una nota ausente y una nota imposible se ven
+ * igual —no está— y mandan a hacer cosas distintas: buscar el generador, o
+ * cargar el dato que falta.
+ */
+export function notasNoGenerables(): readonly {
+  readonly tipo: string;
+  readonly motivo: string;
+  readonly falta: string;
+}[] {
+  return [
+    {
+      tipo: 'BIENES_DE_USO',
+      motivo:
+        'El art. 63 inc. 1) b) 3 pide altas, bajas, depreciaciones y valores de origen del ejercicio.',
+      falta:
+        'Un submayor de bienes de uso. El sistema registra el saldo contable de la cuenta y no el ' +
+        'movimiento por bien, así que no puede armar el cuadro sin inventarlo.',
+    },
+    {
+      tipo: 'PLAZOS_Y_GARANTIAS_DE_CREDITOS_Y_DEUDAS',
+      motivo: 'Art. 63 inc. 4) b) y c): plazos de vencimiento, y si están documentados o garantizados.',
+      falta:
+        'Vencimientos y garantías no están modelados. `party_id` identifica al tercero, no la ' +
+        'fecha de vencimiento ni la garantía.',
+    },
+    {
+      tipo: 'CRITERIOS_DE_VALUACION',
+      motivo: 'Las políticas contables aplicadas a cada rubro.',
+      falta:
+        'El sistema declara el marco contable del ente, no el criterio de valuación por rubro. ' +
+        'Redactarlo con el criterio más frecuente sería afirmar por el ente lo que no dijo.',
+    },
+    {
+      tipo: 'HECHOS_POSTERIORES',
+      motivo: 'Hechos ocurridos entre el cierre y la emisión que afecten la interpretación.',
+      falta: 'Son hechos del mundo, no del sistema. Los aporta quien firma.',
+    },
+  ];
 }

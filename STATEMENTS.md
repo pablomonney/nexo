@@ -284,6 +284,90 @@ es invisible: los números se ven razonables y el balance cuadra, porque cada
 asiento de más está balanceado. Lo encontró un test que dejó un asiento
 PROPUESTO a propósito y lo vio aparecer.
 
+## Notas complementarias
+
+Fuente: **Ley 19.550 (T.O. 1984), art. 65** — las notas y cuadros *«se
+considerarán parte»* de los estados contables.
+
+### La dirección
+
+```
+CONTABILIDAD → NOTA        y nunca al revés
+```
+
+Una nota **explica** algo ya registrado. No funda un asiento, no funda una
+decisión, no funda una regla y no altera un saldo. Eso no se sostiene revisando
+código: se sostiene en la forma de las tablas.
+
+- `note_figures.statement_line_id` es `NOT NULL`, así que **no hay dónde
+  escribir un número suelto**. Una cifra se obtiene apuntando a un renglón de un
+  estado ya emitido, y de ahí hereda el importe y el linaje.
+- `notes` no tiene ninguna columna con la que pudiera nombrar contabilidad — ni
+  `journal_entry_id`, ni `decision_id`, ni `account_id` — y ninguna tabla
+  contable la referencia. Hay un test que recorre el catálogo y lo comprueba en
+  las dos direcciones.
+
+### Los tres estados de evidencia
+
+`status` es el trámite —quién firmó—; `evidencia` es qué la sostiene. Son ejes
+distintos:
+
+| Evidencia | Qué significa | ¿Se puede aprobar? |
+|---|---|---|
+| `VERIFIED` | las cifras salen de renglones del estado; nada que suponer | sí |
+| `REQUIRES_REVIEW` | hay con qué proponerla; falta juicio profesional, no un dato | sí — aprobarla **es** la revisión |
+| `INSUFFICIENT_EVIDENCE` | el sistema no tiene la información | **no**: no hay nada detrás que firmar |
+
+Lo hace valer un CHECK de la migración `0040`, no el endpoint.
+
+Una nota sin evidencia se crea **sin texto**, con el faltante escrito en su
+fundamento. Un párrafo plausible sobre bienes de uso que el sistema no tiene
+sería exactamente lo contrario de lo que estas notas existen para lograr.
+
+### Qué se genera y qué no
+
+| Tipo | Evidencia | Por qué |
+|---|---|---|
+| `BASES_DE_PREPARACION` | `REQUIRES_REVIEW` | marco, norma y moneda están declarados; que sean los aplicables al ente es una afirmación profesional |
+| `COMPOSICION_DE_RUBRO` | `VERIFIED` | cada fila del cuadro es una cuenta del linaje del renglón: la suma **es** el renglón por construcción |
+| `RESULTADO_DEL_EJERCICIO` | `VERIFIED` | sale del renglón del ER, con su linaje |
+
+Y lo que **no** se puede proponer se devuelve enumerado, con lo que le falta a
+cada una: bienes de uso (falta un submayor por bien), plazos y garantías de
+créditos y deudas (no están modelados), criterios de valuación (el sistema
+declara el marco del ente, no el criterio por rubro) y hechos posteriores (son
+hechos del mundo, no del sistema). Una nota ausente y una imposible se ven
+igual —no está— y mandan a hacer cosas distintas.
+
+### Corregir una nota es reemplazarla
+
+Una nota aprobada es inmutable: título, cuerpo, cifras y firma. Lo único que le
+puede pasar es quedar `SUPERSEDIDA` por una versión nueva, encadenada por
+`supersedes_id`, con un motivo que diga qué cambió — «se actualizó» no es un
+motivo. Quedan las dos, como un asiento y su contraasiento.
+
+### El paquete
+
+`GET /statements/:id/package` reúne el estado, sus notas y su completitud.
+«Completo» ahí significa que todas las notas vigentes están aprobadas y ninguna
+quedó sin evidencia. **No significa que estén todas las que la ley exige**: el
+sistema no sabe cuáles son obligatorias, y lo dice —
+`obligatoriedad: 'REQUIRES_EXTERNAL_INPUT'`.
+
+### El futuro lugar de la IA
+
+La interfaz ya lo contempla y no lo usa. `BloqueDeNota` de tipo `TEXTO` lleva
+`origenTexto: 'PLANTILLA' | 'HUMANO' | 'IA_BORRADOR'`, y `verificarNotas`
+rechaza con `BORRADOR_DE_IA_SIN_REVISAR` cualquier nota que llegue a emitirse
+con texto de IA sin que una persona lo haya hecho suyo. El camino previsto es:
+
+```
+LLM → propuesta de REDACCIÓN → evidencia estructurada ya determinada → revisión profesional → publicación
+```
+
+Nunca `LLM → cifra`, `LLM → clasificación` ni `LLM → aprobación`. Las cifras no
+pasan por ahí: no hay forma de escribirlas.
+
 ## Gaps declarados
 
 - **Comparativos.** `construirEstado` acepta `saldosComparativos` y el endpoint
@@ -295,8 +379,16 @@ PROPUESTO a propósito y lo vio aparecer.
   queda dicha acá.
   `REQUIRES_EXTERNAL_INPUT`: FACPCE, RT 6 (reexpresión) y la serie de índices
   que la RT 6 manda usar. Falta el documento oficial archivado con su hash.
-- **Notas.** `notes.ts` existe y no tiene endpoint de emisión. El invariante A-2
-  queda `VACUO_PERMITIDO` por eso.
+- **Qué notas son legalmente obligatorias.** `REQUIRES_EXTERNAL_INPUT`. Las
+  plantillas de los arts. 63 y 64 no declaran ninguna remisión a nota
+  (`nodo.nota`), y no hay fuente archivada que enumere el juego mínimo
+  exigible. Organismo: **IGJ / FACPCE**; falta el documento oficial con su
+  hash. Hasta entonces el paquete informa qué notas tiene, no que estén
+  todas — y no se inventa una lista de obligatorias.
+- **Notas que necesitan datos que el sistema no modela.** Bienes de uso,
+  plazos y garantías, criterios de valuación y hechos posteriores: las
+  enumera `notasNoGenerables()` con lo que le falta a cada una, en vez de
+  omitirlas.
 - **Estado de evolución del patrimonio neto y flujo de efectivo.** Fuera del MVP,
   ya declarados.
 - **Un solo juego de plantillas**: RT FACPCE, SA, IGJ. Una cooperativa expone su

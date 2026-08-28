@@ -51,6 +51,9 @@ const CHECKS = [
   ['accounting_closures', 'ac_completado_completo', 'Un cierre COMPLETADO dice con qué cerró'],
   ['accounting_closures', 'ac_apertura_solo_sobre_cierre_completo', 'A-13: la apertura nace de un cierre'],
   ['accounts', 'accounts_resultado_es_pn_imputable', 'La cuenta de resultado es PN e imputable'],
+  ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
+  ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
+  ['note_figures', 'nf_con_origen', 'A-2: una cifra con importe tiene linaje detrás'],
   ['account_balances', 'balance_arithmetic', 'El saldo final se deriva de sus movimientos'],
 ];
 
@@ -69,6 +72,9 @@ const TRIGGERS = [
   ['accounting_closures', 'accounting_closures_inmutable', 'Lo que fundamentó un cierre no cambia'],
   ['accounting_closures', 'accounting_closures_no_delete', 'Un cierre no se borra'],
   ['accounting_decisions', 'accounting_decisions_inmutable', 'Una decisión usada no se edita'],
+  ['notes', 'notes_inmutable', 'Una nota aprobada no se edita: se supersede'],
+  ['note_figures', 'note_figures_match_line', 'A-2: la cifra dice lo mismo que su renglón'],
+  ['note_figures', 'note_figures_inmutables', 'Las cifras de una nota firmada no se tocan'],
   ['audit_logs', 'audit_logs_chain', 'A-5: cada entrada encadena con el hash de la anterior'],
   ['audit_logs', 'audit_logs_immutable', 'A-5: la cadena solo crece; nada se edita ni se borra'],
 ];
@@ -83,6 +89,8 @@ const INDICES = [
   ['accounting_closures_apertura_unica', 'Cada apertura pertenece a un solo cierre'],
   ['accounts_una_cuenta_de_resultado', 'Una sola cuenta de resultado por empresa'],
   ['accounting_decisions_una_vigente', 'Una decisión vigente por operación fiscal'],
+  ['notes_numero_vigente', 'Un número de nota por estado, entre las no supersedidas'],
+  ['notes_una_sucesora', 'Una nota reemplaza como mucho a una anterior'],
 ];
 
 /**
@@ -93,6 +101,7 @@ const INDICES = [
  */
 const RLS_FORZADO = [
   'accounts', 'fiscal_years', 'periods', 'journal_entries', 'journal_entry_lines',
+  'notes', 'note_figures',
   'ledger_movements', 'account_balances', 'accounting_closures', 'accounting_decisions',
   'rule_applications', 'audit_logs', 'tax_transactions', 'ai_predictions',
 ];
@@ -107,6 +116,7 @@ const RLS_FORZADO = [
 const VISTAS_INVOKER = [
   'ledger_trace', 'trial_balance', 'bank_trace', 'note_trace', 'statement_trace',
   'documents_pendientes', 'predictions_pendientes', 'company_arca_credentials_public',
+  'statement_package',
   'ai_answer_metrics',
 ];
 

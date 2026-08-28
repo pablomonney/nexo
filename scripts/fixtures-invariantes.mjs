@@ -375,6 +375,19 @@ async function ejercitarCierre(app, ctx) {
       tipo,
     });
     exigir(r, 201, `emisión del estado ${tipo}`);
+
+    // Y sus notas. Es lo que le da casos a A-2, que venía declarado
+    // VACUO_PERMITIDO porque no había camino productivo que creara una nota: el
+    // modelo estaba desde la 0024 y nadie lo escribía.
+    const notas = await pedir(
+      app,
+      ctx,
+      ctx.empresaA,
+      'POST',
+      `/statements/${r.json().estadoId}/notes/generate`,
+      { rubros: tipo === 'ESP' ? ['AC_CAJA', 'PN_CAPITAL'] : ['VENTAS'] },
+    );
+    exigir(notas, 201, `generación de notas del estado ${tipo}`);
   }
 
   const pre = await pedir(app, ctx, ctx.empresaA, 'POST', `/fiscal-years/${ctx.ejercicioA26}/pre-close`);
