@@ -221,13 +221,29 @@ no el libro que no cierra, sino el que cierra mal.
 
 ## 10. Gaps declarados
 
-- **El estado `BLOQUEADO` de los períodos no se puede alcanzar por la API.** La
-  migración `0004` documenta la máquina `ABIERTO → BLOQUEADO → CERRADO` y el
-  trigger `assert_period_open` la respeta, pero `POST /periods/:id/close` va
-  directo a `CERRADO`. El estado intermedio existe en la base y no tiene puerta.
-  El pre-cierre del **ejercicio** cubre la necesidad que motivaba a `BLOQUEADO`
-  —congelar la operación corriente mientras se cierra— a nivel de ejercicio, que
-  es donde corresponde; el de período quedó sin uso.
+- ~~**El estado `BLOQUEADO` de los períodos no se puede alcanzar por la API.**~~
+  **Cerrado.** Ahora hay `POST /periods/:id/block` con permiso `period:block`, y
+  las tres transiciones las decide `transicionar()` del motor —que hasta esta
+  fase tenía la máquina de estados completa y **ningún llamador productivo**: la
+  ruta reimplementaba las reglas en un `if`—.
+
+  Abrir la puerta dejó a la vista dos cosas que el estado inalcanzable tapaba:
+
+  1. `je_period_guard` (`0010`) admitía `AJUSTE` y `CIERRE`, y la `0038` había
+     agregado `REFUNDICION` sin avisarle. Bloquear un período hacía **imposible
+     cerrar el ejercicio**, que es exactamente al revés de para qué existe el
+     estado. Lo corrige la `0042`.
+  2. El motor solo miraba el permiso (`actorCanPostToBlocked`) y no la clase de
+     asiento, así que a un actor con `period:close` le dejaba pasar un asiento
+     `NORMAL` que después rechazaba el trigger: un 500 con un `RAISE EXCEPTION`
+     adentro en vez del `E_PERIOD_CLOSED` que corresponde.
+
+  Un candado sobre un estado al que nadie puede llegar no está probado: está
+  solamente escrito.
+
+  El pre-cierre del **ejercicio** sigue siendo el mecanismo principal para
+  congelar la operación corriente. `BLOQUEADO` es el equivalente por período,
+  para el cierre que lleva días.
 - **Reapertura de un ejercicio cerrado.** No existe. Un período cerrado se
   reabre con doble firma (`POST /periods/:id/reopen`); un ejercicio, no. El
   trigger `je_fiscal_year_guard` rechaza todo asiento en un ejercicio `CERRADO`,

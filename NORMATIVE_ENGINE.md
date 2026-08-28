@@ -186,9 +186,28 @@ dependiente finja estar respaldada.
 | Actos de adopción de consejos distintos de CABA | Empresas de otras jurisdicciones. El motor **rechaza resolver** sin la adopción cargada |
 | Régimen de ajuste por inflación (contable y fiscal) | Reexpresión en moneda homogénea |
 | Percepciones, retenciones e IIBB por régimen y jurisdicción | Módulos fiscales correspondientes |
+| Vigencia del t.o. 1997 de IVA (`vigencia_to_1997_iva`) | **La activación de `AR-IVA-CF-VINCULACION-001`.** Falta el texto completo del Decreto 280/1997, que trae la cláusula de vigencia; lo archivado es la ficha de INFOLEG, sin articulado |
 
 Un gap abierto no rompe el sistema: **degrada la funcionalidad a "requiere revisión profesional"**,
 que es el comportamiento correcto según el §52.
+
+### Un gap que bloquea, bloquea en la base
+
+La `0033` dice que registra el gap en la base «porque el motor consulta esta
+tabla». **No la consultaba**: la única lectura de `normative_gaps` estaba en una
+pantalla del estudio, y la regla se podía activar con el gap abierto.
+
+Desde la `0041` el vínculo es estructural —`normative_gaps.blocks_rule_key`, una
+columna, no una búsqueda del `rule_key` dentro del texto en prosa de `blocks`— y
+lo impone un trigger sobre `accounting_rules`. Ni la API, ni el script, ni un
+`UPDATE` a mano pueden llevar a `ACTIVE` una regla que un gap abierto nombre.
+
+`npm run reglas:aprobar` además lo consulta **antes** de intentar nada, para
+poder decir cuál es el gap y qué documento falta, en vez de devolver un error de
+constraint.
+
+Cerrar un gap es incorporar la fuente oficial que falta —descarga, SHA-256,
+registro en `registro-de-descargas.csv`—, no cambiarle el estado.
 
 ## 9. Lección de campo: la vigencia se mueve incluso dentro de una misma norma
 

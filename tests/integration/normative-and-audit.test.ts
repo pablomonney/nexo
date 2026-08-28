@@ -8,6 +8,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, expectFailure, hasDatabase, seed, type Client, type Fixture } from './helpers/db.js';
+import { sufijoUnico } from './helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 
@@ -42,9 +43,16 @@ suite('Motor normativo — una regla no se activa sin fuente verificada', () => 
       return versionId;
     };
 
-    normV1 = await makeNorm(`T${Date.now() % 100000}`, 'V1', true);
-    normV2 = await makeNorm(`T${(Date.now() % 100000) + 1}`, 'V2', true);
-    normV1SinDocumento = await makeNorm(`T${(Date.now() % 100000) + 2}`, 'V1', false);
+    // El número sale de la secuencia de PostgreSQL, no del reloj.
+    // `Date.now() % 100000` da un contador que **se repite cada 100 segundos**,
+    // así que dos corridas seguidas de `npm run verify` chocaban contra
+    // `norms_organismo_tipo_numero_anio_key`. Es el mismo defecto que
+    // `identificadores.ts` ya documenta para los CUIT: un recorte del reloj no
+    // es un identificador único, es un identificador que todavía no chocó.
+    const base = await sufijoUnico(client);
+    normV1 = await makeNorm(`T${base}1`, 'V1', true);
+    normV2 = await makeNorm(`T${base}2`, 'V2', true);
+    normV1SinDocumento = await makeNorm(`T${base}3`, 'V1', false);
   });
 
   afterAll(async () => {

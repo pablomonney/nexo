@@ -109,6 +109,27 @@ try {
     process.exit(1);
   }
 
+  // Un gap normativo abierto que nombre esta regla la bloquea. La base también
+  // lo impone (`accounting_rules_gap_abierto`, 0041); acá se consulta antes para
+  // poder decir CUÁL gap y QUÉ falta, en vez de devolver un error de constraint.
+  const gaps = await db.query(
+    `SELECT topic, description, blocks
+       FROM normative_gaps
+      WHERE blocks_rule_key = $1 AND status = 'ABIERTO'`,
+    [clave],
+  );
+  if (gaps.rowCount > 0) {
+    console.error(`\n✘ ${clave} no se puede activar: hay ${gaps.rowCount} gap(s) normativo(s) abiertos.\n`);
+    for (const gap of gaps.rows) {
+      console.error(`  · ${gap.topic}`);
+      console.error(`    falta    ${gap.description}`);
+      console.error(`    bloquea  ${gap.blocks}\n`);
+    }
+    console.error('  Un gap se cierra incorporando la fuente oficial que falta —descarga, SHA-256,');
+    console.error('  registro en registro-de-descargas.csv—, no cambiando su estado a mano.');
+    process.exit(1);
+  }
+
   // Se muestra QUÉ se está por activar, antes de activarlo.
   const cita = regla.action?._cita ?? {};
   console.log('\nSe va a ACTIVAR:');
@@ -134,14 +155,22 @@ try {
 
   // La bitácora encadenada por hash. Sin esto la activación sería un UPDATE que
   // nadie puede reconstruir después.
-  // Los nombres de columna salen de la 0008, no de la memoria: `object_type` y
-  // `old_value`/`new_value`, no `entity`/`before`/`after`. `prev_hash` y `hash`
-  // van vacíos porque los completa el trigger de encadenamiento.
+  //
+  // Va a `normative_audit_logs` y no a `audit_logs`. La corrección anterior
+  // arregló los nombres de las columnas —`object_type`, `old_value`/`new_value`—
+  // y dejó pasar lo otro: `audit_logs.company_id` es NOT NULL, y acá se pasaba
+  // NULL porque una regla no es de ninguna empresa. La inserción fallaba con
+  // 23502 SIEMPRE, después del UPDATE, y el `catch` la revertía. Es decir: este
+  // comando nunca pudo aprobar nada. No se notó porque nunca se aprobó una regla
+  // —el §32 exige la firma, y la firma no tenía dónde escribirse—.
+  //
+  // El destino correcto no es aflojar el NOT NULL: es reconocer que un acto
+  // normativo no ocurre dentro de una empresa. Ver la 0041.
   await db.query(
-    `INSERT INTO audit_logs
-       (company_id, actor_type, actor_id, action, object_type, object_id,
-        old_value, new_value, motivo, prev_hash, hash)
-     VALUES (NULL, 'USER', $1, 'RULE_APPROVED', 'accounting_rules', $2, $3, $4, $5, '', '')`,
+    `INSERT INTO normative_audit_logs
+       (actor_type, actor_id, action, object_type, object_id,
+        old_value, new_value, motivo, prev_hash, hash, seq)
+     VALUES ('USER', $1, 'RULE_APPROVED', 'accounting_rules', $2, $3, $4, $5, '', '', 0)`,
     [
       aprobador,
       regla.id,

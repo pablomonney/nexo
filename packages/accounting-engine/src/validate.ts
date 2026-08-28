@@ -53,6 +53,21 @@ export type ResultadoValidacion =
  */
 const ADMITIDOS_EN_CIERRE: readonly EntryKind[] = ['AJUSTE', 'REFUNDICION', 'CIERRE'];
 
+/**
+ * Clases que un período BLOQUEADO admite.
+ *
+ * Coincide con la del ejercicio EN_CIERRE y no es casualidad: las dos describen
+ * la misma etapa —el cierre en curso— vista desde dos objetos distintos. Son
+ * constantes separadas porque los candados son separados y podrían divergir;
+ * hoy no divergen.
+ *
+ * La lista sale del trigger `je_period_guard`, en la versión de la 0042. Ahí se
+ * agregó `REFUNDICION`, que la 0038 había creado sin avisarle a este guard: sin
+ * eso, bloquear un período hacía imposible cerrar el ejercicio. Si divergen,
+ * manda la base.
+ */
+const ADMITIDOS_EN_BLOQUEO: readonly EntryKind[] = ['AJUSTE', 'REFUNDICION', 'CIERRE'];
+
 export function validar(draft: JournalEntryDraft, context: LedgerContext): ResultadoValidacion {
   const errors: AccountingError[] = [];
 
@@ -211,13 +226,33 @@ export function validar(draft: JournalEntryDraft, context: LedgerContext): Resul
           `El período ${period.number} está cerrado. Corregir exige un ajuste en período abierto o la reapertura formal.`,
         ),
       );
-    } else if (period.status === 'BLOQUEADO' && context.actorCanPostToBlocked !== true) {
-      errors.push(
-        accountingError(
-          'E_PERIOD_CLOSED',
-          `El período ${period.number} está bloqueado: solo admite asientos de cierre`,
-        ),
-      );
+    } else if (period.status === 'BLOQUEADO') {
+      // Son DOS condiciones, no una: quién puede postear y QUÉ se puede postear.
+      // El motor solo miraba la primera, así que a un actor con `period:close`
+      // le dejaba pasar un asiento MANUAL — y el trigger `je_period_guard`
+      // (0010), que impone la segunda para todos sin mirar permisos, lo
+      // rechazaba después. El resultado era un 500 con un `RAISE EXCEPTION`
+      // adentro en vez del error de dominio que corresponde.
+      //
+      // No se notó hasta esta fase porque no había endpoint que llevara un
+      // período a BLOQUEADO: la discrepancia existía en un estado inalcanzable.
+      if (context.actorCanPostToBlocked !== true) {
+        errors.push(
+          accountingError(
+            'E_PERIOD_CLOSED',
+            `El período ${period.number} está bloqueado: solo admite asientos de cierre`,
+          ),
+        );
+      } else if (!ADMITIDOS_EN_BLOQUEO.includes(draft.kind)) {
+        errors.push(
+          accountingError(
+            'E_PERIOD_CLOSED',
+            `El período ${period.number} está BLOQUEADO: admite ${ADMITIDOS_EN_BLOQUEO.join(' o ')}, ` +
+              `y este asiento es ${draft.kind}. El bloqueo existe para que entren los ajustes de ` +
+              'cierre sin que entre operación corriente.',
+          ),
+        );
+      }
     }
 
     const year = fiscalYearById(context, period.fiscalYearId);

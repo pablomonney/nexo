@@ -6,15 +6,38 @@
  * reconstruye el Mayor completo desde el Diario y verifica que coincide con lo
  * materializado.
  *
- *   npm run ledger:verify              # todas las empresas
- *   npm run ledger:verify -- <cuit>    # una sola
+ *   npm run ledger:verify                        — modo CONDUCTUAL (el de `verify`)
+ *   node scripts/verify-ledger.mjs --observacional        — sobre DATABASE_URL, tal cual está
+ *   node scripts/verify-ledger.mjs --observacional <cuit> — una sola empresa
  *
- * Sale con código distinto de cero si alguna empresa discrepa. Un control que
- * informa y sigue no es un control: si el Mayor no coincide con el Diario, no se
- * emiten estados contables, y el pipeline tiene que enterarse.
+ * ## El tercer falso verde de la misma forma
  *
- * Sin DATABASE_URL no falla: avisa y sale con 0. Un desarrollador sin base
- * levantada tiene que poder correr `npm run verify`.
+ * Este script tenía exactamente el defecto que `check-invariants.mjs` documenta
+ * y arregló para los invariantes, y que las notas volvieron a mostrar en el
+ * modelo de datos. Corría contra la base de **desarrollo**, que después de un
+ * `db:reset` no tiene empresas, y entonces:
+ *
+ *     if (empresas.rows.length === 0) { console.log('no hay empresas'); exit(0) }
+ *
+ * Salir con 0 ahí no dice "el Mayor coincide": dice "no miré". Y había un
+ * segundo camino más silencioso todavía: una empresa **sin un solo movimiento**
+ * no produce discrepancias, así que imprimía `✔ el Mayor coincide con el Diario`
+ * sin haber comparado nada.
+ *
+ * Encima no estaba en CI. El único lugar donde corría era el `npm run verify`
+ * local, contra la base vacía.
+ *
+ * ## Los cuatro estados, los mismos que los invariantes
+ *
+ * | Estado | Qué significa | ¿Corta? |
+ * |---|---|---|
+ * | `VERIFIED` | se compararon movimientos y coinciden | no |
+ * | `VIOLATED` | el Mayor no coincide con el Diario | **sí, siempre** |
+ * | `NOT_EXERCISED` | no había nada que comparar | **sí, en modo conductual** |
+ *
+ * No hay `VACUO_PERMITIDO` acá: no existe ninguna razón declarada por la que el
+ * fixture conductual no pueda producir asientos aprobados. Si no los produjo, se
+ * rompió el fixture, y eso es justamente lo que hay que enterarse.
  *
  * La verificación se hace **en SQL**, no trayendo los movimientos a memoria. Un
  * ejercicio con medio millón de movimientos no entra en un proceso de Node, y un
@@ -34,16 +57,44 @@ if (existsSync(join(HERE, '..', '.env'))) {
   process.loadEnvFile(join(HERE, '..', '.env'));
 }
 
-const DATABASE_URL = process.env.DATABASE_URL ?? '';
+export const VERIFIED = 'VERIFIED';
+export const VIOLATED = 'VIOLATED';
+export const NOT_EXERCISED = 'NOT_EXERCISED';
 
-if (DATABASE_URL === '') {
+const observacional = process.argv.includes('--observacional');
+const conductual = !observacional;
+const cuitPedido = process.argv.slice(2).find((arg) => !arg.startsWith('--')) ?? null;
+
+let url = process.env.DATABASE_URL ?? '';
+if (url === '') {
+  // Sin base no se puede afirmar nada, y en modo conductual eso es un fallo: el
+  // gate promete haber comparado. En observacional se avisa y se sigue, porque
+  // ahí el comando es una pregunta, no una promesa.
+  if (conductual) {
+    console.error('ledger:verify — falta DATABASE_URL y el modo conductual necesita una base.');
+    process.exit(1);
+  }
   console.log('ledger:verify — sin DATABASE_URL. Nada que verificar.');
   process.exit(0);
 }
 
-const cuitPedido = process.argv[2] ?? null;
+if (conductual) {
+  const { prepararBaseDeVerificacion } = await import('./verification-db.mjs');
+  const { sembrarFixtures } = await import('./fixtures-invariantes.mjs');
+  console.log('Modo CONDUCTUAL — base de verificación aislada y fixtures propios.\n');
+  url = await prepararBaseDeVerificacion({ silencioso: true });
+  await sembrarFixtures(url, { silencioso: true });
+  console.log('  ✔ fixtures conductuales sembrados\n');
+} else {
+  console.log(`Modo OBSERVACIONAL — se mira ${new URL(url).pathname.slice(1)} tal como está.\n`);
+}
 
-const client = new pg.Client({ connectionString: DATABASE_URL });
+// Arriba del bloque que lo usa, y no al lado de `imprimir`: el `try` de abajo
+// corre en el orden del módulo, y un `const` declarado después queda en zona
+// muerta temporal. `function` se iza; `const` no.
+const SIMBOLO = { [VERIFIED]: '✔', [VIOLATED]: '✘', [NOT_EXERCISED]: '✘' };
+
+const client = new pg.Client({ connectionString: url });
 await client.connect();
 
 try {
@@ -54,16 +105,20 @@ try {
     cuitPedido === null ? [] : [cuitPedido],
   );
 
-  if (empresas.rows.length === 0) {
-    console.log(`ledger:verify — no hay empresas${cuitPedido === null ? '' : ` con CUIT ${cuitPedido}`}.`);
-    process.exit(0);
-  }
-
-  let conDiscrepancias = 0;
+  const resultados = [];
 
   for (const empresa of empresas.rows) {
+    // El universo primero: cuántas líneas de asiento DEBERÍA proyectar el Mayor.
+    // Sin este número, "cero discrepancias" y "cero comparaciones" se ven igual.
+    const esperados = await contarEsperados(client, empresa.id);
     const discrepancias = await verificar(client, empresa.id);
     const total = discrepancias.reduce((acc, fila) => acc + Number(fila.cantidad), 0);
+
+    // El orden importa, igual que en los invariantes: una discrepancia manda
+    // aunque el universo diera cero. Si las dos consultas discrepan, el problema
+    // es el control, y taparlo con NOT_EXERCISED sería esconder el caso que hay
+    // que mirar.
+    const estado = total > 0 ? VIOLATED : esperados > 0 ? VERIFIED : NOT_EXERCISED;
 
     await client.query(
       `INSERT INTO ledger_verifications
@@ -71,27 +126,22 @@ try {
        VALUES ($1, 'script:ledger-verify', $2, $3, $4::jsonb, $5)`,
       [
         empresa.id,
-        await contarEsperados(client, empresa.id),
+        esperados,
         total,
         JSON.stringify(discrepancias),
         total === 0 ? 'COINCIDE' : 'DISCREPA',
       ],
     );
 
-    if (total === 0) {
-      console.log(`  ✔ ${empresa.legal_name} (${empresa.cuit}) — el Mayor coincide con el Diario`);
-      continue;
-    }
-
-    conDiscrepancias += 1;
-    console.error(`  ✘ ${empresa.legal_name} (${empresa.cuit}) — ${total} discrepancia(s):`);
-    for (const fila of discrepancias) {
-      console.error(`      ${fila.tipo}: ${fila.cantidad}`);
-      for (const ejemplo of fila.ejemplos) console.error(`        línea ${ejemplo}`);
-    }
+    resultados.push({ empresa, esperados, discrepancias, total, estado });
   }
 
-  if (conDiscrepancias > 0) {
+  imprimir(resultados);
+
+  const violados = resultados.filter((r) => r.estado === VIOLATED);
+  const ejercitados = resultados.filter((r) => r.estado === VERIFIED);
+
+  if (violados.length > 0) {
     console.error('');
     console.error(
       'El Mayor no coincide con el Diario. Vale el Diario: es el libro con eficacia probatoria',
@@ -102,9 +152,56 @@ try {
     process.exit(1);
   }
 
-  console.log(`ledger:verify — ${empresas.rows.length} empresa(s) verificada(s), sin discrepancias.`);
+  if (ejercitados.length === 0) {
+    const mensaje =
+      empresas.rows.length === 0
+        ? 'no hay ni una empresa'
+        : `${empresas.rows.length} empresa(s), ninguna con asientos aprobados`;
+
+    if (conductual) {
+      console.error('');
+      console.error(`ledger:verify — NO EJERCITADO: ${mensaje}.`);
+      console.error('');
+      console.error('  Esto NO es "el Mayor coincide": es "no había nada que comparar". En modo');
+      console.error('  conductual el fixture prometió producir asientos aprobados y no lo hizo, así');
+      console.error('  que el que está roto es el fixture, no el libro.');
+      process.exit(1);
+    }
+
+    console.log('');
+    console.log(`ledger:verify — NO EJERCITADO: ${mensaje}. No se afirma que el Mayor coincida.`);
+    process.exit(0);
+  }
+
+  console.log('');
+  console.log(
+    `ledger:verify — ${ejercitados.length} empresa(s) verificada(s) con movimientos reales, sin discrepancias.`,
+  );
 } finally {
   await client.end();
+}
+
+
+function imprimir(resultados) {
+  for (const r of resultados) {
+    const nombre = `${r.empresa.legal_name} (${r.empresa.cuit})`;
+
+    if (r.estado === VERIFIED) {
+      console.log(`  ${SIMBOLO[VERIFIED]} ${nombre} — ${r.esperados} línea(s) proyectadas, coinciden`);
+      continue;
+    }
+
+    if (r.estado === NOT_EXERCISED) {
+      console.log(`  ${SIMBOLO[NOT_EXERCISED]} ${nombre} — sin asientos aprobados: nada que comparar`);
+      continue;
+    }
+
+    console.error(`  ${SIMBOLO[VIOLATED]} ${nombre} — ${r.total} discrepancia(s):`);
+    for (const fila of r.discrepancias) {
+      console.error(`      ${fila.tipo}: ${fila.cantidad}`);
+      for (const ejemplo of fila.ejemplos) console.error(`        línea ${ejemplo}`);
+    }
+  }
 }
 
 /**

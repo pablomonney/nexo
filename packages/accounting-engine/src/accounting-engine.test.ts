@@ -253,10 +253,23 @@ describe('validación del asiento', () => {
     expect(resultado.errors.find((e) => e.code === 'E_PERIOD_CLOSED')?.message).toMatch(/reapertura/);
   });
 
-  it('5 · bloqueado no es cerrado: el rol de cierre sí puede postear', () => {
-    const draft = borrador({ entryDate: fecha('2025-02-10') });
-    expect(codigos(draft)).toContain('E_PERIOD_CLOSED');
-    expect(codigos(draft, contexto({ actorCanPostToBlocked: true }))).toEqual([]);
+  it('5 · bloqueado no es cerrado: el rol de cierre postea los AJUSTES', () => {
+    // Son dos condiciones y no una, y hasta esta fase el motor solo miraba la
+    // primera. El permiso dice QUIÉN puede postear durante el bloqueo; la clase
+    // de asiento dice QUÉ, y esa la impone `je_period_guard` (0010) para todos.
+    //
+    // Con solo el permiso, un asiento NORMAL pasaba el motor y lo rechazaba la
+    // base: un 500 con un RAISE EXCEPTION adentro en vez del error de dominio.
+    const corriente = borrador({ entryDate: fecha('2025-02-10') });
+    expect(codigos(corriente)).toContain('E_PERIOD_CLOSED');
+    expect(codigos(corriente, contexto({ actorCanPostToBlocked: true }))).toContain(
+      'E_PERIOD_CLOSED',
+    );
+
+    const ajuste = borrador({ entryDate: fecha('2025-02-10'), kind: 'AJUSTE' });
+    expect(codigos(ajuste, contexto({ actorCanPostToBlocked: true }))).toEqual([]);
+    // Y sin el permiso, ni siquiera el ajuste: el bloqueo también es de personas.
+    expect(codigos(ajuste)).toContain('E_PERIOD_CLOSED');
   });
 
   it('6 · la fecha tiene que caer en algún período', () => {

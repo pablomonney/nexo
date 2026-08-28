@@ -55,6 +55,7 @@ const CHECKS = [
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
   ['note_figures', 'nf_con_origen', 'A-2: una cifra con importe tiene linaje detrás'],
   ['account_balances', 'balance_arithmetic', 'El saldo final se deriva de sus movimientos'],
+  ['normative_audit_logs', 'normative_audit_logs_motivo_check', 'Un acto normativo sin constancia escrita no se registra'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -77,6 +78,10 @@ const TRIGGERS = [
   ['note_figures', 'note_figures_inmutables', 'Las cifras de una nota firmada no se tocan'],
   ['audit_logs', 'audit_logs_chain', 'A-5: cada entrada encadena con el hash de la anterior'],
   ['audit_logs', 'audit_logs_immutable', 'A-5: la cadena solo crece; nada se edita ni se borra'],
+  ['normative_audit_logs', 'normative_audit_logs_chain', 'La bitácora normativa también encadena por hash'],
+  ['normative_audit_logs', 'normative_audit_logs_immutable', 'La bitácora normativa solo crece'],
+  ['accounting_rules', 'accounting_rules_gap_abierto', 'Un gap normativo ABIERTO bloquea la activación de la regla'],
+  ['periods', 'periods_transicion_valida', 'La máquina de estados del período, no solo en TypeScript'],
 ];
 
 /** Índices únicos que sostienen una unicidad de negocio. */

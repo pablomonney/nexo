@@ -335,6 +335,65 @@ const INVARIANTES = [
   },
 ];
 
+/**
+ * La política de ejercicio deja de ser decorativa.
+ *
+ * `ejercicio: 'REQUERIDO'` estaba escrito en once invariantes y **no lo leía
+ * nadie**: la clasificación miraba únicamente si existía `vacuoPermitido`. El
+ * campo era un comentario con dos puntos. Eso deja tres formas de equivocarse
+ * sin que nada avise:
+ *
+ *   · un invariante nuevo que no declara nada cae en NOT_EXERCISED por defecto
+ *     —lo cual falla cerrado, que está bien— pero por accidente, no por diseño;
+ *   · uno que declare las dos cosas se comporta como el más débil de los dos;
+ *   · `ejercicio: 'REQUERIDA'` —una letra— no lo detecta nadie.
+ *
+ * Así que la lista se valida al cargarse, y un error acá revienta el módulo en
+ * vez de degradar el gate en silencio. Es el mismo criterio que el resto del
+ * sistema: la promesa se declara, y declararla mal es un error, no un default.
+ */
+export function validarPoliticas(lista = INVARIANTES) {
+  const problemas = [];
+
+  for (const inv of lista) {
+    const declaraRequerido = inv.ejercicio !== undefined;
+    const declaraVacuo = inv.vacuoPermitido !== undefined;
+
+    if (declaraRequerido && inv.ejercicio !== 'REQUERIDO') {
+      problemas.push(`${inv.id}: ejercicio = ${JSON.stringify(inv.ejercicio)}; el único valor válido es 'REQUERIDO'`);
+    }
+    if (!declaraRequerido && !declaraVacuo) {
+      problemas.push(
+        `${inv.id}: no declara su política. Poné ejercicio: 'REQUERIDO' —el fixture conductual ` +
+          'tiene que producirle casos— o vacuoPermitido: "<por qué hoy es imposible ejercitarlo>".',
+      );
+    }
+    if (declaraRequerido && declaraVacuo) {
+      problemas.push(
+        `${inv.id}: declara las dos políticas a la vez. Son excluyentes: o el fixture le produce ` +
+          'casos, o está declarado por qué no puede haberlos.',
+      );
+    }
+    // Un motivo de una línea vaga —"todavía no"— convierte VACUO_PERMITIDO en la
+    // etiqueta que este archivo existe para no volver a tener.
+    if (declaraVacuo && String(inv.vacuoPermitido).trim().length < 40) {
+      problemas.push(
+        `${inv.id}: el motivo del vacuo permitido tiene que decir QUÉ lo bloquea hoy, y es demasiado corto.`,
+      );
+    }
+  }
+
+  return problemas;
+}
+
+const PROBLEMAS_DE_POLITICA = validarPoliticas();
+if (PROBLEMAS_DE_POLITICA.length > 0) {
+  throw new Error(
+    `check-invariants: ${PROBLEMAS_DE_POLITICA.length} invariante(s) con la política mal declarada:\n  · ` +
+      PROBLEMAS_DE_POLITICA.join('\n  · '),
+  );
+}
+
 export { INVARIANTES };
 
 const MAX_EJEMPLOS = 5;

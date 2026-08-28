@@ -7,6 +7,7 @@
  * (SECURITY.md §3).
  */
 
+import { type EstadoPeriodo, transicionar } from '@aai/accounting-engine';
 import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -136,6 +137,53 @@ export async function periodRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  /**
+   * BLOQUEADO: "solo los ajustes de cierre".
+   *
+   * El estado existía en el CHECK de la 0004 y el guard de asientos lo
+   * contemplaba desde la 0010 —`BLOQUEADO` admite AJUSTE y CIERRE y nada más—,
+   * pero no había forma de llegar a él: ni permiso, ni endpoint. Un candado que
+   * protege un estado inalcanzable no protege nada, y por eso no se podía saber
+   * si funcionaba.
+   */
+  app.post('/periods/:periodId/block', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'period:block');
+    const auth = requireAuth(request);
+    const params = z.object({ periodId: z.string().uuid() }).parse(request.params);
+
+    return withCompany({ companyId: tenant.companyId, actorId: `user:${auth.user.userId}` }, async (tx) => {
+      const current = await tx.query<{ status: EstadoPeriodo; number: number }>(
+        'SELECT status, number FROM periods WHERE id = $1',
+        [params.periodId],
+      );
+      if (current.rowCount === 0) throw notFound('Período no encontrado');
+
+      const paso = transicionar({
+        desde: current.rows[0]!.status,
+        transicion: 'BLOQUEAR',
+        actorId: `user:${auth.user.userId}`,
+      });
+      if (!paso.ok) throw conflict(paso.motivo);
+
+      await tx.query(`UPDATE periods SET status = 'BLOQUEADO' WHERE id = $1`, [params.periodId]);
+
+      await recordAudit(tx, tenant.companyId, {
+        actorType: 'USER',
+        actorId: `user:${auth.user.userId}`,
+        action: 'BLOQUEAR_PERIODO',
+        objectType: 'period',
+        objectId: params.periodId,
+        oldValue: current.rows[0],
+        newValue: { status: 'BLOQUEADO' },
+        ip: clientIp(request),
+        userAgent: request.headers['user-agent'] ?? null,
+      });
+
+      return { status: 'BLOQUEADO' };
+    });
+  });
+
   app.post('/periods/:periodId/close', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'period:close');
@@ -143,12 +191,21 @@ export async function periodRoutes(app: FastifyInstance): Promise<void> {
     const params = z.object({ periodId: z.string().uuid() }).parse(request.params);
 
     return withCompany({ companyId: tenant.companyId, actorId: `user:${auth.user.userId}` }, async (tx) => {
-      const current = await tx.query<{ status: string; number: number }>(
+      const current = await tx.query<{ status: EstadoPeriodo; number: number }>(
         'SELECT status, number FROM periods WHERE id = $1',
         [params.periodId],
       );
       if (current.rowCount === 0) throw notFound('Período no encontrado');
-      if (current.rows[0]!.status === 'CERRADO') throw conflict('El período ya está cerrado');
+
+      // La transición la decide la máquina de estados del motor, no un `if`
+      // acá. Tenerla escrita en `periods.ts` y no usarla dejaba dos definiciones
+      // de lo mismo, y la que gobernaba era la que nadie había revisado.
+      const paso = transicionar({
+        desde: current.rows[0]!.status,
+        transicion: 'CERRAR',
+        actorId: `user:${auth.user.userId}`,
+      });
+      if (!paso.ok) throw conflict(paso.motivo);
 
       // Checklist de cierre (§36): asientos sin aprobar bloquean.
       const pending = await tx.query<{ n: string }>(
@@ -208,11 +265,20 @@ export async function periodRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return withCompany({ companyId: tenant.companyId, actorId: `user:${auth.user.userId}` }, async (tx) => {
-      const current = await tx.query<{ status: string }>('SELECT status FROM periods WHERE id = $1', [
-        params.periodId,
-      ]);
+      const current = await tx.query<{ status: EstadoPeriodo }>(
+        'SELECT status FROM periods WHERE id = $1',
+        [params.periodId],
+      );
       if (current.rowCount === 0) throw notFound('Período no encontrado');
-      if (current.rows[0]!.status !== 'CERRADO') throw conflict('El período no está cerrado');
+
+      const paso = transicionar({
+        desde: current.rows[0]!.status,
+        transicion: 'REABRIR',
+        actorId: auth.user.email,
+        refrendadoPor: body.countersignedBy,
+        motivo: body.motivo,
+      });
+      if (!paso.ok) throw conflict(paso.motivo);
 
       await tx.query(
         `UPDATE periods

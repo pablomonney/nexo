@@ -86,7 +86,7 @@ export async function sembrarFixtures(databaseUrl, { silencioso = false } = {}) 
     await ejercitarAsientos(app, db, contexto);
     decir('  ✔ asientos por las tres vías de trazabilidad, contraasiento y propuesta de IA');
 
-    await ejercitarCierre(app, contexto);
+    await ejercitarCierre(app, db, contexto);
     decir('  ✔ ciclo completo: pre-cierre → cierre → apertura (empresa A)');
 
     await ejercitarEmpresaB(app, contexto);
@@ -360,7 +360,7 @@ async function ejercitarAsientos(app, db, ctx) {
 // El ciclo del ejercicio, completo
 // ---------------------------------------------------------------------------
 
-async function ejercitarCierre(app, ctx) {
+async function ejercitarCierre(app, db, ctx) {
   // Los estados se emiten **antes** de cerrar: después del asiento de cierre
   // todas las cuentas quedan en cero, y A-1 se ejercita sobre renglones con
   // importe distinto de cero.
@@ -388,6 +388,28 @@ async function ejercitarCierre(app, ctx) {
       { rubros: tipo === 'ESP' ? ['AC_CAJA', 'PN_CAPITAL'] : ['VENTAS'] },
     );
     exigir(notas, 201, `generación de notas del estado ${tipo}`);
+  }
+
+  // El bloqueo de un período, que hasta esta fase era un estado inalcanzable:
+  // estaba en el CHECK de la 0004 y en el guard de la 0010, sin permiso ni
+  // endpoint que llevara a él. Se ejercita acá para que el candado que lo
+  // protege reciba, al menos una vez por corrida, una fila válida y una que no.
+  const paraBloquear = await db.query(
+    `SELECT id FROM periods
+      WHERE fiscal_year_id = $1 AND status = 'ABIERTO'
+        AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.period_id = periods.id)
+      ORDER BY number DESC LIMIT 1`,
+    [ctx.ejercicioA26],
+  );
+  if (paraBloquear.rows.length > 0) {
+    const bloqueo = await pedir(
+      app,
+      ctx,
+      ctx.empresaA,
+      'POST',
+      `/periods/${paraBloquear.rows[0].id}/block`,
+    );
+    exigir(bloqueo, 200, 'bloqueo de un período de A');
   }
 
   const pre = await pedir(app, ctx, ctx.empresaA, 'POST', `/fiscal-years/${ctx.ejercicioA26}/pre-close`);

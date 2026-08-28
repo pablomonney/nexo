@@ -7,11 +7,33 @@
 
 | Mecanismo | Pregunta que responde | Tabla |
 |-----------|----------------------|-------|
-| **Bitácora** (`audit_logs`) | ¿Quién hizo qué, cuándo y por qué? | Append-only encadenado |
+| **Bitácora** (`audit_logs`) | ¿Quién hizo qué, cuándo y por qué, **en una empresa**? | Append-only encadenado |
+| **Bitácora normativa** (`normative_audit_logs`) | ¿Quién aprobó esta regla, y contra qué? | Append-only encadenado |
 | **Linaje** (`lineage_edges`) | ¿De qué se compone esta cifra? | Grafo append-only |
 
 Se confunden a menudo. No son lo mismo: la bitácora registra **acciones**; el linaje registra
 **derivaciones de datos**. Ambos son necesarios.
+
+### Por qué son dos bitácoras y no una
+
+`audit_logs.company_id` es `NOT NULL`, su política de RLS es
+`company_id = app_company_id()` y su cadena de hash se encadena **por empresa**.
+Nada de eso es incidental: es lo que hace que un inquilino no pueda leer la
+operación de otro dentro del registro que dice quién hizo qué.
+
+Una **regla** no pertenece a ninguna empresa —`accounting_rules` ni siquiera
+tiene RLS—, así que su aprobación no cabe ahí. Durante un tiempo se intentó:
+`aprobar-regla.mjs` insertaba con `company_id = NULL`, la inserción fallaba con
+`23502` **después** del `UPDATE`, y el `catch` revertía la activación entera. El
+comando nunca pudo aprobar nada, y no se notó porque nunca se aprobó una regla —
+el §32 exige la firma, y la firma no tenía dónde escribirse—.
+
+La salida no era aflojar el `NOT NULL`: eso habría abierto una fila invisible
+para todos los inquilinos dentro de la bitácora contable. Es reconocer que un
+acto normativo no ocurre dentro de una empresa (migración `0041`). En
+`normative_audit_logs` el `motivo` además **no es opcional**: mínimo 30
+caracteres, por CHECK. Una firma que no dice qué se revisó es lo que el §32 pide
+que no pase.
 
 ---
 
@@ -135,9 +157,10 @@ para ninguna empresa con un plan de cuentas completo (ver los gaps de
 ```bash
 npm run audit:estructura    # ¿están los candados? no necesita datos
 npm run audit:invariants    # ¿las filas cumplen? crea su base y sus fixtures
+npm run ledger:verify       # ¿el Mayor coincide con el Diario? ídem
 ```
 
-Los dos son parte de `npm run verify` y de CI. Son **dos preguntas distintas**:
+Los tres son parte de `npm run verify` y de CI. Son **dos preguntas distintas**:
 la estructural verifica que existan los CHECK, triggers, índices únicos, RLS
 forzado y vistas con `security_invoker` de los que dependen los invariantes; la
 conductual verifica que las filas que hay cumplan la propiedad. Una base recién
@@ -179,6 +202,29 @@ Nadie rompió nada: un arreglo correcto en un lugar dejó ciego a un gate en otr
 y el gate siguió diciendo que sí. Por eso lo que cambió no fue una consulta sino
 **quién decide que un invariante pasó**, y por eso el gate tiene ahora sus
 propios tests (`tests/integration/gate-de-invariantes.test.ts`).
+
+#### El mismo falso verde estaba en otros dos lugares
+
+Arreglarlo para los invariantes no lo arregló para los demás gates, y el
+2026-08-28 la auditoría encontró que:
+
+- **`ledger:verify` tenía la forma exacta del defecto.** Corría contra la base de
+  desarrollo, salía con 0 diciendo «no hay empresas», y tenía además un camino
+  más silencioso: una empresa **sin un solo movimiento** no produce discrepancias,
+  así que imprimía `✔ el Mayor coincide con el Diario` sin haber comparado nada.
+  Encima **no estaba en CI**. Hoy usa los mismos cuatro estados, corre en modo
+  conductual sobre `aai_verify` con los mismos fixtures, y falla si no hubo
+  movimientos que comparar.
+- **CI corría `npm test`, no `npm run test:coverage`.** Los umbrales de cobertura
+  por paquete solo se hacían cumplir en el `verify` local.
+
+- **La política de ejercicio era decorativa.** `ejercicio: 'REQUERIDO'` estaba
+  escrito en once invariantes y no lo leía nadie: la clasificación miraba
+  únicamente si existía `vacuoPermitido`. Un invariante nuevo que no declarara
+  nada caía en `NOT_EXERCISED` por accidente y no por diseño, uno que declarara
+  las dos cosas se comportaba como la más débil, y `'REQUERIDA'` —una letra— no
+  lo detectaba nadie. Ahora la lista **se valida al cargarse** (`validarPoliticas`)
+  y un error revienta el módulo en vez de degradar el gate en silencio.
 
 Cuando un invariante puede convertirse en candado, se convierte: **A-3** es desde
 la migración `0025` un CHECK sobre `journal_entries` —extendido en la `0037`

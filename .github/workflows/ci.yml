@@ -66,8 +66,12 @@ jobs:
         # Correrlas dos veces no debe cambiar nada ni fallar.
         run: npm run db:setup
 
-      - name: Tests
-        run: npm test
+      # Con cobertura, no `npm test` a secas. Los umbrales por paquete están en
+      # la configuración de vitest y hasta el 2026-08-28 solo los hacía cumplir
+      # el `npm run verify` local: en CI un paquete podía caer por debajo del
+      # umbral y el pipeline seguía verde.
+      - name: Tests (con umbrales de cobertura)
+        run: npm run test:coverage
 
       # ── El gate de invariantes ────────────────────────────────────────────
       # Hasta el 2026-08-28 esto NO estaba en CI: los invariantes solo corrían
@@ -85,6 +89,13 @@ jobs:
 
       - name: Invariantes — conducta (base aislada, fixtures y verificación)
         run: npm run audit:invariants
+
+      # El Mayor contra el Diario. Tampoco estaba en CI —solo en el `verify`
+      # local, y allí contra la base de desarrollo vacía, donde salía con 0
+      # diciendo "no hay empresas"—. Ahora corre en modo conductual: base
+      # aislada, fixtures, y falla si no hubo movimientos que comparar.
+      - name: El Mayor coincide con el Diario (ACCOUNTING_ENGINE.md §7)
+        run: npm run ledger:verify
 
   # El archivo normativo se verifica también de forma independiente, para que un
   # cambio en el código no pueda enmascarar una alteración de los originales.
