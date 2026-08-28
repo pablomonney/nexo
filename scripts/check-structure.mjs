@@ -56,6 +56,9 @@ const CHECKS = [
   ['note_figures', 'nf_con_origen', 'A-2: una cifra con importe tiene linaje detrás'],
   ['account_balances', 'balance_arithmetic', 'El saldo final se deriva de sus movimientos'],
   ['normative_audit_logs', 'normative_audit_logs_motivo_check', 'Un acto normativo sin constancia escrita no se registra'],
+  ['tax_transactions', 'tt_constatacion_coherente', 'Un resultado de constatación sin procedencia no entra'],
+  ['tax_transactions', 'tt_constatacion_arca_con_consulta', 'Una constatación de ARCA muestra la consulta que la produjo'],
+  ['tax_transactions', 'tt_constatacion_declarada_firmada', 'Una constatación declarada lleva firma y fecha'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -82,6 +85,9 @@ const TRIGGERS = [
   ['normative_audit_logs', 'normative_audit_logs_immutable', 'La bitácora normativa solo crece'],
   ['accounting_rules', 'accounting_rules_gap_abierto', 'Un gap normativo ABIERTO bloquea la activación de la regla'],
   ['periods', 'periods_transicion_valida', 'La máquina de estados del período, no solo en TypeScript'],
+  ['tax_transactions', 'tax_transactions_constatacion_coherente', 'La consulta ARCA que respalda es de esta empresa y del servicio wscdc'],
+  ['tax_transactions', 'tax_transactions_constatacion_no_degrada', 'Una declaración no reemplaza una respuesta del organismo'],
+  ['user_company_roles', 'user_company_roles_audit', 'Dar o quitar acceso a una empresa deja su entrada en la bitácora'],
 ];
 
 /** Índices únicos que sostienen una unicidad de negocio. */

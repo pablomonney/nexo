@@ -92,9 +92,11 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
       `INSERT INTO tax_transactions
          (company_id, tax_id, period_id, direction, cbte_tipo, punto_venta, cbte_numero,
           cbte_fecha, cuit_contraparte, razon_social, condicion_iva, neto, iva,
-          no_gravado, exento, percepciones, total, constatacion, created_by)
+          no_gravado, exento, percepciones, total,
+          constatacion, constatacion_origen, constatacion_por, constatacion_at, created_by)
        VALUES ($1,$2,$3,'VENTAS',$4,$5,$6,$7,$8,'Consumidor final','CONSUMIDOR_FINAL',
-               $9,0,0,0,0,$9,'OK','traza')
+               $9,0,0,0,0,$9,
+               'OK','DECLARACION_PROFESIONAL','fixture:traza',now(),'traza')
        RETURNING id`,
       [fx.companyA, impuesto.rows[0]!.id, periodId, c.cbteTipo, c.ptoVta, c.cbteNro, fecha, c.cuitEmisor, total],
     );
@@ -129,9 +131,11 @@ suite('trazabilidad — de un asiento a su fuente normativa', () => {
       `INSERT INTO tax_transactions
          (company_id, tax_id, period_id, direction, cbte_tipo, punto_venta, cbte_numero,
           cbte_fecha, cuit_contraparte, razon_social, condicion_iva, neto, iva,
-          no_gravado, exento, percepciones, total, constatacion, created_by)
+          no_gravado, exento, percepciones, total,
+          constatacion, constatacion_origen, constatacion_por, constatacion_at, created_by)
        VALUES ($1,$2,$3,'VENTAS',11,1,$4,$5,$6,'Consumidor final','CONSUMIDOR_FINAL',
-               100,0,0,0,0,100,'OK','traza')
+               100,0,0,0,0,100,
+               'OK','DECLARACION_PROFESIONAL','fixture:traza',now(),'traza')
        RETURNING id`,
       [
         fx.companyA,

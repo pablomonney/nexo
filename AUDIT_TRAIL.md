@@ -158,7 +158,15 @@ para ninguna empresa con un plan de cuentas completo (ver los gaps de
 npm run audit:estructura    # ¿están los candados? no necesita datos
 npm run audit:invariants    # ¿las filas cumplen? crea su base y sus fixtures
 npm run ledger:verify       # ¿el Mayor coincide con el Diario? ídem
+npm run ci:desde-cero       # el pipeline entero, con las bases rehechas
 ```
+
+`ci:desde-cero` corre **exactamente** lo que corre CI: la secuencia vive en
+`scripts/pipeline.mjs` y `tests/security/pipeline.test.ts` comprueba que el
+workflow ejecute esos pasos, con esos comandos y en ese orden. Sin eso el
+pipeline estaría escrito dos veces y podría divergir sin síntoma — que es lo que
+pasó hasta el 2026-08-28, cuando CI no creaba `aai_test` y ninguna suite de
+integración habría podido conectar.
 
 Los tres son parte de `npm run verify` y de CI. Son **dos preguntas distintas**:
 la estructural verifica que existan los CHECK, triggers, índices únicos, RLS

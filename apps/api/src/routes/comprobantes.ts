@@ -27,11 +27,13 @@
  * que pregunta.
  */
 
+import { createArcaClient, parseEnvironment } from '@aai/arca';
 import { recordAudit, withCompany, type Tx } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { badRequest, conflict, notFound } from '../http/errors.js';
+import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
 
 /** Importe decimal como texto. Nunca `number`: un JSON con float ya perdió. */
 const importe = z
@@ -65,15 +67,33 @@ const cuerpo = z.object({
   percepciones: importe,
   total: importe,
   /**
-   * Resultado de la constatación en ARCA, si se hizo.
+   * Constatación **declarada por una persona**, cuando la hizo por fuera.
    *
-   * Por defecto `NO_CONSULTADO`, que es distinto de `NO_VERIFICABLE`: el primero
-   * dice que nadie preguntó y el segundo que se preguntó y no se pudo. El
-   * endpoint no consulta a ARCA por su cuenta.
+   * Hasta la 0043 este campo era `constatacion: 'OK' | ...` a secas, y ahí
+   * estaba el problema: un valor escrito en el cuerpo del pedido quedaba
+   * guardado igual que una respuesta de ARCA, y una vez en la tabla se veían
+   * idénticos. Eso convierte una verificación en una afirmación — la frontera
+   * que el §11 pide no cruzar— y deja entrar un comprobante apócrifo como
+   * constatado, con su crédito fiscal detrás.
+   *
+   * Ahora hay dos caminos y quedan distinguidos en la fila:
+   *
+   *   · `POST /tax-transactions/:id/constatar` pregunta a ARCA y guarda la
+   *     respuesta con `constatacion_origen = 'ARCA'` y el id de la consulta;
+   *   · este campo declara lo que una persona verificó por su cuenta, y queda
+   *     como `DECLARACION_PROFESIONAL`, con su firma y su fecha.
+   *
+   * Omitirlo deja la operación en `NO_CONSULTADO`, que es distinto de
+   * `NO_VERIFICABLE`: el primero dice que nadie preguntó y el segundo que se
+   * preguntó y no se pudo.
    */
-  constatacion: z
-    .enum(['OK', 'WARN', 'FAIL', 'NO_VERIFICABLE', 'NO_CONSULTADO'])
-    .default('NO_CONSULTADO'),
+  constatacionDeclarada: z
+    .object({
+      resultado: z.enum(['OK', 'WARN', 'FAIL', 'NO_VERIFICABLE']),
+      /** Dónde y cómo se verificó. Queda en la fila y en la bitácora. */
+      motivo: z.string().min(10).max(500),
+    })
+    .optional(),
 });
 
 /** Suma de decimales de dos posiciones, sin punto flotante. */
@@ -202,8 +222,10 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
         `INSERT INTO tax_transactions
            (company_id, tax_id, document_id, period_id, direction, cbte_tipo, punto_venta,
             cbte_numero, cbte_fecha, cuit_contraparte, razon_social, condicion_iva,
-            neto, iva, no_gravado, exento, percepciones, total, constatacion, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+            neto, iva, no_gravado, exento, percepciones, total,
+            constatacion, constatacion_origen, constatacion_por, constatacion_at, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+                 CASE WHEN $21::text IS NULL THEN NULL ELSE now() END, $22)
          ON CONFLICT (document_id) WHERE document_id IS NOT NULL DO NOTHING
          RETURNING id`,
         [
@@ -225,7 +247,11 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
           body.exento,
           body.percepciones,
           body.total,
-          body.constatacion,
+          // Los tres van juntos o ninguno: el CHECK `tt_constatacion_coherente`
+          // rechaza un resultado sin procedencia y una procedencia sin resultado.
+          body.constatacionDeclarada?.resultado ?? 'NO_CONSULTADO',
+          body.constatacionDeclarada === undefined ? 'NO_CONSULTADO' : 'DECLARACION_PROFESIONAL',
+          body.constatacionDeclarada === undefined ? null : auth.user.email,
           actorId,
         ],
       );
@@ -254,8 +280,13 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
           direction: body.direction,
           comprobante: `${body.cbteTipo}-${body.puntoVenta}-${body.numero}`,
           total: body.total,
-          constatacion: body.constatacion,
+          constatacion: body.constatacionDeclarada?.resultado ?? 'NO_CONSULTADO',
+          constatacionOrigen:
+            body.constatacionDeclarada === undefined ? 'NO_CONSULTADO' : 'DECLARACION_PROFESIONAL',
         },
+        ...(body.constatacionDeclarada === undefined
+          ? {}
+          : { motivo: body.constatacionDeclarada.motivo }),
         ip: clientIp(request),
         userAgent: request.headers['user-agent'] ?? null,
       });
@@ -294,4 +325,218 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
       },
     );
   });
+
+  /**
+   * Preguntarle a ARCA si el comprobante está autorizado.
+   *
+   * Esta ruta es la diferencia entre «WSCDC responde» y «NEXO usa ARCA». Hasta
+   * ahora el paquete `@aai/arca` lo importaban dos scripts y nada más: el
+   * producto guardaba el resultado de una constatación que nunca hacía.
+   *
+   * ## Qué se le manda, y de dónde sale
+   *
+   * Los datos de identificación del comprobante salen de la **fila guardada**,
+   * no del cuerpo del pedido: se constata lo que el sistema registró, que es lo
+   * que después va a fundar un asiento. Si viniera del pedido, se podría
+   * constatar un comprobante y guardar otro.
+   *
+   * Lo único que llega de afuera es lo que el sistema no tiene: el CAE y su
+   * modalidad, y el documento del receptor. Están impresos en el comprobante y
+   * `tax_transactions` no los modela.
+   *
+   * ## Qué NO hace
+   *
+   * No decide nada fiscal. `APROBADO` significa que el comprobante está
+   * autorizado, y **solo** eso: no dice que la operación económica haya existido
+   * ni que el crédito fiscal sea computable. Son dimensiones distintas de
+   * validación (§11), y la segunda la resuelve una regla que hoy no existe.
+   *
+   * Tampoco falla cuando ARCA falla. Un servicio caído es un resultado
+   * —`NO_VERIFICABLE` con motivo—, no un error de programa: colapsar «no pude
+   * preguntar» con «está bien» convierte una caída del organismo en un
+   * comprobante aprobado en silencio.
+   */
+  app.post<{ Params: { taxTransactionId: string } }>(
+    '/tax-transactions/:taxTransactionId/constatar',
+    async (request) => {
+      const tenant = await requireCompany(request);
+      requirePermission(tenant, 'tax_transaction:constatar');
+      const auth = requireAuth(request);
+      const actorId = `user:${auth.user.userId}`;
+      const { taxTransactionId } = z
+        .object({ taxTransactionId: z.string().uuid() })
+        .parse(request.params);
+      const body = z
+        .object({
+          modalidad: z.enum(['CAE', 'CAEA', 'CAI']).default('CAE'),
+          /** El código de autorización impreso en el comprobante. */
+          cae: z.string().regex(/^\d{8,20}$/, 'El CAE es una cadena de dígitos'),
+          /** Tipo y número de documento del receptor, como los pide el WSCDC. */
+          tipoDocReceptor: z.string().regex(/^\d{1,3}$/).default('80'),
+          nroDocReceptor: z.string().regex(/^\d{1,11}$/),
+        })
+        .parse(request.body ?? {});
+
+      const operacion = await withCompany({ companyId: tenant.companyId, actorId }, (tx) =>
+        tx.query<{
+          id: string;
+          direction: string;
+          cbte_tipo: number;
+          punto_venta: number;
+          cbte_numero: string;
+          cbte_fecha: string;
+          cuit_contraparte: string | null;
+          total: string;
+          constatacion_origen: string;
+        }>(
+          `SELECT t.id, t.direction, t.cbte_tipo, t.punto_venta, t.cbte_numero::text,
+                  to_char(t.cbte_fecha, 'YYYYMMDD') AS cbte_fecha,
+                  t.cuit_contraparte, t.total::text, t.constatacion_origen
+             FROM tax_transactions t WHERE t.id = $1`,
+          [taxTransactionId],
+        ),
+      );
+      if (operacion.rowCount === 0) throw notFound('La operación fiscal no existe');
+      const op = operacion.rows[0]!;
+
+      // En COMPRAS el emisor es la contraparte; en VENTAS, la propia empresa. Sin
+      // esta distinción se constataría el comprobante equivocado, con un CUIT que
+      // ARCA no reconocería como emisor.
+      const cuitEmisor =
+        op.direction === 'COMPRAS'
+          ? op.cuit_contraparte
+          : await withCompany({ companyId: tenant.companyId, actorId }, async (tx) =>
+              (
+                await tx.query<{ cuit: string }>('SELECT cuit FROM companies WHERE id = $1', [
+                  tenant.companyId,
+                ])
+              ).rows[0]?.cuit ?? null,
+            );
+
+      if (cuitEmisor === null) {
+        throw unprocessable(
+          'SIN_CUIT_EMISOR',
+          'La operación es de COMPRAS y no tiene CUIT de contraparte cargado. Sin emisor no hay ' +
+            'nada que preguntarle a ARCA.',
+        );
+      }
+
+      const cliente = createArcaClient({
+        environment: parseEnvironment(config.arca.environment),
+        timeoutMs: config.arca.timeoutMs,
+      });
+
+      const comenzo = Date.now();
+      const resultado = await cliente.constatarComprobante(tenant.companyId, {
+        modalidad: body.modalidad,
+        cuitEmisor,
+        puntoVenta: op.punto_venta,
+        tipoComprobante: op.cbte_tipo,
+        numeroComprobante: Number(op.cbte_numero),
+        fecha: op.cbte_fecha,
+        importeTotal: op.total,
+        codigoAutorizacion: body.cae,
+        tipoDocReceptor: body.tipoDocReceptor,
+        nroDocReceptor: body.nroDocReceptor,
+      });
+      const duracion = Date.now() - comenzo;
+
+      // El log primero y la operación después, en la misma transacción: la fila
+      // del log es lo que el CHECK `tt_constatacion_arca_con_consulta` exige como
+      // prueba de que la consulta ocurrió. Sin ella no se puede escribir el
+      // resultado, y es a propósito.
+      return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+        const clave = `${cuitEmisor}-${op.punto_venta}-${op.cbte_tipo}-${op.cbte_numero}`;
+
+        const consulta = await tx.query<{ id: string }>(
+          `INSERT INTO arca_query_log
+             (company_id, environment, service, operation, request_key, outcome, reason,
+              response_raw, duration_ms)
+           VALUES ($1, $2, 'wscdc', 'ComprobanteConstatar', $3, $4, $5, $6::jsonb, $7)
+           RETURNING id`,
+          [
+            tenant.companyId,
+            resultado.ambiente,
+            clave,
+            resultado.estado,
+            resultado.motivoNoVerificable ?? null,
+            JSON.stringify({
+              observaciones: resultado.observaciones,
+              errores: resultado.errores,
+              respuestaCruda: resultado.respuestaCruda ?? null,
+              consultadoEn: resultado.consultadoEn,
+            }),
+            duracion,
+          ],
+        );
+
+        const estadoGuardado = traducirEstado(resultado);
+
+        await tx.query(
+          `UPDATE tax_transactions
+              SET constatacion = $2,
+                  constatacion_origen = 'ARCA',
+                  constatacion_at = now(),
+                  constatacion_por = $3,
+                  arca_query_id = $4
+            WHERE id = $1`,
+          [taxTransactionId, estadoGuardado, auth.user.email, consulta.rows[0]!.id],
+        );
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId,
+          action: 'CONSTATAR_COMPROBANTE',
+          objectType: 'tax_transactions',
+          objectId: taxTransactionId,
+          oldValue: { constatacionOrigen: op.constatacion_origen },
+          newValue: {
+            constatacion: estadoGuardado,
+            constatacionOrigen: 'ARCA',
+            ambiente: resultado.ambiente,
+            arcaQueryId: consulta.rows[0]!.id,
+          },
+          ip: clientIp(request),
+          userAgent: request.headers['user-agent'] ?? null,
+        });
+
+        return {
+          taxTransactionId,
+          constatacion: estadoGuardado,
+          origen: 'ARCA' as const,
+          ambiente: resultado.ambiente,
+          estadoArca: resultado.estado,
+          motivoNoVerificable: resultado.motivoNoVerificable ?? null,
+          observaciones: resultado.observaciones,
+          errores: resultado.errores,
+          arcaQueryId: consulta.rows[0]!.id,
+          consultadoEn: resultado.consultadoEn,
+          /**
+           * Lo que este resultado NO significa. Va en la respuesta y no en la
+           * documentación porque es donde lo va a leer quien tome la decisión.
+           */
+          alcance:
+            'La constatación dice si el comprobante está autorizado por ARCA. No dice que la ' +
+            'operación económica haya existido ni que el crédito fiscal sea computable: eso ' +
+            'exige la declaración de afectación y una regla vigente.',
+        };
+      });
+    },
+  );
+}
+
+/**
+ * Del vocabulario de ARCA al de `tax_transactions.constatacion`.
+ *
+ * `WARN` es el caso que obliga a mirar: el WSCDC puede responder aprobado **y**
+ * observado a la vez —el manual muestra `Resultado=A` con `Obs 200`—, y guardar
+ * eso como `OK` a secas perdería la observación justo donde importa.
+ */
+function traducirEstado(resultado: {
+  estado: string;
+  observaciones: readonly unknown[];
+}): 'OK' | 'WARN' | 'FAIL' | 'NO_VERIFICABLE' {
+  if (resultado.estado === 'RECHAZADO') return 'FAIL';
+  if (resultado.estado === 'NO_VERIFICABLE') return 'NO_VERIFICABLE';
+  return resultado.observaciones.length > 0 ? 'WARN' : 'OK';
 }

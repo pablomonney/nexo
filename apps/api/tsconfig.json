@@ -37,6 +37,9 @@
     },
     {
       "path": "../../packages/financial-statements"
+    },
+    {
+      "path": "../../packages/arca"
     }
   ]
 }

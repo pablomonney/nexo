@@ -50,7 +50,9 @@
     "reglas:aprobar": "node scripts/aprobar-regla.mjs",
     "circuito:demo": "node scripts/circuito-demo.mjs",
     "audit:estructura": "node scripts/check-structure.mjs",
-    "verify:db": "node scripts/verification-db.mjs"
+    "verify:db": "node scripts/verification-db.mjs",
+    "ci": "node scripts/pipeline.mjs",
+    "ci:desde-cero": "node scripts/pipeline.mjs --desde-cero"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

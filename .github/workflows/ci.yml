@@ -28,6 +28,8 @@ jobs:
           --health-retries 20
 
     env:
+      # Solo esta. `aai_test` y `aai_verify` se derivan de acá y las crean sus
+      # propios pasos: `test:db` la primera, y los gates conductuales la segunda.
       DATABASE_URL: postgres://aai:aai@localhost:5432/aai
 
     steps:
@@ -43,6 +45,12 @@ jobs:
       # ── Puertas de calidad ────────────────────────────────────────────────
       # Cada una codifica una promesa del producto. No son "buenas prácticas":
       # son las condiciones bajo las cuales el sistema es lo que dice ser.
+      #
+      # La secuencia y los comandos salen de `scripts/pipeline.mjs`, que es la
+      # única definición del pipeline. Los pasos están escritos uno por uno acá
+      # —y no como un `npm run ci`— para que la interfaz de GitHub muestre cuál
+      # falló sin abrir el log; `tests/security/pipeline.test.ts` comprueba que
+      # los dos no puedan divergir.
 
       - name: Typecheck
         run: npm run typecheck
@@ -66,6 +74,16 @@ jobs:
         # Correrlas dos veces no debe cambiar nada ni fallar.
         run: npm run db:setup
 
+      # Este paso faltaba, y su ausencia hacía que CI no pudiera funcionar.
+      #
+      # `tests/setup-env.ts` redirige DATABASE_URL a `aai_test` antes de importar
+      # una sola suite —para que los tests no escriban en la base de desarrollo,
+      # que es correcto— y hasta el 2026-08-28 nadie creaba esa base en CI. Cada
+      # suite de integración habría fallado al conectar. No se detectó porque el
+      # repositorio no tiene remoto y el workflow nunca se ejecutó.
+      - name: Crear y migrar la base de tests
+        run: npm run test:db
+
       # Con cobertura, no `npm test` a secas. Los umbrales por paquete están en
       # la configuración de vitest y hasta el 2026-08-28 solo los hacía cumplir
       # el `npm run verify` local: en CI un paquete podía caer por debajo del
@@ -74,11 +92,6 @@ jobs:
         run: npm run test:coverage
 
       # ── El gate de invariantes ────────────────────────────────────────────
-      # Hasta el 2026-08-28 esto NO estaba en CI: los invariantes solo corrían
-      # en el `npm run verify` local, y allí contra la base de desarrollo, que
-      # después de un `db:reset` está vacía. El resultado era un gate que decía
-      # que sí sin haber mirado nada.
-      #
       # Van en dos pasos porque son dos preguntas distintas. La estructural no
       # necesita datos —pregunta si los candados están— y por eso puede correr
       # sobre la base recién migrada. La conductual se crea su propia base,
@@ -90,10 +103,8 @@ jobs:
       - name: Invariantes — conducta (base aislada, fixtures y verificación)
         run: npm run audit:invariants
 
-      # El Mayor contra el Diario. Tampoco estaba en CI —solo en el `verify`
-      # local, y allí contra la base de desarrollo vacía, donde salía con 0
-      # diciendo "no hay empresas"—. Ahora corre en modo conductual: base
-      # aislada, fixtures, y falla si no hubo movimientos que comparar.
+      # El Mayor contra el Diario. Corre en modo conductual: base aislada,
+      # fixtures, y falla si no hubo movimientos que comparar.
       - name: El Mayor coincide con el Diario (ACCOUNTING_ENGINE.md §7)
         run: npm run ledger:verify
 

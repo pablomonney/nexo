@@ -1,13 +1,85 @@
-import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
+import { defineConfig, type Plugin } from 'vitest/config';
+
+const RAIZ = fileURLToPath(new URL('.', import.meta.url));
+const API_SRC = `${RAIZ}apps/api/src/`;
+
+/**
+ * DECISIÓN ARQUITECTÓNICA — los tests de integración pasan a ejercitar el
+ * **código fuente** de la API, no su compilado.
+ *
+ * ## El problema
+ *
+ * `apps/api/package.json` exporta `./server` → `./dist/server.js`, así que
+ * `buildServer()` en un test cargaba el JavaScript emitido. Consecuencia: los
+ * 8.752 renglones de `apps/api/src` —los 80 endpoints, todo el SQL, todo el
+ * manejo de errores— **no se podían medir**. La auditoría maestra lo marcó como
+ * riesgo crítico: el 89,65 % que daba confianza describía los paquetes puros y
+ * no el producto.
+ *
+ * Agregarlos al `include` sin más los mostraba en 0 %, que es peor que no
+ * medirlos: dice que no están probados cuando sí lo están.
+ *
+ * ## Las tres salidas, y por qué esta
+ *
+ *   · **Seguir sobre `dist`.** Prueba el artefacto que se despliega, que es un
+ *     argumento real. Pero deja sin medir el archivo más grande y más riesgoso
+ *     del repositorio, y ahí vivía el 500-en-lugar-de-error-de-dominio que
+ *     encontramos la semana pasada.
+ *   · **Mapear la cobertura de `dist` a `src` por source maps.** Sería ideal y
+ *     no funciona: el proveedor v8 no aplica el mapeo al filtro del `include`.
+ *   · **Ejercitar `src`.** Es lo que hace este plugin.
+ *
+ * ## Qué se pierde, y con qué se compensa
+ *
+ * Los tests dejan de probar la salida de `tsc`. Se compensa con lo que el
+ * pipeline ya hace: `typecheck` corre con `--build --force` sobre todo el árbol
+ * antes que los tests, y el paso de migraciones ejecuta el `dist` recién
+ * compilado. Una diferencia de comportamiento entre `src` y `dist` exigiría un
+ * error del compilador, no de este repositorio.
+ *
+ * ## Por qué un plugin y no un alias
+ *
+ * El código de la API usa especificadores con extensión `.js` —lo exige
+ * `verbatimModuleSyntax` con NodeNext—, así que `server.ts` importa
+ * `./routes/accounts.js`, que en `src` no existe. Un alias global
+ * `.js` → `.ts` arreglaría eso y **rompería todo lo demás**: reescribiría
+ * también los imports internos de los paquetes, que sí deben resolver a `dist`.
+ *
+ * Este plugin mira `importer` y solo reescribe cuando quien importa está dentro
+ * de `apps/api/src`. Es la diferencia entre una regla dirigida y una que se
+ * aplica a todo por si acaso.
+ */
+function apiDesdeElFuente(): Plugin {
+  return {
+    name: 'aai-api-desde-el-fuente',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === '@aai/api/server') return `${API_SRC}server.ts`;
+      if (source === '@aai/api') return `${API_SRC}index.ts`;
+
+      // Solo los relativos, y solo si el que importa ya está en el fuente de la
+      // API. Sin las dos condiciones esto sería el alias global que arriba se
+      // descarta.
+      if (importer !== undefined && importer.replace(/\\/g, '/').startsWith(API_SRC)) {
+        if (source.startsWith('.') && source.endsWith('.js')) {
+          return this.resolve(`${source.slice(0, -3)}.ts`, importer, { skipSelf: true });
+        }
+      }
+      return null;
+    },
+  };
+}
 
 export default defineConfig({
+  plugins: [apiDesdeElFuente()],
   test: {
     setupFiles: ['tests/setup-env.ts'],
     include: ['packages/**/src/**/*.test.ts', 'tests/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     coverage: {
       provider: 'v8',
-      include: ['packages/*/src/**/*.ts'],
+      include: ['packages/*/src/**/*.ts', 'apps/api/src/**/*.ts'],
       exclude: ['**/*.test.ts', '**/index.ts'],
       // ACCOUNTING_ENGINE.md: el motor contable exige >= 95%. El umbral global
       // arranca más bajo y sube por paquete a medida que se implementan.
@@ -22,6 +94,38 @@ export default defineConfig({
         lines: 80,
         functions: 80,
         branches: 75,
+
+        /**
+         * El borde HTTP: autenticación, contexto de empresa y catálogo de
+         * errores. Lo atraviesa **cada** pedido, así que una rama sin ejercitar
+         * acá es una rama que decide sobre todos.
+         */
+        'apps/api/src/http/**': {
+          lines: 95,
+          functions: 90,
+          branches: 85,
+        },
+
+        /**
+         * Los dos eslabones que esta fase volvió productivos.
+         *
+         * Son los que convierten una afirmación en un dato verificado —la
+         * declaración profesional y la constatación contra ARCA— y por eso no
+         * pueden volver a quedarse sin cobertura sin que el pipeline lo diga.
+         * El umbral está en lo alcanzado menos un margen chico: subirlo más
+         * exigiría tests del camino de error de la red, que hoy solo se puede
+         * simular.
+         */
+        'apps/api/src/routes/afectaciones.ts': {
+          lines: 85,
+          functions: 95,
+          branches: 75,
+        },
+        'apps/api/src/routes/comprobantes.ts': {
+          lines: 85,
+          functions: 95,
+          branches: 75,
+        },
         'packages/accounting-engine/src/**': {
           lines: 95,
           functions: 95,

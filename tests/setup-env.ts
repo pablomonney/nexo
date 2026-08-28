@@ -19,6 +19,22 @@ if (existsSync(envFile)) {
 process.env.DOCUMENT_STORAGE_PATH = join(raiz, 'var', 'test-documents');
 
 /**
+ * Los tests hablan con el ARCA simulado, siempre.
+ *
+ * Mismo argumento que el directorio de documentos y que la base: una suite no
+ * puede depender de cómo tenga configurado el entorno quien la corre. Con
+ * `ARCA_ENVIRONMENT=homologacion` en el `.env` local, el cliente real contesta
+ * `NO_VERIFICABLE / SIN_CREDENCIAL` —que es lo correcto para él y lo hace de
+ * forma visible— y las suites que esperan un resultado concreto pasan a depender
+ * de una variable de entorno en vez de de su propio fixture.
+ *
+ * Se fija acá y no en cada suite por lo mismo de siempre: `config` se evalúa al
+ * importarse, y cambiarlo en trece archivos deja el catorceavo hablándole a
+ * homologación.
+ */
+process.env.ARCA_ENVIRONMENT = 'mock';
+
+/**
  * La base de los tests tampoco es la del desarrollo.
  *
  * Mismo argumento que el directorio de documentos, y bastante más grave: las

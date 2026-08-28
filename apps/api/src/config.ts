@@ -54,6 +54,21 @@ export const config = {
     ocrEngine: process.env.OCR_ENGINE ?? 'none',
   },
 
+  arca: {
+    /**
+     * Ambiente de ARCA: `mock` (por defecto), `homologacion` o `produccion`.
+     *
+     * Mismo criterio que el OCR y que el proveedor de IA, y acá pesa más: el
+     * mock se usa **si y solo si** el ambiente es `mock`. La alternativa cómoda
+     * —«si no hay credencial, usá el mock»— produciría validaciones fiscales
+     * inventadas que el sistema informaría como reales. Sin credencial, el
+     * cliente real contesta `NO_VERIFICABLE` con motivo `SIN_CREDENCIAL`, que es
+     * lo que corresponde informar (ver `packages/arca/src/factory.ts`).
+     */
+    environment: process.env.ARCA_ENVIRONMENT ?? 'mock',
+    timeoutMs: Number(process.env.ARCA_TIMEOUT_MS ?? 15_000),
+  },
+
   ai: {
     /**
      * Proveedor de modelo: `none` (por defecto) o `mock`.

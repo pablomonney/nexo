@@ -390,14 +390,69 @@ suite('Aislamiento multiempresa', () => {
       expect(r.statusCode).toBe(403);
     });
 
-    it('A no puede leer un asiento de B por su id', async () => {
-      const r = await pedir(tokenA, A.companyId, 'GET', `/journal-entries/${B.entryId}`);
-      expect(r.statusCode).toBe(404);
+    /**
+     * Estos dos reemplazan a un par de tests que **no probaban nada**.
+     *
+     * Afirmaban 404 sobre `GET /journal-entries/:id` y `GET /statements/:id`,
+     * que **no existen**: el 404 lo devolvía Fastify por ruta desconocida, sin
+     * llegar nunca al handler. Habrían pasado igual con el aislamiento roto —
+     * es el mismo defecto que el gate de invariantes existe para no repetir,
+     * cometido dentro de un test de aislamiento.
+     *
+     * Los reemplazos usan rutas que sí existen y que sí llegan al handler: el
+     * listado filtrado y el detalle de un renglón por id. No se fabricó ningún
+     * endpoint para hacerlos verdes; el gap de las rutas de detalle queda
+     * documentado aparte.
+     */
+    it('el listado de asientos de A no contiene ninguno de B', async () => {
+      const deA = await pedir(tokenA, A.companyId, 'GET', '/journal-entries');
+      expect(deA.statusCode, deA.body).toBe(200);
+      const ids = deA.json<{ asientos: { id: string }[] }>().asientos.map((e) => e.id);
+
+      // Las dos mitades: A ve lo suyo, y entre lo suyo no está lo de B.
+      expect(ids).toContain(A.entryId);
+      expect(ids).not.toContain(B.entryId);
     });
 
-    it('A no puede leer un estado contable de B por su id', async () => {
-      const r = await pedir(tokenA, A.companyId, 'GET', `/statements/${B.statementId}`);
-      expect(r.statusCode).toBe(404);
+    it('y el de B tampoco contiene ninguno de A', async () => {
+      const deB = await pedir(tokenB, B.companyId, 'GET', '/journal-entries');
+      expect(deB.statusCode, deB.body).toBe(200);
+      const ids = deB.json<{ asientos: { id: string }[] }>().asientos.map((e) => e.id);
+
+      expect(ids).toContain(B.entryId);
+      expect(ids).not.toContain(A.entryId);
+    });
+
+    it('A no puede trazar un renglón del estado contable de B', async () => {
+      // `/statements/trace/:lineId` sí existe y llega al handler: el 404 de acá
+      // lo produce el RLS, que es lo que se quiere probar.
+      const renglonDeB = await db.query<{ id: string }>(
+        `SELECT id FROM financial_statement_lines
+          WHERE statement_id = $1 AND line_type = 'RENGLON' LIMIT 1`,
+        [B.statementId],
+      );
+      const ajeno = await pedir(
+        tokenA,
+        A.companyId,
+        'GET',
+        `/statements/trace/${renglonDeB.rows[0]!.id}`,
+      );
+      expect(ajeno.statusCode).toBe(404);
+
+      // Y la mitad que falta: el propio sí se traza. Sin esto, la ruta podría
+      // estar devolviendo 404 para todo el mundo y el test no lo notaría.
+      const renglonDeA = await db.query<{ id: string }>(
+        `SELECT id FROM financial_statement_lines
+          WHERE statement_id = $1 AND line_type = 'RENGLON' LIMIT 1`,
+        [A.statementId],
+      );
+      const propio = await pedir(
+        tokenA,
+        A.companyId,
+        'GET',
+        `/statements/trace/${renglonDeA.rows[0]!.id}`,
+      );
+      expect(propio.statusCode, propio.body).toBe(200);
     });
 
     it('A no puede leer el paquete de notas de B', async () => {
