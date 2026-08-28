@@ -46,6 +46,21 @@ export interface FiscalYearSnapshot {
   readonly status: 'ABIERTO' | 'EN_CIERRE' | 'CERRADO';
 }
 
+/**
+ * Una decisión contable que el contexto pudo resolver para este asiento.
+ *
+ * Lleva lo mínimo para que el motor decida y para que el error sea legible. No
+ * trae los hechos ni la evidencia: el motor no los evalúa, y arrastrarlos lo
+ * invitaría a hacerlo.
+ */
+export interface DecisionSnapshot {
+  readonly id: string;
+  readonly origen: 'DETERMINISTICA' | 'PROPUESTA_IA' | 'MANUAL';
+  readonly resultado: string;
+  /** Cuántas reglas la fundan. Cero es legítimo: una decisión manual no cita ninguna. */
+  readonly reglasAplicadas: number;
+}
+
 export interface LedgerContext {
   readonly companyId: string;
   /** Moneda en la que se lleva la contabilidad. El balance se verifica en ella. */
@@ -65,6 +80,20 @@ export interface LedgerContext {
    * dónde sale. Un default acá lo volvería invisible.
    */
   readonly fxRoundingMode: RoundingMode;
+  /**
+   * La decisión que funda el asiento, **ya resuelta y verificada**.
+   *
+   * Se entrega resuelta o no se entrega. El motor es puro y no puede comprobar
+   * que un UUID exista, sea de esta empresa, no sea de ambiente PRUEBA y
+   * corresponda al comprobante del asiento — todo eso lo hace quien arma el
+   * contexto, que sí tiene la base.
+   *
+   * Es la misma inversión que el permiso de emisión y el candado del sandbox:
+   * en vez de pasarle al dominio un dato para que desconfíe, se le pasa la
+   * prueba o nada. Un `null` acá no significa "no la pude verificar": significa
+   * que no hay decisión válida, y el motor actúa en consecuencia.
+   */
+  readonly decision?: DecisionSnapshot | null;
   /**
    * Rol de cierre: habilita postear en un período `BLOQUEADO`.
    *

@@ -17,6 +17,14 @@ export type AccountingErrorCode =
   | 'E_MISSING_FX'
   | 'E_TAX_LINK_MISSING'
   | 'E_NO_TRACEABILITY'
+  /**
+   * Se citó una decisión contable que el contexto no pudo resolver: no existe,
+   * es de otra empresa, es de ambiente PRUEBA o corresponde a otro comprobante.
+   *
+   * Es distinto de E_NO_TRACEABILITY —'no citaste nada'— y merece su propio
+   * código: 'citaste algo que no está' manda a revisar otra cosa.
+   */
+  | 'E_DECISION_NOT_FOUND'
   | 'E_DUPLICATE_SOURCE';
 
 export type NormativeErrorCode =

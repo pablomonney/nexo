@@ -49,7 +49,8 @@ accionables, porque el destinatario es un contador que necesita saber **qué** c
 | 7 | Si la cuenta exige centro de costo o tercero, están presentes | `E_MISSING_DIMENSION` |
 | 8 | Si hay moneda extranjera, hay cotización con fuente y fecha | `E_MISSING_FX` |
 | 9 | Toda línea con efecto fiscal tiene su `tax_transaction` | `E_TAX_LINK_MISSING` |
-| 10 | Existe al menos una `ruleApplication` o una justificación manual firmada | `E_NO_TRACEABILITY` |
+| 10 | Existe al menos una `ruleApplication`, una justificación manual firmada **o una decisión contable resuelta** | `E_NO_TRACEABILITY` |
+| 10b | El `decisionId` citado se pudo resolver: existe, es de esta empresa, es PRODUCTIVO y corresponde al comprobante | `E_DECISION_NOT_FOUND` |
 | 11 | El asiento no duplica un `source` ya posteado | `E_DUPLICATE_SOURCE` |
 
 La #3 se verifica **dos veces**: en el motor y por constraint diferido en PostgreSQL

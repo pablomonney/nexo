@@ -417,9 +417,11 @@ suite('flujo productivo completo — del PDF al Libro Diario', () => {
       currency: 'ARS',
       source: { type: 'INVOICE', id: taxTransactionId },
       decisionId: decisionManual,
-      // GAP conocido: E_NO_TRACEABILITY (§24) todavía no reconoce decision_id
-      // como origen demostrable, así que el asiento lleva las dos cosas.
-      manualJustification: 'Decidido por la contadora; ver decision_id.',
+      // SIN manualJustification: la decisión es el fundamento.
+      //
+      // Hasta la evolución del motor había que repetir acá la justificación que
+      // ya estaba en la decisión, solo para conformar a E_NO_TRACEABILITY. Este
+      // test existe para que esa duplicación no vuelva.
       lines: [
         { accountCode: '1.1.01', debit: importe, credit: '0', currency: 'ARS' },
         { accountCode: '4.1.01', debit: '0', credit: importe, currency: 'ARS' },

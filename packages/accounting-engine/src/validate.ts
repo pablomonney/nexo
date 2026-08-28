@@ -234,13 +234,41 @@ export function validar(draft: JournalEntryDraft, context: LedgerContext): Resul
     }
   }
 
-  // --- 10. Trazabilidad: regla aplicada o justificación firmada ------------
-  if (draft.ruleApplications.length === 0 && vacio(draft.manualJustification)) {
+  // --- 10. Trazabilidad: regla aplicada, justificación firmada o decisión ---
+  //
+  // Tres vías, y la tercera se agregó cuando el circuito
+  // `comprobante → decisión → asiento` empezó a producir asientos cuya razón
+  // vive en `accounting_decisions`. Antes había que repetir la justificación en
+  // el asiento **solo para conformar a este control**, y una explicación
+  // duplicada es una que se desincroniza.
+  //
+  // El motor no valida el UUID: compara lo que el llamador pidió contra lo que
+  // el contexto pudo resolver. Un `decisionId` pedido que no aparece resuelto no
+  // es un asiento sin trazabilidad —es un asiento que cita algo que no está—, y
+  // esa diferencia manda a revisar cosas distintas.
+  const decisionPedida = draft.decisionId;
+  const decisionResuelta = context.decision ?? null;
+
+  if (decisionPedida !== undefined && decisionResuelta?.id !== decisionPedida) {
+    errors.push(
+      accountingError(
+        'E_DECISION_NOT_FOUND',
+        `El asiento cita la decisión ${decisionPedida}, que no se pudo resolver para esta ` +
+          'operación. Puede no existir, ser de otra empresa, ser de ambiente PRUEBA, o ' +
+          'corresponder a otro comprobante.',
+      ),
+    );
+  }
+
+  const tieneDecision = decisionPedida !== undefined && decisionResuelta?.id === decisionPedida;
+
+  if (draft.ruleApplications.length === 0 && vacio(draft.manualJustification) && !tieneDecision) {
     errors.push(
       accountingError(
         'E_NO_TRACEABILITY',
-        'El asiento no cita ninguna regla aplicada ni trae justificación manual. ' +
-          'Un asiento sin origen demostrable no se postea, ni siquiera a mano (§24).',
+        'El asiento no cita ninguna regla aplicada, ni trae justificación manual, ni se apoya ' +
+          'en una decisión contable. Un asiento sin origen demostrable no se postea, ni ' +
+          'siquiera a mano (§24).',
       ),
     );
   }

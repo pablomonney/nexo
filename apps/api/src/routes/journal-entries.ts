@@ -28,6 +28,7 @@ import {
   type FiscalYearSnapshot,
   type JournalEntryDraft,
   type JournalEntryLineDraft,
+  type DecisionSnapshot,
   type LedgerContext,
   type PeriodSnapshot,
 } from '@aai/accounting-engine';
@@ -660,6 +661,62 @@ async function armarContexto(
         : [],
     fxRoundingMode: opciones.fxRoundingMode,
     actorCanPostToBlocked: opciones.actorCanPostToBlocked,
+    decision: await resolverDecision(tx, draft),
+  };
+}
+
+/**
+ * La decisión que funda el asiento, resuelta y verificada — o `null`.
+ *
+ * Todas las condiciones van en el `WHERE`, no en un `if` posterior: si una fila
+ * no las cumple, no aparece, y el motor recibe `null`. Eso es la inversión que
+ * usa el resto del sistema — se entrega la prueba o nada.
+ *
+ * ## Por qué se comprueba acá si la base ya lo impide
+ *
+ * Los triggers de la 0034 y la 0036 son la garantía y no se tocan: rechazan una
+ * decisión de otra empresa, de ambiente PRUEBA, o de otro comprobante. Pero lo
+ * hacen con una excepción de PostgreSQL en el `INSERT`, que sale al cliente como
+ * 500. Resolverla acá convierte eso en un error de validación tipado
+ * —`E_DECISION_NOT_FOUND`— antes de intentar persistir.
+ *
+ * La duplicación es deliberada y en un solo sentido: la base sigue mandando, y
+ * esto solo mejora el mensaje. Si divergen, la base gana y el asiento no entra.
+ */
+async function resolverDecision(
+  tx: Tx,
+  draft: JournalEntryDraft,
+): Promise<DecisionSnapshot | null> {
+  if (draft.decisionId === undefined) return null;
+
+  const r = await tx.query<{
+    id: string;
+    origen: 'DETERMINISTICA' | 'PROPUESTA_IA' | 'MANUAL';
+    resultado: string;
+    reglas: string;
+  }>(
+    `SELECT d.id, d.origen, d.resultado,
+            (SELECT count(*) FROM rule_applications ra WHERE ra.decision_id = d.id)::text AS reglas
+       FROM accounting_decisions d
+      WHERE d.id = $1
+        AND d.ambiente = 'PRODUCTIVO'
+        AND d.estado <> 'SUPERSEDIDA'
+        -- Coherencia con el origen del asiento: una decisión sobre otro
+        -- comprobante no funda este. Cuando la decisión no tiene comprobante
+        -- —un ajuste de cierre— no hay nada que comparar.
+        AND (d.tax_transaction_id IS NULL OR d.tax_transaction_id = $2::uuid)`,
+    [draft.decisionId, draft.source.id],
+  );
+  // El RLS ya limitó la consulta a la empresa en contexto: una decisión ajena
+  // no llega hasta acá.
+  const fila = r.rows[0];
+  if (fila === undefined) return null;
+
+  return {
+    id: fila.id,
+    origen: fila.origen,
+    resultado: fila.resultado,
+    reglasAplicadas: Number(fila.reglas),
   };
 }
 
@@ -784,6 +841,9 @@ function aDraft(
     ...(body.manualJustification !== undefined
       ? { manualJustification: body.manualJustification }
       : {}),
+    // Hasta acá el decisionId llegaba al INSERT y nunca al motor: se persistia
+    // una razon que la validacion no veia.
+    ...(body.decisionId !== undefined ? { decisionId: body.decisionId } : {}),
     actor: { userId: actorId.replace(/^user:/, '') },
   };
 }

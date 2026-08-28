@@ -69,11 +69,35 @@ export interface JournalEntryDraft {
     readonly id: string | null;
   };
   /**
-   * Trazabilidad normativa. Si está vacío, hace falta `manualJustification`
-   * firmada: un asiento sin origen demostrable no se postea (E_NO_TRACEABILITY).
+   * Trazabilidad — **tres vías, no dos**.
+   *
+   * Un asiento sin origen demostrable no se postea (E_NO_TRACEABILITY), y hay
+   * tres formas de demostrarlo:
+   *
+   *   1. `ruleApplications` — una regla normativa lo funda.
+   *   2. `manualJustification` — una persona lo explica y lo firma.
+   *   3. `decisionId` — una decisión contable persistida lo respalda.
+   *
+   * La tercera se agregó cuando el circuito `comprobante → decisión → asiento`
+   * empezó a producir asientos cuya razón vivía en `accounting_decisions`. Sin
+   * ella había que repetir la justificación en el asiento **solo para conformar
+   * al motor**, y una explicación duplicada es una que se desincroniza.
+   *
+   * Una decisión manual sigue teniendo `rule_key = NULL` cuando no hay regla:
+   * no se fabrica una `ruleApplication` para llenar el requisito.
    */
   readonly ruleApplications: readonly RuleApplicationRef[];
   readonly manualJustification?: string;
+  /**
+   * Decisión que funda el asiento.
+   *
+   * El motor **no verifica este UUID**: no puede, es puro. Lo verifica quien
+   * arma el `LedgerContext`, que devuelve la decisión resuelta o nada. Acá viaja
+   * lo que el llamador pidió, para poder comparar contra lo que se resolvió: si
+   * pidió una y no se resolvió, eso es `E_DECISION_NOT_FOUND` y no un asiento
+   * sin trazabilidad.
+   */
+  readonly decisionId?: string;
   readonly actor: { readonly userId: string; readonly onBehalfOfAi?: string };
 }
 
