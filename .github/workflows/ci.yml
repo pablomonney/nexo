@@ -69,6 +69,23 @@ jobs:
       - name: Tests
         run: npm test
 
+      # ── El gate de invariantes ────────────────────────────────────────────
+      # Hasta el 2026-08-28 esto NO estaba en CI: los invariantes solo corrían
+      # en el `npm run verify` local, y allí contra la base de desarrollo, que
+      # después de un `db:reset` está vacía. El resultado era un gate que decía
+      # que sí sin haber mirado nada.
+      #
+      # Van en dos pasos porque son dos preguntas distintas. La estructural no
+      # necesita datos —pregunta si los candados están— y por eso puede correr
+      # sobre la base recién migrada. La conductual se crea su propia base,
+      # recorre los flujos productivos reales y recién entonces verifica.
+
+      - name: Invariantes — estructura (los candados están)
+        run: npm run audit:estructura
+
+      - name: Invariantes — conducta (base aislada, fixtures y verificación)
+        run: npm run audit:invariants
+
   # El archivo normativo se verifica también de forma independiente, para que un
   # cambio en el código no pueda enmascarar una alteración de los originales.
   normative-archive:

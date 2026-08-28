@@ -206,3 +206,27 @@ de un ejercicio anterior emitido mañana volvería a tomarla.
   el resultado del ER coincida con la variación del PN necesita el EEPN, que no
   está.
 - **Consolidación**: fuera del MVP.
+
+## Gap: `/statements/issue` no se puede completar con un plan de cuentas real
+
+Medido el 2026-08-28, al armar los fixtures del gate de invariantes.
+
+`CUENTA_SIN_RUBRO` recorre **todas** las cuentas imputables con saldo, no las
+que corresponden al estado que se está armando. La plantilla del ESP no tiene
+—ni debe tener— selectores para `INGRESO` ni `GASTO`, así que toda cuenta de
+resultado con saldo sale marcada como huérfana y el estado queda
+`emisible = false`. El ER tiene el problema espejo con las patrimoniales.
+
+Consecuencia: ninguna empresa con un plan de cuentas completo puede emitir un
+estado por el endpoint. No se había notado porque los tests de integración
+insertan las filas de `financial_statements` directamente por SQL y los
+unitarios usan un plan hecho a medida de la plantilla — es decir, **el endpoint
+nunca se ejercitó de punta a punta**.
+
+Por eso los invariantes **A-1 y A-2** quedan declarados `VACUO_PERMITIDO`: no
+hay forma de producirles casos por el camino productivo.
+
+Lo que hay que decidir para arreglarlo —y es una decisión contable, no
+técnica—: si el universo de `CUENTA_SIN_RUBRO` debe ser el plan entero o el
+subconjunto de tipos que al estado le corresponden. La primera opción es la que
+está y detecta cuentas mal codificadas; la segunda emite, y deja de detectarlas.

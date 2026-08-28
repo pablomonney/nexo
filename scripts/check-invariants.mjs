@@ -1,27 +1,55 @@
 #!/usr/bin/env node
 /**
- * Los ocho invariantes de AUDIT_TRAIL.md, como puerta de CI.
+ * El gate de invariantes: qué promete el sistema y si eso se cumple.
  *
- *   npm run audit:invariants
+ *   npm run audit:invariants                  — modo CONDUCTUAL (el de `verify`)
+ *   node scripts/check-invariants.mjs --observacional   — sobre DATABASE_URL, tal cual está
  *
- * El criterio de la FASE 12 es que **corran en CI y fallen el build al
- * violarse**. No que existan documentados, ni que haya un tablero donde
- * mirarlos: que rompan la compilación.
+ * ## El falso verde que este archivo existe para no repetir
  *
- * La diferencia importa. Un invariante que se informa en un reporte es algo que
- * alguien tiene que ir a mirar, y la primera semana lo mira. Un invariante que
- * corta el pipeline es algo que hay que resolver para poder seguir.
+ * Hasta el 2026-08-28 este script corría contra la base de **desarrollo**. Los
+ * tests de integración habían dejado de escribir ahí el 2026-08-27 —se aislaron
+ * en `aai_test`, corrección necesaria y correcta—, así que el checker se quedó
+ * mirando una base que después de un `db:reset` está vacía. Los catorce
+ * invariantes daban VACUO, VACUO no contaba como violación, y `verify` terminaba
+ * en 0.
  *
- * Cada consulta devuelve **las filas que violan** el invariante, no un conteo.
- * Un "3 violaciones de A-1" obliga a escribir la consulta de nuevo para saber
- * cuáles; devolver los ids es la diferencia entre un hallazgo y un aviso.
+ * Nadie rompió nada: un arreglo en un lugar dejó ciego a un gate en otro, y el
+ * gate siguió diciendo que sí. Por eso lo que cambia acá no es una consulta sino
+ * **quién decide que un invariante pasó**.
  *
- * Sin DATABASE_URL no falla: avisa y sale con 0, igual que `ledger:verify`.
+ * ## Los cuatro estados
+ *
+ * | Estado | Qué significa | ¿Corta el build? |
+ * |---|---|---|
+ * | `VERIFIED` | hay casos y ninguno viola la propiedad | no |
+ * | `VIOLATED` | hay al menos un caso que la viola | **sí, siempre** |
+ * | `NOT_EXERCISED` | el invariante exige ejercicio y no hubo ni un caso | **sí, en modo conductual** |
+ * | `VACUO_PERMITIDO` | no hubo casos, y está declarado por qué no puede haberlos | no |
+ *
+ * La diferencia entre los dos últimos **no es una etiqueta**. `VACUO_PERMITIDO`
+ * obliga a escribir el motivo por el que hoy es imposible ejercitarlo, y ese
+ * motivo se imprime en cada corrida: es una deuda a la vista, no un permiso.
+ * Todo lo demás declara `ejercicio: 'REQUERIDO'`, y entonces el fixture
+ * conductual tiene que producirle casos o el gate falla.
+ *
+ * ## Los dos modos
+ *
+ * **Conductual** (el que corre `verify`): levanta una base de verificación
+ * aislada, la siembra recorriendo los flujos productivos reales —altas,
+ * aprobaciones, contraasientos, cierre, apertura— y recién entonces verifica.
+ * Un `NOT_EXERCISED` acá significa que algo que tenía que pasar no pasó.
+ *
+ * **Observacional**: mira la base que se le indique, tal como está. Sirve para
+ * preguntarle a una base real si cumple, y **no afirma cobertura**: sus
+ * `NOT_EXERCISED` se informan y no cortan, porque que una base no tenga cierres
+ * no es un defecto de la base.
  */
 
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import pg from 'pg';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -29,27 +57,22 @@ if (existsSync(join(HERE, '..', '.env'))) {
   process.loadEnvFile(join(HERE, '..', '.env'));
 }
 
-const DATABASE_URL = process.env.DATABASE_URL ?? '';
-if (DATABASE_URL === '') {
-  console.log('audit:invariants — sin DATABASE_URL. Nada que verificar.');
-  process.exit(0);
-}
-
-/**
- * Los ocho.
- *
- * `sql` devuelve una fila por violación. Vacío = el invariante se cumple.
- *
- * Varios son **vacuos hoy**: sin plantillas cargadas no hay renglones de estado,
- * así que A-1 y A-2 no tienen sobre qué fallar. Eso se informa como tal —
- * `vacuo: true`— en vez de reportarse como verde. Un invariante que pasa porque
- * no hay datos no es lo mismo que uno que pasa porque los datos están bien, y
- * confundirlos es cómo un tablero en verde acompaña una base rota.
- */
 const INVARIANTES = [
   {
     id: 'A-1',
     enunciado: 'Todo renglón de estado contable resuelve a ≥ 1 asiento aprobado',
+    // Hoy es imposible ejercitarlo, y el motivo está medido: `CUENTA_SIN_RUBRO`
+    // recorre TODAS las cuentas imputables con saldo, no las que corresponden al
+    // estado que se arma. La plantilla del ESP no tiene selectores para INGRESO
+    // ni GASTO, así que toda cuenta de resultado con saldo sale huérfana y el
+    // estado queda `emisible = false`; el ER tiene el problema espejo con las
+    // patrimoniales. `POST /statements/issue` no puede completarse para ninguna
+    // empresa con un plan de cuentas completo — los tests de estados insertan las
+    // filas por SQL y los unitarios usan un plan hecho a medida de la plantilla.
+    vacuoPermitido:
+      'Requiere emitir un estado contable, y /statements/issue rechaza todo ESP de una ' +
+      'empresa con cuentas de resultado con saldo (CUENTA_SIN_RUBRO evalúa el plan entero, ' +
+      'no el subconjunto del estado). Arreglarlo es del subsistema de Estados Contables.',
     universo: 'SELECT count(*)::int AS n FROM financial_statement_lines',
     sql: `
       SELECT l.id::text AS violacion,
@@ -68,6 +91,9 @@ const INVARIANTES = [
   {
     id: 'A-2',
     enunciado: 'Toda cifra de nota resuelve a ≥ 1 asiento aprobado',
+    vacuoPermitido:
+      'Las cifras de nota nacen de un estado contable emitido, que hoy no se puede emitir. ' +
+      'Mismo bloqueo que A-1.',
     universo: 'SELECT count(*)::int AS n FROM note_figures',
     sql: `
       SELECT f.id::text AS violacion,
@@ -86,6 +112,7 @@ const INVARIANTES = [
   {
     id: 'A-3',
     enunciado: 'Todo asiento aprobado tiene comprobante, justificación firmada o decisión contable',
+    ejercicio: 'REQUERIDO',
     universo: "SELECT count(*)::int AS n FROM journal_entries WHERE status = 'APROBADO'",
     // Las tres vías, las mismas de `E_NO_TRACEABILITY` en el motor y de
     // `je_trazabilidad_obligatoria` en la base (0037).
@@ -107,6 +134,10 @@ const INVARIANTES = [
   {
     id: 'A-4',
     enunciado: 'Toda aplicación de regla apunta a una norma con documento y hash',
+    vacuoPermitido:
+      'Una aplicación de regla exige que la regla esté ACTIVE (assert_rule_application_activa). ' +
+      'El estado del proyecto es ACTIVE = 0 y ninguna regla se activa sin la firma de un ' +
+      'aprobador (§32): activar una para que el tablero quede verde sería falsear el sistema.',
     universo: 'SELECT count(*)::int AS n FROM rule_applications',
     sql: `
       -- La norma no está en rule_applications sino en la regla que se aplicó:
@@ -128,6 +159,7 @@ const INVARIANTES = [
   {
     id: 'A-5',
     enunciado: 'La cadena de audit_logs es continua para cada empresa',
+    ejercicio: 'REQUERIDO',
     universo: 'SELECT count(*)::int AS n FROM audit_logs',
     // Cada entrada encadena con el hash de la anterior de la misma empresa. Una
     // ruptura significa que alguien insertó, borró o reordenó — que es lo que la
@@ -148,6 +180,7 @@ const INVARIANTES = [
   {
     id: 'A-6',
     enunciado: 'Ningún asiento creado por IA existe sin aprobación humana',
+    ejercicio: 'REQUERIDO',
     universo: 'SELECT count(*)::int AS n FROM journal_entries WHERE ai_prediction_id IS NOT NULL',
     // La verificación mecánica de la promesa central del producto (ADR-001).
     // Si esta falla alguna vez, el sistema dejó de ser lo que dice ser.
@@ -162,6 +195,7 @@ const INVARIANTES = [
   {
     id: 'A-7',
     enunciado: 'El Mayor coincide con el Diario',
+    ejercicio: 'REQUERIDO',
     universo: 'SELECT count(*)::int AS n FROM ledger_movements',
     // Es el mismo control que `npm run ledger:verify`, expresado como
     // invariante. Corre acá también para que el criterio de la FASE 12 —los ocho
@@ -183,6 +217,9 @@ const INVARIANTES = [
   {
     id: 'A-8',
     enunciado: 'Ninguna regla contable ACTIVE carece de aprobador',
+    vacuoPermitido:
+      'Su universo son las reglas ACTIVE, y hay cero por decisión de producto. Que esté ' +
+      'vacío no es una carencia del gate: es el estado declarado del sistema.',
     universo: "SELECT count(*)::int AS n FROM accounting_rules WHERE status = 'ACTIVE'",
     sql: `
       SELECT r.id::text AS violacion, format('regla %s', r.rule_key) AS detalle
@@ -192,6 +229,7 @@ const INVARIANTES = [
   {
     id: 'A-9',
     enunciado: 'Toda aplicación de regla congeló el hash del documento que citó',
+    vacuoPermitido: 'Mismo bloqueo que A-4: no hay aplicaciones de regla sin una regla ACTIVE.',
     universo: 'SELECT count(*)::int AS n FROM rule_applications',
     // A-4 comprueba que la derivación `regla → norma → documento` exista HOY.
     // Esto es distinto: que la aplicación haya guardado el hash del día en que
@@ -210,6 +248,7 @@ const INVARIANTES = [
   {
     id: 'A-10',
     enunciado: 'Ningún asiento aprobado se funda en una decisión de ambiente PRUEBA',
+    ejercicio: 'REQUERIDO',
     universo: "SELECT count(*)::int AS n FROM journal_entries WHERE decision_id IS NOT NULL",
     sql: `
       SELECT e.id::text AS violacion,
@@ -229,6 +268,7 @@ const INVARIANTES = [
   {
     id: 'A-11',
     enunciado: 'Todo ejercicio CERRADO tiene su cierre completado, y viceversa',
+    ejercicio: 'REQUERIDO',
     universo: "SELECT count(*)::int AS n FROM fiscal_years WHERE status = 'CERRADO'",
     sql: `
       SELECT fy.id::text AS violacion,
@@ -248,6 +288,7 @@ const INVARIANTES = [
   {
     id: 'A-12',
     enunciado: 'Los asientos de cierre pertenecen al ejercicio que su expediente dice cerrar',
+    ejercicio: 'REQUERIDO',
     universo: "SELECT count(*)::int AS n FROM accounting_closures WHERE status = 'COMPLETADO'",
     // Un asiento de cierre imputado a otro ejercicio es trazabilidad falsa: el
     // recorrido se ve completo y señala el ejercicio equivocado.
@@ -264,6 +305,7 @@ const INVARIANTES = [
   {
     id: 'A-13',
     enunciado: 'Toda apertura deriva de un cierre completado del ejercicio anterior',
+    ejercicio: 'REQUERIDO',
     universo: "SELECT count(*)::int AS n FROM journal_entries WHERE kind = 'APERTURA'",
     // Una apertura huérfana es un patrimonio que aparece sin venir de ningún
     // lado. Cuadra —el asiento está balanceado— y no se puede explicar.
@@ -280,6 +322,7 @@ const INVARIANTES = [
   {
     id: 'A-14',
     enunciado: 'Ningún ejercicio cerrado tiene asientos que no sean de su propio cierre',
+    ejercicio: 'REQUERIDO',
     universo: "SELECT count(*)::int AS n FROM fiscal_years WHERE status = 'CERRADO'",
     // El trigger `je_fiscal_year_guard` lo impide desde la 0038. Esto verifica
     // que nada anterior a la migración —ni ninguna carga posterior con el
@@ -298,65 +341,196 @@ const INVARIANTES = [
   },
 ];
 
+export { INVARIANTES };
+
 const MAX_EJEMPLOS = 5;
 
-const client = new pg.Client({ connectionString: DATABASE_URL });
-await client.connect();
+export const VERIFIED = 'VERIFIED';
+export const VIOLATED = 'VIOLATED';
+export const NOT_EXERCISED = 'NOT_EXERCISED';
+export const VACUO_PERMITIDO = 'VACUO_PERMITIDO';
 
-let violados = 0;
-let vacuos = 0;
+/**
+ * Evalúa la lista contra una conexión abierta y devuelve el resultado
+ * estructurado. No imprime, no decide el código de salida y no sabe en qué modo
+ * está: eso es de quien la llama.
+ *
+ * Se exporta para que los tests del propio gate puedan armar datos y preguntarle
+ * qué ve, en vez de leer su salida de texto. Un gate cuya única interfaz es un
+ * `console.log` solo se puede probar por scraping, y entonces no se prueba.
+ */
+export async function evaluarInvariantes(client, lista = INVARIANTES) {
+  const resultados = [];
 
-try {
-  for (const invariante of INVARIANTES) {
+  for (const invariante of lista) {
     const universo = await client.query(invariante.universo);
-    const filas = Number(universo.rows[0]?.n ?? 0);
-    const resultado = await client.query(invariante.sql);
+    const casos = Number(universo.rows[0]?.n ?? 0);
+    const violaciones = await client.query(invariante.sql);
 
-    if (resultado.rows.length > 0) {
-      violados += 1;
-      console.error(`  ✘ ${invariante.id} — ${invariante.enunciado}`);
-      console.error(`      ${resultado.rows.length} violación(es):`);
-      for (const fila of resultado.rows.slice(0, MAX_EJEMPLOS)) {
-        console.error(`        · ${fila.detalle}`);
-      }
-      if (resultado.rows.length > MAX_EJEMPLOS) {
-        console.error(`        … y ${resultado.rows.length - MAX_EJEMPLOS} más`);
-      }
-      continue;
-    }
+    // El orden importa: una violación manda aunque el universo diera cero. Si
+    // las dos consultas discrepan —hay filas que violan y el universo dice que
+    // no hay ninguna— el problema es el invariante, y taparlo con VACUO sería
+    // esconder justamente el caso que hay que mirar.
+    const estado =
+      violaciones.rows.length > 0
+        ? VIOLATED
+        : casos > 0
+          ? VERIFIED
+          : invariante.vacuoPermitido !== undefined
+            ? VACUO_PERMITIDO
+            : NOT_EXERCISED;
 
-    if (filas === 0) {
-      vacuos += 1;
-      console.log(`  ○ ${invariante.id} — ${invariante.enunciado}`);
-      console.log('      VACUO: no hay filas sobre las que pueda fallar.');
-      continue;
-    }
-
-    console.log(`  ✔ ${invariante.id} — ${invariante.enunciado} (${filas} filas)`);
+    resultados.push({
+      id: invariante.id,
+      enunciado: invariante.enunciado,
+      estado,
+      casos,
+      violaciones: violaciones.rows.length,
+      ejemplos: violaciones.rows.slice(0, MAX_EJEMPLOS).map((fila) => fila.detalle),
+      motivoVacuo: invariante.vacuoPermitido ?? null,
+    });
   }
 
+  return resultados;
+}
+
+export function resumir(resultados) {
+  const por = (estado) => resultados.filter((r) => r.estado === estado);
+  return {
+    verificados: por(VERIFIED).length,
+    violados: por(VIOLATED).length,
+    noEjercitados: por(NOT_EXERCISED).length,
+    vacuosPermitidos: por(VACUO_PERMITIDO).length,
+    total: resultados.length,
+  };
+}
+
+/**
+ * Código de salida.
+ *
+ * Una violación corta siempre. Un `NOT_EXERCISED` corta **solo en modo
+ * conductual**: ahí el fixture prometió producirle casos y no lo hizo, así que
+ * la propiedad quedó sin probar y decir que pasó sería el falso verde otra vez.
+ * En modo observacional no corta, porque que una base real no tenga cierres no
+ * es un defecto de la base — pero se informa igual, y el resumen dice
+ * explícitamente que esa corrida no afirma cobertura.
+ */
+export function codigoDeSalida(resumen, { conductual }) {
+  if (resumen.violados > 0) return 1;
+  if (conductual && resumen.noEjercitados > 0) return 1;
+  return 0;
+}
+
+const SIMBOLO = {
+  [VERIFIED]: '✔',
+  [VIOLATED]: '✘',
+  [NOT_EXERCISED]: '✘',
+  [VACUO_PERMITIDO]: '○',
+};
+
+export function imprimir(resultados, { conductual }) {
+  for (const r of resultados) {
+    const linea = `  ${SIMBOLO[r.estado]} ${r.id} — ${r.enunciado}`;
+    const detalle = `      Estado: ${r.estado} · casos ejercitados: ${r.casos} · violaciones: ${r.violaciones}`;
+
+    if (r.estado === VIOLATED || (r.estado === NOT_EXERCISED && conductual)) {
+      console.error(linea);
+      console.error(detalle);
+      for (const ejemplo of r.ejemplos) console.error(`        · ${ejemplo}`);
+      if (r.violaciones > r.ejemplos.length) {
+        console.error(`        … y ${r.violaciones - r.ejemplos.length} más`);
+      }
+      if (r.estado === NOT_EXERCISED) {
+        console.error('        · el fixture conductual no le produjo ni un caso');
+      }
+      continue;
+    }
+
+    console.log(linea);
+    console.log(detalle);
+    if (r.estado === VACUO_PERMITIDO) console.log(`        · vacuo permitido: ${r.motivoVacuo}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+
+const invocadoDirectamente =
+  process.argv[1] !== undefined &&
+  resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
+
+if (invocadoDirectamente) {
+  const observacional = process.argv.includes('--observacional');
+  const conductual = !observacional;
+
+  let url = process.env.DATABASE_URL ?? '';
+  if (url === '') {
+    console.log('audit:invariants — sin DATABASE_URL. Nada que verificar.');
+    process.exit(0);
+  }
+
+  if (conductual) {
+    // Base aislada + fixtures, en ese orden. La de desarrollo no se toca: ni se
+    // lee ni se escribe, así que verificar no puede tener efectos colaterales
+    // sobre el trabajo de nadie.
+    const { prepararBaseDeVerificacion } = await import('./verification-db.mjs');
+    const { sembrarFixtures } = await import('./fixtures-invariantes.mjs');
+    console.log('Modo CONDUCTUAL — base de verificación aislada y fixtures propios.\n');
+    url = await prepararBaseDeVerificacion({ silencioso: true });
+    await sembrarFixtures(url, { silencioso: true });
+    console.log('  ✔ fixtures conductuales sembrados\n');
+  } else {
+    console.log(`Modo OBSERVACIONAL — se mira ${new URL(url).pathname.slice(1)} tal como está.\n`);
+  }
+
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  let resultados;
+  try {
+    resultados = await evaluarInvariantes(client);
+  } finally {
+    await client.end();
+  }
+
+  imprimir(resultados, { conductual });
+  const resumen = resumir(resultados);
   console.log('');
 
-  if (violados > 0) {
-    console.error(`audit:invariants — ${violados} de ${INVARIANTES.length} invariantes VIOLADOS.`);
+  const salida = codigoDeSalida(resumen, { conductual });
+
+  if (resumen.violados > 0) {
+    console.error(
+      `audit:invariants — ${resumen.violados} de ${resumen.total} invariantes VIOLADOS.`,
+    );
     console.error('');
     console.error('Estos no son avisos. Cada uno es una propiedad que el sistema promete y que');
     console.error('en este momento no se cumple: una cifra sin respaldo, un asiento de IA sin');
     console.error('firma, una cadena de auditoría rota. El build no sigue.');
-    process.exit(1);
   }
 
-  if (vacuos > 0) {
-    console.log(
-      `audit:invariants — ${INVARIANTES.length - vacuos} verificados, ${vacuos} vacuos (sin datos).`,
+  if (resumen.noEjercitados > 0 && conductual) {
+    console.error(
+      `audit:invariants — ${resumen.noEjercitados} invariante(s) NO EJERCITADOS en modo conductual.`,
     );
-    console.log('');
-    console.log('Un invariante vacuo NO es un invariante verde: pasa porque no hay sobre qué');
-    console.log('fallar. Se informa aparte a propósito — un tablero que los pinta iguales');
-    console.log('acompaña una base vacía con la misma cara que una base sana.');
-  } else {
-    console.log(`audit:invariants — los ${INVARIANTES.length} invariantes se cumplen.`);
+    console.error('');
+    console.error('Declararon exigir ejercicio y el fixture no les produjo ni un caso. No se');
+    console.error('sabe si se cumplen: no fallaron, no pasaron. Darlos por buenos sería');
+    console.error('exactamente el falso verde que este gate existe para no repetir — o el');
+    console.error('fixture dejó de cubrir un flujo, o el invariante necesita declarar por qué');
+    console.error('hoy no se puede ejercitar.');
   }
-} finally {
-  await client.end();
+
+  console.log(
+    `audit:invariants — ${resumen.verificados} verificados, ${resumen.violados} violados, ` +
+      `${resumen.noEjercitados} no ejercitados, ${resumen.vacuosPermitidos} vacuos permitidos.`,
+  );
+
+  if (!conductual) {
+    console.log('');
+    console.log('Modo observacional: esta corrida NO afirma cobertura. Dice qué cumple la base');
+    console.log('que se le señaló, y nada sobre lo que esa base no contiene.');
+  }
+
+  process.exit(salida);
 }

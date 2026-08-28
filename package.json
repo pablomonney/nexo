@@ -23,7 +23,7 @@
     "db:status": "node scripts/migrate.mjs status",
     "db:reset": "node scripts/migrate.mjs reset",
     "norms:verify": "node scripts/verify-norm-archive.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run ledger:verify && npm run audit:invariants && npm run test:coverage",
+    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run ledger:verify && npm run audit:estructura && npm run audit:invariants && npm run test:coverage",
     "db:create": "node scripts/db-create.mjs",
     "db:setup": "npm run db:create && npm run db:migrate && npm run build && npm run catalog:seed && npm run prompts:register && npm run norms:seed && npm run tax:seed && npm run statements:seed",
     "arca:check": "node scripts/arca-check.mjs",
@@ -48,7 +48,9 @@
     "test:db": "node scripts/test-db.mjs",
     "reglas:cargar": "node scripts/cargar-reglas-contables.mjs",
     "reglas:aprobar": "node scripts/aprobar-regla.mjs",
-    "circuito:demo": "node scripts/circuito-demo.mjs"
+    "circuito:demo": "node scripts/circuito-demo.mjs",
+    "audit:estructura": "node scripts/check-structure.mjs",
+    "verify:db": "node scripts/verification-db.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

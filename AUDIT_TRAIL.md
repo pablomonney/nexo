@@ -91,32 +91,102 @@ Estos tests fallan el build, no emiten advertencias:
 |---|-----------|
 | A-1 | Todo `financial_statement_lines.lineage_id` resuelve a ≥ 1 asiento aprobado |
 | A-2 | Todo `note_figures.lineage_id` resuelve a ≥ 1 asiento aprobado |
-| A-3 | Todo `journal_entry` aprobado tiene `source` o justificación manual firmada |
+| A-3 | Todo `journal_entry` aprobado tiene comprobante, justificación firmada o decisión contable |
 | A-4 | Todo `rule_application` apunta a una `norm_version` existente con documento y hash |
 | A-5 | La cadena de `audit_logs` es continua para cada empresa |
 | A-6 | Ningún `journal_entry` fue creado por un actor `AI` sin `approved_by` humano |
 | A-7 | El Mayor reconstruido desde el Diario coincide con `ledger_movements` |
 | A-8 | Ninguna `accounting_rule` en estado `ACTIVE` carece de `approved_by` |
+| A-9 | Toda aplicación de regla congeló el hash del documento normativo que citó |
+| A-10 | Ningún asiento aprobado se funda en una decisión de ambiente `PRUEBA` |
+| A-11 | Todo ejercicio `CERRADO` tiene su cierre completado, y viceversa |
+| A-12 | Los asientos de cierre pertenecen al ejercicio que su expediente dice cerrar |
+| A-13 | Toda apertura deriva de un cierre completado del ejercicio anterior |
+| A-14 | Ningún ejercicio cerrado tiene asientos que no sean de su propio cierre |
+
+### Los cuatro estados
+
+Un invariante no tiene dos resultados posibles sino cuatro, y confundir dos de
+ellos fue exactamente el falso verde del 2026-08-28:
+
+| Estado | Qué significa | ¿Corta el build? |
+|---|---|---|
+| `VERIFIED` | hay casos y ninguno viola la propiedad | no |
+| `VIOLATED` | hay al menos un caso que la viola | **sí, siempre** |
+| `NOT_EXERCISED` | exige ejercicio y no hubo ni un caso | **sí, en modo conductual** |
+| `VACUO_PERMITIDO` | no hubo casos, y está declarado por qué no puede haberlos | no |
+
+La distinción entre los dos últimos **no es una etiqueta**. Cada invariante
+declara una de las dos políticas y no puede omitir las dos: o `ejercicio:
+'REQUERIDO'` —y entonces el fixture conductual tiene que producirle casos— o
+`vacuoPermitido: '<motivo>'`, que obliga a escribir por qué hoy es imposible
+ejercitarlo. Ese motivo se imprime en cada corrida: es una deuda a la vista, no
+un permiso. Un invariante nuevo que se olvide de declarar cae en
+`NOT_EXERCISED` y corta el build.
+
+Hoy hay cinco `VACUO_PERMITIDO`: **A-4, A-8 y A-9** necesitan una regla en
+estado `ACTIVE` y el sistema tiene cero por decisión de producto; **A-1 y A-2**
+necesitan un estado contable emitido, y `/statements/issue` no puede completarse
+para ninguna empresa con un plan de cuentas completo (ver los gaps de
+`STATEMENTS.md`).
 
 ### Cómo se corren
 
 ```bash
-npm run audit:invariants
+npm run audit:estructura    # ¿están los candados? no necesita datos
+npm run audit:invariants    # ¿las filas cumplen? crea su base y sus fixtures
 ```
 
-Parte de `npm run verify`. Devuelve **las filas que violan** cada invariante, no un conteo: un
-"3 violaciones de A-1" obliga a escribir la consulta de nuevo para saber cuáles.
+Los dos son parte de `npm run verify` y de CI. Son **dos preguntas distintas**:
+la estructural verifica que existan los CHECK, triggers, índices únicos, RLS
+forzado y vistas con `security_invoker` de los que dependen los invariantes; la
+conductual verifica que las filas que hay cumplan la propiedad. Una base recién
+migrada y vacía tiene que dar estructural verde y conductual sin ejercitar — si
+las dos se mezclaran en un solo número, nadie sabría cuál de las dos mitades
+falta.
 
-Los que no tienen filas sobre las que fallar se informan como **VACUO**, no como verde. Un
-invariante que pasa porque no hay datos no es lo mismo que uno que pasa porque los datos están
-bien (R-35).
+Y ninguna de las dos reemplaza a los tests: un trigger que existe pero que nunca
+recibió una fila válida y una inválida no está probado.
 
-Cuando un invariante puede convertirse en candado, se convierte: **A-3** es desde la migración
-`0025` un CHECK sobre `journal_entries`. Un invariante que solo se verifica después ya se violó
-cuando se detecta.
+#### El modo conductual, y por qué se crea su propia base
 
-A-6 es la verificación mecánica de la promesa central del producto. Si alguna vez falla, el
-producto dejó de ser lo que dice ser.
+`audit:invariants` destruye y rehace `aai_verify`, la migra, la siembra
+**recorriendo los flujos productivos reales** —altas de asiento por las tres vías
+de trazabilidad, aprobación, contraasiento, propuesta de IA revisada, decisión
+contable, pre-cierre, cierre y apertura, en dos empresas— y recién entonces
+verifica. Los fixtures escriben por HTTP y no por `INSERT`: un fixture que arma
+las filas a mano produce el estado final sin pasar por los candados que el
+invariante promete proteger, y el `CONSTRAINT TRIGGER` del `Debe = Haber` solo
+dispara en el COMMIT.
+
+La base de desarrollo no se toca: ni se lee ni se escribe. Verificar no puede
+tener efectos colaterales sobre el trabajo de nadie.
+
+Hay también un modo `--observacional` que mira la base que se le indique tal
+como está. Sirve para preguntarle a una base real si cumple, y **no afirma
+cobertura**: sus `NOT_EXERCISED` se informan y no cortan, porque que una base no
+tenga cierres no es un defecto de la base.
+
+### La causa del falso verde, para no repetirla
+
+El 2026-08-27 los tests de integración se aislaron en `aai_test`. Era necesario
+—escribían en la base de desarrollo y no podían limpiar— y estaba bien hecho.
+Pero `audit:invariants` corría contra la base de desarrollo, y los datos que
+venía mirando eran, sin que nadie lo hubiera decidido, los que esos tests
+dejaban. El aislamiento le sacó al gate lo único que estaba viendo.
+
+Nadie rompió nada: un arreglo correcto en un lugar dejó ciego a un gate en otro,
+y el gate siguió diciendo que sí. Por eso lo que cambió no fue una consulta sino
+**quién decide que un invariante pasó**, y por eso el gate tiene ahora sus
+propios tests (`tests/integration/gate-de-invariantes.test.ts`).
+
+Cuando un invariante puede convertirse en candado, se convierte: **A-3** es desde
+la migración `0025` un CHECK sobre `journal_entries` —extendido en la `0037`
+para reconocer la tercera vía de trazabilidad—. Un invariante que solo se
+verifica después ya se violó cuando se detecta.
+
+A-6 es la verificación mecánica de la promesa central del producto. Si alguna vez
+falla, el producto dejó de ser lo que dice ser.
 
 ---
 
