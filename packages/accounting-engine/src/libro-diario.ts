@@ -63,6 +63,15 @@ export interface AsientoDelLibro {
   readonly sourceId: string | null;
   readonly documentId: string | null;
   readonly manualJustification: string | null;
+  /**
+   * La decisión contable que funda el asiento, si es la que lo funda.
+   *
+   * Es la tercera vía de trazabilidad, incorporada en `d350405`. El libro tiene
+   * que mostrarla por la misma razón por la que muestra el comprobante: un
+   * asiento que aparece sin ninguna de las tres se lee como un asiento sin
+   * fundamento, aunque lo tenga.
+   */
+  readonly decisionId: string | null;
   readonly aiPredictionId: string | null;
   readonly createdBy: string;
   readonly approvedBy: string | null;
@@ -198,6 +207,20 @@ export function construirLibroDiario(
     cumpleFormalidades: controles.every((control) => control.cumple),
     excluidos,
   };
+}
+
+/**
+ * Los asientos que quedaron dentro del Diario, en su orden, sin la foliatura.
+ *
+ * Existe para que el Mayor se construya sobre **exactamente** este conjunto y no
+ * sobre uno parecido. `construirLibroMayor` documenta desde siempre que quien
+ * llama le pasa la salida del Diario; mientras eso fue una recomendación en un
+ * comentario, `routes/books.ts` le pasó la lista cruda de la base y el Mayor
+ * terminó incluyendo BORRADOR y PROPUESTO. Un helper de una línea convierte esa
+ * recomendación en algo que se puede usar sin volver a filtrar a mano.
+ */
+export function asientosDelDiario(libro: LibroDiario): readonly AsientoDelLibro[] {
+  return libro.folios.flatMap((folio) => folio.asientos);
 }
 
 /**
@@ -504,12 +527,17 @@ function controlarCorrecciones(asientos: readonly AsientoDelLibro[]): ControlDeF
 }
 
 /**
- * Cada asiento tiene detrás un documento o una justificación firmada.
+ * Cada asiento tiene detrás un documento, una justificación firmada o una
+ * decisión contable.
  *
  * El art. 321 pide que los asientos «se respalden con la documentación
  * respectiva». Un asiento de cierre no tiene factura, y está bien: su respaldo
  * es el acto de cierre. Lo que no puede haber es un asiento sin ninguna de las
- * dos cosas.
+ * tres cosas.
+ *
+ * Las tres son las mismas que admite `E_NO_TRACEABILITY` en `validate.ts`, y
+ * tienen que serlo: si el motor deja pasar un asiento y después el libro lo
+ * denuncia como sin respaldo, uno de los dos está mintiendo.
  */
 function controlarRespaldo(asientos: readonly AsientoDelLibro[]): ControlDeForma {
   const incumplen: string[] = [];
@@ -518,7 +546,13 @@ function controlarRespaldo(asientos: readonly AsientoDelLibro[]): ControlDeForma
     const tieneDocumento = asiento.documentId !== null || asiento.sourceId !== null;
     const tieneJustificacion =
       asiento.manualJustification !== null && asiento.manualJustification.trim() !== '';
-    if (!tieneDocumento && !tieneJustificacion) incumplen.push(asiento.id);
+    // Se exige un id de verdad y no solo «distinto de null». Un llamador que
+    // omita el campo lo deja en `undefined`, y con `!== null` eso alcanzaría
+    // para dar por respaldados a todos los asientos del libro: el control se
+    // apagaría entero sin que nada lo diga. Acá conviene fallar cerrado.
+    const tieneDecision =
+      typeof asiento.decisionId === 'string' && asiento.decisionId.trim() !== '';
+    if (!tieneDocumento && !tieneJustificacion && !tieneDecision) incumplen.push(asiento.id);
   }
 
   return {
@@ -527,8 +561,8 @@ function controlarRespaldo(asientos: readonly AsientoDelLibro[]): ControlDeForma
     fundamento: ART_321,
     detalle:
       incumplen.length === 0
-        ? 'Todos los asientos tienen documento respaldatorio o justificación firmada'
-        : `${incumplen.length} asiento(s) no tienen ni comprobante ni justificación`,
+        ? 'Todos los asientos tienen documento respaldatorio, justificación firmada o decisión contable'
+        : `${incumplen.length} asiento(s) no tienen ni comprobante, ni justificación, ni decisión`,
     incumplen,
   };
 }

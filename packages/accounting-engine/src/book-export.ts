@@ -57,6 +57,7 @@ const COLUMNAS_DIARIO = [
   'asiento_id',
   'linea_id',
   'anula_asiento_id',
+  'decision_id',
   'prediccion_ia_id',
   'creado_por',
   'aprobado_por',
@@ -77,6 +78,7 @@ const COLUMNAS_MAYOR = [
   'documento_id',
   'comprobante_tipo',
   'comprobante_id',
+  'decision_id',
   'asiento_id',
   'linea_id',
 ] as const;
@@ -124,6 +126,7 @@ export function exportarDiarioCsv(libro: LibroDiario): string {
             asiento.id,
             linea.id,
             asiento.reversesEntryId ?? '',
+            asiento.decisionId ?? '',
             asiento.aiPredictionId ?? '',
             asiento.createdBy,
             asiento.approvedBy ?? '',
@@ -159,6 +162,7 @@ export function exportarMayorCsv(mayor: LibroMayor): string {
           movimiento.documentId ?? '',
           movimiento.sourceType,
           movimiento.sourceId ?? '',
+          movimiento.decisionId ?? '',
           movimiento.entryId,
           movimiento.entryLineId,
         ]

@@ -12,6 +12,7 @@
  */
 
 import {
+  asientosDelDiario,
   balanceDesdeMayor,
   construirLibroDiario,
   construirLibroMayor,
@@ -118,7 +119,7 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
         const contexto = await resolverContexto(tx, tenant.companyId, query);
-        const mayor = construirLibroMayor(contexto.asientos, contexto.opcionesMayor);
+        const mayor = mayorDelRango(contexto);
         const cuentas =
           query.cuenta === undefined
             ? mayor.cuentas
@@ -143,7 +144,7 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
         const contexto = await resolverContexto(tx, tenant.companyId, query);
-        const csv = exportarMayorCsv(construirLibroMayor(contexto.asientos, contexto.opcionesMayor));
+        const csv = exportarMayorCsv(mayorDelRango(contexto));
 
         return reply
           .header('content-type', 'text/csv; charset=utf-8')
@@ -179,7 +180,7 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
       async (tx) => {
         const contexto = await resolverContexto(tx, tenant.companyId, query);
 
-        const mayor = construirLibroMayor(contexto.asientos, contexto.opcionesMayor);
+        const mayor = mayorDelRango(contexto);
         const materializado = await tx.query<{
           entry_line_id: string;
           account_id: string;
@@ -267,7 +268,7 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
         const contenido =
           body.libro === 'DIARIO'
             ? exportarDiarioCsv(diario)
-            : exportarMayorCsv(construirLibroMayor(contexto.asientos, contexto.opcionesMayor));
+            : exportarMayorCsv(mayorDelRango(contexto));
         const sha256 = hashDeLibro(contenido);
 
         const emision = await tx.query<{ id: string }>(
@@ -384,6 +385,27 @@ interface ContextoDeLibros {
 }
 
 /**
+ * El Mayor del rango, armado sobre los asientos que quedaron en el Diario.
+ *
+ * Nunca sobre `contexto.asientos`, que es la lista cruda de la base y trae los
+ * BORRADOR y PROPUESTO. Ese era el error: `construirLibroMayor` filtra por
+ * cuenta y por fecha pero **no por estado** —confía en que quien llama ya le
+ * pasó los registrables, como dice su encabezado— y acá se le pasaba todo. El
+ * Mayor mostraba asientos que nadie aprobó, `/books/ledger-verification` los
+ * denunciaba como sobrantes contra `ledger_movements` —que sí filtra— y el
+ * control quedaba informando una discrepancia que no era del Mayor sino de esta
+ * llamada.
+ *
+ * Que sea una sola función y no cuatro llamadas es parte del arreglo: mientras
+ * la forma correcta y la incorrecta se escribían igual de fácil, el próximo
+ * endpoint iba a volver a elegir mal.
+ */
+function mayorDelRango(contexto: ContextoDeLibros): LibroMayor {
+  const diario = construirLibroDiario(contexto.asientos, contexto.opcionesDiario);
+  return construirLibroMayor(asientosDelDiario(diario), contexto.opcionesMayor);
+}
+
+/**
  * Trae los asientos del rango con sus líneas y arma las opciones de los dos
  * libros a la vez.
  *
@@ -433,6 +455,7 @@ async function resolverContexto(
     source_id: string | null;
     document_id: string | null;
     manual_justification: string | null;
+    decision_id: string | null;
     ai_prediction_id: string | null;
     created_by: string;
     approved_by: string | null;
@@ -441,7 +464,8 @@ async function resolverContexto(
             e.status, e.fiscal_year_id, e.period_id, e.reverses_entry_id,
             e.source_type, e.source_id::text,
             d.id::text AS document_id,
-            e.manual_justification, e.ai_prediction_id::text, e.created_by, e.approved_by
+            e.manual_justification, e.decision_id::text, e.ai_prediction_id::text,
+            e.created_by, e.approved_by
        FROM journal_entries e
        LEFT JOIN documents d ON d.id = e.source_id
                             AND e.source_type IN ('INVOICE', 'RECEIPT', 'BANK')
@@ -489,8 +513,28 @@ async function resolverContexto(
     [companyId, query.desde, query.hasta],
   );
 
+  // El catálogo del Mayor sale del plan de cuentas, no de las líneas del rango.
+  //
+  // Salía de las líneas, y por eso una cuenta con saldo inicial y sin
+  // movimientos en el rango aparecía con código y nombre vacíos: el Mayor
+  // siempre incluye las cuentas con saldo de apertura —si no, los totales no
+  // cerrarían— pero no tenía de dónde sacar su ficha. El Mayor de febrero de una
+  // empresa que solo operó en enero salía entero con `codigo: ""`.
+  //
+  // El plan de cuentas es chico y es lo que el Mayor está proyectando; leerlo
+  // completo cuesta una consulta y saca el problema de raíz en vez de parchear
+  // el caso de las cuentas sin movimiento.
+  const plan = await tx.query<{
+    id: string;
+    code: string;
+    name: string;
+    nature: 'DEUDORA' | 'ACREEDORA';
+  }>('SELECT id, code, name, nature FROM accounts WHERE company_id = $1', [companyId]);
+
   const porAsiento = new Map<string, LineaDelLibro[]>();
-  const catalogo = new Map<string, CuentaParaElMayor>();
+  const catalogo = new Map<string, CuentaParaElMayor>(
+    plan.rows.map((fila) => [fila.id, { id: fila.id, code: fila.code, name: fila.name, nature: fila.nature }]),
+  );
   for (const fila of lineas.rows) {
     catalogo.set(fila.account_id, {
       id: fila.account_id,
@@ -536,6 +580,7 @@ async function resolverContexto(
     sourceId: fila.source_id,
     documentId: fila.document_id,
     manualJustification: fila.manual_justification,
+    decisionId: fila.decision_id,
     aiPredictionId: fila.ai_prediction_id,
     createdBy: fila.created_by,
     approvedBy: fila.approved_by,
@@ -676,6 +721,7 @@ function respuestaDiario(libro: LibroDiario): unknown {
         estado: asiento.status,
         anulaA: asiento.reversesEntryId,
         documentoId: asiento.documentId,
+        decisionId: asiento.decisionId,
         prediccionId: asiento.aiPredictionId,
         aprobadoPor: asiento.approvedBy,
         lineas: asiento.lines.map((linea) => ({
@@ -737,6 +783,7 @@ function respuestaMayor(mayor: LibroMayor): unknown {
         saldo: toDecimalString(movimiento.saldo),
         anulado: movimiento.anulado,
         documentoId: movimiento.documentId,
+        decisionId: movimiento.decisionId,
       })),
     })),
   };

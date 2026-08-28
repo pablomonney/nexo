@@ -34,6 +34,14 @@ export interface MovimientoDelMayor {
   readonly documentId: string | null;
   readonly sourceType: string;
   readonly sourceId: string | null;
+  /**
+   * La otra punta del hilo: la decisión que fundó el asiento.
+   *
+   * Un ajuste de cierre no tiene comprobante y sí tiene decisión. Sin este campo
+   * el recorrido MAYOR → ASIENTO → DECISIÓN obliga a volver a consultar el
+   * asiento, que es justamente el salto que la traza existe para evitar.
+   */
+  readonly decisionId: string | null;
   /** Si el asiento fue anulado, el movimiento sigue: lo compensa el contraasiento. */
   readonly anulado: boolean;
 }
@@ -165,6 +173,7 @@ export function construirLibroMayor(
         documentId: asiento.documentId,
         sourceType: asiento.sourceType,
         sourceId: asiento.sourceId,
+        decisionId: asiento.decisionId,
         anulado: asiento.status === 'ANULADO',
       });
     }

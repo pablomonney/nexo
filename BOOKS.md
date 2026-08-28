@@ -49,7 +49,7 @@ y queda grabado en `book_emissions.controles`.
 | `PARTIDA_DOBLE` | 321 | Debe = Haber y al menos dos líneas |
 | `MONEDA_DE_REGISTRO` | 325 | Que el registro esté en moneda nacional y que toda conversión lleve cotización, fuente y fecha |
 | `CORRECCIONES_SALVADAS` | 324 inc. c | Que toda anulación tenga contraasiento, y que no esté antedatado |
-| `RESPALDO_DOCUMENTAL` | 321 | Comprobante o justificación firmada detrás de cada asiento |
+| `RESPALDO_DOCUMENTAL` | 321 | Comprobante, justificación firmada o decisión contable detrás de cada asiento |
 
 ### El que más se saltea: el contraasiento antedatado
 
@@ -133,6 +133,7 @@ original*. La cadena está escrita una sola vez, en la vista `ledger_trace`:
 
 ```
 movimiento → línea de asiento → asiento → comprobante → documento (con su sha256)
+                                       ↘ decisión contable → regla / justificación
 ```
 
 Se expone en `GET /books/trace/:movementId`. Que esté en una vista y no en un
@@ -143,6 +144,14 @@ Los asientos de cierre y los manuales **no tienen documento**, y la vista lo dic
 en vez de inventarlo. El `JOIN` se acota por `source_type`: un `source_id` que
 coincidiera por casualidad con el id de un documento haría aparecer un respaldo
 que nunca existió.
+
+La segunda punta —`decision_id`, con `decision_origen` y `decision_resultado`— se
+agregó en la migración `0037`. Desde que la decisión contable es una vía de
+trazabilidad por sí sola, un ajuste de cierre llegaba hasta el asiento y ahí se
+cortaba: la vista traía el comprobante y la predicción de IA, y ninguna referencia
+a la decisión que lo había fundado. `decision_origen` viene con ella porque es lo
+que dice por dónde seguir — `DETERMINISTICA` manda a la regla aplicada, `MANUAL` a
+la justificación escrita.
 
 ## 7. Exportación: una forma canónica y su hash
 
@@ -185,8 +194,46 @@ La autorización **no**. Es un hecho del expediente. Cuando no está cargada, el
 dice que *el sistema no la tiene* — no que falte. Puede existir y no haberse
 cargado acá, y afirmar lo contrario sería inventar un hecho jurídico.
 
-## 9. Gaps declarados
+## 9. El Mayor y el balance se arman sobre el Diario, no al lado
 
+Los tres libros son **la misma fuente leída tres veces**. Que cada uno cuadre por
+separado no alcanza: tienen que coincidir entre sí, porque salen del mismo
+Diario.
+
+Suena obvio y no lo era. Hasta la auditoría del circuito base, `routes/books.ts`
+le pasaba a `construirLibroMayor` la lista **cruda** de la base en vez de la que
+había quedado en el Diario. El motor filtra por fecha y por cuenta pero no por
+estado —confía en que quien llama ya le pasó los registrables—, así que el Mayor
+mostraba asientos en `BORRADOR` y `PROPUESTO`, y `POST /books/ledger-verification`
+los denunciaba como sobrantes contra `ledger_movements`, que sí filtra. El
+control informaba una discrepancia que no era del Mayor sino de la llamada.
+
+Hoy hay una sola función, `mayorDelRango`, y `asientosDelDiario(libro)` es la
+única forma de obtener el conjunto. Mientras la forma correcta y la incorrecta se
+escribían igual de fácil, el próximo endpoint iba a volver a elegir mal.
+
+Lo mismo del lado del balance: `/reports/trial-balance` filtraba solo por
+`APROBADO`, así que dejaba afuera el asiento anulado y conservaba su
+contraasiento — restaba una vez lo que nunca había sumado. Y **seguía
+cuadrando**, porque el contraasiento está balanceado: las tres igualdades se
+cumplían sobre un saldo equivocado. Ese es el modo de fallo que hay que evitar:
+no el libro que no cierra, sino el que cierra mal.
+
+## 10. Gaps declarados
+
+- **Cierre de ejercicio.** No existe. La tabla `accounting_closures` está creada
+  desde la migración `0004` y **nadie escribe en ella**: no hay endpoint, no hay
+  asiento de refundición de resultados, no hay asiento de cierre ni de apertura
+  del ejercicio siguiente. Lo que sí existe es el cierre de **período**
+  (`POST /periods/:id/close`), que bloquea la registración y exige que no queden
+  asientos sin aprobar. Son cosas distintas y conviene no confundirlas: el
+  período cerrado impide escribir; el ejercicio cerrado además cancela las
+  cuentas de resultado contra el patrimonio neto. Lo segundo no está.
+- **El estado `BLOQUEADO` no se puede alcanzar por la API.** La migración `0004`
+  documenta la máquina `ABIERTO → BLOQUEADO → CERRADO` y el trigger
+  `assert_period_open` la respeta —en `BLOQUEADO` solo entran `AJUSTE` y
+  `CIERRE`—, pero `POST /periods/:id/close` va directo a `CERRADO`. El estado
+  intermedio existe en la base y no tiene puerta.
 - **Foliatura y rúbrica del art. 323.** El sistema numera folios para el listado;
   la individualización en el Registro Público es un trámite, no un dato que el
   software pueda producir.

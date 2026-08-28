@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { money, parseCalendarDate, zero, type CalendarDate, type Money } from '@aai/shared';
 import {
+  asientosDelDiario,
   balanceDesdeMayor,
   construirLibroDiario,
   construirLibroMayor,
@@ -84,6 +85,7 @@ function asiento(
     sourceId: `doc-${overrides.id}`,
     documentId: `doc-${overrides.id}`,
     manualJustification: null,
+    decisionId: null,
     aiPredictionId: null,
     createdBy: 'u-carga',
     approvedBy: 'u-contador',
@@ -334,6 +336,34 @@ describe('qué entra al Diario', () => {
     expect(diario.excluidos.every((e) => /todavía no es una registración/.test(e.motivo))).toBe(true);
   });
 
+  it('asientosDelDiario devuelve exactamente lo que quedó adentro', () => {
+    // El Mayor se arma sobre esta lista. Mientras había que aplanar los folios a
+    // mano, `routes/books.ts` le pasaba la lista cruda de la base y el Mayor
+    // terminaba con BORRADOR y PROPUESTO que el Diario había excluido.
+    const propuesta = asiento({
+      id: 'je-propuesta',
+      entryNumber: 9,
+      entryDate: fecha('2026-03-05'),
+      status: 'PROPUESTO',
+      approvedBy: null,
+      lines: [
+        linea({ id: 'p-1', lineNo: 1, accountId: 'acc-gasto', debit: pesos(10n) }),
+        linea({ id: 'p-2', lineNo: 2, accountId: 'acc-prov', credit: pesos(10n), partyId: 'p' }),
+      ],
+    });
+
+    const diario = construirLibroDiario([...MARZO, propuesta], OPCIONES_DIARIO);
+    const dentro = asientosDelDiario(diario);
+
+    expect(dentro).toHaveLength(diario.asientos);
+    expect(dentro.map((a) => a.id)).not.toContain('je-propuesta');
+
+    // Y el Mayor armado sobre ella no ve la propuesta tampoco.
+    const mayor = construirLibroMayor(dentro, OPCIONES_MAYOR);
+    const movimientos = mayor.cuentas.flatMap((c) => c.movimientos);
+    expect(movimientos.map((m) => m.entryId)).not.toContain('je-propuesta');
+  });
+
   it('un asiento anulado sí entra: el art. 324 inc. c pide que quede a la vista', () => {
     const original = compra(1, '2026-03-02', 100_000n, 21_000n);
     const anulado: AsientoDelLibro = { ...original, status: 'ANULADO' };
@@ -556,6 +586,60 @@ describe('controles de forma del CCyC', () => {
     expect(respaldo.incumplen).toEqual(['je-huerfano']);
   });
 
+  it('una decisión contable respalda un asiento sin comprobante ni justificación', () => {
+    // Es la tercera vía de `E_NO_TRACEABILITY`. Si el motor deja pasar el
+    // asiento y el libro lo denuncia como sin respaldo, uno de los dos miente.
+    const conDecision = asiento({
+      id: 'je-por-decision',
+      entryNumber: 1,
+      entryDate: fecha('2026-03-06'),
+      kind: 'AJUSTE',
+      sourceType: 'CLOSING',
+      sourceId: null,
+      documentId: null,
+      manualJustification: null,
+      decisionId: 'dec-1',
+      lines: [
+        linea({ id: 'd-1', lineNo: 1, accountId: 'acc-gasto', debit: pesos(10n) }),
+        linea({ id: 'd-2', lineNo: 2, accountId: 'acc-prov', credit: pesos(10n), partyId: 'p' }),
+      ],
+    });
+
+    const respaldo = control(
+      construirLibroDiario([conDecision], OPCIONES_DIARIO),
+      'RESPALDO_DOCUMENTAL',
+    );
+
+    expect(respaldo.incumplen).toEqual([]);
+    expect(respaldo.cumple).toBe(true);
+  });
+
+  it('un id de decisión vacío no respalda nada', () => {
+    // El control falla cerrado: exige un id de verdad, no «distinto de null».
+    const conDecisionVacia = asiento({
+      id: 'je-decision-vacia',
+      entryNumber: 1,
+      entryDate: fecha('2026-03-06'),
+      sourceType: 'MANUAL',
+      sourceId: null,
+      documentId: null,
+      manualJustification: null,
+      decisionId: '   ',
+      lines: [
+        linea({ id: 'v-1', lineNo: 1, accountId: 'acc-gasto', debit: pesos(10n) }),
+        linea({ id: 'v-2', lineNo: 2, accountId: 'acc-prov', credit: pesos(10n), partyId: 'p' }),
+      ],
+    });
+
+    const respaldo = control(
+      construirLibroDiario([conDecisionVacia], OPCIONES_DIARIO),
+      'RESPALDO_DOCUMENTAL',
+    );
+
+    expect(respaldo.cumple).toBe(false);
+    expect(respaldo.incumplen).toEqual(['je-decision-vacia']);
+  });
+
   it('un asiento descuadrado se detecta aunque la base debería haberlo impedido', () => {
     const roto = asiento({
       id: 'je-roto',
@@ -768,6 +852,36 @@ describe('exportación canónica', () => {
     expect(csv).toContain('cuenta_codigo;cuenta_nombre;naturaleza');
     expect(csv).toContain('doc-je-1');
     expect(csv).toContain('linea_id');
+  });
+
+  it('los dos libros escriben la decisión que funda el asiento', () => {
+    // El libro emitido es el que tiene eficacia probatoria. Un asiento fundado
+    // en una decisión y sin comprobante aparecería ahí sin ningún origen: es el
+    // único artefacto donde la tercera vía no podía leerse.
+    const conDecision = asiento({
+      id: 'je-dec',
+      entryNumber: 1,
+      entryDate: fecha('2026-03-06'),
+      sourceType: 'CLOSING',
+      sourceId: null,
+      documentId: null,
+      decisionId: 'dec-7f3',
+      lines: [
+        linea({ id: 'c-1', lineNo: 1, accountId: 'acc-gasto', debit: pesos(10n) }),
+        linea({ id: 'c-2', lineNo: 2, accountId: 'acc-prov', credit: pesos(10n), partyId: 'p' }),
+      ],
+    });
+
+    const diario = construirLibroDiario([conDecision], OPCIONES_DIARIO);
+    const csvDiario = exportarDiarioCsv(diario);
+    expect(csvDiario).toContain('decision_id');
+    expect(csvDiario).toContain('dec-7f3');
+
+    const mayor = construirLibroMayor(asientosDelDiario(diario), OPCIONES_MAYOR);
+    expect(mayor.cuentas.flatMap((c) => c.movimientos).every((m) => m.decisionId === 'dec-7f3')).toBe(
+      true,
+    );
+    expect(exportarMayorCsv(mayor)).toContain('dec-7f3');
   });
 
   it('el pie dice qué controles fallaron, y no afirma tener la autorización del art. 329', () => {

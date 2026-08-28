@@ -483,22 +483,46 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
           debito: string;
           credito: string;
         }>(
+          // ANULADO entra junto con APROBADO, igual que en el Mayor y en
+          // `ledger_movements`. Un asiento anulado pasó por aprobado y sus
+          // movimientos existieron; lo que los compensa es el contraasiento, no
+          // su desaparición (CCyC art. 324 inc. c).
+          //
+          // Filtrando solo por APROBADO el balance dejaba afuera el original y
+          // conservaba su contraasiento, así que restaba una vez lo que nunca
+          // había sumado. Y seguía **cuadrando**: el contraasiento está
+          // balanceado, con lo cual las tres igualdades se cumplían sobre un
+          // saldo equivocado. Ese es el modo de fallo que hay que evitar — un
+          // libro roto que se ve sano.
+          //
+          // El corte superior es `<= hasta`, no `BETWEEN`, y las sumas se
+          // filtran al rango: así entran también las cuentas que solo tienen
+          // saldo anterior. Con `BETWEEN` esas cuentas llegaban al balance por
+          // la lista de saldos iniciales, que no trae código ni nombre, y el
+          // motor las armaba con `accountCode: ''`. El balance de un mes sin
+          // movimientos salía entero sin códigos.
           `SELECT l.account_id, a.code, a.name, a.nature,
-                  sum(l.debit)::text AS debito, sum(l.credit)::text AS credito
+                  coalesce(sum(l.debit)  FILTER (WHERE e.entry_date >= $2::date), 0)::text AS debito,
+                  coalesce(sum(l.credit) FILTER (WHERE e.entry_date >= $2::date), 0)::text AS credito
              FROM journal_entry_lines l
              JOIN journal_entries e ON e.id = l.entry_id
              JOIN accounts a ON a.id = l.account_id
-            WHERE e.company_id = $1 AND e.status = 'APROBADO'
-              AND e.entry_date BETWEEN $2::date AND $3::date
+            WHERE e.company_id = $1 AND e.status IN ('APROBADO', 'ANULADO')
+              AND e.entry_date <= $3::date
             GROUP BY l.account_id, a.code, a.name, a.nature`,
           [tenant.companyId, query.desde, query.hasta],
         );
 
         const iniciales = await tx.query<{ account_id: string; saldo: string }>(
+          // Mismo universo que arriba y que `saldosAnterioresA` en books.ts. Si
+          // el saldo inicial y los movimientos salieran de conjuntos distintos,
+          // el arrastre de un período al siguiente perdería exactamente los
+          // asientos anulados.
           `SELECT l.account_id, (sum(l.debit) - sum(l.credit))::text AS saldo
              FROM journal_entry_lines l
              JOIN journal_entries e ON e.id = l.entry_id
-            WHERE e.company_id = $1 AND e.status = 'APROBADO' AND e.entry_date < $2::date
+            WHERE e.company_id = $1 AND e.status IN ('APROBADO', 'ANULADO')
+              AND e.entry_date < $2::date
             GROUP BY l.account_id`,
           [tenant.companyId, query.desde],
         );
