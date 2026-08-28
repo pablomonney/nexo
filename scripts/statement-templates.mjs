@@ -219,6 +219,20 @@ const ESP = [
       tipos: ['PN'],
       prefijos: ['3.4'],
     }, 'INVERTIDO'),
+    // El resultado del ejercicio, mientras todavía vive en las cuentas de
+    // resultado.
+    //
+    // Sin este renglón el ESP de un ejercicio no cerrado NO cuadra: el activo
+    // incluye lo ganado y el patrimonio neto no. Y con él cuadra igual después
+    // de cerrar, porque la refundición mueve ese mismo importe a una cuenta 3.4
+    // que `PN_RESULTADOS` captura y deja las de resultado en cero. El total del
+    // PN no cambia; cambia dónde se lee.
+    //
+    // Es lo que permite que el estado del ejercicio 2026 sea el mismo el día
+    // antes de cerrarlo y el día después.
+    renglon('PN_RESULTADO_EJERCICIO', 'Resultado del ejercicio', `${ART63} inc. 2) II. c)`, {
+      tipos: ['INGRESO', 'COSTO', 'GASTO'],
+    }, 'INVERTIDO'),
     renglon('PN_OTROS', 'Otros rubros del patrimonio neto', `${ART63} inc. 2) II. d)`, {
       tipos: ['PN'],
       prefijos: ['3.9'],
@@ -352,11 +366,33 @@ export const PLANTILLAS = [
     tipo: 'ESP',
     articulo: 'Ley 19.550 (T.O. 1984), art. 63 — contenido del balance general',
     raiz: ESP,
+    // Sobre qué tipos de cuenta se pronuncia el balance. Una cuenta de resultado
+    // no está acá, y por eso no es huérfana del ESP: es ajena. Sin este dato el
+    // control de cobertura evaluaba el plan entero y ninguna empresa con
+    // ingresos podía emitir un balance.
+    alcance: {
+      // Los tipos de resultado están dentro del alcance del BALANCE porque el
+      // resultado del ejercicio integra el patrimonio neto (art. 63 inc. 2) II. c).
+      // No es que el ESP exponga el detalle de ingresos y gastos: los toma
+      // netos, en un solo renglón.
+      tipos: ['ACTIVO', 'PASIVO', 'PN', 'ORDEN', 'INGRESO', 'COSTO', 'GASTO'],
+      fundamento:
+        'Ley 19.550 (T.O. 1984), art. 63: activo, pasivo, patrimonio neto —incluido el resultado del ejercicio, inc. 2) II. c)— y cuentas de orden',
+    },
+    // Con los códigos de ESTA plantilla. La ecuación vivía en la ruta con
+    // códigos que estos nodos no tienen, así que el control fallaba siempre.
+    ecuacion: { activo: 'ACTIVO', pasivo: 'PASIVO', patrimonioNeto: 'PN' },
   },
   {
     tipo: 'ER',
     articulo: 'Ley 19.550 (T.O. 1984), art. 64 — contenido del estado de resultados',
     raiz: ER,
+    alcance: {
+      tipos: ['INGRESO', 'COSTO', 'GASTO'],
+      fundamento: 'Ley 19.550 (T.O. 1984), art. 64: resultados del ejercicio',
+    },
+    // El estado de resultados no tiene ecuación patrimonial que verificar.
+    ecuacion: undefined,
   },
 ];
 

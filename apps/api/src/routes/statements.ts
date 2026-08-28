@@ -17,6 +17,7 @@ import {
   construirEstado,
   plantillaAplicable,
   validarPlantilla,
+  type EcuacionPatrimonial,
   type EstadoContable,
   type MarcoContable,
   type PlantillaEstado,
@@ -104,7 +105,18 @@ export async function statementRoutes(app: FastifyInstance): Promise<void> {
         `INSERT INTO financial_statements
            (company_id, fiscal_year_id, template_id, statement_kind, comparative_year_id,
             fecha_cierre, status, controles, content_sha256, issued_at, issued_by)
-         VALUES ($1, $2, $3, $4, $5, $6::date, 'EMITIDO', $7::jsonb, $8, now(), $9)
+         -- Nace BORRADOR y se firma al final, después de escribir los renglones.
+         --
+         -- No es un detalle de orden: el trigger fsl_immutable_when_issued rechaza toda
+         -- línea cuyo estado padre esté EMITIDO, así que insertar la cabecera ya
+         -- firmada hacía que el primer renglón rebotara. El endpoint no podía
+         -- completarse nunca, y no se había notado porque los tests insertan las
+         -- filas por SQL y ninguno lo llamaba.
+         --
+         -- El candado se queda como está: agregarle un renglón a un estado ya
+         -- emitido tiene que seguir siendo imposible. Lo que estaba mal era
+         -- firmar antes de terminar de escribir.
+         VALUES ($1, $2, $3, $4, $5, $6::date, 'BORRADOR', $7::jsonb, $8, now(), $9)
          RETURNING id`,
         [
           tenant.companyId,
@@ -150,6 +162,11 @@ export async function statementRoutes(app: FastifyInstance): Promise<void> {
           ],
         );
       }
+
+      // Firmado. A partir de acá los renglones son inmutables.
+      await tx.query(`UPDATE financial_statements SET status = 'EMITIDO' WHERE id = $1`, [
+        statementId,
+      ]);
 
       await recordAudit(tx, tenant.companyId, {
         actorType: 'USER',
@@ -250,21 +267,11 @@ async function armar(
           saldosComparativos: await saldosAlCierre(tx, companyId, comparativo.cierre),
           fechaCierreComparativo: parseCalendarDate(comparativo.cierre),
         }),
-    ...(pedido.tipo === 'ESP' ? { ecuacion: ECUACION_ESP } : {}),
   });
 
   return { plantilla, estado };
 }
 
-/**
- * Códigos de nodo que forman la ecuación patrimonial.
- *
- * Es una convención de las plantillas del sistema, no una regla del motor: una
- * plantilla que use otros códigos declara los suyos. Está acá y no adentro del
- * motor porque el motor no debe saber cómo se llaman los rubros — eso es
- * exactamente lo que la fase busca sacar del código.
- */
-const ECUACION_ESP = { activo: 'A', pasivo: 'P', patrimonioNeto: 'PN' } as const;
 
 async function cargarEjercicio(
   tx: Tx,
@@ -345,9 +352,13 @@ async function cargarPlantillas(
     structure: PlantillaEstado['raiz'];
     norm_version_id: string;
     articulo: string;
+    scope_types: PlantillaEstado['alcance']['tipos'];
+    scope_fundamento: string;
+    equation: EcuacionPatrimonial | null;
   }>(
     `SELECT id, statement_kind, framework, entity_type, regulator, version,
-            valid_from::text, valid_to::text, structure, norm_version_id, articulo
+            valid_from::text, valid_to::text, structure, norm_version_id, articulo,
+            scope_types, scope_fundamento, equation
        FROM statement_templates
       WHERE (company_id IS NULL OR company_id = $1) AND statement_kind = $2`,
     [companyId, tipo],
@@ -365,6 +376,11 @@ async function cargarPlantillas(
     normVersionId: fila.norm_version_id,
     articulo: fila.articulo,
     raiz: fila.structure,
+    alcance: { tipos: fila.scope_types, fundamento: fila.scope_fundamento },
+    // La ecuación es de la plantilla. Antes era una constante de este archivo
+    // con códigos —`A`, `P`— que la plantilla sembrada no tiene, así que el
+    // control fallaba siempre y ningún ESP era emisible.
+    ...(fila.equation === null ? {} : { ecuacion: fila.equation }),
   }));
 }
 
@@ -387,13 +403,46 @@ async function saldosAlCierre(
     is_postable: boolean;
     saldo: string;
   }>(
+    // El `FILTER` no es un adorno: sin él, los filtros de abajo NO filtran nada.
+    //
+    // Están en el `ON` de un LEFT JOIN encadenado después del join de líneas,
+    // que es incondicional. Una línea de un asiento en BORRADOR o posterior a la
+    // fecha de corte igual entra al `sum`, con `e` en NULL. El estado se armaba
+    // sobre el plan de cuentas entero sin ninguna de sus restricciones —asientos
+    // sin aprobar incluidos— y el error es invisible: los números se ven
+    // razonables y el balance cuadra, porque cada asiento de más está
+    // balanceado.
+    //
+    // Lo encontró un test que dejó un asiento PROPUESTO a propósito y lo vio
+    // aparecer en el estado.
     `SELECT a.id AS account_id, a.code, a.name, a.type, a.is_postable,
-            COALESCE(sum(l.debit) - sum(l.credit), 0)::text AS saldo
+            COALESCE(sum(l.debit - l.credit) FILTER (WHERE e.id IS NOT NULL), 0)::text AS saldo
        FROM accounts a
        LEFT JOIN journal_entry_lines l ON l.account_id = a.id
        LEFT JOIN journal_entries e ON e.id = l.entry_id
                                   AND e.status IN ('APROBADO', 'ANULADO')
                                   AND e.entry_date <= $2::date
+                                  -- Los asientos del cierre NO entran en el
+                                  -- estado, y es la decisión que hace que un
+                                  -- estado contable siga siendo cierto antes y
+                                  -- después de cerrar el ejercicio.
+                                  --
+                                  -- Un estado contable describe la SITUACIÓN a
+                                  -- una fecha. La refundición y el cierre son el
+                                  -- mecanismo para poder reabrir los libros: no
+                                  -- son hechos económicos del ejercicio. El
+                                  -- cierre patrimonial lleva todas las cuentas a
+                                  -- cero, así que incluirlo produciría un balance
+                                  -- de ceros —formalmente cuadrado y sin ninguna
+                                  -- información—, y la refundición vaciaría el
+                                  -- estado de resultados.
+                                  --
+                                  -- Dejándolos afuera, el mismo ejercicio da el
+                                  -- mismo estado el día antes de cerrarlo y el
+                                  -- día después. Que esa igualdad se cumpla es
+                                  -- lo que prueba que el estado sale del Mayor y
+                                  -- no del momento en que se lo pidió.
+                                  AND e.kind NOT IN ('REFUNDICION', 'CIERRE')
       WHERE a.company_id = $1 AND a.status = 'ACTIVE'
       GROUP BY a.id, a.code, a.name, a.type, a.is_postable
       ORDER BY a.code`,
@@ -447,10 +496,14 @@ function serializar(armado: Armado): unknown {
       version: plantilla.version,
       normVersionId: plantilla.normVersionId,
       articulo: plantilla.articulo,
+      // El alcance viaja con la respuesta: es lo que permite contestar por qué
+      // una cuenta no aparece sin tener que abrir la plantilla.
+      alcance: plantilla.alcance,
     },
     emisible: estado.emisible,
     motivo: estado.motivo,
     controles: estado.controles,
+    clasificacion: estado.clasificacion,
     renglones: estado.renglones.map((renglon) => ({
       codigo: renglon.codigo,
       etiqueta: renglon.etiqueta,

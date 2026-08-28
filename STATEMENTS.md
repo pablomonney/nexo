@@ -207,26 +207,98 @@ de un ejercicio anterior emitido mañana volvería a tomarla.
   está.
 - **Consolidación**: fuera del MVP.
 
-## Gap: `/statements/issue` no se puede completar con un plan de cuentas real
+## El alcance de cada estado
 
-Medido el 2026-08-28, al armar los fixtures del gate de invariantes.
+Un estado contable no se pronuncia sobre todo el plan de cuentas. La plantilla
+declara **sobre qué tipos de cuenta habla**, con el artículo de dónde sale:
 
-`CUENTA_SIN_RUBRO` recorre **todas** las cuentas imputables con saldo, no las
-que corresponden al estado que se está armando. La plantilla del ESP no tiene
-—ni debe tener— selectores para `INGRESO` ni `GASTO`, así que toda cuenta de
-resultado con saldo sale marcada como huérfana y el estado queda
-`emisible = false`. El ER tiene el problema espejo con las patrimoniales.
+| Estado | Alcance | Fundamento |
+|---|---|---|
+| ESP | ACTIVO, PASIVO, PN, ORDEN, INGRESO, COSTO, GASTO | art. 63 — los tipos de resultado entran netos, en el renglón "Resultado del ejercicio" del PN (inc. 2) II. c) |
+| ER | INGRESO, COSTO, GASTO | art. 64 |
 
-Consecuencia: ninguna empresa con un plan de cuentas completo puede emitir un
-estado por el endpoint. No se había notado porque los tests de integración
-insertan las filas de `financial_statements` directamente por SQL y los
-unitarios usan un plan hecho a medida de la plantilla — es decir, **el endpoint
-nunca se ejercitó de punta a punta**.
+Con eso, una cuenta cae en una de **cinco situaciones**, y el estado las informa
+una por una en `clasificacion`:
 
-Por eso los invariantes **A-1 y A-2** quedan declarados `VACUO_PERMITIDO`: no
-hay forma de producirles casos por el camino productivo.
+| Situación | Qué significa | ¿Bloquea? |
+|---|---|---|
+| `CLASIFICADA` | está en el alcance y un renglón la captura | no |
+| `SIN_RUBRO` | está en el alcance y ninguno la captura: su saldo desaparece | **sí** |
+| `EN_DOS_RUBROS` | dos renglones la capturan: suma dos veces | **sí** |
+| `FUERA_DEL_ALCANCE` | su tipo no le corresponde a este estado | no |
+| `CAPTURADA_FUERA_DEL_ALCANCE` | un selector se llevó una cuenta que el estado declara no tratar | **sí** |
 
-Lo que hay que decidir para arreglarlo —y es una decisión contable, no
-técnica—: si el universo de `CUENTA_SIN_RUBRO` debe ser el plan entero o el
-subconjunto de tipos que al estado le corresponden. La primera opción es la que
-está y detecta cuentas mal codificadas; la segunda emite, y deja de detectarlas.
+### Por qué esta distinción y no un booleano
+
+`CUENTA_SIN_RUBRO` recorría el plan entero. Un ESP no tiene renglones para
+cuentas de resultado, así que toda cuenta de ingresos con saldo salía huérfana y
+el estado quedaba `emisible = false`: **ninguna empresa con un plan de cuentas
+completo podía emitir un estado**. No se había notado porque los tests insertan
+las filas de `financial_statements` por SQL y los unitarios usan un plan hecho a
+medida de la plantilla — el endpoint nunca se había llamado.
+
+La salida no fue apagar el control sino acotarlo. "No aparece porque no le
+corresponde" y "no aparece porque falta un renglón" son respuestas distintas a
+la misma pregunta, y hasta ahora se veían igual: no está.
+
+Y aparece un control que antes era imposible: `CUENTA_FUERA_DE_ALCANCE`. Un
+renglón del ESP que por un prefijo demasiado ancho se lleve una cuenta de gastos
+infla el activo, y la ecuación patrimonial puede seguir cerrando si el mismo
+error se repite del otro lado.
+
+## Los asientos de cierre no entran al estado
+
+`saldosAlCierre` excluye `REFUNDICION` y `CIERRE`. Un estado contable describe
+la **situación** a una fecha; esos dos asientos son el mecanismo para poder
+reabrir los libros, no hechos económicos del ejercicio. Incluir el cierre
+patrimonial produciría un balance de ceros —formalmente cuadrado y sin ninguna
+información— y la refundición vaciaría el estado de resultados.
+
+Dejándolos afuera, el mismo ejercicio da el mismo estado el día antes de
+cerrarlo y el día después. Hay un test que compara las dos fotos: que sean
+iguales es lo que prueba que el estado sale del Mayor y no del momento en que se
+lo pidió.
+
+El renglón `PN_RESULTADO_EJERCICIO` es la otra mitad de eso. Mientras el
+ejercicio no cerró, el resultado vive en las cuentas de resultado y ese renglón
+lo toma neto; después de la refundición vive en una cuenta `3.4` y lo toma
+`PN_RESULTADOS`. El total del patrimonio neto no cambia: cambia dónde se lee.
+
+## Tres defectos que solo aparecen llamando al endpoint
+
+1. **`CUENTA_SIN_RUBRO` sobre el plan entero** (arriba).
+2. **La ecuación patrimonial vivía en la ruta**, con los códigos de nodo `A` y
+   `P`; la plantilla usa `ACTIVO` y `PASIVO`. El control detectaba los nodos
+   faltantes y fallaba —bien: no correr en silencio hubiera sido peor— pero
+   fallaba **siempre**. Ahora la declara la plantilla, que es de quien es.
+3. **La cabecera se insertaba ya `EMITIDO`** y el trigger
+   `fsl_immutable_when_issued` rechazaba el primer renglón. Nace `BORRADOR` y se
+   firma al final: el candado se queda intacto, lo que estaba mal era firmar
+   antes de terminar de escribir.
+
+Y un cuarto, que apareció al escribir el test: **los saldos del estado no
+filtraban por asiento**. Los filtros —estado aprobado, fecha de corte— estaban
+en el `ON` de un LEFT JOIN encadenado después del join de líneas, que es
+incondicional, así que un asiento en BORRADOR entraba igual al `sum`. El error
+es invisible: los números se ven razonables y el balance cuadra, porque cada
+asiento de más está balanceado. Lo encontró un test que dejó un asiento
+PROPUESTO a propósito y lo vio aparecer.
+
+## Gaps declarados
+
+- **Comparativos.** `construirEstado` acepta `saldosComparativos` y el endpoint
+  admite `?comparativo=`, y funciona; lo que **no** existe es el ajuste por
+  inflación que el art. 62 último párrafo exige para que dos ejercicios sean
+  comparables. Emitir dos columnas en moneda de distinto poder adquisitivo sin
+  reexpresar sería presentar como comparable algo que no lo es. No se fabrican
+  columnas sintéticas: quien pida un comparativo lo obtiene, y la limitación
+  queda dicha acá.
+  `REQUIRES_EXTERNAL_INPUT`: FACPCE, RT 6 (reexpresión) y la serie de índices
+  que la RT 6 manda usar. Falta el documento oficial archivado con su hash.
+- **Notas.** `notes.ts` existe y no tiene endpoint de emisión. El invariante A-2
+  queda `VACUO_PERMITIDO` por eso.
+- **Estado de evolución del patrimonio neto y flujo de efectivo.** Fuera del MVP,
+  ya declarados.
+- **Un solo juego de plantillas**: RT FACPCE, SA, IGJ. Una cooperativa expone su
+  patrimonio de otra manera (RT 62, cap. 12) y copiar la plantilla de una SA
+  cambiándole la etiqueta sería afirmar que son iguales.

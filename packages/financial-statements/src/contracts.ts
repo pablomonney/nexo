@@ -151,6 +151,66 @@ export interface PlantillaEstado {
   readonly normVersionId: string;
   readonly articulo: string;
   readonly raiz: readonly NodoPlantilla[];
+  /**
+   * Sobre qué tipos de cuenta se pronuncia este estado.
+   *
+   * Es lo que permite distinguir **una cuenta huérfana de una cuenta ajena**. Un
+   * ESP no tiene renglones para cuentas de resultado, y eso no es un hueco de la
+   * plantilla: es que el art. 63 no habla de ellas. Sin este dato el control de
+   * cobertura recorría el plan entero y marcaba como huérfana a toda cuenta de
+   * ingresos con saldo, lo que dejaba `emisible = false` a cualquier empresa con
+   * un plan de cuentas completo.
+   *
+   * Va en la plantilla y no en el motor porque cada empresa puede tener la suya.
+   */
+  readonly alcance: AlcanceDelEstado;
+  /**
+   * Códigos de nodo **de esta plantilla** que forman Activo = Pasivo + PN.
+   *
+   * `undefined` en los estados que no tienen ecuación patrimonial. Vivía como
+   * constante en la ruta, con códigos (`A`, `P`) que la plantilla sembrada no
+   * tiene: el control detectaba los nodos faltantes y fallaba siempre.
+   */
+  readonly ecuacion?: EcuacionPatrimonial;
+}
+
+export interface AlcanceDelEstado {
+  readonly tipos: readonly TipoCuenta[];
+  /** De qué artículo sale el alcance. Sin fundamento sería una convención nuestra. */
+  readonly fundamento: string;
+}
+
+export interface EcuacionPatrimonial {
+  readonly activo: string;
+  readonly pasivo: string;
+  readonly patrimonioNeto: string;
+}
+
+/**
+ * Por qué una cuenta está o no está en un estado.
+ *
+ * El sistema tiene que poder explicarlo por cuenta, no dar un booleano global:
+ * «no aparece» y «aparece mal» mandan a corregir cosas distintas.
+ */
+export type SituacionDeCuenta =
+  /** Su tipo está en el alcance y algún renglón la captura. */
+  | 'CLASIFICADA'
+  /** Su tipo está en el alcance y ningún renglón la captura. Bloquea. */
+  | 'SIN_RUBRO'
+  /** Su tipo está en el alcance y más de un renglón la captura. Bloquea. */
+  | 'EN_DOS_RUBROS'
+  /** Su tipo no está en el alcance y ningún renglón la tocó. Correcto. */
+  | 'FUERA_DEL_ALCANCE'
+  /** Su tipo no está en el alcance y un selector la capturó igual. Bloquea. */
+  | 'CAPTURADA_FUERA_DEL_ALCANCE';
+
+export interface ClasificacionDeCuenta {
+  readonly accountId: string;
+  readonly codigo: string;
+  readonly tipo: TipoCuenta;
+  readonly situacion: SituacionDeCuenta;
+  /** Los renglones que la capturaron. Vacío si ninguno. */
+  readonly renglones: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +270,23 @@ export interface RenglonEmitido {
 export type CodigoControlEstado =
   | 'CUENTA_SIN_RUBRO'
   | 'CUENTA_EN_DOS_RUBROS'
+  /**
+   * Un selector capturó una cuenta cuyo tipo el estado declara no tratar.
+   *
+   * Es el control que nace de tener alcance: antes era invisible. Un renglón del
+   * ESP que por un prefijo demasiado ancho se lleve una cuenta de gastos infla
+   * el activo, y la ecuación patrimonial puede seguir cerrando si el mismo error
+   * se repite del otro lado.
+   */
+  | 'CUENTA_FUERA_DE_ALCANCE'
+  /**
+   * Informativo, nunca bloquea: las cuentas que este estado no trata.
+   *
+   * Existe porque la pregunta «¿por qué esta cuenta no aparece?» tiene que tener
+   * respuesta. Sin él, una cuenta ajena y una cuenta olvidada se ven igual: no
+   * están.
+   */
+  | 'CUENTAS_FUERA_DEL_ALCANCE'
   | 'ECUACION_PATRIMONIAL'
   | 'RESULTADO_COHERENTE'
   | 'COMPARATIVO_MISMA_ESTRUCTURA'
@@ -233,6 +310,14 @@ export interface EstadoContable {
   readonly moneda: Money['currency'];
   readonly renglones: readonly RenglonEmitido[];
   readonly controles: readonly ControlDeEstado[];
+  /**
+   * Qué pasó con cada cuenta del plan, una por una.
+   *
+   * Es la respuesta a «¿por qué este número es este número?» del lado de la
+   * entrada: los renglones dicen de qué cuentas sale cada importe, y esto dice
+   * qué se hizo con cada cuenta —incluidas las que no entraron y por qué—.
+   */
+  readonly clasificacion: readonly ClasificacionDeCuenta[];
   /**
    * `false` inhabilita la emisión.
    *

@@ -29,13 +29,16 @@
 import type { Currency, Money } from '@aai/shared';
 import { add, money, negate, zero } from '@aai/shared';
 import type {
+  ClasificacionDeCuenta,
   ControlDeEstado,
+  EcuacionPatrimonial,
   EstadoContable,
   OrigenDelRenglon,
   PlantillaEstado,
   RenglonEmitido,
   SaldoDeCuenta,
   SelectorDeCuentas,
+  SituacionDeCuenta,
 } from './contracts.js';
 import { aplanar, validarPlantilla } from './template.js';
 
@@ -47,15 +50,6 @@ export interface DatosDelEstado {
   /** Saldos del ejercicio anterior, para la columna comparativa. */
   readonly saldosComparativos?: readonly SaldoDeCuenta[];
   readonly fechaCierreComparativo?: EstadoContable['fechaCierre'];
-  /**
-   * Códigos de nodo que forman la ecuación patrimonial, si la plantilla la
-   * declara. Sin ellos el control no corre y **se dice** que no corrió.
-   */
-  readonly ecuacion?: {
-    readonly activo: string;
-    readonly pasivo: string;
-    readonly patrimonioNeto: string;
-  };
 }
 
 export function construirEstado(
@@ -79,6 +73,7 @@ export function construirEstado(
         detalle: `${error.codigo}: ${error.mensaje}`,
         involucrados: [error.nodo],
       })),
+      clasificacion: [],
       emisible: false,
       motivo:
         'La plantilla no es válida. No se construyó ningún renglón: un estado armado sobre una plantilla rota se vería normal y estaría mal.',
@@ -107,16 +102,21 @@ export function construirEstado(
   // un plan de cuentas que la plantilla no cubre tiene el mismo problema que el
   // ejercicio actual, y se ve igual de poco: la columna de la izquierda con un
   // total que no explica sus renglones.
+  const cobertura = controlarCobertura(plantilla, [
+    { calculo: actual, saldos: datos.saldos, columna: 'ejercicio' },
+    ...(comparativo === null || datos.saldosComparativos === undefined
+      ? []
+      : [{ calculo: comparativo, saldos: datos.saldosComparativos, columna: 'comparativo' }]),
+  ]);
+
   const controles = [
-    ...controlarCobertura(
-      [
-        { calculo: actual, saldos: datos.saldos, columna: 'ejercicio' },
-        ...(comparativo === null || datos.saldosComparativos === undefined
-          ? []
-          : [{ calculo: comparativo, saldos: datos.saldosComparativos, columna: 'comparativo' }]),
-      ],
-    ),
-    ...controlarEcuacion(actual.importes, datos),
+    ...cobertura.controles,
+    // La ecuación es de la plantilla y de ningún otro lado. Vivía como constante
+    // en la ruta, con códigos que la plantilla sembrada no tiene: el control
+    // detectaba los nodos faltantes y fallaba siempre. Dejarla también en los
+    // datos daría dos fuentes para el mismo hecho, y la primera vez que
+    // difirieran nadie sabría cuál vale.
+    ...controlarEcuacion(actual.importes, plantilla.ecuacion),
   ];
 
   const falla = controles.filter((control) => !control.cumple);
@@ -133,6 +133,7 @@ export function construirEstado(
       (renglon) => !ocultar(plantilla, renglon.codigo, renglon.importe, renglon.comparativo),
     ),
     controles,
+    clasificacion: cobertura.clasificacion,
     emisible: falla.length === 0,
     motivo:
       falla.length === 0
@@ -265,42 +266,135 @@ interface ColumnaAControlar {
   readonly columna: string;
 }
 
-function controlarCobertura(columnas: readonly ColumnaAControlar[]): ControlDeEstado[] {
-  const huerfanas: { codigo: string; columna: string }[] = [];
-  const duplicadas: { codigo: string; columna: string; en: readonly string[] }[] = [];
+/**
+ * Clasifica cada cuenta del plan respecto de ESTE estado.
+ *
+ * Cuatro situaciones y no dos. La distinción que faltaba es la de **alcance**:
+ * una cuenta de ingresos no está en el ESP porque el art. 63 no habla de ella,
+ * no porque falte un renglón. Tratarlas igual —que es lo que hacía el control
+ * anterior— convertía a toda empresa con un plan completo en una empresa que no
+ * puede emitir estados.
+ *
+ * Se devuelve la clasificación entera y no solo los problemas: la pregunta «¿por
+ * qué esta cuenta no aparece?» tiene que tener respuesta también cuando la
+ * respuesta es «porque no le corresponde».
+ */
+export function clasificarCuentas(
+  plantilla: PlantillaEstado,
+  saldos: readonly SaldoDeCuenta[],
+  veces: ReadonlyMap<string, readonly string[]>,
+): ClasificacionDeCuenta[] {
+  const enAlcance = new Set(plantilla.alcance.tipos);
 
+  // Solo las imputables. Una cuenta de agrupación tiene el saldo de sus hijas:
+  // pedirle un rubro propio la haría aparecer como huérfana siempre.
+  return saldos
+    .filter((saldo) => saldo.imputable)
+    .map((cuenta) => {
+      const renglones = veces.get(cuenta.accountId) ?? [];
+      const corresponde = enAlcance.has(cuenta.tipo);
+
+      const situacion: SituacionDeCuenta = corresponde
+        ? renglones.length === 0
+          ? 'SIN_RUBRO'
+          : renglones.length > 1
+            ? 'EN_DOS_RUBROS'
+            : 'CLASIFICADA'
+        : renglones.length === 0
+          ? 'FUERA_DEL_ALCANCE'
+          : 'CAPTURADA_FUERA_DEL_ALCANCE';
+
+      return {
+        accountId: cuenta.accountId,
+        codigo: cuenta.codigo,
+        tipo: cuenta.tipo,
+        situacion,
+        renglones: [...renglones],
+      };
+    });
+}
+
+function controlarCobertura(
+  plantilla: PlantillaEstado,
+  columnas: readonly ColumnaAControlar[],
+): { controles: ControlDeEstado[]; clasificacion: ClasificacionDeCuenta[] } {
+  // La clasificación que se publica es la de la columna del ejercicio. El
+  // comparativo se controla igual —un plan viejo que la plantilla de hoy no
+  // cubre tiene el mismo problema— pero lo que se expone es el estado actual.
+  const clasificacion = clasificarCuentas(
+    plantilla,
+    columnas[0]?.saldos ?? [],
+    columnas[0]?.calculo.veces ?? new Map(),
+  );
+
+  const porSituacion = new Map<SituacionDeCuenta, { codigo: string; columna: string; en: readonly string[] }[]>();
   for (const { calculo, saldos, columna } of columnas) {
-    for (const cuenta of saldos.filter((saldo) => saldo.imputable)) {
-      const renglones = calculo.veces.get(cuenta.accountId);
-      if (renglones === undefined) huerfanas.push({ codigo: cuenta.codigo, columna });
-      else if (renglones.length > 1) {
-        duplicadas.push({ codigo: cuenta.codigo, columna, en: renglones });
-      }
+    for (const cuenta of clasificarCuentas(plantilla, saldos, calculo.veces)) {
+      const lista = porSituacion.get(cuenta.situacion) ?? [];
+      lista.push({ codigo: cuenta.codigo, columna, en: cuenta.renglones });
+      porSituacion.set(cuenta.situacion, lista);
     }
   }
 
-  return [
-    {
-      codigo: 'CUENTA_SIN_RUBRO',
-      cumple: huerfanas.length === 0,
-      detalle:
-        huerfanas.length === 0
-          ? 'Todas las cuentas imputables del plan caen en algún renglón'
-          : `${huerfanas.length} cuenta(s) del plan no las captura ningún renglón: su saldo desaparece del estado. A veces el estado igual cierra —cuando dos huérfanas se compensan— y entonces nadie lo nota. Falta un renglón en la plantilla, o la cuenta está mal codificada. Columnas afectadas: ${[...new Set(huerfanas.map((cuenta) => cuenta.columna))].join(', ')}.`,
-      involucrados: huerfanas.map((cuenta) => cuenta.codigo),
-    },
-    {
-      codigo: 'CUENTA_EN_DOS_RUBROS',
-      cumple: duplicadas.length === 0,
-      detalle:
-        duplicadas.length === 0
-          ? 'Ninguna cuenta suma en más de un renglón'
-          : `${duplicadas.length} cuenta(s) suman en más de un renglón: ${duplicadas
-              .map((cuenta) => `${cuenta.codigo} (${cuenta.en.join(', ')})`)
-              .join('; ')}. Hay un selector demasiado ancho.`,
-      involucrados: duplicadas.map((cuenta) => cuenta.codigo),
-    },
-  ];
+  const de = (situacion: SituacionDeCuenta) => porSituacion.get(situacion) ?? [];
+  const huerfanas = de('SIN_RUBRO');
+  const duplicadas = de('EN_DOS_RUBROS');
+  const ajenasCapturadas = de('CAPTURADA_FUERA_DEL_ALCANCE');
+  const ajenas = de('FUERA_DEL_ALCANCE');
+  const alcance = plantilla.alcance.tipos.join(', ');
+
+  return {
+    clasificacion,
+    controles: [
+      {
+        codigo: 'CUENTA_SIN_RUBRO',
+        cumple: huerfanas.length === 0,
+        detalle:
+          huerfanas.length === 0
+            ? `Todas las cuentas de tipo ${alcance} caen en algún renglón`
+            : `${huerfanas.length} cuenta(s) DENTRO del alcance (${alcance}) no las captura ningún renglón: su saldo desaparece del estado. A veces el estado igual cierra —cuando dos huérfanas se compensan— y entonces nadie lo nota. Falta un renglón en la plantilla, o la cuenta está mal codificada. Columnas afectadas: ${[...new Set(huerfanas.map((cuenta) => cuenta.columna))].join(', ')}.`,
+        involucrados: huerfanas.map((cuenta) => cuenta.codigo),
+      },
+      {
+        codigo: 'CUENTA_EN_DOS_RUBROS',
+        cumple: duplicadas.length === 0,
+        detalle:
+          duplicadas.length === 0
+            ? 'Ninguna cuenta suma en más de un renglón'
+            : `${duplicadas.length} cuenta(s) suman en más de un renglón: ${duplicadas
+                .map((cuenta) => `${cuenta.codigo} (${cuenta.en.join(', ')})`)
+                .join('; ')}. Hay un selector demasiado ancho.`,
+        involucrados: duplicadas.map((cuenta) => cuenta.codigo),
+      },
+      {
+        // El control que solo existe porque ahora hay alcance. Un renglón del
+        // ESP que por un prefijo ancho se lleve una cuenta de gastos infla el
+        // activo, y la ecuación puede seguir cerrando si el error se repite del
+        // otro lado. Antes esto era invisible.
+        codigo: 'CUENTA_FUERA_DE_ALCANCE',
+        cumple: ajenasCapturadas.length === 0,
+        detalle:
+          ajenasCapturadas.length === 0
+            ? `Ningún renglón captura cuentas fuera del alcance ${alcance}`
+            : `${ajenasCapturadas.length} cuenta(s) que este estado declara no tratar fueron capturadas igual: ${ajenasCapturadas
+                .map((cuenta) => `${cuenta.codigo} (${cuenta.en.join(', ')})`)
+                .join('; ')}. Un selector alcanza un tipo que no le corresponde.`,
+        involucrados: ajenasCapturadas.map((cuenta) => cuenta.codigo),
+      },
+      {
+        // Informativo y siempre `cumple`. Es la respuesta a «¿por qué esta
+        // cuenta no aparece?» cuando la respuesta correcta es «porque no le
+        // corresponde a este estado».
+        codigo: 'CUENTAS_FUERA_DEL_ALCANCE',
+        cumple: true,
+        detalle:
+          ajenas.length === 0
+            ? `Todas las cuentas del plan caen dentro del alcance ${alcance}`
+            : `${ajenas.length} cuenta(s) quedan fuera por su tipo, no por falta de rubro. ${plantilla.alcance.fundamento}.`,
+        involucrados: [...new Set(ajenas.map((cuenta) => cuenta.codigo))],
+      },
+    ],
+  };
 }
 
 /**
@@ -312,9 +406,9 @@ function controlarCobertura(columnas: readonly ColumnaAControlar[]): ControlDeEs
  */
 function controlarEcuacion(
   importes: Map<string, Money>,
-  datos: DatosDelEstado,
+  ecuacion: EcuacionPatrimonial | undefined,
 ): ControlDeEstado[] {
-  if (datos.ecuacion === undefined) {
+  if (ecuacion === undefined) {
     return [
       {
         codigo: 'ECUACION_PATRIMONIAL',
@@ -330,7 +424,7 @@ function controlarEcuacion(
   // "0 = 0 + 0" y pasaría. Sería un control que se desactiva con un error de
   // tipeo, y nadie lo notaría porque su salida se ve idéntica a la de un balance
   // que cierra.
-  const faltantes = [datos.ecuacion.activo, datos.ecuacion.pasivo, datos.ecuacion.patrimonioNeto]
+  const faltantes = [ecuacion.activo, ecuacion.pasivo, ecuacion.patrimonioNeto]
     .filter((codigo) => !importes.has(codigo));
 
   if (faltantes.length > 0) {
@@ -344,9 +438,9 @@ function controlarEcuacion(
     ];
   }
 
-  const activo = importes.get(datos.ecuacion.activo)?.amount ?? 0n;
-  const pasivo = importes.get(datos.ecuacion.pasivo)?.amount ?? 0n;
-  const patrimonio = importes.get(datos.ecuacion.patrimonioNeto)?.amount ?? 0n;
+  const activo = importes.get(ecuacion.activo)?.amount ?? 0n;
+  const pasivo = importes.get(ecuacion.pasivo)?.amount ?? 0n;
+  const patrimonio = importes.get(ecuacion.patrimonioNeto)?.amount ?? 0n;
   const cumple = activo === pasivo + patrimonio;
 
   return [
@@ -356,7 +450,7 @@ function controlarEcuacion(
       detalle: cumple
         ? `Activo (${activo}) = Pasivo (${pasivo}) + PN (${patrimonio})`
         : `Activo ${activo} ≠ Pasivo ${pasivo} + PN ${patrimonio}. Diferencia: ${activo - pasivo - patrimonio} en unidades menores.`,
-      involucrados: [datos.ecuacion.activo, datos.ecuacion.pasivo, datos.ecuacion.patrimonioNeto],
+      involucrados: [ecuacion.activo, ecuacion.pasivo, ecuacion.patrimonioNeto],
     },
   ];
 }

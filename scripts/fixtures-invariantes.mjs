@@ -361,24 +361,21 @@ async function ejercitarAsientos(app, db, ctx) {
 // ---------------------------------------------------------------------------
 
 async function ejercitarCierre(app, ctx) {
-  // Acá iría la emisión de los estados contables, que es lo que le daría casos a
-  // A-1 y A-2. No se puede, y el motivo quedó medido:
+  // Los estados se emiten **antes** de cerrar: después del asiento de cierre
+  // todas las cuentas quedan en cero, y A-1 se ejercita sobre renglones con
+  // importe distinto de cero.
   //
-  //   `CUENTA_SIN_RUBRO` recorre **todas** las cuentas imputables con saldo, no
-  //   las que corresponden al estado que se está armando. La plantilla del ESP
-  //   —arts. 63/64, sembrada— no tiene selectores para INGRESO ni GASTO, así que
-  //   toda cuenta de resultado con saldo sale marcada como huérfana y el estado
-  //   queda `emisible = false`. El ER tiene el problema espejo con las
-  //   patrimoniales.
-  //
-  // Consecuencia: `POST /statements/issue` no puede completarse para ninguna
-  // empresa con un plan de cuentas completo. Los tests de estados insertan las
-  // filas por SQL y los unitarios usan un plan hecho a medida de la plantilla,
-  // así que el endpoint nunca se ejercitó de punta a punta.
-  //
-  // Arreglarlo es del subsistema de Estados Contables, que esta fase no toca.
-  // A-1 y A-2 quedan declarados VACUO_PERMITIDO con este motivo — que es
-  // exactamente la clase de hallazgo que endurecer el gate tenía que producir.
+  // Esta emisión no se podía hacer hasta la migración 0039: `CUENTA_SIN_RUBRO`
+  // evaluaba el plan entero, así que un ESP marcaba como huérfana a toda cuenta
+  // de resultado con saldo y ninguna empresa con un plan completo podía emitir.
+  // Ahora cada estado declara su alcance y evalúa solo lo que le corresponde.
+  for (const tipo of ['ESP', 'ER']) {
+    const r = await pedir(app, ctx, ctx.empresaA, 'POST', '/statements/issue', {
+      ejercicio: ctx.ejercicioA26,
+      tipo,
+    });
+    exigir(r, 201, `emisión del estado ${tipo}`);
+  }
 
   const pre = await pedir(app, ctx, ctx.empresaA, 'POST', `/fiscal-years/${ctx.ejercicioA26}/pre-close`);
   exigir(pre, 201, 'pre-cierre del ejercicio 2026 de A');

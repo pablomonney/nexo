@@ -83,6 +83,14 @@ const ESP_LGS: PlantillaEstado = {
   vigenteHasta: null,
   normVersionId: 'nv-lgs',
   articulo: 'Art. 63',
+  // El alcance es de la plantilla: sobre qué tipos de cuenta se pronuncia este
+  // estado. Sin él, una cuenta de resultado en el plan saldría marcada como
+  // huérfana del ESP, que es el defecto que esta fase cierra.
+  alcance: {
+    tipos: ['ACTIVO', 'PASIVO', 'PN', 'ORDEN'],
+    fundamento: `: activo, pasivo, patrimonio neto y cuentas de orden`,
+  },
+  ecuacion: { activo: 'A', pasivo: 'P', patrimonioNeto: 'PN' },
   raiz: [
     {
       codigo: 'A',
@@ -239,7 +247,6 @@ const DATOS = {
   moneda: 'ARS' as const,
   fechaCierre: fecha('2026-12-31'),
   saldos: PLAN,
-  ecuacion: { activo: 'A', pasivo: 'P', patrimonioNeto: 'PN' },
 };
 
 // ---------------------------------------------------------------------------
@@ -473,12 +480,10 @@ describe('cobertura del plan de cuentas', () => {
   });
 
   it('sin la ecuación declarada, el control no corre y lo dice', () => {
-    const estado = construirEstado(ESP_LGS, {
-      companyId: 'co-1',
-      moneda: 'ARS',
-      fechaCierre: fecha('2026-12-31'),
-      saldos: PLAN,
-    });
+    // Una plantilla sin ecuación es legítima —el ER no tiene ninguna que
+    // verificar—, y lo que no puede pasar es que informe "verificada" sin
+    // haberla verificado.
+    const estado = construirEstado({ ...ESP_LGS, ecuacion: undefined }, DATOS);
     const control = estado.controles.find((c) => c.codigo === 'ECUACION_PATRIMONIAL');
 
     expect(control?.cumple).toBe(true);
@@ -490,10 +495,12 @@ describe('cobertura del plan de cuentas', () => {
     // Sin este control, `{ activo: 'ACTIVO' }` —que no existe; el nodo es 'A'—
     // daría "0 = 0 + 0" y pasaría. Un control que se apaga con un error de tipeo
     // se ve exactamente igual que uno que da bien.
-    const estado = construirEstado(ESP_LGS, {
-      ...DATOS,
-      ecuacion: { activo: 'ACTIVO', pasivo: 'P', patrimonioNeto: 'PN' },
-    });
+    // La ecuación es de la plantilla desde la migración 0039, así que el error
+    // de tipeo se prueba donde puede ocurrir: en la plantilla publicada.
+    const estado = construirEstado(
+      { ...ESP_LGS, ecuacion: { activo: 'ACTIVO', pasivo: 'P', patrimonioNeto: 'PN' } },
+      DATOS,
+    );
     const control = estado.controles.find((c) => c.codigo === 'ECUACION_PATRIMONIAL');
 
     expect(control?.cumple).toBe(false);
@@ -774,7 +781,7 @@ describe('la plantilla se valida antes de usarla', () => {
         },
       ],
     };
-    const estado = construirEstado(vacio, { ...DATOS, ecuacion: undefined });
+    const estado = construirEstado({ ...vacio, ecuacion: undefined }, DATOS);
 
     expect(estado.renglones.find((r) => r.codigo === 'A.X')?.importe.amount).toBe(0n);
     // Y todas las cuentas quedan sin rubro, que es lo que hay que ver.
@@ -800,7 +807,7 @@ describe('la plantilla se valida antes de usarla', () => {
         },
       ],
     };
-    const estado = construirEstado(soloCodigos, { ...DATOS, ecuacion: undefined });
+    const estado = construirEstado({ ...soloCodigos, ecuacion: undefined }, DATOS);
     const renglon = estado.renglones.find((r) => r.codigo === 'A.BU');
 
     expect(renglon?.importe.amount).toBe(100_000n);

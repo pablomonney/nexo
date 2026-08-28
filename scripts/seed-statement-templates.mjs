@@ -117,6 +117,8 @@ try {
       normVersionId,
       articulo: plantilla.articulo,
       raiz: plantilla.raiz,
+      alcance: plantilla.alcance,
+      ...(plantilla.ecuacion === undefined ? {} : { ecuacion: plantilla.ecuacion }),
     });
     for (const error of errores) {
       problemas.push(`${plantilla.tipo} · ${error.codigo} en "${error.nodo}": ${error.mensaje}`);
@@ -188,8 +190,10 @@ try {
     await client.query(
       `INSERT INTO statement_templates
          (company_id, statement_kind, framework, entity_type, regulator, version,
-          valid_from, structure, norm_version_id, articulo, created_by)
-       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, 'seed-statement-templates')`,
+          valid_from, structure, norm_version_id, articulo, created_by,
+          scope_types, scope_fundamento, equation)
+       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, 'seed-statement-templates',
+               $10, $11, $12::jsonb)`,
       [
         plantilla.tipo,
         ALCANCE.marco,
@@ -200,6 +204,12 @@ try {
         JSON.stringify(plantilla.raiz),
         normVersionId,
         plantilla.articulo,
+        // El alcance viaja con la plantilla desde la migración 0039: sin él, el
+        // control de cobertura vuelve a evaluar el plan entero y marca como
+        // huérfana a toda cuenta que el estado no trata.
+        plantilla.alcance.tipos,
+        plantilla.alcance.fundamento,
+        plantilla.ecuacion === undefined ? null : JSON.stringify(plantilla.ecuacion),
       ],
     );
     nuevas.push(`${plantilla.tipo} v${version}`);

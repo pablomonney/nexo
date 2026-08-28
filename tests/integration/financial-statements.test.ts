@@ -33,10 +33,12 @@ suite('Candados de los estados contables', () => {
     const tpl = await client.query<{ id: string }>(
       `INSERT INTO statement_templates
          (company_id, statement_kind, framework, entity_type, regulator, version,
-          valid_from, structure, norm_version_id, articulo, created_by)
+          valid_from, structure, norm_version_id, articulo, created_by,
+          scope_types, scope_fundamento)
        VALUES ($1, 'ESP', 'RT_FACPCE', 'SA', 'IGJ', 1, '2024-01-01',
                '[{"codigo":"A","etiqueta":"ACTIVO","tipo":"RUBRO"}]'::jsonb,
-               $2, 'Art. 63', 'tester')
+               $2, 'Art. 63', 'tester',
+               ARRAY['ACTIVO','PASIVO','PN','ORDEN'], 'Ley 19.550, art. 63')
        RETURNING id`,
       [fx.companyA, normVersionId],
     );
@@ -76,8 +78,9 @@ suite('Candados de los estados contables', () => {
       client.query(
         `INSERT INTO statement_templates
            (company_id, statement_kind, framework, entity_type, regulator, version,
-            valid_from, structure, articulo, created_by)
-         VALUES ($1, 'ESP', 'NIIF', 'SA', 'CNV', 1, '2024-01-01', '[]'::jsonb, 'x', 'tester')`,
+            valid_from, structure, articulo, created_by, scope_types, scope_fundamento)
+         VALUES ($1, 'ESP', 'NIIF', 'SA', 'CNV', 1, '2024-01-01', '[]'::jsonb, 'x', 'tester',
+                 ARRAY['ACTIVO'], 'x')`,
         [fx.companyA],
       ),
     );
@@ -91,9 +94,11 @@ suite('Candados de los estados contables', () => {
       client.query(
         `INSERT INTO statement_templates
            (company_id, statement_kind, framework, entity_type, regulator, version,
-            valid_from, structure, norm_version_id, articulo, created_by)
+            valid_from, structure, norm_version_id, articulo, created_by,
+          scope_types, scope_fundamento)
          VALUES ($1, 'ESP', 'NIIF', 'SA', 'CNV', 1, '2024-01-01',
-                 '{"no":"soy un array"}'::jsonb, $2, 'x', 'tester')`,
+                 '{"no":"soy un array"}'::jsonb, $2, 'x', 'tester',
+                 ARRAY['ACTIVO'], 'x')`,
         [fx.companyA, norma.rows[0]!.id],
       ),
     );

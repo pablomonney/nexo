@@ -88,10 +88,14 @@ suite('Las plantillas sembradas de la Ley 19.550', () => {
       structure: unknown;
       norm_version_id: string;
       articulo: string;
+      scope_types: string[];
+      scope_fundamento: string;
+      equation: PlantillaEstado['ecuacion'] | null;
     }>(
       `SELECT id, statement_kind, framework, entity_type, regulator, version,
               valid_from::text AS valid_from, valid_to::text AS valid_to,
-              structure, norm_version_id, articulo
+              structure, norm_version_id, articulo,
+              scope_types, scope_fundamento, equation
          FROM statement_templates
         WHERE company_id IS NULL`,
     );
@@ -108,6 +112,11 @@ suite('Las plantillas sembradas de la Ley 19.550', () => {
       normVersionId: fila.norm_version_id,
       articulo: fila.articulo,
       raiz: fila.structure as PlantillaEstado['raiz'],
+      alcance: {
+        tipos: fila.scope_types as PlantillaEstado['alcance']['tipos'],
+        fundamento: fila.scope_fundamento,
+      },
+      ...(fila.equation === null ? {} : { ecuacion: fila.equation }),
     }));
 
     // Se resuelve con `plantillaAplicable`, no con el `version` más alto ni con

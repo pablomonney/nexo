@@ -61,18 +61,11 @@ const INVARIANTES = [
   {
     id: 'A-1',
     enunciado: 'Todo renglón de estado contable resuelve a ≥ 1 asiento aprobado',
-    // Hoy es imposible ejercitarlo, y el motivo está medido: `CUENTA_SIN_RUBRO`
-    // recorre TODAS las cuentas imputables con saldo, no las que corresponden al
-    // estado que se arma. La plantilla del ESP no tiene selectores para INGRESO
-    // ni GASTO, así que toda cuenta de resultado con saldo sale huérfana y el
-    // estado queda `emisible = false`; el ER tiene el problema espejo con las
-    // patrimoniales. `POST /statements/issue` no puede completarse para ninguna
-    // empresa con un plan de cuentas completo — los tests de estados insertan las
-    // filas por SQL y los unitarios usan un plan hecho a medida de la plantilla.
-    vacuoPermitido:
-      'Requiere emitir un estado contable, y /statements/issue rechaza todo ESP de una ' +
-      'empresa con cuentas de resultado con saldo (CUENTA_SIN_RUBRO evalúa el plan entero, ' +
-      'no el subconjunto del estado). Arreglarlo es del subsistema de Estados Contables.',
+    // Dejó de ser VACUO_PERMITIDO el 2026-08-28, cuando la fase de Estados
+    // Contables destrabó `/statements/issue`. Ahora exige ejercicio: si el
+    // fixture dejara de emitir estados, el gate corta en vez de volver
+    // silenciosamente a "no hay sobre qué fallar".
+    ejercicio: 'REQUERIDO',
     universo: 'SELECT count(*)::int AS n FROM financial_statement_lines',
     sql: `
       SELECT l.id::text AS violacion,
@@ -91,9 +84,12 @@ const INVARIANTES = [
   {
     id: 'A-2',
     enunciado: 'Toda cifra de nota resuelve a ≥ 1 asiento aprobado',
+    // Las notas son un subsistema aparte (`notes.ts`): no las emite
+    // `/statements/issue` y no hay endpoint que las produzca. Cuando lo haya,
+    // esto pasa a REQUERIDO como pasó A-1.
     vacuoPermitido:
-      'Las cifras de nota nacen de un estado contable emitido, que hoy no se puede emitir. ' +
-      'Mismo bloqueo que A-1.',
+      'Las cifras de nota las produce el subsistema de notas, que no tiene endpoint de ' +
+      'emisión. No hay camino productivo que las cree, así que no hay forma de ejercitarlo.',
     universo: 'SELECT count(*)::int AS n FROM note_figures',
     sql: `
       SELECT f.id::text AS violacion,
