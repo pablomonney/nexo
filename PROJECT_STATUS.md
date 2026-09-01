@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 74 archivos de test, 1406 tests,
-128 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 75 archivos de test, 1420 tests,
+139 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -45,6 +45,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
 | **Ciclo comercial** | **TERMINADO** | **`ciclo-comercial` (16 tests)** |
+| **Recepción y conciliación de compras** | **TERMINADO** | **`recepcion-de-compras` (14 tests)** |
 
 ## 3. En curso
 
@@ -57,6 +58,7 @@ Nada bloqueado a mitad de camino. Los últimos tres bloques cerrados:
 | 0049 | Renglones de comprobante, con el candado diferido que los hace cerrar |
 | 0050 | Ciclo comercial: presupuesto → pedido → factura (ADR-014) |
 | 0051 | La bandeja pasa a ser unión de vistas por dominio, extensible |
+| 0052 | Recepción de mercadería y conciliación de tres puntas en compras |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -67,18 +69,17 @@ factura — no cuando alguien lo marca, porque no hay forma de marcarlo.
 
 El orden no es preferencia: cada línea necesita la anterior.
 
-1. **Compras**: recepción de mercadería y factura de proveedor. La mitad
-   `COMPRAS` de `commercial_documents` ya existe y está probada; falta el paso
-   de recepción, que es el que habilita el stock.
-2. **Tesorería con cuenta corriente**: cobranzas, pagos e imputación contra los
-   saldos que ya deriva `party_balances`.
-3. **Stock**: depósitos y movimientos que no son comprobantes. Hoy existe
-   `product_movements`, que es movimiento **facturado** y no existencias — la
-   diferencia está dicha en la propia respuesta de la API para que nadie la
-   confunda.
-4. **Activos fijos y amortizaciones.**
-5. **Integration Hub** y conectores.
-6. **BI / analítica** sobre eventos.
+1. **Tesorería con cuenta corriente**: cobranzas, pagos e imputación contra los
+   saldos que ya deriva `party_balances`. Hoy se sabe cuánto se le debe a cada
+   tercero, pero no **qué facturas** componen ese saldo ni su antigüedad.
+2. **Stock**: depósitos y movimientos que no son comprobantes. Las dos fuentes
+   ya existen —`goods_receipts` para lo que entra y `tax_transaction_lines`
+   para lo que sale— y falta el módulo que las convierta en existencias. Hoy
+   `product_movements` es movimiento **facturado**, no stock, y las respuestas
+   de la API lo dicen para que nadie lo confunda.
+3. **Activos fijos y amortizaciones.**
+4. **Integration Hub** y conectores.
+5. **BI / analítica** sobre eventos.
 
 ### Decisiones de producto que aparecieron acá
 

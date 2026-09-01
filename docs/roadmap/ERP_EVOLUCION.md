@@ -85,7 +85,7 @@ NIVEL 2  (hecho)   maestro de productos y servicios           0048
 NIVEL 2b (hecho)   renglones de comprobante — une 1 y 2       0049
 NIVEL 3  (hecho)   ciclo comercial: presupuesto → pedido → factura  0050
          (hecho)   la bandeja pasa a ser extensible por dominio     0051
-NIVEL 3b           compras: recepción de mercadería  ← habilita stock
+NIVEL 3b (hecho)   compras: recepción y conciliación de tres puntas 0052
 NIVEL 4            tesorería y cuenta corriente ← necesita 3
 NIVEL 5            stock                        ← necesita 2 y 3b
 NIVEL 6            activos fijos · producción · RRHH

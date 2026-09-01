@@ -125,6 +125,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="terceros">Terceros</button>
   <button data-vista="productos">Productos</button>
   <button data-vista="comercial">Comercial</button>
+  <button data-vista="recepciones">Recepciones</button>
   <button data-vista="asientos">Asientos</button>
   <button data-vista="libros">Libros</button>
   <button data-vista="estados">Estados y notas</button>
@@ -262,6 +263,66 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 </section>
 
 <!-- ══ Operaciones fiscales ═══════════════════════════════════════════════ -->
+<!-- ══ Recepciones ════════════════════════════════════════════════════════ -->
+<section id="v-recepciones" hidden>
+  <h2>Recepción de mercadería</h2>
+  <p class="ayuda">Qué llegó y cuándo. Es la pieza que permite el control de tres puntas:
+    <strong>lo pedido, lo recibido y lo facturado</strong> tienen que coincidir.
+    Todavía <strong>no mueve stock</strong> — no hay depósitos ni movimientos de
+    existencias; cuando ese módulo exista, esta va a ser su fuente.</p>
+  <div class="fila">
+    <div><label>Estado</label><select id="rec-status">
+      <option value="">todos</option><option>BORRADOR</option><option>CONFIRMADA</option>
+      <option>ANULADA</option></select></div>
+  </div>
+  <button id="b-rec" class="sec">Buscar</button>
+  <button id="b-rec-mas" class="sec" hidden>Ver más</button>
+  <div id="rec-msg"></div>
+  <div class="tabla"><table id="t-rec"><thead><tr>
+    <th>Número</th><th>Proveedor</th><th>Orden</th><th>Fecha</th>
+    <th>Remito</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="rec-alta" hidden><summary>Registrar una recepción</summary><div>
+    <p class="ayuda">La orden es opcional: llega mercadería sin orden previa, y obligar a
+      inventar una para registrar lo que ya está en el depósito invertiría la prioridad.</p>
+    <div class="fila">
+      <div><label>Proveedor</label><select id="rec-n-prov"></select></div>
+      <div><label>Orden de compra</label><select id="rec-n-orden"></select></div>
+      <div><label>Fecha</label><input id="rec-n-fecha" type="date"></div>
+      <div><label>Remito del proveedor</label><input id="rec-n-remito" maxlength="60"></div>
+    </div>
+    <button id="b-rec-alta">Crear en borrador</button>
+    <div id="rec-alta-msg"></div>
+  </div></details>
+
+  <div id="rec-detalle" hidden>
+    <h3 id="rec-titulo"></h3>
+    <dl class="kv" id="rec-kv"></dl>
+    <div class="tabla"><table id="t-rec-lin"><thead><tr>
+      <th>#</th><th>Producto</th><th>Descripción</th><th>Cantidad</th><th>Observaciones</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div id="rec-acciones"></div>
+    <div id="rec-accion-msg"></div>
+
+    <details class="grupo" id="rec-renglones" hidden><summary>Cargar lo que llegó</summary><div>
+      <div class="fila">
+        <div><label>Producto</label><select id="rec-r-producto"></select></div>
+        <div><label>Descripción</label><input id="rec-r-desc"></div>
+        <div><label>Cantidad</label><input id="rec-r-cant" inputmode="decimal" value="1"></div>
+        <div><label>Observaciones</label><input id="rec-r-obs"
+          placeholder="dos cajas rotas, faltan tres…"></div>
+      </div>
+      <button id="b-rec-r-add" class="sec">Agregar renglón</button>
+      <button id="b-rec-r-guardar">Guardar</button>
+      <div id="rec-r-msg"></div>
+      <div class="tabla"><table id="t-rec-borrador"><thead><tr>
+        <th>Descripción</th><th>Cantidad</th><th>Observaciones</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div></details>
+  </div>
+</section>
+
 <!-- ══ Comercial ══════════════════════════════════════════════════════════ -->
 <section id="v-comercial" hidden>
   <h2>Presupuestos y pedidos</h2>
@@ -307,6 +368,16 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div id="com-detalle" hidden>
     <h3 id="com-titulo"></h3>
     <dl class="kv" id="com-kv"></dl>
+
+    <div id="com-match" hidden>
+      <h4>Conciliación de tres puntas</h4>
+      <p class="ayuda">Compara <strong>cantidades, no importes</strong>. Que las cantidades
+        coincidan no dice que el precio facturado sea el pactado: eso se mira en el detalle
+        del comprobante.</p>
+      <div class="tabla"><table id="t-com-match"><thead><tr>
+        <th>Ítem</th><th>Pedido</th><th>Recibido</th><th>Facturado</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
     <div class="tabla"><table id="t-com-lin"><thead><tr>
       <th>#</th><th>Producto</th><th>Descripción</th><th>Cantidad</th>
       <th>Precio</th><th>Trato</th><th>Neto</th><th>IVA</th>
@@ -710,8 +781,9 @@ const estado = {
   vista: 'login', migas: [],
   documento: null, campos: [], tt: null, operacion: null, asiento: null,
   tercero: null, comercial: null, comercialBorrador: [],
+  recepcion: null, recepcionBorrador: [],
   cuentas: [], documentosSinOperacion: [],
-  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null },
+  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null },
   filtros: {},
 };
 
@@ -760,7 +832,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','comercial','asientos','libros','estados','cierre','auditoria','config'];
+                'terceros','productos','comercial','recepciones','asientos','libros','estados','cierre','auditoria','config'];
 
 function ir(vista, migas) {
   estado.vista = vista;
@@ -790,6 +862,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'terceros') listarTerceros();
     if (v === 'productos') listarProductos();
     if (v === 'comercial') listarComerciales();
+    if (v === 'recepciones') listarRecepciones();
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
@@ -890,7 +963,7 @@ async function usarEmpresa(id) {
 function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
-    terceros: 'party:read', productos: 'product:read', comercial: 'commercial:read',
+    terceros: 'party:read', productos: 'product:read', comercial: 'commercial:read', recepciones: 'receipt:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
     auditoria: 'audit:read', config: 'company:read',
@@ -1292,6 +1365,212 @@ function pintarDuplicados(duplicados) {
 }
 
 // ══ 4 · Operaciones fiscales ══════════════════════════════════════════════
+// ══ Recepciones ═══════════════════════════════════════════════════════════
+async function listarRecepciones(cursor) {
+  E('rec-alta').hidden = !puede('receipt:write');
+  if (!cursor) await cargarListasParaRecepcion();
+
+  const q = new URLSearchParams({ limite: '25' });
+  if (E('rec-status').value) q.set('status', E('rec-status').value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/goods-receipts?' + q.toString());
+  if (!r.ok) return decir('rec-msg', r);
+  limpiar('rec-msg');
+
+  const cuerpo = E('t-rec').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  const recepciones = r.datos.recepciones || [];
+  if (recepciones.length === 0 && !cursor) {
+    E('rec-msg').innerHTML = '<div class="aviso">Sin recepciones con estos filtros.</div>';
+  }
+
+  for (const x of recepciones) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(x.numero) + '</td>' +
+      '<td>' + escapar(x.proveedor) + '</td>' +
+      '<td class="mono">' + escapar(x.ordenNumero || 'sin orden') + '</td>' +
+      '<td class="mono">' + escapar(x.fecha) + '</td>' +
+      '<td class="mono">' + escapar(x.remito || '—') + '</td>' +
+      '<td>' + pastilla(x.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirRecepcion(x.id);
+    cuerpo.appendChild(tr);
+  }
+
+  estado.cursores.rec = r.datos.cursor;
+  E('b-rec-mas').hidden = !r.datos.cursor;
+}
+
+async function abrirRecepcion(id) {
+  const r = await api('GET', '/goods-receipts/' + id);
+  if (!r.ok) return decir('rec-msg', r);
+  limpiar('rec-msg');
+
+  estado.recepcion = id;
+  estado.recepcionBorrador = [];
+  E('rec-detalle').hidden = false;
+
+  const x = r.datos.recepcion;
+  E('rec-titulo').textContent = 'Recepción N° ' + x.numero;
+  E('rec-kv').innerHTML =
+    '<dt>Proveedor</dt><dd>' + escapar(x.proveedor) + '</dd>' +
+    '<dt>Orden de compra</dt><dd class="mono">' + escapar(x.ordenNumero || 'sin orden') + '</dd>' +
+    '<dt>Fecha</dt><dd class="mono">' + escapar(x.fecha) + '</dd>' +
+    '<dt>Remito</dt><dd class="mono">' + escapar(x.remito || '—') + '</dd>' +
+    '<dt>Estado</dt><dd>' + pastilla(x.status) + '</dd>' +
+    (x.motivoAnulacion
+      ? '<dt>Motivo de anulación</dt><dd>' + escapar(x.motivoAnulacion) + '</dd>' : '');
+
+  const lineas = E('t-rec-lin').querySelector('tbody');
+  lineas.innerHTML = '';
+  for (const l of (r.datos.renglones || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.linea) + '</td>' +
+      '<td class="mono">' + escapar(l.productoCodigo || '—') + '</td>' +
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + ' ' + escapar(l.unidad) + '</td>' +
+      '<td>' + escapar(l.observaciones || '') + '</td>';
+    lineas.appendChild(tr);
+  }
+
+  const caja = E('rec-acciones');
+  caja.innerHTML = '';
+  if (puede('receipt:write')) {
+    if (x.status === 'BORRADOR') {
+      const b = document.createElement('button');
+      b.className = 'sec';
+      b.textContent = 'Confirmar lo que llegó';
+      b.onclick = () => accionRecepcion(id, 'confirm', false);
+      caja.appendChild(b);
+    }
+    if (x.status === 'BORRADOR' || x.status === 'CONFIRMADA') {
+      const b = document.createElement('button');
+      b.className = 'sec';
+      b.textContent = 'Anular';
+      b.onclick = () => accionRecepcion(id, 'cancel', true);
+      caja.appendChild(b);
+    }
+  }
+
+  E('rec-renglones').hidden = !(x.status === 'BORRADOR' && puede('receipt:write'));
+  await cargarProductosParaRecepcion();
+  ir('recepciones', ['Recepciones', 'N° ' + x.numero]);
+}
+
+async function accionRecepcion(id, accion, pideMotivo) {
+  let motivo;
+  if (pideMotivo) {
+    motivo = window.prompt('¿Por qué se anula? Queda en la bitácora.');
+    if (motivo === null || motivo.trim().length < 3) {
+      E('rec-accion-msg').innerHTML = '<div class="aviso mal">Sin motivo no se registra.</div>';
+      return;
+    }
+  }
+  const url = accion === 'confirm'
+    ? '/goods-receipts/' + id + '/confirm'
+    : '/goods-receipts/' + id + '/cancel';
+  const r = await api('POST', url, motivo === undefined ? {} : { motivo: motivo.trim() });
+  decir('rec-accion-msg', r, 'Listo.');
+  if (r.ok) await abrirRecepcion(id);
+}
+
+async function cargarListasParaRecepcion() {
+  if (puede('party:read')) {
+    const r = await api('GET', '/parties?rol=PROVEEDOR&status=ACTIVO&limite=200');
+    if (r.ok) {
+      const sel = E('rec-n-prov');
+      sel.innerHTML = '';
+      for (const t of (r.datos.terceros || [])) {
+        const o = document.createElement('option');
+        o.value = t.id;
+        o.textContent = t.razonSocial;
+        sel.appendChild(o);
+      }
+    }
+  }
+  if (puede('commercial:read')) {
+    const r = await api('GET', '/commercial-documents?direccion=COMPRAS&status=ACEPTADO&limite=200');
+    if (r.ok) {
+      const sel = E('rec-n-orden');
+      sel.innerHTML = '<option value="">— sin orden previa —</option>';
+      for (const d of (r.datos.documentos || [])) {
+        const o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = 'OC ' + d.numero + ' · ' + d.razonSocial;
+        sel.appendChild(o);
+      }
+    }
+  }
+}
+
+async function cargarProductosParaRecepcion() {
+  if (!puede('product:read')) return;
+  const r = await api('GET', '/products?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('rec-r-producto');
+  sel.innerHTML = '<option value="">— sin producto del maestro —</option>';
+  for (const p of (r.datos.productos || [])) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.codigo + ' · ' + p.nombre;
+    sel.appendChild(o);
+  }
+}
+
+E('b-rec').onclick = () => listarRecepciones();
+E('b-rec-mas').onclick = () => listarRecepciones(estado.cursores.rec);
+
+E('b-rec-alta').onclick = async () => {
+  const cuerpo = {
+    proveedorId: E('rec-n-prov').value,
+    fecha: E('rec-n-fecha').value,
+  };
+  if (E('rec-n-orden').value) cuerpo.ordenId = E('rec-n-orden').value;
+  if (E('rec-n-remito').value) cuerpo.remito = E('rec-n-remito').value.trim();
+
+  const r = await api('POST', '/goods-receipts', cuerpo);
+  decir('rec-alta-msg', r, 'Recepción creada en borrador.');
+  if (r.ok) {
+    await listarRecepciones();
+    await abrirRecepcion(r.datos.id);
+  }
+};
+
+E('b-rec-r-add').onclick = () => {
+  const renglon = {
+    descripcion: E('rec-r-desc').value.trim(),
+    cantidad: E('rec-r-cant').value.trim(),
+  };
+  if (E('rec-r-producto').value) renglon.productoId = E('rec-r-producto').value;
+  if (E('rec-r-obs').value) renglon.observaciones = E('rec-r-obs').value.trim();
+  if (renglon.descripcion === '') {
+    E('rec-r-msg').innerHTML = '<div class="aviso mal">Falta la descripción.</div>';
+    return;
+  }
+  estado.recepcionBorrador.push(renglon);
+  limpiar('rec-r-msg');
+
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td>' + escapar(renglon.descripcion) + '</td>' +
+    '<td class="mono">' + escapar(renglon.cantidad) + '</td>' +
+    '<td>' + escapar(renglon.observaciones || '') + '</td>';
+  E('t-rec-borrador').querySelector('tbody').appendChild(tr);
+};
+
+E('b-rec-r-guardar').onclick = async () => {
+  const r = await api('PUT', '/goods-receipts/' + estado.recepcion + '/lines',
+    { renglones: estado.recepcionBorrador });
+  decir('rec-r-msg', r, 'Detalle guardado.');
+  if (r.ok) {
+    E('t-rec-borrador').querySelector('tbody').innerHTML = '';
+    await abrirRecepcion(estado.recepcion);
+  }
+};
+
 // ══ Comercial ═════════════════════════════════════════════════════════════
 async function listarComerciales(cursor) {
   E('com-alta').hidden = !puede('commercial:write');
@@ -1398,12 +1677,37 @@ async function abrirComercial(id) {
     caja.appendChild(boton);
   }
 
+  // La conciliación es del circuito de compras: un documento de ventas no
+  // tiene recepción de mercadería contra la cual comparar.
+  const hayMatch = d.direccion === 'COMPRAS' && puede('receipt:read');
+  E('com-match').hidden = !hayMatch;
+  if (hayMatch) await cargarMatch(id);
+
   E('com-renglones').hidden = !(d.status === 'BORRADOR' && puede('commercial:write'));
   // Facturar es un acto contable y lleva su propio permiso.
   E('com-facturar').hidden = !(d.status === 'ACEPTADO' && puede('journal_entry:create'));
 
   await cargarProductosParaComercial();
   ir('comercial', ['Presupuestos y pedidos', d.tipo + ' ' + d.numero]);
+}
+
+async function cargarMatch(id) {
+  const r = await api('GET', '/commercial-documents/' + id + '/match');
+  const cuerpo = E('t-com-match').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  if (!r.ok) return;
+  for (const m of (r.datos.items || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(m.item) + '</td>' +
+      '<td class="mono">' + escapar(m.pedido) + '</td>' +
+      '<td class="mono">' + escapar(m.recibido) + '</td>' +
+      '<td class="mono">' + escapar(m.facturado) + '</td>' +
+      '<td>' + (m.coincide
+        ? '<span class="p p-ok">coincide</span>'
+        : '<span class="p p-ojo">no coincide</span>') + '</td>';
+    cuerpo.appendChild(tr);
+  }
 }
 
 async function accionComercial(id, accion, pideMotivo) {

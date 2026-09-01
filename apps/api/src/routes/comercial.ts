@@ -543,6 +543,108 @@ export async function comercialRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
+/**
+ * Vincula una factura de proveedor ya registrada a la orden de compra que la
+ * originó.
+ *
+ * Es la mitad de compras de lo que en ventas hace `/invoice`. La diferencia no
+ * es de estilo: en ventas NEXO **emite** el comprobante, y en compras el
+ * comprobante lo emite el proveedor, llega como documento y se registra por el
+ * camino que ya existe. Lo único que falta es decir a qué orden corresponde.
+ *
+ * La columna es la misma —`tax_transaction_id`— llenada de dos maneras según la
+ * dirección. Dos columnas para el mismo vínculo habrían sido dos verdades.
+ */
+export async function vincularFacturaDeCompra(app: FastifyInstance): Promise<void> {
+  app.post('/commercial-documents/:documentId/link-invoice', async (request) => {
+    const tenant = await requireCompany(request);
+    // Afirmar que una factura corresponde a una orden fija contra qué se va a
+    // conciliar y, después, qué se va a pagar. Es un acto contable.
+    requirePermission(tenant, 'journal_entry:create');
+    const auth = requireAuth(request);
+    const { documentId } = z.object({ documentId: z.string().uuid() }).parse(request.params);
+    const body = z.object({ taxTransactionId: z.string().uuid() }).parse(request.body);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const orden = await tx.query<{ direction: string; status: string; party_id: string }>(
+          `SELECT direction, status, party_id FROM commercial_documents
+            WHERE id = $1 AND company_id = $2`,
+          [documentId, tenant.companyId],
+        );
+        if (orden.rowCount === 0) throw notFound('Documento comercial no encontrado');
+        if (orden.rows[0]!.direction !== 'COMPRAS') {
+          throw badRequest(
+            'En ventas la factura se emite con /invoice, no se vincula: NEXO la crea.',
+          );
+        }
+        if (orden.rows[0]!.status !== 'ACEPTADO') {
+          throw conflictoTipado(
+            'DOCUMENTO_NO_ACEPTADO',
+            `La orden está en ${orden.rows[0]!.status}. Se vincula la factura de una orden aceptada.`,
+          );
+        }
+
+        const factura = await tx.query<{ direction: string; party_id: string | null }>(
+          `SELECT direction, party_id FROM tax_transactions
+            WHERE id = $1 AND company_id = $2`,
+          [body.taxTransactionId, tenant.companyId],
+        );
+        if (factura.rowCount === 0) throw notFound('La operación fiscal no existe en esta empresa');
+        if (factura.rows[0]!.direction !== 'COMPRAS') {
+          throw unprocessable(
+            'COMPROBANTE_DE_VENTAS',
+            'Ese comprobante es de ventas: no puede ser la factura de una orden de compra.',
+          );
+        }
+        // Si el comprobante ya está resuelto contra un tercero, tiene que ser el
+        // mismo proveedor. Vincular la factura de otro proveedor a esta orden
+        // haría que la conciliación compare cantidades que no son comparables.
+        const terceroDeLaFactura = factura.rows[0]!.party_id;
+        if (terceroDeLaFactura !== null && terceroDeLaFactura !== orden.rows[0]!.party_id) {
+          throw unprocessable(
+            'PROVEEDOR_NO_COINCIDE',
+            'La factura está resuelta contra otro proveedor distinto del de la orden.',
+          );
+        }
+
+        try {
+          await tx.query(
+            `UPDATE commercial_documents
+                SET status = 'FACTURADO', tax_transaction_id = $3
+              WHERE id = $1 AND company_id = $2`,
+            [documentId, tenant.companyId, body.taxTransactionId],
+          );
+        } catch (error) {
+          if ((error as { code?: string }).code === '23505') {
+            throw conflictoTipado(
+              'FACTURA_YA_VINCULADA',
+              'Esa factura ya está vinculada a otra orden de compra.',
+            );
+          }
+          throw error;
+        }
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId: `user:${auth.user.userId}`,
+          action: 'VINCULAR_FACTURA_DE_COMPRA',
+          objectType: 'commercial_documents',
+          objectId: documentId,
+          oldValue: { status: 'ACEPTADO' },
+          newValue: { status: 'FACTURADO', taxTransactionId: body.taxTransactionId },
+          motivo: 'Se afirma que esta factura corresponde a esta orden de compra',
+          ip: clientIp(request),
+          userAgent: request.headers['user-agent'] ?? null,
+        });
+
+        return { documentId, taxTransactionId: body.taxTransactionId, status: 'FACTURADO' };
+      },
+    );
+  });
+}
+
 /** Del error de la máquina de estados al error del dominio. */
 function traducirTransicion(error: unknown): unknown {
   const fallo = error as { code?: string; message?: string };
