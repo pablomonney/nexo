@@ -88,7 +88,8 @@ NIVEL 3  (hecho)   ciclo comercial: presupuesto → pedido → factura  0050
 NIVEL 3b (hecho)   compras: recepción y conciliación de tres puntas 0052
 NIVEL 4  (hecho)   imputación, composición y antigüedad de saldos   0053
 NIVEL 5  (hecho)   depósitos, movimientos y existencias derivadas   0054
-NIVEL 6            activos fijos · producción · RRHH
+NIVEL 6  (hecho)   bienes de uso y amortizaciones                  0055
+                   producción · RRHH ← siguen pendientes
 NIVEL 7            Integration Hub · conectores
 NIVEL 8            BI · analítica · IA sobre datos reales
 NIVEL 9            suscripciones y control interno del propio NEXO

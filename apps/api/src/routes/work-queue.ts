@@ -80,6 +80,8 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Stock (0054). Las ramas cuelgan del producto: quien no puede leer el
   // maestro no ve avisos sobre existencias que no puede consultar.
   products: 'product:read',
+  // Bienes de uso (0055). La amortización pendiente cuelga del bien.
+  fixed_assets: 'asset:read',
 };
 
 const CATEGORIAS = [

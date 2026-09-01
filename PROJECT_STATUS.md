@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 77 archivos de test, 1449 tests,
-167 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 78 archivos de test, 1464 tests,
+183 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -48,6 +48,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Recepción y conciliación de compras** | **TERMINADO** | **`recepcion-de-compras` (14 tests)** |
 | **Imputación y antigüedad de saldos** | **TERMINADO** | **`imputacion-de-cobros` (16 tests)** |
 | **Stock: depósitos y existencias** | **TERMINADO** | **`stock` (13 tests)** |
+| **Bienes de uso y amortizaciones** | **TERMINADO** | **`bienes-de-uso` (15 tests)** |
 
 ## 3. En curso
 
@@ -63,6 +64,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0052 | Recepción de mercadería y conciliación de tres puntas en compras |
 | 0053 | Imputación de cobros, composición y antigüedad de saldos (ADR-015) |
 | 0054 | Depósitos, libro de movimientos y existencias derivadas |
+| 0055 | Bienes de uso: plan de amortización calculado y valor de libros |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -73,12 +75,23 @@ factura — no cuando alguien lo marca, porque no hay forma de marcarlo.
 
 El orden no es preferencia: cada línea necesita la anterior.
 
-1. **Valuación de existencias.** Hoy el stock son cantidades. Cuánto valen
-   —PPP, FIFO o costo de reposición— es una decisión contable con norma
-   detrás, y sin ella no hay costo de mercadería vendida automático.
-2. **Activos fijos y amortizaciones.**
-3. **Integration Hub** y conectores.
-4. **BI / analítica** sobre eventos.
+Con la 0055 quedan cerrados **todos los módulos contables de fondo**. Lo que
+sigue ya no es contabilidad:
+
+1. **Integration Hub** y conectores (Tiendanube, Mercado Pago, Meta y Google
+   Ads, bancos). Las entidades que un conector necesita escribir —venta,
+   cliente, producto, cobro— ya existen, que era la condición para no inventar
+   entidades paralelas que después haya que migrar.
+2. **BI / analítica** sobre eventos.
+3. **Producción y RRHH.** RRHH tiene ADR-012 escrito y sin implementar.
+
+### Lo que falta dentro de lo hecho
+
+- **Valuación de existencias.** Hoy el stock son cantidades. Cuánto valen —PPP,
+  FIFO o costo de reposición— es una decisión contable con norma detrás, y sin
+  ella no hay costo de mercadería vendida automático.
+- **Métodos de amortización.** Solo `LINEAL`. Cada método adicional tiene
+  consecuencias sobre la RT que lo admite y sobre el impuesto.
 
 ### Decisiones de producto que aparecieron acá
 
