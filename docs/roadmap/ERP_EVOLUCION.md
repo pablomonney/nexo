@@ -93,9 +93,19 @@ NIVEL 6  (hecho)   bienes de uso y amortizaciones                  0055
 NIVEL 7  (hecho)   Integration Hub: zona de aterrizaje             0056
                    conectores por API ← falta el adaptador de cada plataforma
 NIVEL 8  (hecho)   analítica con trazabilidad hasta la fila         0057
-                   IA sobre datos reales ← sigue pendiente
+NIVEL 8b (hecho)   señales, proyección y simulación deterministas   0058
 NIVEL 9            suscripciones y control interno del propio NEXO
 ```
+
+**Qué pasó con «IA sobre datos reales»:** el NIVEL 8b iba a ser esa línea, y al
+escribirla se disolvió. Detectar un desvío es una **comparación** contra un
+umbral que la empresa declaró; proyectar una cobranza es una **extrapolación**
+de plazos ya declarados; simular un escenario es una **función pura** de
+parámetros explícitos. Ninguna necesita un modelo, y usar uno las volvería
+irreproducibles —justo lo contrario de lo que un contador necesita, que es poder
+rehacer la cuenta a mano y llegar al mismo número. La decisión y sus límites
+están en ADR-017. El lugar legítimo del modelo —leer, interpretar y proponer—
+ya existía en `ai_predictions` desde la 0018, con agente `FINANCIAL_ANALYSIS`.
 
 **Por qué BI va al final y no al principio:** una capa analítica sobre datos
 que todavía no existen produce tableros vacíos y decisiones de diseño tomadas

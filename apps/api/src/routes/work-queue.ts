@@ -85,6 +85,12 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Integration Hub (0056). Lo que llegó de afuera y espera resolución.
   external_records: 'integration:read',
   company_integrations: 'integration:read',
+  // Señales (0058). Las que hablan de un cliente cuelgan del tercero, y quien
+  // no puede leer el maestro no recibe avisos sobre gente que no puede mirar.
+  //
+  // Faltaba, y el mapa hizo lo que promete: como es lista blanca y no filtro,
+  // los desvíos sobre terceros simplemente no se listaban. Lo encontró un test.
+  parties: 'party:read',
 };
 
 const CATEGORIAS = [

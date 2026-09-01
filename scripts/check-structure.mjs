@@ -71,6 +71,7 @@ const CHECKS = [
   ['external_records', 'er_descarte_con_motivo', 'Descartar lo de afuera exige decir por qué'],
   ['integration_sync_runs', 'isr_cuentas_cierran', 'Recibidos = nuevos + duplicados'],
   ['company_integrations', 'ci_token_con_sobre', 'Un secreto cifrado dice con qué se lo envolvió'],
+  ['analysis_thresholds', 'analysis_thresholds_caida_ventas_pct_check', 'Un umbral de caída es un porcentaje válido'],
   ['commercial_document_lines', 'cdl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
@@ -231,6 +232,8 @@ const RLS_FORZADO = [
   'fixed_assets', 'fixed_asset_improvements', 'fixed_asset_depreciations',
   // Integration Hub (0056): qué trajo cada plataforma externa.
   'company_integrations', 'integration_sync_runs', 'external_records',
+  // Umbrales declarados (0058): qué considera un desvío cada empresa.
+  'analysis_thresholds',
 ];
 
 /**
@@ -252,7 +255,7 @@ const VISTAS_INVOKER = [
   // cadena saltearía el RLS y repartiría el trabajo de todas las empresas.
   'work_queue', 'work_queue_nucleo', 'work_queue_comercial', 'work_queue_compras',
   'work_queue_cobranzas', 'work_queue_stock', 'work_queue_activos',
-  'work_queue_integraciones',
+  'work_queue_integraciones', 'work_queue_senales',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
@@ -267,6 +270,9 @@ const VISTAS_INVOKER = [
   // `security_invoker` un tablero mostraría las ventas de todas las empresas.
   'analytics_operaciones_mensuales', 'analytics_por_producto', 'analytics_por_tercero',
   'analytics_cobertura_de_detalle', 'analytics_flujo_bancario', 'analytics_resumen',
+  // Señales deterministas (0058). Sin `security_invoker` un desvío de una
+  // empresa aparecería en la bandeja de otra.
+  'analysis_signals',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',

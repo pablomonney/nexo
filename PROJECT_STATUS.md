@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 80 archivos de test, 1495 tests,
-206 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 81 archivos de test, 1507 tests,
+210 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -51,6 +51,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Bienes de uso y amortizaciones** | **TERMINADO** | **`bienes-de-uso` (15 tests)** |
 | **Integration Hub** | **TERMINADO** | **`integration-hub` (18 tests)** |
 | **Analítica con trazabilidad** | **TERMINADO** | **`analitica` (13 tests)** |
+| **Señales, proyección y simulación** | **TERMINADO** | **`senales-y-simulacion` (12 tests)** |
 
 ## 3. En curso
 
@@ -69,6 +70,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0055 | Bienes de uso: plan de amortización calculado y valor de libros |
 | 0056 | Integration Hub: zona de aterrizaje para lo externo (ADR-016) |
 | 0057 | Analítica: seis vistas, ni una cifra almacenada, cada total abrible |
+| 0058 | Señales contra umbrales declarados, sin modelo de por medio (ADR-017) |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -86,10 +88,15 @@ sigue ya no es contabilidad:
    de cada plataforma —Tiendanube, Mercado Pago, Meta y Google Ads, bancos— y
    sus credenciales. Cada uno es un módulo que llama a
    `POST /integrations/:id/records` y nada más.
-2. **IA sobre datos reales.** Ahora hay sobre qué: detección de desvíos,
-   proyección y simulación. Con la forma que fija ADR-001 — propone, no escribe.
-3. **Producción y RRHH.** RRHH tiene ADR-012 escrito y sin implementar.
-4. **Suscripciones y control interno del propio NEXO** (§31–§35).
+2. **Producción y RRHH.** RRHH tiene ADR-012 escrito y sin implementar.
+3. **Suscripciones y control interno del propio NEXO** (§31–§35).
+
+La línea que decía «IA sobre datos reales» quedó cerrada, y no como se esperaba:
+al escribirla, detectar un desvío resultó ser una comparación, proyectar una
+extrapolación de plazos declarados y simular una función pura de parámetros.
+Ninguna necesita un modelo, y usarlo las volvería irreproducibles (ADR-017). El
+lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
+`ai_predictions` desde la migración 0018, así que no se duplicó nada.
 
 ### Lo que falta dentro de lo hecho
 
@@ -106,6 +113,12 @@ sigue ya no es contabilidad:
   facturación parcial y con qué reglas.
 - **Listas de precios.** `products.list_price` es un precio único. Precios por
   cliente, por cantidad o por lista todavía no existen.
+- **Umbral sugerido.** Hoy el umbral se declara o no se afirma nada. Se podría
+  *proponer* uno mirando la propia serie y que una persona lo confirme — la
+  forma que ADR-001 admite. No está hecho.
+- **Pronóstico con método.** La proyección de cobranzas extrapola plazos ya
+  declarados; no predice demanda. Un pronóstico real exige elegir un método con
+  nombre, y eso es una decisión de producto pendiente (ADR-017 §6).
 - **Imputación automática sugerida.** Se podría *proponer* una imputación por
   antigüedad y que una persona la confirme — la forma que ADR-001 admite. Hoy
   no existe: imputar es siempre manual (ADR-015 §7).
@@ -170,3 +183,4 @@ siguen reportando por separado.
 | **014** | **La factura no se guarda dos veces: el pedido se convierte en operación fiscal** |
 | **015** | **El vencimiento no se deduce y la imputación no se adivina: se declaran** |
 | **016** | **Un conector no escribe en el motor contable: deposita y una persona resuelve** |
+| **017** | **Detectar, proyectar y simular son aritmética determinista: no llevan modelo** |
