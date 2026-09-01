@@ -169,9 +169,19 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
    * verificación funcionó — lo que falló es el Mayor, y ese es exactamente el
    * hallazgo que se pidió.
    */
+  /**
+   * Verificar el Mayor contra el Diario, y dejar constancia.
+   *
+   * Exige `ledger:verify` y no `report:read`. La diferencia no es formal: esta
+   * ruta **escribe** una fila en `ledger_verifications` con `ran_by`, o sea una
+   * constancia firmada de que alguien comparó los libros. Con el permiso de
+   * lectura, SOLO_LECTURA y USUARIO_EMPRESA podían dejar esa constancia con su
+   * nombre. Es la única frontera que los cincuenta permisos anteriores no
+   * expresaban: entre mirar un reporte y firmar una verificación.
+   */
   app.post('/books/ledger-verification', async (request) => {
     const tenant = await requireCompany(request);
-    requirePermission(tenant, 'report:read');
+    requirePermission(tenant, 'ledger:verify');
     const auth = requireAuth(request);
     const query = rangoSchema.parse(request.body ?? request.query);
 
@@ -219,6 +229,21 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
             resultado.coincide ? 'COINCIDE' : 'DISCREPA',
           ],
         );
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId: `user:${auth.user.userId}`,
+          action: 'VERIFICAR_MAYOR',
+          objectType: 'ledger_verifications',
+          objectId: contexto.fiscalYearId,
+          ip: clientIp(request),
+          newValue: {
+            desde: query.desde,
+            hasta: query.hasta,
+            movimientos: resultado.movimientos,
+            resultado: resultado.coincide ? 'COINCIDE' : 'DISCREPA',
+          },
+        });
 
         return {
           desde: query.desde,

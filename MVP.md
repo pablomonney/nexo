@@ -21,6 +21,8 @@ activar nada.
 
 | Eslabón | Ruta | Quién aporta el dato |
 |---|---|---|
+| Elegir empresa | `GET /companies` | la pertenencia del usuario, no la cabecera |
+| Encontrar el trabajo | `GET /work-queue`, `GET /tax-transactions` | derivado: proyección de estados que ya existen |
 | Documento | `POST /documents` | el archivo; el sistema calcula hash y tipo |
 | Operación fiscal | `POST /documents/:id/tax-transaction` | los importes los declara una persona; el sistema los cruza contra la extracción |
 | Constatación | `POST /tax-transactions/:id/constatar` | **ARCA**, vía WSCDC |
@@ -91,8 +93,16 @@ extracción cuando la hay, cortando si difieren.
 ## 5. La consola operativa
 
 `GET /consola` sirve una página estática —`apps/web/consola.html`— que recorre el
-circuito completo: login, empresa, documento, operación, constatación,
-afectación, decisión, corrección, asiento, libros y trazabilidad.
+circuito completo: login, **empresa, pendientes, operaciones**, documento,
+operación fiscal, constatación, afectación, decisión, corrección, asiento, libros
+y trazabilidad.
+
+Hasta la FASE 3 el segundo paso estaba roto: el selector de empresa llamaba a
+`GET /organizations/:id/companies`, que no existe, y quedaba siempre vacío. El
+circuito andaba y nadie podía entrar a usarlo. Ahora llama a `GET /companies`, y
+las tres pantallas nuevas —empresa, bandeja de pendientes y libro de
+comprobantes— son **de lectura**: llevan a la pantalla donde se resuelve cada
+cosa, y no resuelven nada por su cuenta.
 
 **No es el frontend del roadmap.** Es la interfaz mínima con la que se opera y se
 demuestra el circuito mientras esa aplicación no exista, y está construida para
@@ -111,6 +121,9 @@ en el barrido de aislamiento (`SIN_DATOS`) en vez de ser un agujero silencioso.
 
 | # | Operación | Ruta |
 |---|---|---|
+| 0a | **Elegir empresa** | `GET /companies` |
+| 0b | **Ver qué está pendiente** | `GET /work-queue` |
+| 0c | **Buscar una operación fiscal** | `GET /tax-transactions` |
 | 1 | Subir o elegir un documento | `POST /documents`, `GET /documents` |
 | 2 | Ver el estado del documento y sus hallazgos | `GET /documents/:id` |
 | 3 | Volver a leer un documento archivado | `POST /documents/:id/extract` |
@@ -132,12 +145,15 @@ en el barrido de aislamiento (`SIN_DATOS`) en vez de ser un agujero silencioso.
 
 | Gap | Tipo | Qué lo destraba |
 |---|---|---|
+| **La bandeja es de lectura** | por diseño de esta fase | primero comprobar que la persona encuentra el trabajo. Resolverlo desde la bandeja viene después |
+| **Nadie escribe `documents.status = 'IMPUTADO'`** | defecto | conectar la transición al crear la operación fiscal. Documentado en [OPERACION.md](docs/OPERACION.md) addenda §5; la bandeja lo esquiva preguntando por el hecho y no por el rótulo |
+| **`alerts` y `audit_findings` sin escritor** | `PRODUCT_DECISION` | decidir qué condición merece una alerta persistente. `audit-engine` ya calcula los hallazgos; lo que falta no es código |
 | **Sin motor de OCR real** | `PRODUCT_DECISION` | elegir un motor. El puerto, los parsers, la persistencia con procedencia y la re-extracción ya están: falta el motor |
 | **Cliente de KMS** | técnico | hoy el sobre es `local:dev` y **se niega a funcionar en producción**. Sin KMS, NEXO no opera con certificados reales |
 | **`wscdc` no autorizado en WSASS** | `REQUIRES_EXTERNAL_INPUT` | trámite del estudio ante ARCA con clave fiscal. El sistema no lo puede hacer solo |
 | **Alta de certificado sin test del camino feliz** | deuda | exige un X.509 real; guardar un par de claves en el repo violaría el §27 |
 | Padrón de ARCA no consultado | `FUTURE_DEVELOPMENT` | `consultarPadron` existe en el cliente y ninguna ruta lo llama |
-| Aplicación del estudio (`apps/web`) | `PRODUCT_DECISION` | la consola cubre el circuito; una aplicación con densidad de ERP es otro producto |
+| Aplicación del estudio (`apps/web`) | `PRODUCT_DECISION` | la consola cubre el circuito y ahora también la navegación —empresa, pendientes, comprobantes—; una aplicación con densidad de ERP sigue siendo otro producto |
 | `banks.ts` y `vat.ts` con baja cobertura | deuda | **fuera del circuito MVP**, declarado; tests de ruta, no solo de motor |
 | Reglas ACTIVE = 0 | `REQUIRES_EXTERNAL_INPUT` + `PROFESSIONAL_REVIEW` | Decreto 280/1997 completo y una firma del §32 |
 | Liquidación de sueldos | `PRODUCT_DECISION` | ver [ADR-012](docs/adr/ADR-012-liquidacion-de-sueldos.md). No implementado, y los límites ya están escritos |

@@ -441,10 +441,18 @@ suite('Aislamiento multiempresa', () => {
 
       // Y la mitad que falta: el propio sí se traza. Sin esto, la ruta podría
       // estar devolviendo 404 para todo el mundo y el test no lo notaría.
+      //
+      // El renglón se elige **desde `statement_trace`**, y no con un `LIMIT 1`
+      // sobre `financial_statement_lines`: un RENGLON sin cuentas detrás —un
+      // subtotal, un rubro vacío— devuelve 404 con toda razón, y cuál trae un
+      // `LIMIT 1` sin `ORDER BY` depende del orden físico. Bajo la suite
+      // completa en paralelo eso alcanzaba para que el test fallara a veces
+      // acusando a la ruta de un 404 que la ruta hacía bien.
       const renglonDeA = await db.query<{ id: string }>(
-        `SELECT id FROM financial_statement_lines
-          WHERE statement_id = $1 AND line_type = 'RENGLON' LIMIT 1`,
-        [A.statementId],
+        `SELECT line_id AS id FROM statement_trace
+          WHERE statement_id = $1 AND company_id = $2
+          ORDER BY line_id LIMIT 1`,
+        [A.statementId, A.companyId],
       );
       const propio = await pedir(
         tokenA,

@@ -8,8 +8,14 @@ import { isValidCuit, normalizeCuit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { hashPassword } from '../auth/crypto.js';
-import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { conflict, forbidden } from '../http/errors.js';
+import {
+  clientIp,
+  requireAuth,
+  requireCompany,
+  requirePermission,
+  ROLES_REQUIRING_MFA,
+} from '../http/context.js';
+import { conflict, forbidden, HttpError } from '../http/errors.js';
 
 const ENTITY_TYPES = [
   'SA', 'SA_299', 'SRL', 'SAS', 'SOCIEDAD_SIMPLE', 'ASOC_CIVIL', 'FUNDACION',
@@ -54,6 +60,92 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         [auth.user.userId],
       );
       return { organizations: result.rows };
+    });
+  });
+
+  /**
+   * Las empresas donde el usuario tiene acceso efectivo.
+   *
+   * Es la ruta que faltaba para que alguien pudiera **entrar** a NEXO: sin ella
+   * la consola no pasa del login, porque `GET /companies/current` exige ya saber
+   * el id y mandarlo en la cabecera.
+   *
+   * ## Por qué no puede apoyarse en RLS
+   *
+   * La política de `companies` es `id = app_company_id()` y acá todavía no hay
+   * empresa en contexto: la consulta devolvería cero filas siempre. Aflojar la
+   * política —`app_company_id() IS NULL OR …`— es exactamente lo que la ADR-010
+   * evitó, porque convertiría cualquier olvido de contexto en un listado de toda
+   * la cartera del estudio.
+   *
+   * En cambio se usa `user_companies()`, SECURITY DEFINER, que deriva el usuario
+   * de `app.actor_id` y **no acepta un uuid por parámetro**: preguntar por la
+   * cartera de otro no es una operación que exista. Ver la migración 0045.
+   *
+   * ## Autorización
+   *
+   * No se creó un permiso nuevo. Se filtra por `company:read`, que es el mismo
+   * que exige `GET /companies/current` para mostrar **una** empresa; pedir otro
+   * para mostrar la lista sería un segundo modelo para la misma pregunta.
+   *
+   * Y se aplica por fila, no como puerta: un rol sin `company:read` no ve esa
+   * empresa. Es el criterio de siempre —lo que no está concedido no existe— y no
+   * convierte al endpoint en un oráculo que distinga «no tenés permiso» de «esa
+   * empresa no es tuya».
+   */
+  app.get('/companies', async (request) => {
+    const auth = requireAuth(request);
+    const query = z
+      .object({
+        organizationId: z.string().uuid().optional(),
+        // `si`/`no` y no un booleano: `z.coerce.boolean()` convierte la cadena
+        // "false" en `true` —cualquier texto no vacío es verdadero en
+        // JavaScript—, así que un flag que por defecto es `true` no se podría
+        // apagar nunca desde la query string.
+        incluirArchivadas: z.enum(['si', 'no']).default('no'),
+      })
+      .parse(request.query);
+
+    return withoutCompany(`user:${auth.user.userId}`, async (tx) => {
+      const result = await tx.query<{ roles: string[] }>(
+        `SELECT uc.id, uc.legal_name AS "legalName", uc.cuit,
+                uc.entity_type AS "entityType", uc.jurisdiction, uc.regulator,
+                uc.fiscal_year_end AS "fiscalYearEnd", uc.status,
+                uc.organization_id AS "organizationId",
+                uc.organization_name AS "organizationName",
+                uc.roles
+           FROM user_companies() uc
+          WHERE ($1::uuid IS NULL OR uc.organization_id = $1::uuid)
+            AND ($2 = false OR uc.status = 'ACTIVE')
+            -- Autorización por fila: al menos un rol del usuario en esa empresa
+            -- tiene que conceder company:read.
+            AND EXISTS (
+                  SELECT 1
+                    FROM roles r
+                    JOIN role_permissions rp ON rp.role_id = r.id
+                    JOIN permissions p ON p.id = rp.permission_id
+                   WHERE r.code = ANY (uc.roles) AND p.code = 'company:read')
+          ORDER BY uc.organization_name, uc.legal_name`,
+        [query.organizationId ?? null, query.incluirArchivadas === 'no'],
+      );
+
+      // Mismo criterio que `requireCompany`, aplicado antes: un rol que exige
+      // segundo factor no ve nada mientras no lo tenga configurado. Se corta acá
+      // en vez de filtrar en silencio para que el mensaje diga qué hacer.
+      const exigenMfa = result.rows.some((fila) =>
+        fila.roles.some((rol) => ROLES_REQUIRING_MFA.has(rol)),
+      );
+      if (!auth.user.mfaEnabled && exigenMfa) {
+        throw new HttpError(
+          403,
+          'MFA_SETUP_REQUIRED',
+          'Tu rol exige segundo factor. Configuralo en /auth/mfa/setup antes de continuar.',
+        );
+      }
+
+      // Una lista vacía es una respuesta, no un error: un usuario recién dado de
+      // alta todavía no tiene empresas asignadas.
+      return { companies: result.rows };
     });
   });
 
@@ -111,7 +203,9 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
       })
       .parse(request.body);
 
-    return withoutCompany(`user:${auth.user.userId}`, async (tx) => {
+    const actorId = `user:${auth.user.userId}`;
+
+    return withoutCompany(actorId, async (tx) => {
       const level = await tx.query<{ organization_level: string | null }>(
         'SELECT organization_level($1, $2)',
         [auth.user.userId, params.organizationId],
@@ -128,14 +222,25 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
       if (existing.rowCount! > 0) throw conflict('Ya existe un usuario con ese email');
 
       const created = await tx.query<{ id: string }>(
-        'INSERT INTO users (email, full_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-        [body.email, body.fullName, await hashPassword(body.password)],
+        // `created_by` en la fila, y no un evento en una bitácora aparte: quién
+        // dio de alta a una persona es un hecho de la fila, y `audit_logs` exige
+        // `company_id NOT NULL` — un usuario recién creado todavía no pertenece
+        // a ninguna empresa.
+        //
+        // Lo que de verdad importa auditar —que alguien recibió acceso a la
+        // contabilidad de una empresa— ya lo registra el trigger
+        // `audit_company_role` con ROL_OTORGADO, y ese sí lleva la empresa. No
+        // se duplica el evento.
+        `INSERT INTO users (email, full_name, password_hash, created_by)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [body.email, body.fullName, await hashPassword(body.password), actorId],
       );
       const userId = created.rows[0]!.id;
 
       await tx.query(
-        'INSERT INTO organization_members (organization_id, user_id, level) VALUES ($1, $2, $3)',
-        [params.organizationId, userId, body.level],
+        `INSERT INTO organization_members (organization_id, user_id, level, created_by)
+         VALUES ($1, $2, $3, $4)`,
+        [params.organizationId, userId, body.level, actorId],
       );
 
       return { id: userId };

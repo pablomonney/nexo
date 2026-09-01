@@ -51,6 +51,11 @@ const CHECKS = [
   ['accounting_closures', 'ac_completado_completo', 'Un cierre COMPLETADO dice con qué cerró'],
   ['accounting_closures', 'ac_apertura_solo_sobre_cierre_completo', 'A-13: la apertura nace de un cierre'],
   ['accounts', 'accounts_resultado_es_pn_imputable', 'La cuenta de resultado es PN e imputable'],
+  ['parties', 'parties_documento_coherente', 'Sin documento solo si se declaró SIN_IDENTIFICAR'],
+  ['parties', 'parties_documento_forma', 'CUIT y CUIL de once dígitos; DNI de hasta ocho'],
+  ['products', 'products_gravado_con_impuesto', 'Un producto gravado dice qué impuesto le aplica'],
+  ['products', 'products_servicio_sin_stock', 'Un servicio no tiene existencias'],
+  ['tax_transaction_lines', 'ttl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
   ['note_figures', 'nf_con_origen', 'A-2: una cifra con importe tiene linaje detrás'],
@@ -73,6 +78,14 @@ const TRIGGERS = [
   ['journal_entries', 'journal_entries_decision_coherente', 'A-10: la decisión es de esta empresa y no es de PRUEBA'],
   ['journal_entry_lines', 'jel_entry_consistent', 'Debe = Haber verificado al COMMIT'],
   ['journal_entry_lines', 'jel_account_valid', 'CANDADO 7: cuenta imputable y dimensiones'],
+  ['tax_transactions', 'tt_party_coherente', '0047: no se vincula un tercero con otro CUIT'],
+  ['parties', 'parties_no_delete', 'Un tercero con movimientos se archiva, no se borra'],
+  ['party_roles', 'party_roles_no_delete', 'Un rol declarado no desaparece sin rastro'],
+  ['products', 'products_cuentas_coherentes', '0048: la cuenta sugerida es imputable y del tipo correcto'],
+  ['products', 'products_no_delete', 'Un producto facturado se archiva, no se borra'],
+  ['tax_transaction_lines', 'ttl_renglones_cierran', '0049: el detalle cierra con la cabecera (diferido)'],
+  ['tax_transactions', 'tt_renglones_cierran', '0049: cambiar la cabecera no descuadra el detalle'],
+  ['tax_transaction_lines', 'ttl_editables', 'El detalle de un comprobante imputado no se edita'],
   ['ledger_movements', 'ledger_movements_immutable', 'El Mayor no se edita ni se borra'],
   ['accounting_closures', 'accounting_closures_inmutable', 'Lo que fundamentó un cierre no cambia'],
   ['accounting_closures', 'accounting_closures_no_delete', 'Un cierre no se borra'],
@@ -91,6 +104,10 @@ const TRIGGERS = [
   ['user_company_roles', 'user_company_roles_audit', 'Dar o quitar acceso a una empresa deja su entrada en la bitácora'],
   ['accounting_decisions', 'accounting_decisions_supersede_coherente', 'Una corrección es de la misma empresa y del mismo comprobante'],
   ['arca_query_log', 'arca_query_log_credencial_coherente', 'La credencial que firmó una consulta es de esa empresa'],
+  // El guard anterior era `status <> 'IMPUTADO'` en el handler, y nadie escribe
+  // ese estado: la condición nunca era falsa y el candado estaba apagado desde
+  // la 0016. Ahora pregunta por el hecho, y desde la base.
+  ['documents', 'documents_anulacion_sin_operacion', 'Un documento que funda una operación fiscal no se anula'],
 ];
 
 /** Índices únicos que sostienen una unicidad de negocio. */
@@ -105,6 +122,26 @@ const INDICES = [
   ['accounting_decisions_una_vigente', 'Una decisión vigente por operación fiscal'],
   ['notes_numero_vigente', 'Un número de nota por estado, entre las no supersedidas'],
   ['notes_una_sucesora', 'Una nota reemplaza como mucho a una anterior'],
+  ['parties_documento_unico', 'Un documento, un tercero, por empresa'],
+  ['products_code_unico', 'Un código, un producto, por empresa'],
+];
+
+/**
+ * Claves foráneas que llevan la empresa **dentro de la clave**.
+ *
+ * Una FK simple a `parties (id)` dejaría que una empresa impute un movimiento
+ * al tercero de otra: el uuid existe y la restricción lo aceptaría. RLS no lo
+ * impide, porque las restricciones foráneas se verifican con privilegios del
+ * sistema y ven la fila igual. La única defensa es que la empresa forme parte
+ * de la clave referenciada.
+ */
+const FK_CON_EMPRESA = [
+  ['journal_entry_lines', 'jel_party_fk', 'Un asiento no se imputa al tercero de otra empresa'],
+  ['tax_transactions', 'tt_party_fk', 'Un comprobante no se vincula al tercero de otra empresa'],
+  ['products', 'products_cuenta_venta_fk', 'Un producto no apunta a la cuenta de venta de otra empresa'],
+  ['products', 'products_cuenta_compra_fk', 'Un producto no apunta a la cuenta de compra de otra empresa'],
+  ['tax_transaction_lines', 'ttl_comprobante_fk', 'Un renglón no cuelga del comprobante de otra empresa'],
+  ['tax_transaction_lines', 'ttl_producto_fk', 'Un renglón no cita el producto de otra empresa'],
 ];
 
 /**
@@ -118,6 +155,11 @@ const RLS_FORZADO = [
   'notes', 'note_figures',
   'ledger_movements', 'account_balances', 'accounting_closures', 'accounting_decisions',
   'rule_applications', 'audit_logs', 'tax_transactions', 'ai_predictions',
+  // El maestro de terceros (0047). Es el dato comercial más sensible que tiene
+  // una empresa: a quién le compra, a quién le vende y cuánto le debe.
+  'parties', 'party_roles',
+  // El maestro de productos (0048): precios, márgenes y costos de la empresa.
+  'products', 'tax_transaction_lines',
 ];
 
 /**
@@ -132,6 +174,29 @@ const VISTAS_INVOKER = [
   'documents_pendientes', 'predictions_pendientes', 'company_arca_credentials_public',
   'statement_package',
   'ai_answer_metrics',
+  // La bandeja de trabajo (0045). Lee veinte tablas con RLS forzado: sin
+  // `security_invoker` repartiría el trabajo pendiente de todas las empresas.
+  'work_queue',
+  // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
+  // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
+  'party_balances',
+  // Qué se movió de cada producto (0049). Son precios y volúmenes: sin
+  // `security_invoker` mostraría el negocio de las demás empresas.
+  'product_movements',
+];
+
+/**
+ * Funciones `SECURITY DEFINER` y la forma que las hace seguras.
+ *
+ * Una función privilegiada corre con los permisos de su dueño: lo que la vuelve
+ * segura no es el `GRANT`, es **qué puede recibir**. `user_companies()` no toma
+ * argumentos a propósito — deriva el usuario de `app.actor_id`— y agregarle un
+ * `p_user_id` la convertiría en un oráculo para preguntar por la cartera de
+ * cualquier otro usuario del estudio. Que la firma sea vacía es el candado, y
+ * por eso se verifica acá y no solo en un test.
+ */
+const FUNCIONES_PRIVILEGIADAS = [
+  ['user_companies', '', 'Sin parámetros: no se le puede preguntar por otro usuario'],
 ];
 
 export async function verificarEstructura(client) {
@@ -164,6 +229,21 @@ export async function verificarEstructura(client) {
     anotar('ÍNDICE', nombre, que, indices.has(nombre));
   }
 
+  // No alcanza con que la clave foránea exista: tiene que llevar `company_id`
+  // como primera columna. Una FK con ese nombre pero apuntando solo al `id`
+  // pasaría un chequeo de existencia y dejaría el hueco abierto igual.
+  const conEmpresa = await client.query(
+    `SELECT c.conname AS nombre
+       FROM pg_constraint c
+       JOIN pg_attribute a
+         ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+      WHERE c.contype = 'f' AND a.attname = 'company_id'`,
+  );
+  const fks = new Set(conEmpresa.rows.map((r) => r.nombre));
+  for (const [tabla, nombre, que] of FK_CON_EMPRESA) {
+    anotar('FK + EMPRESA', `${tabla}.${nombre}`, que, fks.has(nombre));
+  }
+
   const forzadas = await existentes(
     `SELECT c.relname AS nombre FROM pg_class c
       WHERE c.relrowsecurity AND c.relforcerowsecurity`,
@@ -178,6 +258,15 @@ export async function verificarEstructura(client) {
   );
   for (const vista of VISTAS_INVOKER) {
     anotar('VISTA', vista, 'security_invoker: no saltea el RLS de abajo', invoker.has(vista));
+  }
+
+  const privilegiadas = await client.query(
+    `SELECT proname AS nombre, pg_get_function_arguments(oid) AS args, prosecdef
+       FROM pg_proc WHERE prosecdef`,
+  );
+  for (const [nombre, firma, que] of FUNCIONES_PRIVILEGIADAS) {
+    const fila = privilegiadas.rows.find((r) => r.nombre === nombre);
+    anotar('FUNCIÓN', `${nombre}(${firma})`, que, fila !== undefined && fila.args === firma);
   }
 
   // El rol de la aplicación no puede saltear el RLS. Es la condición de la que

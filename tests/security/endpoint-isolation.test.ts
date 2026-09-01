@@ -35,7 +35,22 @@ interface Actor {
  * aparte — un endpoint que se agregue sin declararse acá entra al barrido, que
  * es lo que se quiere.
  */
-const STUDIO_SCOPED = new Set(['GET /organizations', 'POST /organizations']);
+const STUDIO_SCOPED = new Set([
+  'GET /organizations',
+  'POST /organizations',
+  /**
+   * `GET /companies` es la ruta con la que se **elige** empresa: corre antes de
+   * que haya una, así que ignora `X-Company-Id` por completo y el barrido —que
+   * mide "2xx con una empresa ajena en la cabecera"— no dice nada sobre ella.
+   *
+   * Su aislamiento se prueba donde corresponde, en `aislamiento-lectura.test.ts`
+   * (S-10): por HTTP cada usuario ve solo lo suyo, y por SQL directo
+   * `user_companies()` devuelve vacío sin actor, con un actor que no es persona
+   * y con uno mal formado — y no acepta un uuid por parámetro con el que
+   * preguntar por la cartera de otro.
+   */
+  'GET /companies',
+]);
 
 /**
  * Rutas que sirven contenido sin ningún dato y por eso no se autentican.

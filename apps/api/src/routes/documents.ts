@@ -33,6 +33,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, conflictoTipado, notFound } from '../http/errors.js';
+import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 
 const store = new FilesystemDocumentStore(config.documents.storagePath);
 
@@ -165,13 +166,16 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       .object({
         soloPendientes: z.coerce.boolean().default(false),
         limite: z.coerce.number().int().min(1).max(200).default(50),
+        cursor: z.string().max(512).optional(),
       })
       .parse(request.query);
+
+    const [cursorFecha, cursorId] = parametrosDeCorte(corteDe(query.cursor));
 
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
-        const result = await tx.query(
+        const result = await tx.query<{ id: string; recibidoEn: Date }>(
           `SELECT id, original_name AS "nombre", content_type AS "tipo", status,
                   received_at AS "recibidoEn", extraction_id AS "extractionId",
                   engine AS "motor", extraccion_disponible AS "extraccionDisponible",
@@ -183,11 +187,20 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
             WHERE company_id = $1
               AND ($2 = false OR tiene_hallazgo_bloqueante OR tiene_duplicado_sin_resolver
                    OR extraccion_disponible IS NOT TRUE)
-            ORDER BY received_at DESC
-            LIMIT $3`,
-          [tenant.companyId, query.soloPendientes, query.limite],
+              -- Keyset descendente: el desempate por id hace el orden total, así
+              -- que una inserción entre páginas no duplica ni saltea filas.
+              AND ($3::timestamptz IS NULL
+                   OR (received_at, id) < ($3::timestamptz, $4::uuid))
+            ORDER BY received_at DESC, id DESC
+            LIMIT $5`,
+          [tenant.companyId, query.soloPendientes, cursorFecha, cursorId, query.limite + 1],
         );
-        return { documentos: result.rows };
+
+        const pagina = armarPagina(result.rows, query.limite, (fila) => ({
+          fecha: fila.recibidoEn,
+          id: fila.id,
+        }));
+        return { documentos: pagina.items, cursor: pagina.cursor, limite: pagina.limite };
       },
     );
   });
@@ -381,13 +394,34 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (body.resolucion === 'ES_DUPLICADO') {
-        await tx.query(
-          `UPDATE documents
-              SET status = 'ANULADO', voided_at = now(), voided_by = $2,
-                  void_reason = $3
-            WHERE id = $1 AND status <> 'IMPUTADO'`,
-          [params.documentId, actorId, `Duplicado confirmado: ${body.motivo}`],
-        );
+        // El candado ya no vive acá: lo aplica el trigger
+        // `documents_anulacion_sin_operacion` (migración 0046), que pregunta si
+        // existe una operación fiscal fundada en el documento.
+        //
+        // La condición anterior era `status <> 'IMPUTADO'`, y **nunca era
+        // falsa**: nadie escribe ese estado. El candado estaba apagado desde la
+        // 0016. Se movió a la base para que valga también por SQL directo, y se
+        // cambió por la pregunta correcta: no importa qué diga la columna,
+        // importa si la operación existe.
+        try {
+          await tx.query(
+            `UPDATE documents
+                SET status = 'ANULADO', voided_at = now(), voided_by = $2,
+                    void_reason = $3
+              WHERE id = $1 AND status <> 'ANULADO'`,
+            [params.documentId, actorId, `Duplicado confirmado: ${body.motivo}`],
+          );
+        } catch (error) {
+          const fallo = error as { message?: string };
+          if ((fallo.message ?? '').includes('ya funda una operación fiscal')) {
+            throw conflictoTipado(
+              'DOCUMENTO_CON_OPERACION',
+              'El documento ya produjo una operación fiscal: no se anula. ' +
+                'El duplicado queda marcado igual, pero corregir la operación es otro camino.',
+            );
+          }
+          throw error;
+        }
       }
 
       await recordAudit(tx, tenant.companyId, {

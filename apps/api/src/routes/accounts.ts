@@ -241,6 +241,19 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
              VALUES ($1, $2, $3, $4) RETURNING id`,
             [tenant.companyId, body.code, body.name, body.parentId ?? null],
           );
+
+          // Un centro de costo es una dimensión contable: se cita como evidencia
+          // de una afectación fiscal. Crear uno sin dejar constancia era una de
+          // las escrituras sin auditoría que encontró el barrido de la FASE 4.
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'CREAR_CENTRO_DE_COSTO',
+            objectType: 'cost_centers',
+            objectId: result.rows[0]!.id,
+            ip: clientIp(request),
+            newValue: { code: body.code, name: body.name },
+          });
           return result.rows[0]!.id;
         },
       );

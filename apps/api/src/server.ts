@@ -22,6 +22,10 @@ import { vatRoutes } from './routes/vat.js';
 import { periodRoutes } from './routes/periods.js';
 import { predictionRoutes } from './routes/predictions.js';
 import { studioRoutes } from './routes/studio.js';
+import { workQueueRoutes } from './routes/work-queue.js';
+import { auditRoutes } from './routes/audit.js';
+import { partyRoutes } from './routes/parties.js';
+import { productRoutes } from './routes/products.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -105,6 +109,8 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(authRoutes);
   await app.register(studioRoutes);
   await app.register(accountRoutes);
+  await app.register(partyRoutes);
+  await app.register(productRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
@@ -119,6 +125,8 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(bankRoutes);
   await app.register(statementRoutes);
   await app.register(noteRoutes);
+  await app.register(workQueueRoutes);
+  await app.register(auditRoutes);
 
   return app;
 }

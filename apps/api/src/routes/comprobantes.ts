@@ -34,7 +34,22 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
+import {
+  badRequest, conflict, conflictoTipado, notFound, unprocessable,
+} from '../http/errors.js';
+import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
+
+/** `YYYY-MM-DD` o nada. Se valida acá para no castear texto libre en la consulta. */
+const fechaOpcional = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha en formato YYYY-MM-DD')
+  .optional();
+
+/** Lo que devuelve una fila del listado. Solo se tipa lo que la paginación usa. */
+interface FilaOperacion {
+  readonly id: string;
+  readonly fecha: string;
+}
 
 /** Importe decimal como texto. Nunca `number`: un JSON con float ya perdió. */
 const importe = z
@@ -302,6 +317,134 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  /**
+   * El libro de comprobantes de la empresa.
+   *
+   * Hasta acá solo se llegaba a una operación fiscal **por el documento que la
+   * originó**, de a una. Un contador que quiere ver las compras de julio tenía
+   * que conocer de antemano el id de cada documento; sin este listado no hay
+   * revisión, ni control cruzado, ni forma de encontrar lo que se cargó mal.
+   *
+   * ## El permiso es `journal_entry:read`, y no uno nuevo
+   *
+   * `docs/OPERACION.md` §E.2 recomendaba crear `tax_transaction:read`. Al
+   * implementarlo apareció que ya existe el permiso correcto y que crear otro
+   * habría sido el error: **todas** las lecturas de una operación fiscal —esta
+   * misma ruta por documento, la afectación, la decisión y su historial— exigen
+   * hoy `journal_entry:read`. En este esquema ese permiso significa «leer la
+   * cadena contable y fiscal», y lo tienen ADMINISTRADOR, AUDITOR, CONTADOR y
+   * SOLO_LECTURA — no USUARIO_EMPRESA ni CARGADOR, que es exactamente el corte
+   * que se buscaba.
+   *
+   * ## Los dos sellos van separados
+   *
+   * `constatacion` y `constatacionOrigen` se devuelven los dos, siempre. Un
+   * `OK` declarado por una persona y un `OK` que contestó ARCA valen distinto
+   * (§11), y fundirlos en una sola columna es cómo se pierde esa diferencia.
+   */
+  app.get('/tax-transactions', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'journal_entry:read');
+    const auth = requireAuth(request);
+
+    const query = z
+      .object({
+        direccion: z.enum(['COMPRAS', 'VENTAS']).optional(),
+        desde: fechaOpcional,
+        hasta: fechaOpcional,
+        cuitContraparte: z.string().regex(/^\d{11}$/).optional(),
+        cbteTipo: z.coerce.number().int().min(1).max(999).optional(),
+        constatacion: z.enum(['OK', 'WARN', 'FAIL', 'NO_VERIFICABLE', 'NO_CONSULTADO']).optional(),
+        constatacionOrigen: z
+          .enum(['NO_CONSULTADO', 'ARCA', 'DECLARACION_PROFESIONAL', 'ORIGEN_NO_REGISTRADO'])
+          .optional(),
+        periodoId: z.string().uuid().optional(),
+        documentId: z.string().uuid().optional(),
+        conAfectacion: z.enum(['si', 'no']).optional(),
+        conDecision: z.enum(['si', 'no']).optional(),
+        limite: z.coerce.number().int().min(1).max(200).default(50),
+        cursor: z.string().max(512).optional(),
+      })
+      .parse(request.query);
+
+    const [cursorFecha, cursorId] = parametrosDeCorte(corteDe(query.cursor));
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const result = await tx.query<FilaOperacion>(
+          `SELECT t.id, t.direction AS direccion, t.cbte_tipo AS "cbteTipo",
+                  t.punto_venta AS "puntoVenta", t.cbte_numero::text AS numero,
+                  t.cbte_fecha::text AS fecha, t.cuit_contraparte AS "cuitContraparte",
+                  t.razon_social AS "razonSocial", t.condicion_iva AS "condicionIva",
+                  t.neto::text AS neto, t.iva::text AS iva,
+                  t.no_gravado::text AS "noGravado", t.exento::text AS exento,
+                  t.percepciones::text AS percepciones, t.total::text AS total,
+                  t.constatacion, t.constatacion_origen AS "constatacionOrigen",
+                  t.constatacion_at AS "constatacionAt",
+                  t.document_id AS "documentId", t.entry_id AS "entryId",
+                  t.period_id AS "periodoId", t.created_at AS "creadoEn",
+                  a.afectacion,
+                  a.origen AS "afectacionOrigen",
+                  d.id AS "decisionId", d.estado AS "decisionEstado",
+                  d.resultado AS "decisionResultado"
+             FROM tax_transactions t
+             -- Toda unión lleva la igualdad de empresa explícita. RLS ya filtra;
+             -- esto hace que una fila cruzada sea imposible aunque no filtrara.
+             LEFT JOIN tax_affectations a
+                    ON a.tax_transaction_id = t.id AND a.company_id = t.company_id
+             LEFT JOIN LATERAL (
+                    SELECT ad.id, ad.estado, ad.resultado
+                      FROM accounting_decisions ad
+                     WHERE ad.tax_transaction_id = t.id
+                       AND ad.company_id = t.company_id
+                       AND ad.estado <> 'SUPERSEDIDA'
+                     ORDER BY ad.created_at DESC
+                     LIMIT 1) d ON true
+            WHERE t.company_id = $1
+              AND ($2::text  IS NULL OR t.direction = $2)
+              AND ($3::date  IS NULL OR t.cbte_fecha >= $3::date)
+              AND ($4::date  IS NULL OR t.cbte_fecha <= $4::date)
+              AND ($5::text  IS NULL OR t.cuit_contraparte = $5)
+              AND ($6::int   IS NULL OR t.cbte_tipo = $6)
+              AND ($7::text  IS NULL OR t.constatacion = $7)
+              AND ($8::text  IS NULL OR t.constatacion_origen = $8)
+              AND ($9::uuid  IS NULL OR t.period_id = $9::uuid)
+              AND ($10::uuid IS NULL OR t.document_id = $10::uuid)
+              AND ($11::bool IS NULL OR ($11 = (a.id IS NOT NULL)))
+              AND ($12::bool IS NULL OR ($12 = (d.id IS NOT NULL)))
+              AND ($13::date IS NULL
+                   OR (t.cbte_fecha, t.id) < ($13::date, $14::uuid))
+            ORDER BY t.cbte_fecha DESC, t.id DESC
+            LIMIT $15`,
+          [
+            tenant.companyId,
+            query.direccion ?? null,
+            query.desde ?? null,
+            query.hasta ?? null,
+            query.cuitContraparte ?? null,
+            query.cbteTipo ?? null,
+            query.constatacion ?? null,
+            query.constatacionOrigen ?? null,
+            query.periodoId ?? null,
+            query.documentId ?? null,
+            query.conAfectacion === undefined ? null : query.conAfectacion === 'si',
+            query.conDecision === undefined ? null : query.conDecision === 'si',
+            cursorFecha,
+            cursorId,
+            query.limite + 1,
+          ],
+        );
+
+        const pagina = armarPagina(result.rows, query.limite, (fila) => ({
+          fecha: fila.fecha,
+          id: fila.id,
+        }));
+        return { operaciones: pagina.items, cursor: pagina.cursor, limite: pagina.limite };
+      },
+    );
+  });
+
   app.get('/documents/:documentId/tax-transaction', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'journal_entry:read');
@@ -541,6 +684,252 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
       });
     },
   );
+
+  /**
+   * Resuelve la contraparte de un comprobante contra el maestro de terceros.
+   *
+   * No corrige el comprobante. `cuit_contraparte` y `razon_social` siguen
+   * diciendo lo que dice el papel; esto afirma **a quién corresponden**. Si el
+   * tercero elegido tiene un CUIT distinto del declarado, el trigger
+   * `tt_party_coherente` (migración 0047) lo rechaza: vincular al proveedor
+   * equivocado es un error invisible —el subdiario sigue saliendo bien— que
+   * después aparece como una cuenta corriente que crece sin motivo.
+   *
+   * `null` desvincula. Es una operación legítima: alguien resolvió mal y lo
+   * corrige. Queda en la bitácora como cualquier otra modificación.
+   */
+  app.post('/tax-transactions/:taxTransactionId/party', async (request) => {
+    const tenant = await requireCompany(request);
+    // Escribe sobre el comprobante, y elige del maestro: los dos permisos.
+    requirePermission(tenant, 'tax_affectation:declare');
+    requirePermission(tenant, 'party:read');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+    const body = z.object({ partyId: z.string().uuid().nullable() }).parse(request.body);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const antes = await tx.query<{ party_id: string | null; cuit: string | null }>(
+          `SELECT party_id, cuit_contraparte AS cuit FROM tax_transactions
+            WHERE id = $1 AND company_id = $2`,
+          [taxTransactionId, tenant.companyId],
+        );
+        if (antes.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+        try {
+          await tx.query(
+            'UPDATE tax_transactions SET party_id = $3 WHERE id = $1 AND company_id = $2',
+            [taxTransactionId, tenant.companyId, body.partyId],
+          );
+        } catch (error) {
+          const failure = error as { code?: string; message?: string };
+          // 23514 llega del trigger de coherencia; 23503 de la clave foránea con
+          // empresa incluida —un tercero de otra empresa no existe desde acá—.
+          // Se reconoce por el texto y se responde con el propio: el mensaje de
+          // PostgreSQL no se reenvía al cliente, como en el resto del sistema.
+          if (failure.code === '23514' && (failure.message ?? '').includes('No se vincula')) {
+            throw unprocessable(
+              'TERCERO_NO_COINCIDE',
+              'El tercero elegido tiene un CUIT distinto del que declara el comprobante. ' +
+                'Vinculá el tercero que corresponde, o corregí el comprobante si el error está ahí.',
+            );
+          }
+          if (failure.code === '23503') throw notFound('El tercero no existe en esta empresa');
+          throw error;
+        }
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId: `user:${auth.user.userId}`,
+          action: 'VINCULAR_TERCERO',
+          objectType: 'tax_transactions',
+          objectId: taxTransactionId,
+          oldValue: { partyId: antes.rows[0]!.party_id },
+          newValue: { partyId: body.partyId },
+          motivo:
+            body.partyId === null
+              ? 'Se desvincula el tercero'
+              : 'Se resuelve la contraparte contra el maestro',
+          ip: clientIp(request),
+          userAgent: request.headers['user-agent'] ?? null,
+        });
+
+        return { taxTransactionId, partyId: body.partyId };
+      },
+    );
+  });
+
+  app.get('/tax-transactions/:taxTransactionId/lines', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'journal_entry:read');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const cabecera = await tx.query(
+          `SELECT neto::text, iva::text, exento::text, no_gravado::text AS "noGravado",
+                  total::text
+             FROM tax_transactions WHERE id = $1 AND company_id = $2`,
+          [taxTransactionId, tenant.companyId],
+        );
+        if (cabecera.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+        const renglones = await tx.query(
+          `SELECT l.id, l.line_no AS "linea", l.product_id AS "productoId",
+                  p.code AS "productoCodigo", l.descripcion,
+                  l.cantidad::text, l.unidad, l.precio_unitario::text AS "precioUnitario",
+                  l.descuento::text, l.tratamiento, l.neto::text, l.iva::text
+             FROM tax_transaction_lines l
+             LEFT JOIN products p ON p.id = l.product_id AND p.company_id = l.company_id
+            WHERE l.tax_transaction_id = $1 AND l.company_id = $2
+            ORDER BY l.line_no`,
+          [taxTransactionId, tenant.companyId],
+        );
+
+        return {
+          cabecera: cabecera.rows[0],
+          renglones: renglones.rows,
+          /**
+           * Que no haya renglones no es un defecto del comprobante. Va dicho en
+           * la respuesta y no en la documentación porque es donde lo lee quien
+           * se pregunta por qué la tabla está vacía.
+           */
+          alcance:
+            renglones.rowCount === 0
+              ? 'Este comprobante no tiene detalle cargado. Es válido igual: la cabecera es lo ' +
+                'que declara el papel. El detalle hace falta para margen y stock, no para el IVA.'
+              : 'La suma de los renglones coincide con la cabecera: lo verifica la base al confirmar.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Reemplaza el detalle completo de un comprobante.
+   *
+   * Se reemplaza entero y no se editan renglones sueltos por una razón
+   * aritmética: los renglones tienen que cerrar contra la cabecera, y una
+   * edición parcial pasa por estados intermedios que no cierran. Mandar el
+   * detalle completo hace que la transacción entera sea el paso, y el candado
+   * diferido la verifica una sola vez al confirmar.
+   *
+   * Enviar una lista vacía borra el detalle. Es legítimo: alguien lo cargó mal
+   * y prefiere quedarse sin detalle antes que con uno falso.
+   */
+  app.put('/tax-transactions/:taxTransactionId/lines', async (request) => {
+    const tenant = await requireCompany(request);
+    // Mismo permiso que registrar la operación: es el mismo hecho, con más
+    // detalle. Un permiso propio dejaría a quien registra sin poder detallar.
+    requirePermission(tenant, 'journal_entry:create');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    const cantidad = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Cantidad con hasta cuatro decimales');
+    const precio = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Precio con hasta cuatro decimales');
+    const monto = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importe con hasta dos decimales');
+
+    const body = z
+      .object({
+        renglones: z
+          .array(
+            z.object({
+              productoId: z.string().uuid().nullish(),
+              descripcion: z.string().min(1).max(500),
+              cantidad,
+              unidad: z.string().min(1).max(30).default('UNIDAD'),
+              precioUnitario: precio,
+              descuento: monto.default('0'),
+              tratamiento: z.enum(['GRAVADO', 'EXENTO', 'NO_GRAVADO']).default('GRAVADO'),
+              neto: monto,
+              iva: monto.default('0'),
+            }),
+          )
+          .max(500),
+      })
+      .parse(request.body);
+
+    try {
+      return await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const existe = await tx.query(
+            'SELECT 1 FROM tax_transactions WHERE id = $1 AND company_id = $2',
+            [taxTransactionId, tenant.companyId],
+          );
+          if (existe.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+          await tx.query(
+            'DELETE FROM tax_transaction_lines WHERE tax_transaction_id = $1 AND company_id = $2',
+            [taxTransactionId, tenant.companyId],
+          );
+
+          let linea = 0;
+          for (const r of body.renglones) {
+            linea += 1;
+            await tx.query(
+              `INSERT INTO tax_transaction_lines
+                 (company_id, tax_transaction_id, line_no, product_id, descripcion,
+                  cantidad, unidad, precio_unitario, descuento, tratamiento, neto, iva)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+              [
+                tenant.companyId, taxTransactionId, linea, r.productoId ?? null,
+                r.descripcion, r.cantidad, r.unidad, r.precioUnitario,
+                r.descuento, r.tratamiento, r.neto, r.iva,
+              ],
+            );
+          }
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'DETALLAR_COMPROBANTE',
+            objectType: 'tax_transactions',
+            objectId: taxTransactionId,
+            newValue: { renglones: body.renglones.length },
+            motivo:
+              body.renglones.length === 0
+                ? 'Se borra el detalle del comprobante'
+                : 'Se carga el detalle del comprobante',
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return { taxTransactionId, renglones: body.renglones.length };
+        },
+      );
+    } catch (error) {
+      const fallo = error as { code?: string; message?: string };
+      const mensaje = fallo.message ?? '';
+      if (mensaje.includes('no cierran con la cabecera')) {
+        throw unprocessable(
+          'RENGLONES_NO_CIERRAN',
+          'La suma de los renglones no da los totales del comprobante. Cada tratamiento ' +
+            'suma en su columna: lo gravado al neto, lo exento al exento, lo no gravado al ' +
+            'no gravado. Sin tolerancia: un peso de diferencia es un concepto que falta.',
+        );
+      }
+      if (mensaje.includes('ya funda un asiento aprobado')) {
+        throw conflictoTipado(
+          'COMPROBANTE_IMPUTADO',
+          'El comprobante ya funda un asiento aprobado: su detalle no se edita. ' +
+            'La corrección va por contraasiento.',
+        );
+      }
+      if (fallo.code === '23503') {
+        throw notFound('Alguno de los productos no existe en esta empresa');
+      }
+      throw error;
+    }
+  });
 }
 
 /**

@@ -4,83 +4,144 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NEXO — consola operativa</title>
+<!--
+  Consola operativa de NEXO.
+
+  Un archivo. Sin build, sin framework, sin dependencias. Lo que hace es llamar
+  a la API y mostrar lo que devuelve, incluidos los rechazos.
+
+  Tres reglas que esta página no puede romper:
+
+    1. No calcula nada contable ni fiscal. Ni un saldo, ni una alícuota, ni una
+       afectación. Todo número que se ve acá lo devolvió la API.
+    2. No ofrece una acción que el backend fuera a rechazar por una condición
+       que la página ya conoce: sin el permiso, el botón no existe; con el
+       período cerrado, tampoco.
+    3. Nunca presenta una sugerencia de máquina con el mismo tratamiento que una
+       declaración profesional, ni una declaración como una respuesta de ARCA.
+       Distinto color, distinta etiqueta, distinto verbo.
+-->
 <style>
 :root{
-  --papel:#f7f7f5; --alto:#fff; --hund:#eeeeea;
-  --tinta:#14181d; --tinta2:#3d454e; --tinta3:#6b7480;
-  --linea:#dcdcd6; --acento:#1f5f5b; --acento-cl:#e3efed;
-  --mal:#a4243b; --mal-bg:#f8e7ea; --bien:#2f6b3f; --bien-bg:#e4f0e6;
-  --ojo:#a85a12; --ojo-bg:#fbeddd;
-  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  --papel:#f7f7f5; --alto:#fff; --hund:#eeeeea; --linea:#dcdcd4; --linea2:#c2c2b8;
+  --tinta:#16181b; --tinta2:#4a5057; --tinta3:#777d85;
+  --acento:#1e5f57; --acento-cl:#e2edea;
+  --bien:#245a3a; --bien-bg:#e6f0e9;
+  --mal:#8f2a3c;  --mal-bg:#f9e8ec;
+  --ojo:#7a5d0f;  --ojo-bg:#f7f1dc;
+  --ia:#5b3f8c;   --ia-bg:#efe9f7;
+  --mono:Consolas,"SF Mono",Menlo,monospace;
 }
-@media (prefers-color-scheme:dark){:root{
-  --papel:#12151a; --alto:#1a1e25; --hund:#0d1014;
-  --tinta:#e6e8ea; --tinta2:#b3bac2; --tinta3:#838d99;
-  --linea:#2b313a; --acento:#6fbdb4; --acento-cl:#16302f;
-  --mal:#e8919f; --mal-bg:#35191f; --bien:#7fc08e; --bien-bg:#16281a;
-  --ojo:#dfa663; --ojo-bg:#33230f;
-}}
+@media (prefers-color-scheme: dark){
+  :root{
+    --papel:#15181a; --alto:#1c2023; --hund:#101315; --linea:#2c3235; --linea2:#3d4448;
+    --tinta:#e9e7e1; --tinta2:#b0b5ba; --tinta3:#858c93;
+    --acento:#6fbfb0; --acento-cl:#17302d;
+    --bien:#7fc79b; --bien-bg:#16281e;
+    --mal:#e08a99;  --mal-bg:#2e181d;
+    --ojo:#d8b45e;  --ojo-bg:#2c2513;
+    --ia:#b39ae0;   --ia-bg:#221b33;
+  }
+}
 *{box-sizing:border-box}
 body{margin:0;background:var(--papel);color:var(--tinta);
- font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{border-bottom:1px solid var(--linea);padding:.9rem 1.4rem;display:flex;
- gap:1rem;align-items:baseline;flex-wrap:wrap;background:var(--alto)}
-header h1{font-size:1.05rem;margin:0;letter-spacing:-.01em}
-header .sub{color:var(--tinta3);font-size:.8rem}
-header .quien{margin-left:auto;font-family:var(--mono);font-size:.75rem;color:var(--tinta3)}
-main{max-width:1180px;margin:0 auto;padding:1.4rem}
-section{background:var(--alto);border:1px solid var(--linea);border-radius:6px;
- padding:1.1rem 1.2rem;margin-bottom:1rem}
-section[hidden]{display:none}
-h2{font-size:.95rem;margin:0 0 .2rem;letter-spacing:.01em}
-h2 .n{font-family:var(--mono);font-size:.72rem;color:var(--acento);margin-right:.5rem}
-.ayuda{color:var(--tinta3);font-size:.82rem;margin:.15rem 0 .9rem;max-width:74ch}
-label{display:block;font-size:.78rem;color:var(--tinta2);margin:.55rem 0 .2rem}
-input,select,textarea{width:100%;padding:.45rem .55rem;border:1px solid var(--linea);
- border-radius:4px;background:var(--papel);color:var(--tinta);font:inherit}
-input[type=file]{padding:.3rem}
-textarea{min-height:4.5rem;resize:vertical}
-.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 .8rem}
-button{margin-top:.8rem;padding:.45rem .9rem;border:1px solid var(--acento);
- border-radius:4px;background:var(--acento);color:var(--alto);font:inherit;cursor:pointer}
-button.sec{background:transparent;color:var(--acento)}
+     font:15px/1.55 "Segoe UI",system-ui,sans-serif}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem 1rem;
+       padding:.7rem 1.2rem;background:var(--alto);border-bottom:1px solid var(--linea)}
+h1{font-size:1.05rem;margin:0;letter-spacing:.14em}
+.sub{color:var(--tinta3);font-size:.8rem}
+.quien{margin-left:auto;font-size:.8rem;color:var(--tinta2)}
+.empresa-activa{font-weight:600;color:var(--acento)}
+nav{display:flex;flex-wrap:wrap;gap:.2rem;padding:.4rem 1.2rem;background:var(--alto);
+    border-bottom:1px solid var(--linea)}
+nav button{background:none;border:1px solid transparent;color:var(--tinta2);
+           padding:.3rem .65rem;border-radius:4px;font-size:.85rem;cursor:pointer}
+nav button:hover{background:var(--hund)}
+nav button[aria-current="true"]{background:var(--acento-cl);color:var(--acento);
+           border-color:var(--acento);font-weight:600}
+.miga{padding:.4rem 1.2rem;font-size:.8rem;color:var(--tinta3);background:var(--papel)}
+.miga b{color:var(--tinta2);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:1rem 1.2rem 4rem}
+section{background:var(--alto);border:1px solid var(--linea);border-radius:5px;
+        padding:1rem 1.2rem;margin-bottom:1rem}
+h2{font-size:1.02rem;margin:0 0 .3rem}
+h3{font-size:.9rem;margin:1.1rem 0 .4rem;color:var(--tinta2)}
+.ayuda{color:var(--tinta3);font-size:.84rem;margin:.2rem 0 .8rem;max-width:72ch}
+label{display:block;font-size:.76rem;color:var(--tinta2);margin:.5rem 0 .15rem}
+input,select,textarea{width:100%;padding:.35rem .5rem;background:var(--papel);
+       color:var(--tinta);border:1px solid var(--linea2);border-radius:4px;font:inherit;font-size:.87rem}
+textarea{min-height:3.5rem}
+.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem}
+.chk{display:inline-flex;align-items:center;gap:.3rem;margin:.15rem .6rem .15rem 0}
+button{background:var(--acento);color:#fff;border:0;border-radius:4px;
+       padding:.4rem .8rem;font:inherit;font-size:.85rem;cursor:pointer;margin:.5rem .35rem 0 0}
+button.sec{background:var(--hund);color:var(--tinta)}
 button:disabled{opacity:.45;cursor:not-allowed}
-button+button{margin-left:.5rem}
-pre{background:var(--hund);border:1px solid var(--linea);border-radius:4px;
- padding:.7rem;overflow:auto;max-height:22rem;font-family:var(--mono);font-size:.76rem;margin:.7rem 0 0}
-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:.7rem}
-th{text-align:left;font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
- letter-spacing:.07em;color:var(--tinta3);padding:.45rem .5rem;border-bottom:1px solid var(--linea)}
-td{padding:.4rem .5rem;border-bottom:1px solid var(--linea);vertical-align:top}
-tr:hover td{background:var(--hund)}
-.p{display:inline-block;font-family:var(--mono);font-size:.66rem;letter-spacing:.04em;
- padding:.1em .45em;border-radius:3px;border:1px solid}
-.p-bien{background:var(--bien-bg);color:var(--bien);border-color:var(--bien)}
-.p-mal{background:var(--mal-bg);color:var(--mal);border-color:var(--mal)}
-.p-ojo{background:var(--ojo-bg);color:var(--ojo);border-color:var(--ojo)}
+table{width:100%;border-collapse:collapse;font-size:.83rem;margin-top:.6rem}
+th,td{text-align:left;padding:.32rem .45rem;border-bottom:1px solid var(--linea);vertical-align:top}
+th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta3)}
+.tabla{overflow-x:auto}
+.clic{color:var(--acento);cursor:pointer;text-decoration:underline}
+.p{display:inline-block;font-size:.68rem;padding:.1em .4em;border-radius:3px;
+   border:1px solid currentColor;white-space:nowrap}
+.p-bien{background:var(--bien-bg);color:var(--bien)}
+.p-mal{background:var(--mal-bg);color:var(--mal)}
+.p-ojo{background:var(--ojo-bg);color:var(--ojo)}
+.p-ia{background:var(--ia-bg);color:var(--ia)}
 .p-neu{background:var(--hund);color:var(--tinta3);border-color:var(--linea)}
-.aviso{border-left:3px solid var(--ojo);background:var(--ojo-bg);color:var(--tinta);
- padding:.6rem .8rem;border-radius:4px;font-size:.82rem;margin:.7rem 0}
-.error{border-left-color:var(--mal);background:var(--mal-bg)}
-.clic{cursor:pointer;color:var(--acento);text-decoration:underline}
-.mono{font-family:var(--mono);font-size:.76rem}
+.aviso{background:var(--hund);border-left:3px solid var(--linea2);padding:.5rem .7rem;
+       margin:.6rem 0;border-radius:0 4px 4px 0;font-size:.85rem}
+.aviso.error{background:var(--mal-bg);border-left-color:var(--mal);color:var(--mal)}
+.aviso.ok{background:var(--bien-bg);border-left-color:var(--bien);color:var(--bien)}
+pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wrap;
+    word-break:break-word;max-height:22rem;overflow:auto}
+.mono{font-family:var(--mono);font-size:.78rem}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media (max-width:880px){.dos{grid-template-columns:1fr}}
+.evidencia{background:var(--hund);border:1px solid var(--linea);border-radius:4px;padding:.6rem;
+           max-height:26rem;overflow:auto}
+.evidencia img{max-width:100%;height:auto}
+.grupo{border:1px solid var(--linea);border-radius:4px;margin-bottom:.5rem}
+.grupo>summary{cursor:pointer;padding:.45rem .7rem;background:var(--hund);font-size:.85rem}
+.grupo>div{padding:.2rem .7rem .6rem}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.15rem .8rem;font-size:.84rem}
+.kv dt{color:var(--tinta3);font-size:.76rem}
+.kv dd{margin:0;font-family:var(--mono);font-size:.78rem;word-break:break-all}
 </style>
 </head>
 <body>
 
 <header>
   <h1>NEXO</h1>
-  <span class="sub">consola operativa — recorre el circuito, no lo reemplaza</span>
-  <span class="quien" id="quien"></span>
+  <span class="sub">consola operativa</span>
+  <span class="quien"><span id="quien"></span> · <span class="empresa-activa" id="empresa-activa">sin empresa</span></span>
 </header>
+
+<nav id="nav" hidden>
+  <button data-vista="inicio">Inicio</button>
+  <button data-vista="bandeja">Pendientes</button>
+  <button data-vista="documentos">Documentos</button>
+  <button data-vista="operaciones">Operaciones</button>
+  <button data-vista="terceros">Terceros</button>
+  <button data-vista="productos">Productos</button>
+  <button data-vista="asientos">Asientos</button>
+  <button data-vista="libros">Libros</button>
+  <button data-vista="estados">Estados y notas</button>
+  <button data-vista="cierre">Períodos y cierre</button>
+  <button data-vista="auditoria">Auditoría</button>
+  <button data-vista="config">Configuración</button>
+  <button data-vista="empresa" class="sec">Cambiar empresa</button>
+</nav>
+
+<div class="miga" id="miga" hidden></div>
 
 <main>
 
-<!-- ══ 0 · Sesión ══════════════════════════════════════════════════════════ -->
-<section id="s-login">
-  <h2><span class="n">00</span>Ingresar</h2>
-  <p class="ayuda">El mismo login que usa la API: contraseña y segundo factor. La
-    consola no guarda credenciales; la sesión vive en la cookie que emite el servidor.</p>
+<!-- ══ Ingresar ═══════════════════════════════════════════════════════════ -->
+<section id="v-login">
+  <h2>Ingresar</h2>
+  <p class="ayuda">El mismo login que usa la API. La consola no guarda credenciales:
+    la sesión vive en la cookie que emite el servidor.</p>
   <div class="fila">
     <div><label>Correo</label><input id="email" type="email" autocomplete="username"></div>
     <div><label>Contraseña</label><input id="pass" type="password" autocomplete="current-password"></div>
@@ -90,172 +151,376 @@ tr:hover td{background:var(--hund)}
   <div id="login-msg"></div>
 </section>
 
-<!-- ══ 1 · Empresa ═════════════════════════════════════════════════════════ -->
-<section id="s-empresa" hidden>
-  <h2><span class="n">01</span>Empresa</h2>
+<!-- ══ Empresa ════════════════════════════════════════════════════════════ -->
+<section id="v-empresa" hidden>
+  <h2>Empresa</h2>
   <p class="ayuda">Todo lo que sigue ocurre dentro de la empresa elegida. No es una
     preferencia de la pantalla: es la cabecera <span class="mono">X-Company-Id</span>,
-    y el servidor la rechaza si no tenés rol en ella.</p>
-  <label>Empresa</label>
-  <select id="empresa"></select>
-  <button id="b-empresa" class="sec">Usar esta empresa</button>
+    y el servidor la rechaza si no tenés rol en ella. Cambiar de empresa limpia el
+    trabajo en curso.</p>
+  <div class="tabla"><table id="t-empresas"><thead><tr>
+    <th>Empresa</th><th>CUIT</th><th>Tipo</th><th>Roles</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
   <div id="empresa-msg"></div>
 </section>
 
-<!-- ══ 2 · Documentos ══════════════════════════════════════════════════════ -->
-<section id="s-doc" hidden>
-  <h2><span class="n">02</span>Documentos</h2>
+<!-- ══ Inicio ═════════════════════════════════════════════════════════════ -->
+<section id="v-inicio" hidden>
+  <h2>Inicio</h2>
+  <p class="ayuda">Tres cuentas de hechos, no indicadores compuestos: qué requiere
+    atención, en qué período estás parado, y qué vence.</p>
+  <div id="inicio-resumen"></div>
+  <h3>Períodos del ejercicio</h3>
+  <div class="tabla"><table id="t-inicio-periodos"><thead><tr>
+    <th>Período</th><th>Desde</th><th>Hasta</th><th>Estado</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="inicio-msg"></div>
+</section>
+
+<!-- ══ Bandeja ════════════════════════════════════════════════════════════ -->
+<section id="v-bandeja" hidden>
+  <h2>Pendientes</h2>
+  <p class="ayuda">Lo que requiere intervención humana en esta empresa. Es una
+    proyección de estados que ya existen: un ítem desaparece cuando el hecho cambia,
+    no cuando alguien lo marca. <strong>Acá no se resuelve nada</strong>: cada fila
+    lleva a la pantalla donde sí se resuelve.</p>
+  <div class="fila">
+    <div><label>Categoría</label><select id="wq-cat">
+      <option value="">todas</option>
+      <option>BLOQUEADO</option><option>REQUIERE_REVISION</option>
+      <option>REQUIERE_DECLARACION</option><option>REQUIERE_EVIDENCIA</option>
+      <option>REQUIERE_CORRECCION</option><option>REQUIERE_FUENTE_EXTERNA</option>
+      <option>REQUIERE_APROBACION</option>
+    </select></div>
+    <div><label>Disponibilidad</label><select id="wq-disp">
+      <option value="">todas</option>
+      <option>ACCIONABLE</option><option>INFORMATIVO</option><option>BLOQUEADO_POR_ESTADO</option>
+    </select></div>
+    <div><label>Solo bloqueantes</label><select id="wq-bloq">
+      <option value="">no filtrar</option><option value="si">sí</option>
+    </select></div>
+  </div>
+  <button id="b-wq" class="sec">Actualizar</button>
+  <button id="b-wq-mas" class="sec" hidden>Ver más</button>
+  <div id="wq-resumen"></div>
+  <div id="wq-lista"></div>
+  <div id="wq-msg"></div>
+</section>
+
+<!-- ══ Documentos ═════════════════════════════════════════════════════════ -->
+<section id="v-documentos" hidden>
+  <h2>Documentos</h2>
   <p class="ayuda">Subir archiva y calcula el hash. La extracción corre sola; sin motor
-    de OCR configurado responde <span class="mono">SIN_MOTOR_OCR</span>, que no es lo
-    mismo que «no se encontró nada».</p>
-  <label>Archivo (PDF, JPG, PNG, XML, CSV, XLSX)</label>
-  <input id="archivo" type="file">
+    de OCR responde <span class="mono">SIN_MOTOR_OCR</span>, que no es lo mismo que
+    «no se encontró nada».</p>
+  <div class="fila">
+    <div><label>Archivo (PDF, JPG, PNG, XML, CSV, XLSX)</label><input id="archivo" type="file"></div>
+  </div>
   <button id="b-subir">Subir</button>
-  <button id="b-listar" class="sec">Actualizar lista</button>
+  <button id="b-doc-listar" class="sec">Actualizar</button>
+  <button id="b-doc-mas" class="sec" hidden>Ver más</button>
   <div id="doc-msg"></div>
-  <table id="t-doc"><thead><tr>
-    <th>Nombre</th><th>Tipo</th><th>Estado</th><th>SHA-256</th><th></th>
-  </tr></thead><tbody></tbody></table>
+  <div class="tabla"><table id="t-doc"><thead><tr>
+    <th>Nombre</th><th>Tipo</th><th>Estado</th><th>Confianza</th><th>Señales</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="doc-detalle" hidden>
+    <h3>Documento</h3>
+    <div class="dos">
+      <div>
+        <h3>Evidencia — el original</h3>
+        <div class="evidencia" id="doc-evidencia">
+          <span class="ayuda">Elegí un documento.</span>
+        </div>
+        <button id="b-doc-bajar" class="sec">Descargar el original</button>
+        <button id="b-reextraer" class="sec">Volver a leer</button>
+      </div>
+      <div>
+        <h3>Identificación</h3>
+        <dl class="kv" id="doc-kv"></dl>
+        <h3>Lo que se leyó</h3>
+        <div class="tabla"><table id="t-campos"><thead><tr>
+          <th>Campo</th><th>Valor</th><th>Método</th><th>Confianza</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+        <div id="doc-corregir" hidden>
+          <h3>Corregir un campo</h3>
+          <p class="ayuda">La corrección <strong>no pisa</strong> la lectura del motor:
+            se agrega con tu nombre al lado. Las dos quedan.</p>
+          <div class="fila">
+            <div><label>Campo</label><input id="corr-campo" readonly></div>
+            <div><label>Valor correcto</label><input id="corr-valor"></div>
+          </div>
+          <button id="b-corr-campo">Guardar corrección</button>
+          <button id="b-corr-cancelar" class="sec">Cancelar</button>
+        </div>
+        <div id="doc-duplicados"></div>
+      </div>
+    </div>
+    <div id="doc-detalle-msg"></div>
+  </div>
 </section>
 
-<!-- ══ 3 · El documento elegido ════════════════════════════════════════════ -->
-<section id="s-detalle" hidden>
-  <h2><span class="n">03</span>Lo que se leyó del documento</h2>
-  <p class="ayuda">Cada campo trae su método y su confianza. Un valor leído es una
-    propuesta, no un hecho: los importes de la operación fiscal los declarás vos abajo
-    y el sistema corta si no coinciden con lo leído.</p>
-  <button id="b-reextraer" class="sec">Volver a extraer</button>
-  <div id="detalle-msg"></div>
-  <table id="t-campos"><thead><tr>
-    <th>Campo</th><th>Valor leído</th><th>Método</th><th>Confianza</th>
-  </tr></thead><tbody></tbody></table>
+<!-- ══ Operaciones fiscales ═══════════════════════════════════════════════ -->
+<!-- ══ Productos ══════════════════════════════════════════════════════════ -->
+<section id="v-productos" hidden>
+  <h2>Productos y servicios</h2>
+  <p class="ayuda">Qué vende y qué compra la empresa. El maestro
+    <strong>no guarda la alícuota</strong>: guarda si el producto está gravado, exento
+    o no gravado, y cuánto es esa alícuota lo resuelve el sistema por la fecha de cada
+    operación. Guardar un 21 acá haría que una factura vieja se recalculara con la
+    norma de hoy.</p>
+  <div class="fila">
+    <div><label>Buscar</label><input id="pro-q" placeholder="código o nombre"></div>
+    <div><label>Tipo</label><select id="pro-tipo">
+      <option value="">todos</option><option>PRODUCTO</option><option>SERVICIO</option></select></div>
+    <div><label>Estado</label><select id="pro-status">
+      <option value="">todos</option><option>ACTIVO</option><option>ARCHIVADO</option></select></div>
+  </div>
+  <button id="b-pro" class="sec">Buscar</button>
+  <button id="b-pro-mas" class="sec" hidden>Ver más</button>
+  <div id="pro-msg"></div>
+  <div class="tabla"><table id="t-pro"><thead><tr>
+    <th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Impuesto</th>
+    <th>Cuenta venta</th><th>Precio lista</th><th>Stock</th><th>Estado</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="pro-alta" hidden><summary>Dar de alta un producto o servicio</summary><div>
+    <p class="ayuda">Las cuentas son la imputación <em>sugerida</em> cuando este producto
+      entre en un asiento. No la imponen: el asiento lo sigue firmando una persona.</p>
+    <div class="fila">
+      <div><label>Código</label><input id="pro-codigo" maxlength="60"></div>
+      <div><label>Nombre</label><input id="pro-nombre" maxlength="200"></div>
+      <div><label>Tipo</label><select id="pro-n-tipo">
+        <option>PRODUCTO</option><option>SERVICIO</option></select></div>
+      <div><label>Unidad</label><select id="pro-unidad">
+        <option>UNIDAD</option><option>KILOGRAMO</option><option>GRAMO</option>
+        <option>TONELADA</option><option>LITRO</option><option>MILILITRO</option>
+        <option>METRO</option><option>METRO_CUADRADO</option><option>METRO_CUBICO</option>
+        <option>HORA</option><option>DIA</option><option>MES</option>
+        <option>DOCENA</option><option>CAJA</option><option>PAQUETE</option>
+        <option>OTRA</option></select></div>
+    </div>
+    <div class="fila">
+      <div><label>Frente al impuesto</label><select id="pro-trat">
+        <option>GRAVADO</option><option>EXENTO</option><option>NO_GRAVADO</option></select></div>
+      <div><label>Impuesto</label><select id="pro-imp">
+        <option value="">—</option><option>IVA</option><option>IIBB</option>
+        <option>INTERNOS</option></select></div>
+      <div><label>Cuenta de venta (código)</label><input id="pro-cv" maxlength="40"></div>
+      <div><label>Cuenta de compra (código)</label><input id="pro-cc" maxlength="40"></div>
+      <div><label>Precio de lista</label><input id="pro-precio" inputmode="decimal"></div>
+      <div><label>&nbsp;</label>
+        <label class="chk"><input type="checkbox" id="pro-stock"> Lleva stock</label></div>
+    </div>
+    <button id="b-pro-alta">Dar de alta</button>
+    <div id="pro-alta-msg"></div>
+  </div></details>
 </section>
 
-<!-- ══ 4 · Operación fiscal ════════════════════════════════════════════════ -->
-<section id="s-tt" hidden>
-  <h2><span class="n">04</span>Operación fiscal</h2>
-  <p class="ayuda">Los importes los declara una persona. La operación nace en
-    <span class="mono">NO_CONSULTADO</span>: no hay forma de afirmar acá que ARCA la
-    validó.</p>
+<!-- ══ Terceros ═══════════════════════════════════════════════════════════ -->
+<section id="v-terceros" hidden>
+  <h2>Terceros</h2>
+  <p class="ayuda">Clientes, proveedores y demás contrapartes de <em>esta</em> empresa.
+    El saldo de la cuenta corriente <strong>no se guarda</strong>: se suma del Mayor cada
+    vez que se lo mira, y solo cuenta asientos aprobados.</p>
   <div class="fila">
-    <div><label>Sentido</label><select id="tt-dir"><option>COMPRAS</option><option>VENTAS</option></select></div>
-    <div><label>Tipo cbte.</label><input id="tt-tipo" type="number" value="1"></div>
-    <div><label>Punto de venta</label><input id="tt-pv" type="number" value="1"></div>
-    <div><label>Número</label><input id="tt-nro" type="number"></div>
-    <div><label>Fecha</label><input id="tt-fecha" type="date"></div>
-    <div><label>CUIT contraparte</label><input id="tt-cuit" maxlength="11"></div>
+    <div><label>Buscar</label><input id="ter-q" placeholder="razón social o documento"></div>
+    <div><label>Rol</label><select id="ter-rol">
+      <option value="">todos</option><option>CLIENTE</option><option>PROVEEDOR</option>
+      <option>EMPLEADO</option><option>ACREEDOR</option><option>DEUDOR</option>
+      <option>TRANSPORTISTA</option><option>OTRO</option></select></div>
+    <div><label>Estado</label><select id="ter-status">
+      <option value="">todos</option><option>ACTIVO</option><option>ARCHIVADO</option></select></div>
   </div>
-  <div class="fila">
-    <div><label>Neto</label><input id="tt-neto" value="0"></div>
-    <div><label>IVA</label><input id="tt-iva" value="0"></div>
-    <div><label>No gravado</label><input id="tt-ng" value="0"></div>
-    <div><label>Exento</label><input id="tt-ex" value="0"></div>
-    <div><label>Percepciones</label><input id="tt-perc" value="0"></div>
-    <div><label>Total</label><input id="tt-total" value="0"></div>
+  <button id="b-ter" class="sec">Buscar</button>
+  <button id="b-ter-mas" class="sec" hidden>Ver más</button>
+  <div id="ter-msg"></div>
+  <div class="tabla"><table id="t-ter"><thead><tr>
+    <th>Razón social</th><th>Documento</th><th>Condición IVA</th><th>Roles</th>
+    <th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="ter-alta" hidden><summary>Dar de alta un tercero</summary><div>
+    <p class="ayuda">El CUIT se verifica por módulo 11 antes de guardarlo. Eso dice que el
+      número está bien construido, <strong>no</strong> que el contribuyente exista ni esté
+      activo: eso lo contesta ARCA y es otra comprobación.</p>
+    <div class="fila">
+      <div><label>Tipo de documento</label><select id="ter-tipo">
+        <option>CUIT</option><option>CUIL</option><option>DNI</option>
+        <option>PASAPORTE</option><option>DOC_EXTRANJERO</option>
+        <option>SIN_IDENTIFICAR</option></select></div>
+      <div><label>Número</label><input id="ter-doc" maxlength="40"></div>
+      <div><label>Razón social</label><input id="ter-rs"></div>
+      <div><label>Condición IVA</label><select id="ter-iva">
+        <option>DESCONOCIDA</option><option>RESPONSABLE_INSCRIPTO</option>
+        <option>MONOTRIBUTO</option><option>EXENTO</option>
+        <option>CONSUMIDOR_FINAL</option><option>NO_CATEGORIZADO</option></select></div>
+      <div><label>Correo</label><input id="ter-email" type="email"></div>
+      <div><label>Teléfono</label><input id="ter-tel"></div>
+    </div>
+    <div class="fila">
+      <div><label>Roles</label>
+        <label class="chk"><input type="checkbox" id="ter-r-cli" value="CLIENTE"> Cliente</label>
+        <label class="chk"><input type="checkbox" id="ter-r-pro" value="PROVEEDOR"> Proveedor</label>
+      </div>
+    </div>
+    <button id="b-ter-alta">Dar de alta</button>
+    <div id="ter-alta-msg"></div>
+  </div></details>
+
+  <div id="ter-detalle" hidden>
+    <h3 id="ter-titulo"></h3>
+    <dl class="kv" id="ter-kv"></dl>
+    <div id="ter-cc-msg"></div>
+    <div class="tabla"><table id="t-ter-cc"><thead><tr>
+      <th>Fecha</th><th>Asiento</th><th>Cuenta</th><th>Detalle</th><th>Debe</th><th>Haber</th>
+    </tr></thead><tbody></tbody></table></div>
+    <button id="b-ter-cc-mas" class="sec" hidden>Ver más movimientos</button>
   </div>
-  <button id="b-tt">Registrar operación</button>
-  <div id="tt-msg"></div>
 </section>
 
-<!-- ══ 5 · Constatación ════════════════════════════════════════════════════ -->
-<section id="s-arca" hidden>
-  <h2><span class="n">05</span>Constatación</h2>
-  <p class="ayuda">Preguntarle a ARCA y declarar que verificaste por tu cuenta son dos
-    cosas distintas, y quedan distinguidas en la fila. El CAE no está en la operación:
-    va acá porque está impreso en el comprobante.</p>
+<section id="v-operaciones" hidden>
+  <h2>Operaciones fiscales</h2>
+  <p class="ayuda">El libro de comprobantes. Los dos sellos van separados:
+    <span class="mono">constatación</span> es el resultado y
+    <span class="mono">origen</span> es quién lo afirma. Un OK que declaró una persona
+    y un OK que contestó ARCA <strong>no valen lo mismo</strong>.</p>
   <div class="fila">
-    <div><label>CAE</label><input id="cae"></div>
-    <div><label>Modalidad</label><select id="modalidad"><option>CAE</option><option>CAEA</option><option>CAI</option></select></div>
-    <div><label>Doc. receptor (tipo)</label><input id="doctipo" value="80"></div>
-    <div><label>Doc. receptor (número)</label><input id="docnro"></div>
+    <div><label>Sentido</label><select id="op-dir">
+      <option value="">ambos</option><option>COMPRAS</option><option>VENTAS</option></select></div>
+    <div><label>Desde</label><input id="op-desde" type="date"></div>
+    <div><label>Hasta</label><input id="op-hasta" type="date"></div>
+    <div><label>CUIT contraparte</label><input id="op-cuit" maxlength="11"></div>
+    <div><label>Constatación</label><select id="op-const">
+      <option value="">todas</option><option>NO_CONSULTADO</option><option>OK</option>
+      <option>WARN</option><option>FAIL</option><option>NO_VERIFICABLE</option></select></div>
   </div>
-  <button id="b-constatar">Consultar a ARCA</button>
-  <div id="arca-msg"></div>
+  <button id="b-ops" class="sec">Buscar</button>
+  <button id="b-ops-mas" class="sec" hidden>Ver más</button>
+  <div id="ops-msg"></div>
+  <div class="tabla"><table id="t-ops"><thead><tr>
+    <th>Fecha</th><th>Comprobante</th><th>Contraparte</th><th>Total</th>
+    <th>Constatación</th><th>Quién lo afirma</th><th>Afectación</th><th>Decisión</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="op-detalle" hidden>
+    <h3>Operación</h3>
+    <dl class="kv" id="op-kv"></dl>
+
+    <details class="grupo"><summary>Registrar una operación desde un documento</summary><div>
+      <p class="ayuda">Los importes los declarás vos. Si hay una lectura del documento,
+        el sistema los cruza y corta si difieren: no elige uno en silencio.</p>
+      <div class="fila">
+        <div><label>Documento</label><select id="tt-doc"></select></div>
+        <div><label>Sentido</label><select id="tt-dir"><option>COMPRAS</option><option>VENTAS</option></select></div>
+        <div><label>Tipo cbte.</label><input id="tt-tipo" type="number" value="1"></div>
+        <div><label>Punto de venta</label><input id="tt-pv" type="number" value="1"></div>
+        <div><label>Número</label><input id="tt-nro" type="number"></div>
+        <div><label>Fecha</label><input id="tt-fecha" type="date"></div>
+        <div><label>CUIT contraparte</label><input id="tt-cuit" maxlength="11"></div>
+        <div><label>Razón social</label><input id="tt-rs"></div>
+      </div>
+      <div class="fila">
+        <div><label>Neto</label><input id="tt-neto" value="0"></div>
+        <div><label>IVA</label><input id="tt-iva" value="0"></div>
+        <div><label>No gravado</label><input id="tt-ng" value="0"></div>
+        <div><label>Exento</label><input id="tt-ex" value="0"></div>
+        <div><label>Percepciones</label><input id="tt-perc" value="0"></div>
+        <div><label>Total</label><input id="tt-total" value="0"></div>
+      </div>
+      <button id="b-tt">Registrar operación</button>
+      <div id="tt-msg"></div>
+    </div></details>
+
+    <details class="grupo"><summary>Constatar contra ARCA</summary><div>
+      <p class="ayuda">Lo que se le manda a ARCA sale de la <strong>fila guardada</strong>.
+        Del formulario solo salen el CAE y el documento del receptor, que están impresos
+        en el comprobante y el sistema no los modela.</p>
+      <div class="fila">
+        <div><label>CAE</label><input id="cae"></div>
+        <div><label>Modalidad</label><select id="modalidad"><option>CAE</option><option>CAEA</option><option>CAI</option></select></div>
+        <div><label>Doc. receptor (tipo)</label><input id="doctipo" value="80"></div>
+        <div><label>Doc. receptor (número)</label><input id="docnro"></div>
+      </div>
+      <button id="b-constatar">Consultar a ARCA</button>
+      <div id="arca-msg"></div>
+    </div></details>
+
+    <details class="grupo"><summary>Declarar la afectación</summary><div>
+      <p class="ayuda">Es una <strong>declaración profesional</strong> y exige evidencia
+        que la base verifica: cada id citado tiene que existir y ser de esta empresa.</p>
+      <div class="fila">
+        <div><label>Afectación</label><select id="afec">
+          <option>GRAVADAS</option><option>EXENTAS</option><option>NO_GRAVADAS</option>
+          <option>MIXTA</option><option>NO_DETERMINADA</option></select></div>
+        <div><label>Proporción gravada (base 10000)</label>
+          <input id="afec-prop" type="number" placeholder="6550 = 65,50 %"></div>
+      </div>
+      <label>Cuentas como evidencia (múltiple)</label>
+      <select id="afec-cuentas" multiple size="5"></select>
+      <label>Nota</label><textarea id="afec-nota"></textarea>
+      <button id="b-afec">Declarar</button>
+      <div id="afec-msg"></div>
+    </div></details>
+    <div id="op-detalle-msg"></div>
+  </div>
 </section>
 
-<!-- ══ 6 · Afectación ══════════════════════════════════════════════════════ -->
-<section id="s-afec" hidden>
-  <h2><span class="n">06</span>Afectación fiscal</h2>
-  <p class="ayuda">Es una declaración profesional y queda firmada con tu usuario. La
-    evidencia tiene que apuntar a objetos reales de esta empresa: un texto suelto explica,
-    no respalda.</p>
+<!-- ══ Asientos ═══════════════════════════════════════════════════════════ -->
+<section id="v-asientos" hidden>
+  <h2>Asientos</h2>
+  <p class="ayuda">Un asiento entra en borrador y no toca el Mayor hasta que alguien lo
+    aprueba. Un asiento aprobado no se edita: se anula por contraasiento, y el número
+    del anulado se conserva.</p>
   <div class="fila">
-    <div><label>Afectación</label><select id="afec">
-      <option>GRAVADAS</option><option>EXENTAS</option><option>NO_GRAVADAS</option>
-      <option>MIXTA</option><option>NO_DETERMINADA</option></select></div>
-    <div><label>Proporción gravada (solo MIXTA, en centésimas de %)</label>
-      <input id="afec-prop" type="number" placeholder="6550 = 65,50 %"></div>
+    <div><label>Desde</label><input id="as-desde" type="date"></div>
+    <div><label>Hasta</label><input id="as-hasta" type="date"></div>
+    <div><label>Estado</label><select id="as-estado">
+      <option value="">todos</option><option>BORRADOR</option><option>PROPUESTO</option>
+      <option>APROBADO</option><option>ANULADO</option></select></div>
   </div>
-  <label>Evidencia — cuentas del plan (se pueden elegir varias)</label>
-  <select id="afec-cuentas" multiple size="5"></select>
-  <label>Nota (opcional, mínimo 10 caracteres)</label>
-  <textarea id="afec-nota"></textarea>
-  <button id="b-afec">Declarar</button>
-  <div id="afec-msg"></div>
+  <button id="b-as-listar" class="sec">Buscar</button>
+  <button id="b-as-mas" class="sec" hidden>Ver más</button>
+  <div id="as-msg"></div>
+  <div class="tabla"><table id="t-as"><thead><tr>
+    <th>Fecha</th><th>Libro</th><th>N.º</th><th>Descripción</th><th>Debe</th><th>Haber</th>
+    <th>Estado</th><th>Origen</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="as-detalle" hidden>
+    <h3>Asiento</h3>
+    <dl class="kv" id="as-kv"></dl>
+    <div id="as-acciones"></div>
+    <div id="as-detalle-msg"></div>
+  </div>
+
+  <details class="grupo"><summary>Cargar un asiento</summary><div>
+    <div class="fila">
+      <div><label>Libro</label><select id="ne-libro">
+        <option>GENERAL</option><option>COMPRAS</option><option>VENTAS</option>
+        <option>BANCOS</option><option>CAJA</option><option>AJUSTES</option></select></div>
+      <div><label>Fecha</label><input id="ne-fecha" type="date"></div>
+      <div><label>Estado inicial</label><select id="ne-status">
+        <option>PROPUESTO</option><option>BORRADOR</option></select></div>
+    </div>
+    <label>Descripción</label><input id="ne-desc">
+    <div class="fila">
+      <div><label>Cuenta al Debe</label><select id="ne-debe"></select></div>
+      <div><label>Cuenta al Haber</label><select id="ne-haber"></select></div>
+      <div><label>Importe</label><input id="ne-importe"></div>
+    </div>
+    <label>Justificación (si no lo funda una decisión)</label><input id="ne-just">
+    <div id="ne-decision"></div>
+    <button id="b-ne">Registrar</button>
+    <div id="ne-msg"></div>
+  </div></details>
 </section>
 
-<!-- ══ 7 · Decisión ════════════════════════════════════════════════════════ -->
-<section id="s-dec" hidden>
-  <h2><span class="n">07</span>Decisión contable</h2>
-  <p class="ayuda">Sin reglas ACTIVE, la vía determinística devuelve
-    <span class="mono">REQUIERE_REVISION</span> y nombra qué falta. Resolver por tu
-    cuenta exige justificación escrita, y esa decisión no cita ninguna regla.</p>
-  <button id="b-dec-auto" class="sec">Pedir decisión del motor</button>
-  <div class="fila">
-    <div><label>Resultado (manual)</label><select id="dec-res">
-      <option>PROPUESTA_DE_ASIENTO</option><option>SIN_EFECTO</option></select></div>
-  </div>
-  <label>Justificación (mínimo 30 caracteres)</label>
-  <textarea id="dec-just"></textarea>
-  <button id="b-dec-manual">Decidir a mano</button>
-  <button id="b-dec-hist" class="sec">Ver historial</button>
-  <div id="dec-msg"></div>
-  <table id="t-dec" hidden><thead><tr>
-    <th>Decisión</th><th>Estado</th><th>Origen</th><th>Resultado</th><th>Asientos</th><th>Corrige a</th><th></th>
-  </tr></thead><tbody></tbody></table>
-</section>
-
-<!-- ══ 8 · Corrección ══════════════════════════════════════════════════════ -->
-<section id="s-corr" hidden>
-  <h2><span class="n">08</span>Corregir la decisión</h2>
-  <p class="ayuda">La anterior no se borra ni se edita: queda
-    <span class="mono">SUPERSEDIDA</span>, encadenada, y deja de poder fundar asientos
-    nuevos. El asiento que ya la citó la sigue mostrando.</p>
-  <div class="fila">
-    <div><label>Nuevo resultado</label><select id="corr-res">
-      <option>SIN_EFECTO</option><option>PROPUESTA_DE_ASIENTO</option><option>REQUIERE_REVISION</option></select></div>
-  </div>
-  <label>Motivo (mínimo 30 caracteres: qué cambió)</label>
-  <textarea id="corr-motivo"></textarea>
-  <button id="b-corr">Corregir</button>
-  <div id="corr-msg"></div>
-</section>
-
-<!-- ══ 9 · Asiento ═════════════════════════════════════════════════════════ -->
-<section id="s-asiento" hidden>
-  <h2><span class="n">09</span>Asiento</h2>
-  <p class="ayuda">Se funda en la decisión vigente. La aprobación es humana siempre, y
-    recién al aprobar se proyecta al Mayor.</p>
-  <div class="fila">
-    <div><label>Libro</label><input id="as-libro" value="COMPRAS"></div>
-    <div><label>Fecha</label><input id="as-fecha" type="date"></div>
-  </div>
-  <label>Descripción</label><input id="as-desc">
-  <div class="fila">
-    <div><label>Cuenta al Debe</label><select id="as-debe"></select></div>
-    <div><label>Cuenta al Haber</label><select id="as-haber"></select></div>
-    <div><label>Importe</label><input id="as-importe"></div>
-  </div>
-  <button id="b-asiento">Registrar</button>
-  <button id="b-aprobar" class="sec" disabled>Aprobar</button>
-  <div id="asiento-msg"></div>
-</section>
-
-<!-- ══ 10 · Libros y trazabilidad ══════════════════════════════════════════ -->
-<section id="s-libros" hidden>
-  <h2><span class="n">10</span>Libros y trazabilidad</h2>
-  <p class="ayuda">Diario, Mayor y Balance describen el mismo universo: asientos
-    aprobados y anulados. Nada de lo que se ve acá lo calcula esta pantalla.</p>
+<!-- ══ Libros ═════════════════════════════════════════════════════════════ -->
+<section id="v-libros" hidden>
+  <h2>Libros</h2>
+  <p class="ayuda">Diario, Mayor y balance de sumas y saldos. Emitir un libro le calcula
+    el hash y deja constancia: es un acto del profesional, no una exportación.</p>
   <div class="fila">
     <div><label>Desde</label><input id="lib-desde" type="date"></div>
     <div><label>Hasta</label><input id="lib-hasta" type="date"></div>
@@ -263,68 +528,185 @@ tr:hover td{background:var(--hund)}
   <button id="b-diario" class="sec">Diario</button>
   <button id="b-mayor" class="sec">Mayor</button>
   <button id="b-balance" class="sec">Balance</button>
-  <button id="b-traza" class="sec">Trazar la operación</button>
-  <pre id="libros-out"></pre>
+  <button id="b-emisiones" class="sec">Emisiones</button>
+  <div id="lib-acciones"></div>
+  <div id="lib-msg"></div>
+  <div class="tabla" id="lib-salida"></div>
+</section>
+
+<!-- ══ Estados y notas ════════════════════════════════════════════════════ -->
+<section id="v-estados" hidden>
+  <h2>Estados contables y notas</h2>
+  <p class="ayuda">El estado se <strong>arma</strong> desde el Mayor cada vez que se pide:
+    verlo no lo emite. Emitirlo es un acto del profesional, y le calcula el hash.
+    Cada renglón es clickeable: lleva a las cuentas que lo componen.</p>
+  <div class="fila">
+    <div><label>Ejercicio</label><select id="est-fy"></select></div>
+    <div><label>Tipo</label><select id="est-tipo"><option>ESP</option><option>ER</option></select></div>
+  </div>
+  <button id="b-est-armar" class="sec">Armar el estado</button>
+  <div id="est-acciones"></div>
+  <div id="est-msg"></div>
+  <div class="tabla"><table id="t-est"><thead><tr>
+    <th>Código</th><th>Renglón</th><th>Importe</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="est-detalle"></div>
+</section>
+
+<!-- ══ Períodos y cierre ══════════════════════════════════════════════════ -->
+<section id="v-cierre" hidden>
+  <h2>Períodos y cierre</h2>
+  <p class="ayuda">Un período pasa de ABIERTO a BLOQUEADO a CERRADO, y no salta pasos.
+    Reabrir uno cerrado exige motivo y contrafirma de otra persona: lo pide la base,
+    no esta pantalla.</p>
+  <button id="b-per-listar" class="sec">Actualizar</button>
+  <div id="per-msg"></div>
+  <div class="tabla"><table id="t-per"><thead><tr>
+    <th>N.º</th><th>Desde</th><th>Hasta</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+  <h3>Ejercicios</h3>
+  <div class="tabla"><table id="t-fy"><thead><tr>
+    <th>Código</th><th>Desde</th><th>Hasta</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="cierre-checklist"></div>
+</section>
+
+<!-- ══ Auditoría ══════════════════════════════════════════════════════════ -->
+<section id="v-auditoria" hidden>
+  <h2>Auditoría</h2>
+  <p class="ayuda">Quién hizo qué, cuándo, sobre qué y por qué — con lo que había antes y
+    lo que quedó después. <strong>Quién</strong> y <strong>qué clase de quién</strong> son
+    columnas distintas: que algo lo haya propuesto un modelo y que lo haya firmado una
+    persona no es lo mismo.</p>
+  <div class="fila">
+    <div><label>Acción</label><input id="au-accion" placeholder="APROBAR_ASIENTO"></div>
+    <div><label>Tipo de objeto</label><input id="au-tipo" placeholder="document"></div>
+    <div><label>Id del objeto</label><input id="au-obj"></div>
+    <div><label>Actor</label><select id="au-actor">
+      <option value="">todos</option><option>USER</option><option>SYSTEM</option><option>AI</option>
+    </select></div>
+    <div><label>Desde</label><input id="au-desde" type="date"></div>
+    <div><label>Hasta</label><input id="au-hasta" type="date"></div>
+  </div>
+  <button id="b-au" class="sec">Buscar</button>
+  <button id="b-au-mas" class="sec" hidden>Ver más</button>
+  <div id="au-msg"></div>
+  <div class="tabla"><table id="t-au"><thead><tr>
+    <th>Cuándo</th><th>Quién</th><th>Clase</th><th>Acción</th><th>Objeto</th><th>Motivo</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="au-detalle"></div>
+</section>
+
+<!-- ══ Configuración ══════════════════════════════════════════════════════ -->
+<section id="v-config" hidden>
+  <h2>Configuración</h2>
+  <p class="ayuda">Nada de lo que se ve acá es un secreto: los certificados se listan por
+    su huella y su vigencia, nunca por su contenido.</p>
+  <button id="b-cfg" class="sec">Actualizar</button>
+  <div id="cfg-msg"></div>
+  <div id="cfg-salida"></div>
 </section>
 
 </main>
 
 <script>
 'use strict';
-/**
- * La consola no sabe contabilidad.
- *
- * No calcula un saldo, no decide si un crédito es computable, no valida una
- * afectación. Todo lo que muestra viene de una respuesta de la API, y todo lo
- * que envía lo valida el servidor. Es deliberado: una segunda implementación de
- * las reglas contables acá sería una que nadie revisó y que puede divergir.
- *
- * Lo único que hace es recorrer el circuito en orden y mostrar lo que cada paso
- * devolvió, incluidos los rechazos —que son la parte interesante—.
- */
+
+// ── Estado de la sesión de trabajo ────────────────────────────────────────
+// Nada de esto se persiste: al recargar, la consola vuelve a preguntar.
+const estado = {
+  empresa: null, empresas: [], permisos: [], roles: [],
+  vista: 'login', migas: [],
+  documento: null, campos: [], tt: null, operacion: null, asiento: null,
+  tercero: null,
+  cuentas: [], documentosSinOperacion: [],
+  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null },
+  filtros: {},
+};
 
 const E = (id) => document.getElementById(id);
-const estado = { empresa: null, documento: null, tt: null, decision: null, asiento: null, cuentas: [] };
+const escapar = (t) => String(t === null || t === undefined ? '' : t)
+  .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-/** Un solo lugar por el que sale un pedido. La cabecera de empresa se pone acá. */
-async function api(metodo, ruta, cuerpo, esArchivo) {
-  const cabeceras = {};
-  if (estado.empresa) cabeceras['x-company-id'] = estado.empresa;
-  if (!esArchivo && cuerpo !== undefined) cabeceras['content-type'] = 'application/json';
+/** Único punto de contacto con la API. La empresa viaja en la cabecera, siempre. */
+async function api(method, url, cuerpo, esForma) {
+  const cab = { accept: 'application/json' };
+  if (estado.empresa) cab['x-company-id'] = estado.empresa;
+  if (cuerpo !== undefined && !esForma) cab['content-type'] = 'application/json';
 
-  const r = await fetch(ruta, {
-    method: metodo,
+  const r = await fetch(url, {
+    method,
+    headers: cab,
     credentials: 'same-origin',
-    headers: cabeceras,
-    body: cuerpo === undefined ? undefined : (esArchivo ? cuerpo : JSON.stringify(cuerpo)),
+    body: cuerpo === undefined ? undefined : (esForma ? cuerpo : JSON.stringify(cuerpo)),
   });
-
   let datos = null;
-  try { datos = await r.json(); } catch { /* 204 y similares */ }
+  try { datos = await r.json(); } catch (e) { /* 204 y similares */ }
   return { ok: r.ok, status: r.status, datos };
 }
 
 /**
  * Muestra la respuesta tal cual.
  *
- * Los errores del sistema explican qué corregir —es una de las cosas que más
- * cuidado tiene la API— así que se muestran enteros en vez de traducirlos a un
- * "algo salió mal".
+ * Los errores de la API explican qué corregir —es una de las cosas que más
+ * cuidado tiene— así que se muestran enteros en vez de traducirse a un
+ * «algo salió mal».
  */
 function decir(destino, resultado, exito) {
   const caja = E(destino);
+  if (!caja) return;
   if (resultado.ok) {
-    caja.innerHTML = '<div class="aviso"><strong>' + (exito || 'Listo') + '</strong>' +
-      '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre></div>';
+    caja.innerHTML = '<div class="aviso ok"><strong>' + escapar(exito || 'Listo') + '</strong>' +
+      (resultado.datos ? '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre>' : '') +
+      '</div>';
   } else {
-    caja.innerHTML = '<div class="aviso error"><strong>' + resultado.status + '</strong> ' +
+    caja.innerHTML = '<div class="aviso error"><strong>' + resultado.status + '</strong>' +
       '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre></div>';
   }
 }
-const escapar = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-const ver = (id, s) => { E(id).hidden = !s; };
+const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
+const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
-// ── 0 · Sesión ────────────────────────────────────────────────────────────
+// ── Navegación ────────────────────────────────────────────────────────────
+const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
+                'terceros','productos','asientos','libros','estados','cierre','auditoria','config'];
+
+function ir(vista, migas) {
+  estado.vista = vista;
+  for (const v of VISTAS) {
+    const s = E('v-' + v);
+    if (s) s.hidden = v !== vista;
+  }
+  for (const b of document.querySelectorAll('nav button')) {
+    b.setAttribute('aria-current', String(b.dataset.vista === vista));
+  }
+  const caja = E('miga');
+  caja.hidden = vista === 'login';
+  const empresa = (estado.empresas.find((c) => c.id === estado.empresa) || {}).legalName;
+  const partes = [empresa || 'sin empresa'].concat(migas || []);
+  caja.innerHTML = partes.map((p, i) =>
+    i === partes.length - 1 ? '<b>' + escapar(p) + '</b>' : escapar(p)).join(' › ');
+}
+
+for (const b of document.querySelectorAll('nav button')) {
+  b.onclick = () => {
+    const v = b.dataset.vista;
+    ir(v, [b.textContent]);
+    if (v === 'inicio') cargarInicio();
+    if (v === 'bandeja') bandeja();
+    if (v === 'documentos') listarDocumentos();
+    if (v === 'operaciones') listarOperaciones();
+    if (v === 'terceros') listarTerceros();
+    if (v === 'productos') listarProductos();
+    if (v === 'asientos') listarAsientos();
+    if (v === 'cierre') listarPeriodos();
+    if (v === 'estados') listarEstados();
+    if (v === 'auditoria') listarAuditoria();
+    if (v === 'config') cargarConfig();
+  };
+}
+
+// ══ 0 · Sesión ════════════════════════════════════════════════════════════
 E('b-login').onclick = async () => {
   const login = await api('POST', '/auth/login', { email: E('email').value, password: E('pass').value });
   if (!login.ok) return decir('login-msg', login);
@@ -338,60 +720,319 @@ E('b-login').onclick = async () => {
   if (!yo.ok) return decir('login-msg', yo);
   E('quien').textContent = (yo.datos.user && yo.datos.user.email) || '';
 
-  const orgs = await api('GET', '/organizations');
-  const sel = E('empresa');
-  sel.innerHTML = '';
-  for (const org of (orgs.datos.organizations || orgs.datos.organizaciones || [])) {
-    const empresas = await api('GET', '/organizations/' + org.id + '/companies');
-    for (const c of (empresas.datos.companies || empresas.datos.empresas || [])) {
-      const o = document.createElement('option');
-      o.value = c.id;
-      o.textContent = c.legalName + ' — ' + c.cuit;
-      sel.appendChild(o);
-    }
-  }
-  ver('s-login', false); ver('s-empresa', true);
+  const empresas = await api('GET', '/companies');
+  if (!empresas.ok) return decir('login-msg', empresas);
+  estado.empresas = empresas.datos.companies || [];
+  pintarEmpresas();
+  E('nav').hidden = false;
+  ir('empresa', ['Empresa']);
 };
 
-// ── 1 · Empresa ───────────────────────────────────────────────────────────
-E('b-empresa').onclick = async () => {
-  estado.empresa = E('empresa').value;
-  const c = await api('GET', '/companies/current');
-  if (!c.ok) return decir('empresa-msg', c);
-
-  const cuentas = await api('GET', '/accounts');
-  estado.cuentas = (cuentas.datos && cuentas.datos.accounts) || [];
-  for (const id of ['afec-cuentas', 'as-debe', 'as-haber']) {
-    const sel = E(id); sel.innerHTML = '';
-    for (const a of estado.cuentas) {
-      const o = document.createElement('option');
-      o.value = id === 'afec-cuentas' ? a.id : a.code;
-      o.textContent = a.code + ' — ' + a.name;
-      sel.appendChild(o);
-    }
-  }
-  decir('empresa-msg', c, 'Empresa en contexto');
-  for (const s of ['s-doc', 's-libros']) ver(s, true);
-  listar();
-};
-
-// ── 2 · Documentos ────────────────────────────────────────────────────────
-async function listar() {
-  const r = await api('GET', '/documents');
-  const cuerpo = E('t-doc').querySelector('tbody');
+function pintarEmpresas() {
+  const cuerpo = E('t-empresas').querySelector('tbody');
   cuerpo.innerHTML = '';
-  for (const d of ((r.datos && r.datos.documentos) || [])) {
+  if (estado.empresas.length === 0) {
+    E('empresa-msg').innerHTML =
+      '<div class="aviso">No tenés ninguna empresa asignada todavía.</div>';
+    return;
+  }
+  for (const c of estado.empresas) {
     const tr = document.createElement('tr');
     tr.innerHTML =
-      '<td>' + escapar(d.nombre) + '</td><td class="mono">' + escapar(d.tipo) + '</td>' +
-      '<td><span class="p p-neu">' + escapar(d.status) + '</span></td>' +
-      '<td class="mono">' + escapar(String(d.sha256).slice(0, 12)) + '…</td>' +
-      '<td><span class="clic">elegir</span></td>';
-    tr.querySelector('.clic').onclick = () => elegir(d.id);
+      '<td>' + escapar(c.legalName) + '</td><td class="mono">' + escapar(c.cuit) + '</td>' +
+      '<td>' + escapar(c.entityType) + '</td>' +
+      '<td>' + (c.roles || []).map((r) => '<span class="p p-neu">' + escapar(r) + '</span>').join(' ') + '</td>' +
+      '<td><span class="clic">usar</span></td>';
+    tr.querySelector('.clic').onclick = () => usarEmpresa(c.id);
     cuerpo.appendChild(tr);
   }
 }
-E('b-listar').onclick = listar;
+
+async function usarEmpresa(id) {
+  // Cambiar de empresa limpia el trabajo en curso. Arrastrar el documento de un
+  // cliente al contexto de otro es cómo se cometen los errores caros.
+  estado.empresa = id;
+  estado.documento = estado.tt = estado.operacion = estado.asiento = null;
+  estado.cursores = { doc: null, ops: null, wq: null, as: null, au: null };
+  E('doc-detalle').hidden = true;
+  E('op-detalle').hidden = true;
+  E('as-detalle').hidden = true;
+
+  const c = await api('GET', '/companies/current');
+  if (!c.ok) return decir('empresa-msg', c);
+  estado.permisos = c.datos.permissions || [];
+  estado.roles = c.datos.roles || [];
+
+  const elegida = estado.empresas.find((x) => x.id === id);
+  E('empresa-activa').textContent = elegida ? elegida.legalName + ' · ' + elegida.cuit : '—';
+
+  const cuentas = await api('GET', '/accounts');
+  estado.cuentas = (cuentas.datos && cuentas.datos.accounts) || [];
+  for (const sel of ['afec-cuentas', 'ne-debe', 'ne-haber']) {
+    const s = E(sel); s.innerHTML = '';
+    for (const a of estado.cuentas) {
+      const o = document.createElement('option');
+      o.value = sel === 'afec-cuentas' ? a.id : a.code;
+      o.textContent = a.code + ' — ' + a.name;
+      s.appendChild(o);
+    }
+  }
+
+  aplicarPermisosANav();
+  const hoy = new Date().toISOString().slice(0, 10);
+  for (const campo of ['tt-fecha', 'ne-fecha']) E(campo).value = hoy;
+  E('lib-desde').value = hoy.slice(0, 4) + '-01-01';
+  E('lib-hasta').value = hoy.slice(0, 4) + '-12-31';
+
+  ir('inicio', ['Inicio']);
+  cargarInicio();
+}
+
+/**
+ * Una pantalla sin permiso no se ofrece.
+ *
+ * No es cosmética: un botón que termina en 403 le enseña a la persona que el
+ * sistema falla al azar. Si el backend va a decir que no, la consola no
+ * pregunta.
+ */
+function aplicarPermisosANav() {
+  const requiere = {
+    documentos: 'document:read', operaciones: 'journal_entry:read',
+    terceros: 'party:read', productos: 'product:read',
+    asientos: 'journal_entry:read', libros: 'report:read',
+    estados: 'statement:read', cierre: 'period:read',
+    auditoria: 'audit:read', config: 'company:read',
+  };
+  for (const b of document.querySelectorAll('nav button')) {
+    const p = requiere[b.dataset.vista];
+    b.hidden = p !== undefined && !puede(p);
+  }
+}
+
+// ══ 1 · Inicio ════════════════════════════════════════════════════════════
+async function cargarInicio() {
+  const wq = await api('GET', '/work-queue?limite=1');
+  const resumen = (wq.datos && wq.datos.resumen) || {};
+  const total = Object.keys(resumen).reduce((a, k) => a + resumen[k], 0);
+  E('inicio-resumen').innerHTML = total === 0
+    ? '<div class="aviso ok">Sin pendientes.</div>'
+    : '<div class="aviso"><strong>' + total + ' pendientes</strong><br>' +
+      Object.keys(resumen).sort().map((k) =>
+        '<span class="p p-ojo">' + escapar(k) + ' ' + resumen[k] + '</span>').join(' ') + '</div>';
+
+  if (!puede('period:read')) { limpiar('t-inicio-periodos'); return; }
+  const per = await api('GET', '/periods');
+  const cuerpo = E('t-inicio-periodos').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of ((per.datos && per.datos.periods) || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + escapar(p.number) + '</td>' +
+      '<td class="mono">' + escapar(p.startDate) + '</td>' +
+      '<td class="mono">' + escapar(p.endDate) + '</td>' +
+      '<td>' + pastilla(p.status) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+function pastilla(v) {
+  const bien = ['APROBADO','APROBADA','OK','EMITIDO','CERRADO','CONFIRMADA','COINCIDE','ACTIVE'];
+  const mal = ['FAIL','ANULADO','ANULADA','RECHAZADO','DISCREPA','BLOQUEADO'];
+  const clase = bien.indexOf(v) !== -1 ? 'p-bien' : (mal.indexOf(v) !== -1 ? 'p-mal' : 'p-ojo');
+  return '<span class="p ' + clase + '">' + escapar(v) + '</span>';
+}
+
+/**
+ * El color del origen del dato.
+ *
+ * IA tiene su propio color y su propia etiqueta, y nunca comparte ninguno de
+ * los dos con una declaración profesional. Es ADR-001 llevado a la pantalla.
+ */
+function pastillaOrigen(origen) {
+  const clase = origen === 'IA' ? 'p-ia'
+    : origen === 'ARCA' ? 'p-bien'
+    : origen === 'PROFESIONAL' ? 'p-neu'
+    : origen === 'PRECEDENTE' ? 'p-ia'
+    : 'p-neu';
+  const texto = origen === 'IA' ? 'propuesto por IA'
+    : origen === 'PRECEDENTE' ? 'sugerido por precedente'
+    : origen === 'PROFESIONAL' ? 'declarado por una persona'
+    : origen === 'ARCA' ? 'contestó ARCA'
+    : origen;
+  return '<span class="p ' + clase + '">' + escapar(texto) + '</span>';
+}
+
+// ══ 2 · Bandeja ═══════════════════════════════════════════════════════════
+async function bandeja(cursor) {
+  const q = new URLSearchParams({ limite: '50' });
+  if (E('wq-cat').value) q.set('categoria', E('wq-cat').value);
+  if (E('wq-disp').value) q.set('disponibilidad', E('wq-disp').value);
+  if (E('wq-bloq').value) q.set('bloquea', E('wq-bloq').value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/work-queue?' + q.toString());
+  if (!r.ok) return decir('wq-msg', r);
+  limpiar('wq-msg');
+
+  const resumen = r.datos.resumen || {};
+  E('wq-resumen').innerHTML = Object.keys(resumen).length === 0
+    ? '<div class="aviso ok">Sin pendientes con estos filtros.</div>'
+    : '<div class="aviso">' + Object.keys(resumen).sort().map((k) =>
+        '<span class="p p-ojo">' + escapar(k) + ' ' + resumen[k] + '</span>').join(' ') + '</div>';
+
+  if (!cursor) E('wq-lista').innerHTML = '';
+  // Agrupada por entidad: doscientos comprobantes producen seiscientos ítems, y
+  // una lista plana de seiscientos no se mira.
+  const grupos = {};
+  for (const it of (r.datos.items || [])) {
+    (grupos[it.entidad] = grupos[it.entidad] || []).push(it);
+  }
+  for (const entidad of Object.keys(grupos).sort()) {
+    const det = document.createElement('details');
+    det.className = 'grupo';
+    det.open = true;
+    det.innerHTML = '<summary>' + escapar(entidad) + ' — ' + grupos[entidad].length +
+      '</summary><div class="tabla"><table><thead><tr>' +
+      '<th>Categoría</th><th>Qué falta</th><th>Disponibilidad</th><th>Desde</th>' +
+      '<th>Vence</th><th></th></tr></thead><tbody></tbody></table></div>';
+    const cuerpo = det.querySelector('tbody');
+    for (const it of grupos[entidad]) {
+      const tr = document.createElement('tr');
+      const disp = it.disponibilidad === 'ACCIONABLE'
+        ? '<span class="p p-bien">accionable</span>'
+        : it.disponibilidad === 'INFORMATIVO'
+          ? '<span class="p p-neu">informativo — falta una fuente externa</span>'
+          : '<span class="p p-mal">sin camino: el período no lo admite</span>';
+      tr.innerHTML =
+        '<td>' + (it.bloquea ? '<span class="p p-mal">' : '<span class="p p-ojo">') +
+          escapar(it.categoria) + '</span></td>' +
+        '<td>' + escapar(it.motivo) +
+          ((it.evidenciaFaltante || []).length
+            ? '<br><span class="mono">falta: ' + escapar((it.evidenciaFaltante || []).join(', ')) + '</span>'
+            : '') + '</td>' +
+        '<td>' + disp + '</td>' +
+        '<td class="mono">' + escapar(String(it.creadoEn).slice(0, 10)) + '</td>' +
+        '<td class="mono">' + escapar(it.fechaLimite || '—') + '</td>' +
+        '<td><span class="clic">abrir</span></td>';
+      tr.querySelector('.clic').onclick = () => abrirPendiente(it);
+      cuerpo.appendChild(tr);
+    }
+    E('wq-lista').appendChild(det);
+  }
+
+  estado.cursores.wq = r.datos.cursor;
+  E('b-wq-mas').hidden = !r.datos.cursor;
+}
+E('b-wq').onclick = () => bandeja();
+E('b-wq-mas').onclick = () => bandeja(estado.cursores.wq);
+
+/**
+ * De un pendiente a su pantalla.
+ *
+ * No se renderiza JSON como respaldo para un objeto que NEXO sabe interpretar:
+ * cada entidad de la bandeja tiene destino. Las que todavía no tienen acción
+ * posible lo dicen con todas las letras en vez de mostrar un botón falso.
+ */
+async function abrirPendiente(item) {
+  const migas = ['Pendientes', item.rama];
+  switch (item.entidad) {
+    case 'documents':
+    case 'document_extractions':
+    case 'document_duplicates': {
+      const id = item.trazaRef.replace('/documents/', '');
+      ir('documentos', migas);
+      await listarDocumentos();
+      await abrirDocumento(id);
+      return;
+    }
+    case 'tax_transactions':
+    case 'tax_affectations':
+    case 'accounting_decisions': {
+      ir('operaciones', migas);
+      await listarOperaciones();
+      const id = item.entidad === 'tax_transactions' ? item.entityId : null;
+      if (id) await abrirOperacion(id);
+      else E('op-detalle-msg').innerHTML =
+        '<div class="aviso">Buscá el comprobante en la lista para abrir su ' +
+        'afectación o su decisión.</div>';
+      return;
+    }
+    case 'journal_entries':
+      ir('asientos', migas);
+      await listarAsientos();
+      await abrirAsiento(item.entityId);
+      return;
+    case 'periods':
+    case 'accounting_closures':
+      ir('cierre', migas);
+      await listarPeriodos();
+      return;
+    case 'fiscal_years':
+      ir('libros', migas);
+      E('lib-msg').innerHTML = '<div class="aviso error">' + escapar(item.motivo) +
+        '<br>El Diario es el libro con eficacia probatoria: revisalo antes de emitir nada.</div>';
+      return;
+    case 'notes':
+      ir('estados', migas);
+      await listarEstados();
+      return;
+    case 'vat_books':
+      ir('libros', migas);
+      E('lib-msg').innerHTML = '<div class="aviso">' + escapar(item.motivo) +
+        '<br>El libro de IVA se genera desde el período correspondiente.</div>';
+      return;
+    case 'ai_predictions':
+      ir('bandeja', migas);
+      E('wq-msg').innerHTML = '<div class="aviso"><span class="p p-ia">propuesto por IA</span> ' +
+        escapar(item.motivo) + '<br>La revisión de propuestas todavía no tiene pantalla: ' +
+        'la propuesta existe y no se convierte en decisión sin que una persona la revise.</div>';
+      return;
+    default:
+      E('wq-msg').innerHTML = '<div class="aviso">' + escapar(item.motivo) +
+        '<br>Esta entidad todavía no tiene pantalla propia.</div>';
+  }
+}
+
+// ══ 3 · Documentos ════════════════════════════════════════════════════════
+async function listarDocumentos(cursor) {
+  const r = await api('GET', '/documents?limite=25' + (cursor ? '&cursor=' + cursor : ''));
+  if (!r.ok) return decir('doc-msg', r);
+  limpiar('doc-msg');
+
+  const cuerpo = E('t-doc').querySelector('tbody');
+  if (!cursor) { cuerpo.innerHTML = ''; estado.documentosSinOperacion = []; }
+
+  for (const d of (r.datos.documentos || [])) {
+    const senales = [];
+    if (d.tieneHallazgoBloqueante) senales.push('<span class="p p-mal">hallazgo bloqueante</span>');
+    if (d.tieneDuplicadoSinResolver) senales.push('<span class="p p-mal">duplicado sin resolver</span>');
+    if (d.extraccionDisponible === false) {
+      senales.push('<span class="p p-ojo">' + escapar(d.motivoNoDisponible || 'sin lectura') + '</span>');
+    }
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(d.nombre) + '</td><td class="mono">' + escapar(d.tipo) + '</td>' +
+      '<td>' + pastilla(d.status) + '</td>' +
+      '<td class="mono">' + escapar(d.confianza === null || d.confianza === undefined ? '—' : d.confianza) + '</td>' +
+      '<td>' + (senales.join(' ') || '<span class="p p-bien">sin observaciones</span>') + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirDocumento(d.id);
+    cuerpo.appendChild(tr);
+    estado.documentosSinOperacion.push({ id: d.id, nombre: d.nombre });
+  }
+
+  const sel = E('tt-doc');
+  sel.innerHTML = '';
+  for (const d of estado.documentosSinOperacion) {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.nombre;
+    sel.appendChild(o);
+  }
+
+  estado.cursores.doc = r.datos.cursor;
+  E('b-doc-mas').hidden = !r.datos.cursor;
+}
+E('b-doc-listar').onclick = () => listarDocumentos();
+E('b-doc-mas').onclick = () => listarDocumentos(estado.cursores.doc);
 
 E('b-subir').onclick = async () => {
   const f = E('archivo').files[0];
@@ -400,194 +1041,974 @@ E('b-subir').onclick = async () => {
   forma.append('file', f);
   const r = await api('POST', '/documents', forma, true);
   decir('doc-msg', r, 'Documento archivado');
-  if (r.ok) { await listar(); elegir(r.datos.id); }
+  if (r.ok) { await listarDocumentos(); abrirDocumento(r.datos.id); }
 };
 
-// ── 3 · Detalle ───────────────────────────────────────────────────────────
-async function elegir(id) {
+async function abrirDocumento(id) {
   estado.documento = id;
   const r = await api('GET', '/documents/' + id);
   if (!r.ok) return decir('doc-msg', r);
 
+  E('doc-detalle').hidden = false;
+  ir('documentos', ['Documentos', (r.datos.documento || {}).nombre || 'documento']);
+
+  const d = r.datos.documento || {};
+  E('doc-kv').innerHTML =
+    fila('Nombre', d.nombre) + fila('Tipo', d.tipo) + fila('MIME', d.mime) +
+    fila('Bytes', d.bytes) + fila('Estado', d.status) +
+    fila('SHA-256', d.sha256) + fila('Origen', d.source) +
+    fila('Recibido', d.receivedAt || d.recibidoEn);
+
+  estado.campos = r.datos.campos || [];
   const cuerpo = E('t-campos').querySelector('tbody');
   cuerpo.innerHTML = '';
-  for (const c of (r.datos.campos || [])) {
+  for (const c of estado.campos) {
     const tr = document.createElement('tr');
     // El método es lo que separa un dato leído de uno declarado. Se muestra
     // siempre, no como detalle avanzado.
     tr.innerHTML =
       '<td class="mono">' + escapar(c.fieldPath) + '</td>' +
-      '<td>' + escapar(c.rawValue == null ? '—' : c.rawValue) + '</td>' +
-      '<td><span class="p ' + (c.method === 'MANUAL' ? 'p-bien' : 'p-ojo') + '">' +
-        escapar(c.method) + '</span></td>' +
-      '<td class="mono">' + escapar(c.confidence) + '</td>';
+      '<td>' + escapar(c.rawValue === null || c.rawValue === undefined ? '—' : c.rawValue) + '</td>' +
+      '<td>' + (c.method === 'MANUAL'
+          ? '<span class="p p-neu">declarado por una persona</span>'
+          : '<span class="p p-ojo">' + escapar(c.method) + '</span>') + '</td>' +
+      '<td class="mono">' + escapar(c.confidence) + '</td>' +
+      '<td>' + (puede('document:upload') ? '<span class="clic">corregir</span>' : '') + '</td>';
+    const clic = tr.querySelector('.clic');
+    if (clic) clic.onclick = () => pedirCorreccion(c.fieldPath, c.rawValue);
     cuerpo.appendChild(tr);
   }
 
   const ext = (r.datos.extracciones || [])[0];
-  E('detalle-msg').innerHTML = ext && !ext.disponible
+  E('doc-detalle-msg').innerHTML = ext && !ext.disponible
     ? '<div class="aviso">Sin extracción disponible: <span class="mono">' +
-      escapar(ext.motivoNoDisponible) + '</span>. No es que no se haya encontrado nada; ' +
+      escapar(ext.motivoNoDisponible) + '</span>. No es que no se haya encontrado nada: ' +
       'es que no hubo con qué leerlo.</div>'
     : '';
 
-  for (const s of ['s-detalle', 's-tt']) ver(s, true);
+  pintarDuplicados(r.datos.duplicados || []);
+  E('b-reextraer').hidden = !puede('document:upload');
+  E('b-doc-bajar').hidden = !puede('document:download');
+  await mostrarEvidencia(id, d.mime, d.contentType || d.tipo);
+}
 
-  const tt = await api('GET', '/documents/' + id + '/tax-transaction');
-  if (tt.ok && tt.datos && tt.datos.id) {
-    estado.tt = tt.datos.id;
-    decir('tt-msg', tt, 'Esta operación ya estaba registrada');
-    trasOperacion();
+const fila = (k, v) => '<dt>' + escapar(k) + '</dt><dd>' + escapar(v === undefined ? '—' : v) + '</dd>';
+
+/**
+ * La evidencia, antes de la acción.
+ *
+ * El original se pide con la sesión —un `img src` no puede mandar la cabecera de
+ * empresa— y se muestra según lo que la política de la página admite:
+ * imágenes y texto se ven acá; un PDF se descarga, porque `object-src` es
+ * `none` y no se va a aflojar por una vista previa.
+ */
+async function mostrarEvidencia(id, mime, tipo) {
+  const caja = E('doc-evidencia');
+  caja.innerHTML = '<span class="ayuda">Cargando el original…</span>';
+  if (!puede('document:download')) {
+    caja.innerHTML = '<span class="ayuda">Tu rol no puede descargar el original.</span>';
+    return;
+  }
+  const r = await fetch('/documents/' + id + '/content', {
+    headers: { 'x-company-id': estado.empresa }, credentials: 'same-origin',
+  });
+  if (!r.ok) {
+    caja.innerHTML = '<div class="aviso error">No se pudo traer el original (' + r.status + ').</div>';
+    return;
+  }
+  const blob = await r.blob();
+  if (String(mime).indexOf('image/') === 0) {
+    const lector = new FileReader();
+    lector.onload = () => { caja.innerHTML = '<img alt="original" src="' + lector.result + '">'; };
+    lector.readAsDataURL(blob);
+  } else if (String(mime).indexOf('xml') !== -1 || String(mime).indexOf('text') !== -1 ||
+             String(mime).indexOf('json') !== -1) {
+    caja.innerHTML = '<pre>' + escapar(await blob.text()) + '</pre>';
+  } else {
+    caja.innerHTML = '<div class="aviso">Tipo <span class="mono">' + escapar(tipo) +
+      '</span>: la vista previa no está disponible bajo la política de esta página. ' +
+      'Descargalo para verlo.</div>';
   }
 }
 
-E('b-reextraer').onclick = async () => {
-  const r = await api('POST', '/documents/' + estado.documento + '/extract');
-  decir('detalle-msg', r, 'Se volvió a leer');
-  if (r.ok) elegir(estado.documento);
+E('b-doc-bajar').onclick = async () => {
+  const r = await fetch('/documents/' + estado.documento + '/content', {
+    headers: { 'x-company-id': estado.empresa }, credentials: 'same-origin',
+  });
+  if (!r.ok) return decir('doc-detalle-msg', { ok: false, status: r.status, datos: null });
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = 'documento';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
 };
 
-// ── 4 · Operación fiscal ──────────────────────────────────────────────────
+E('b-reextraer').onclick = async () => {
+  const r = await api('POST', '/documents/' + estado.documento + '/extract');
+  decir('doc-detalle-msg', r, 'Se volvió a leer');
+  if (r.ok) abrirDocumento(estado.documento);
+};
+
+function pedirCorreccion(campo, valor) {
+  E('doc-corregir').hidden = false;
+  E('corr-campo').value = campo;
+  E('corr-valor').value = valor === null || valor === undefined ? '' : valor;
+}
+E('b-corr-cancelar').onclick = () => { E('doc-corregir').hidden = true; };
+E('b-corr-campo').onclick = async () => {
+  const r = await api('POST', '/documents/' + estado.documento + '/fields', {
+    campos: [{ fieldPath: E('corr-campo').value, value: E('corr-valor').value }],
+  });
+  decir('doc-detalle-msg', r, 'Corrección registrada junto a la lectura del motor');
+  if (r.ok) { E('doc-corregir').hidden = true; abrirDocumento(estado.documento); }
+};
+
+function pintarDuplicados(duplicados) {
+  const caja = E('doc-duplicados');
+  const abiertos = duplicados.filter((d) => !d.resolucion);
+  if (abiertos.length === 0) { caja.innerHTML = ''; return; }
+
+  caja.innerHTML = '<h3>Posibles duplicados</h3>';
+  for (const d of abiertos) {
+    const div = document.createElement('div');
+    div.className = 'aviso';
+    div.innerHTML = '<strong>' + escapar(d.nivel) + '</strong> ' + escapar(d.explicacion || '') +
+      '<label>Motivo</label><input class="motivo">';
+    if (puede('document:upload')) {
+      const si = document.createElement('button');
+      si.textContent = 'Es duplicado';
+      const no = document.createElement('button');
+      no.textContent = 'No es duplicado'; no.className = 'sec';
+      const resolver = async (resolucion) => {
+        const r = await api('POST', '/documents/' + estado.documento + '/duplicates/' + d.id, {
+          resolucion, motivo: div.querySelector('.motivo').value,
+        });
+        decir('doc-detalle-msg', r, 'Duplicado resuelto');
+        if (r.ok) abrirDocumento(estado.documento);
+      };
+      si.onclick = () => resolver('ES_DUPLICADO');
+      no.onclick = () => resolver('NO_ES_DUPLICADO');
+      div.appendChild(si); div.appendChild(no);
+    }
+    caja.appendChild(div);
+  }
+}
+
+// ══ 4 · Operaciones fiscales ══════════════════════════════════════════════
+// ══ Productos ═════════════════════════════════════════════════════════════
+async function listarProductos(cursor) {
+  E('pro-alta').hidden = !puede('product:write');
+
+  const q = new URLSearchParams({ limite: '25' });
+  const mapa = [['pro-q','q'],['pro-tipo','tipo'],['pro-status','status']];
+  for (const par of mapa) if (E(par[0]).value) q.set(par[1], E(par[0]).value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/products?' + q.toString());
+  if (!r.ok) return decir('pro-msg', r);
+  limpiar('pro-msg');
+
+  const cuerpo = E('t-pro').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  const productos = r.datos.productos || [];
+  if (productos.length === 0 && !cursor) {
+    E('pro-msg').innerHTML = '<div class="aviso">Sin productos con estos filtros.</div>';
+  }
+
+  for (const p of productos) {
+    const tr = document.createElement('tr');
+    // El tratamiento impositivo se muestra tal cual, sin traducirlo a un
+    // porcentaje: el porcentaje depende de la fecha de la operación y esta
+    // tabla no sabe de qué operación se trata.
+    tr.innerHTML =
+      '<td class="mono">' + escapar(p.codigo) + '</td>' +
+      '<td>' + escapar(p.nombre) + '</td>' +
+      '<td>' + escapar(p.tipo) + '</td>' +
+      '<td>' + escapar(p.unidad) + '</td>' +
+      '<td>' + escapar(p.tratamientoImpositivo) +
+        (p.impuesto ? ' <span class="p p-neu">' + escapar(p.impuesto) + '</span>' : '') + '</td>' +
+      '<td class="mono">' + escapar(p.cuentaVentaCodigo || '—') + '</td>' +
+      '<td class="mono">' + escapar(p.precioLista || '—') + '</td>' +
+      '<td>' + (p.llevaStock ? 'sí' : 'no') + '</td>' +
+      '<td>' + pastilla(p.status) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  estado.cursores.pro = r.datos.cursor;
+  E('b-pro-mas').hidden = !r.datos.cursor;
+}
+
+E('b-pro').onclick = () => listarProductos();
+E('b-pro-mas').onclick = () => listarProductos(estado.cursores.pro);
+
+E('b-pro-alta').onclick = async () => {
+  const cuerpo = {
+    codigo: E('pro-codigo').value.trim(),
+    nombre: E('pro-nombre').value.trim(),
+    tipo: E('pro-n-tipo').value,
+    unidad: E('pro-unidad').value,
+    tratamientoImpositivo: E('pro-trat').value,
+    llevaStock: E('pro-stock').checked,
+  };
+  if (E('pro-imp').value) cuerpo.impuesto = E('pro-imp').value;
+  if (E('pro-cv').value) cuerpo.cuentaVenta = E('pro-cv').value.trim();
+  if (E('pro-cc').value) cuerpo.cuentaCompra = E('pro-cc').value.trim();
+  if (E('pro-precio').value) cuerpo.precioLista = E('pro-precio').value.trim();
+
+  const r = await api('POST', '/products', cuerpo);
+  decir('pro-alta-msg', r, 'Producto dado de alta.');
+  if (r.ok) listarProductos();
+};
+
+// ══ Terceros ══════════════════════════════════════════════════════════════
+async function listarTerceros(cursor) {
+  // El formulario de alta solo aparece con el permiso que lo ejecuta. Un botón
+  // que la API va a rechazar no es una funcionalidad: es una promesa incumplida.
+  E('ter-alta').hidden = !puede('party:write');
+
+  const q = new URLSearchParams({ limite: '25' });
+  const mapa = [['ter-q','q'],['ter-rol','rol'],['ter-status','status']];
+  for (const par of mapa) if (E(par[0]).value) q.set(par[1], E(par[0]).value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/parties?' + q.toString());
+  if (!r.ok) return decir('ter-msg', r);
+  limpiar('ter-msg');
+
+  const cuerpo = E('t-ter').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  const terceros = r.datos.terceros || [];
+  if (terceros.length === 0 && !cursor) {
+    E('ter-msg').innerHTML = '<div class="aviso">Sin terceros con estos filtros.</div>';
+  }
+
+  for (const t of terceros) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(t.razonSocial) + '</td>' +
+      '<td class="mono">' + escapar(t.tipoDocumento) + ' ' +
+        escapar(t.numeroDocumento || '—') + '</td>' +
+      '<td>' + escapar(t.condicionIva) + '</td>' +
+      '<td>' + (t.roles || []).map((x) =>
+        '<span class="p p-neu">' + escapar(x) + '</span>').join(' ') + '</td>' +
+      '<td>' + pastilla(t.status) + '</td>' +
+      '<td><span class="clic">cuenta corriente</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirTercero(t.id);
+    cuerpo.appendChild(tr);
+  }
+
+  estado.cursores.ter = r.datos.cursor;
+  E('b-ter-mas').hidden = !r.datos.cursor;
+}
+
+async function abrirTercero(id, cursor) {
+  // La query se arma aparte y siempre se concatena igual. Con un ternario
+  // adentro del argumento, el barrido S-12 no puede reconstruir la ruta y la
+  // reporta como inexistente — con razón: no puede distinguir esa forma de una
+  // llamada rota de verdad.
+  const q = new URLSearchParams({ limite: '50' });
+  if (cursor) q.set('cursor', cursor);
+  const r = await api('GET', '/parties/' + id + '/cuenta-corriente?' + q.toString());
+  if (!r.ok) return decir('ter-cc-msg', r);
+  limpiar('ter-cc-msg');
+
+  estado.tercero = id;
+  E('ter-detalle').hidden = false;
+  const t = r.datos.tercero;
+  E('ter-titulo').textContent = t.razonSocial;
+
+  // El signo se explica en palabras. «-1500» no dice quién le debe a quién, y
+  // esa es exactamente la pregunta que trae a alguien a esta pantalla.
+  const saldo = Number(t.saldo);
+  const sentido = saldo === 0 ? 'sin saldo'
+    : saldo > 0 ? 'nos debe' : 'le debemos';
+  E('ter-kv').innerHTML =
+    '<dt>Debe</dt><dd class="mono">' + escapar(t.debe) + '</dd>' +
+    '<dt>Haber</dt><dd class="mono">' + escapar(t.haber) + '</dd>' +
+    '<dt>Saldo</dt><dd class="mono">' + escapar(t.saldo) + ' <em>(' + sentido + ')</em></dd>' +
+    '<dt>Movimientos</dt><dd>' + escapar(t.movimientos) + '</dd>' +
+    '<dt>Último</dt><dd class="mono">' + escapar(t.ultimoMovimiento || '—') + '</dd>';
+
+  const cuerpo = E('t-ter-cc').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  for (const m of (r.datos.movimientos || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(m.fecha) + '</td>' +
+      '<td class="mono">' + escapar(m.diario) + ' ' + escapar(m.numeroAsiento) + '</td>' +
+      '<td class="mono">' + escapar(m.cuentaCodigo) + ' ' + escapar(m.cuentaNombre) + '</td>' +
+      '<td>' + escapar(m.detalleLinea || m.detalle) + '</td>' +
+      '<td class="mono">' + escapar(m.debe) + '</td>' +
+      '<td class="mono">' + escapar(m.haber) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  estado.cursores.terCc = r.datos.cursor;
+  E('b-ter-cc-mas').hidden = !r.datos.cursor;
+  ir('terceros', ['Terceros', t.razonSocial]);
+}
+
+E('b-ter').onclick = () => listarTerceros();
+E('b-ter-mas').onclick = () => listarTerceros(estado.cursores.ter);
+E('b-ter-cc-mas').onclick = () => abrirTercero(estado.tercero, estado.cursores.terCc);
+
+E('b-ter-alta').onclick = async () => {
+  const roles = [];
+  if (E('ter-r-cli').checked) roles.push('CLIENTE');
+  if (E('ter-r-pro').checked) roles.push('PROVEEDOR');
+  if (roles.length === 0) {
+    E('ter-alta-msg').innerHTML =
+      '<div class="aviso mal">Elegí al menos un rol: sin rol el tercero no se puede ofrecer ' +
+      'en ninguna pantalla.</div>';
+    return;
+  }
+
+  const tipo = E('ter-tipo').value;
+  const cuerpo = {
+    tipoDocumento: tipo,
+    razonSocial: E('ter-rs').value,
+    condicionIva: E('ter-iva').value,
+    roles: roles,
+  };
+  // `SIN_IDENTIFICAR` no lleva número, y la base lo rechaza. La consola no
+  // manda el campo en vez de mandarlo vacío: son dos cosas distintas.
+  if (tipo !== 'SIN_IDENTIFICAR') cuerpo.numeroDocumento = E('ter-doc').value.trim();
+  if (E('ter-email').value) cuerpo.email = E('ter-email').value;
+  if (E('ter-tel').value) cuerpo.telefono = E('ter-tel').value;
+
+  const r = await api('POST', '/parties', cuerpo);
+  decir('ter-alta-msg', r, 'Tercero dado de alta.');
+  if (r.ok) listarTerceros();
+};
+
+async function listarOperaciones(cursor) {
+  const q = new URLSearchParams({ limite: '25' });
+  const mapa = [['op-dir','direccion'],['op-desde','desde'],['op-hasta','hasta'],
+                ['op-cuit','cuitContraparte'],['op-const','constatacion']];
+  for (const par of mapa) if (E(par[0]).value) q.set(par[1], E(par[0]).value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/tax-transactions?' + q.toString());
+  if (!r.ok) return decir('ops-msg', r);
+  limpiar('ops-msg');
+
+  const cuerpo = E('t-ops').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  const ops = r.datos.operaciones || [];
+  if (ops.length === 0 && !cursor) {
+    E('ops-msg').innerHTML = '<div class="aviso">Sin operaciones con estos filtros.</div>';
+  }
+
+  for (const o of ops) {
+    const tr = document.createElement('tr');
+    // Los dos sellos, en dos columnas. Nunca uno solo: `DECLARACION_PROFESIONAL`
+    // con resultado OK no es «ARCA OK», y esta tabla no puede sugerir que sí.
+    tr.innerHTML =
+      '<td class="mono">' + escapar(o.fecha) + '</td>' +
+      '<td class="mono">' + escapar(o.direccion) + ' ' + escapar(o.cbteTipo) + '-' +
+        escapar(o.puntoVenta) + '-' + escapar(o.numero) + '</td>' +
+      '<td>' + escapar(o.razonSocial || o.cuitContraparte || '—') + '</td>' +
+      '<td class="mono">' + escapar(o.total) + '</td>' +
+      '<td>' + pastilla(o.constatacion) + '</td>' +
+      '<td>' + (o.constatacionOrigen === 'ARCA'
+          ? pastillaOrigen('ARCA')
+          : o.constatacionOrigen === 'DECLARACION_PROFESIONAL'
+            ? pastillaOrigen('PROFESIONAL')
+            : '<span class="p p-neu">' + escapar(o.constatacionOrigen) + '</span>') + '</td>' +
+      '<td>' + (o.afectacion
+          ? escapar(o.afectacion) + ' ' +
+            (o.afectacionOrigen === 'SUGERIDA_POR_PRECEDENTE' ? pastillaOrigen('PRECEDENTE') : '')
+          : '<span class="p p-ojo">falta</span>') + '</td>' +
+      '<td>' + (o.decisionResultado
+          ? escapar(o.decisionResultado)
+          : '<span class="p p-ojo">falta</span>') + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirOperacion(o.id);
+    cuerpo.appendChild(tr);
+  }
+
+  estado.cursores.ops = r.datos.cursor;
+  E('b-ops-mas').hidden = !r.datos.cursor;
+}
+E('b-ops').onclick = () => listarOperaciones();
+E('b-ops-mas').onclick = () => listarOperaciones(estado.cursores.ops);
+
+async function abrirOperacion(id) {
+  estado.tt = id;
+  E('op-detalle').hidden = false;
+  ir('operaciones', ['Operaciones', 'comprobante']);
+
+  const afec = await api('GET', '/tax-transactions/' + id + '/afectacion');
+  const dec = await api('GET', '/comprobantes/' + id + '/decision');
+  const hist = await api('GET', '/comprobantes/' + id + '/decision/historial');
+
+  const a = (afec.datos && afec.datos.afectacion) || null;
+  const d = (dec.datos && dec.datos.decision) || (dec.datos || null);
+
+  E('op-kv').innerHTML =
+    fila('Operación', id) +
+    fila('Afectación', a ? a.afectacion : 'sin declarar') +
+    fila('Quién la declaró', a ? (a.declaradaPor || a.origen) : '—') +
+    fila('Decisión', d && d.resultado ? d.resultado : 'sin decisión vigente') +
+    fila('Origen de la decisión', d && d.origen ? d.origen : '—');
+
+  const historial = (hist.datos && (hist.datos.historial || hist.datos.decisiones)) || [];
+  E('op-detalle-msg').innerHTML = historial.length === 0 ? '' :
+    '<h3>Historial de decisiones</h3><div class="tabla"><table><thead><tr>' +
+    '<th>Estado</th><th>Resultado</th><th>Origen</th><th>Motivo de la corrección</th>' +
+    '</tr></thead><tbody>' +
+    historial.map((h) =>
+      '<tr><td>' + pastilla(h.estado) + '</td><td>' + escapar(h.resultado) + '</td>' +
+      '<td>' + pastillaOrigen(h.origen === 'PROPUESTA_IA' ? 'IA' : 'PROFESIONAL') + '</td>' +
+      '<td>' + escapar(h.justificacion || h.motivo || '—') + '</td></tr>').join('') +
+    '</tbody></table></div>';
+}
+
 E('b-tt').onclick = async () => {
-  const r = await api('POST', '/documents/' + estado.documento + '/tax-transaction', {
+  const r = await api('POST', '/documents/' + E('tt-doc').value + '/tax-transaction', {
     direction: E('tt-dir').value,
     cbteTipo: Number(E('tt-tipo').value),
     puntoVenta: Number(E('tt-pv').value),
     numero: Number(E('tt-nro').value),
     fecha: E('tt-fecha').value,
-    cuitContraparte: E('tt-cuit').value.trim() === '' ? null : E('tt-cuit').value.trim(),
-    razonSocial: null,
+    cuitContraparte: E('tt-cuit').value,
+    razonSocial: E('tt-rs').value,
     condicionIva: 'RESPONSABLE_INSCRIPTO',
-    neto: E('tt-neto').value, iva: E('tt-iva').value, noGravado: E('tt-ng').value,
-    exento: E('tt-ex').value, percepciones: E('tt-perc').value, total: E('tt-total').value,
+    neto: E('tt-neto').value, iva: E('tt-iva').value,
+    noGravado: E('tt-ng').value, exento: E('tt-ex').value,
+    percepciones: E('tt-perc').value, total: E('tt-total').value,
   });
-  decir('tt-msg', r, 'Operación registrada');
-  if (r.ok) { estado.tt = r.datos.taxTransactionId; trasOperacion(); }
+  decir('tt-msg', r, 'Operación registrada, sin constatar');
+  if (r.ok) { estado.tt = r.datos.taxTransactionId; listarOperaciones(); }
 };
 
-function trasOperacion() {
-  for (const s of ['s-arca', 's-afec', 's-dec', 's-asiento']) ver(s, true);
-}
-
-// ── 5 · ARCA ──────────────────────────────────────────────────────────────
 E('b-constatar').onclick = async () => {
   const r = await api('POST', '/tax-transactions/' + estado.tt + '/constatar', {
-    modalidad: E('modalidad').value,
-    cae: E('cae').value.trim(),
-    tipoDocReceptor: E('doctipo').value.trim(),
-    nroDocReceptor: E('docnro').value.trim(),
+    cae: E('cae').value, modalidad: E('modalidad').value,
+    docTipoReceptor: Number(E('doctipo').value), docNroReceptor: E('docnro').value,
   });
   decir('arca-msg', r, 'ARCA contestó');
+  if (r.ok) listarOperaciones();
 };
 
-// ── 6 · Afectación ────────────────────────────────────────────────────────
 E('b-afec').onclick = async () => {
-  const evidencia = Array.from(E('afec-cuentas').selectedOptions)
-    .map((o) => ({ tipo: 'CUENTA', id: o.value }));
-  if (estado.documento) evidencia.push({ tipo: 'DOCUMENTO', id: estado.documento });
-  const nota = E('afec-nota').value.trim();
-  if (nota.length >= 10) evidencia.push({ tipo: 'NOTA', texto: nota });
-
-  const cuerpo = { afectacion: E('afec').value, evidencia };
-  if (E('afec').value === 'MIXTA' && E('afec-prop').value !== '') {
-    cuerpo.proporcionGravada = Number(E('afec-prop').value);
-  }
-  decir('afec-msg', await api('POST', '/tax-transactions/' + estado.tt + '/afectacion', cuerpo),
-    'Afectación declarada');
-};
-
-// ── 7 · Decisión ──────────────────────────────────────────────────────────
-E('b-dec-auto').onclick = async () => {
-  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision');
-  decir('dec-msg', r, 'Decisión del motor');
-  if (r.ok) { estado.decision = r.datos.decisionId; ver('s-corr', true); }
-};
-
-E('b-dec-manual').onclick = async () => {
-  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision', {
-    manual: { justificacion: E('dec-just').value, resultado: E('dec-res').value },
+  const cuentas = Array.prototype.slice.call(E('afec-cuentas').selectedOptions).map((o) => o.value);
+  const r = await api('POST', '/tax-transactions/' + estado.tt + '/afectacion', {
+    afectacion: E('afec').value,
+    proporcionGravada: E('afec-prop').value ? Number(E('afec-prop').value) : undefined,
+    evidencia: cuentas.map((id) => ({ tipo: 'CUENTA', id })),
+    nota: E('afec-nota').value,
   });
-  decir('dec-msg', r, 'Decisión registrada');
-  if (r.ok) { estado.decision = r.datos.decisionId; ver('s-corr', true); }
+  decir('afec-msg', r, 'Afectación declarada');
+  if (r.ok) { listarOperaciones(); abrirOperacion(estado.tt); }
 };
 
-E('b-dec-hist').onclick = async () => {
-  const r = await api('GET', '/comprobantes/' + estado.tt + '/decision/historial');
-  if (!r.ok) return decir('dec-msg', r);
-  const t = E('t-dec'); t.hidden = false;
-  const cuerpo = t.querySelector('tbody'); cuerpo.innerHTML = '';
-  for (const d of r.datos.historial) {
+// ══ 5 · Asientos ══════════════════════════════════════════════════════════
+async function listarAsientos(cursor) {
+  const q = new URLSearchParams({ limite: '25' });
+  if (E('as-desde').value) q.set('desde', E('as-desde').value);
+  if (E('as-hasta').value) q.set('hasta', E('as-hasta').value);
+  if (E('as-estado').value) q.set('status', E('as-estado').value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/journal-entries?' + q.toString());
+  if (!r.ok) return decir('as-msg', r);
+  limpiar('as-msg');
+
+  const cuerpo = E('t-as').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  for (const a of (r.datos.asientos || [])) {
     const tr = document.createElement('tr');
     tr.innerHTML =
-      '<td class="mono">' + escapar(d.id.slice(0, 8)) + '…</td>' +
-      '<td><span class="p ' + (d.estado === 'SUPERSEDIDA' ? 'p-neu' : 'p-bien') + '">' +
-        escapar(d.estado) + '</span></td>' +
-      '<td class="mono">' + escapar(d.origen) + '</td>' +
-      '<td class="mono">' + escapar(d.resultado) + '</td>' +
-      '<td class="mono">' + escapar(d.asientos) + '</td>' +
-      '<td class="mono">' + escapar(d.supersede ? d.supersede.slice(0, 8) + '…' : '—') + '</td>' +
-      '<td>' + (d.estado === 'SUPERSEDIDA' ? '' : '<span class="clic">usar</span>') + '</td>';
-    const clic = tr.querySelector('.clic');
-    if (clic) clic.onclick = () => { estado.decision = d.id; ver('s-corr', true); };
+      '<td class="mono">' + escapar(a.fecha) + '</td>' +
+      '<td class="mono">' + escapar(a.libro) + '</td>' +
+      '<td class="mono">' + escapar(a.numero) + '</td>' +
+      '<td>' + escapar(a.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(a.debe) + '</td>' +
+      '<td class="mono">' + escapar(a.haber) + '</td>' +
+      '<td>' + pastilla(a.status) + '</td>' +
+      '<td>' + (a.prediccionId ? pastillaOrigen('IA') : pastillaOrigen('PROFESIONAL')) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirAsiento(a.id, a);
     cuerpo.appendChild(tr);
+  }
+  estado.cursores.as = r.datos.cursor;
+  E('b-as-mas').hidden = !r.datos.cursor;
+}
+E('b-as-listar').onclick = () => listarAsientos();
+E('b-as-mas').onclick = () => listarAsientos(estado.cursores.as);
+
+async function abrirAsiento(id, resumen) {
+  estado.asiento = id;
+  E('as-detalle').hidden = false;
+  ir('asientos', ['Asientos', 'asiento']);
+
+  const traza = await api('GET', '/books/trace/' + id);
+  const a = resumen || {};
+  E('as-kv').innerHTML =
+    fila('Asiento', id) + fila('Libro', a.libro) + fila('Número', a.numero) +
+    fila('Fecha', a.fecha) + fila('Estado', a.status) +
+    fila('Debe', a.debe) + fila('Haber', a.haber) +
+    fila('Origen', a.origenTipo) + fila('Decisión que lo funda', a.decisionId || '—') +
+    fila('Anula a', a.anulaA || '—');
+
+  const acciones = E('as-acciones');
+  acciones.innerHTML = '';
+
+  // Sin el permiso, el botón no existe. Con el asiento ya aprobado, tampoco:
+  // aprobar dos veces no es una operación.
+  if (a.status && (a.status === 'BORRADOR' || a.status === 'PROPUESTO') &&
+      puede('journal_entry:approve')) {
+    const b = document.createElement('button');
+    b.textContent = 'Aprobar';
+    b.onclick = async () => {
+      const r = await api('POST', '/journal-entries/' + id + '/approve');
+      decir('as-detalle-msg', r, 'Aprobado: recién ahora se proyecta al Mayor');
+      if (r.ok) listarAsientos();
+    };
+    acciones.appendChild(b);
+  }
+
+  if (a.status === 'APROBADO' && puede('journal_entry:reverse')) {
+    const caja = document.createElement('div');
+    caja.innerHTML = '<label>Motivo de la anulación</label><input class="motivo">' +
+      '<p class="ayuda">Un asiento aprobado no se edita. Se anula con un contraasiento, ' +
+      'y el número del anulado se conserva: el Diario muestra la corrección.</p>';
+    const b = document.createElement('button');
+    b.textContent = 'Anular por contraasiento';
+    b.onclick = async () => {
+      const r = await api('POST', '/journal-entries/' + id + '/reverse', {
+        motivo: caja.querySelector('.motivo').value,
+      });
+      decir('as-detalle-msg', r, 'Contraasiento registrado');
+      if (r.ok) listarAsientos();
+    };
+    caja.appendChild(b);
+    acciones.appendChild(caja);
+  }
+
+  if (traza.ok) {
+    E('as-detalle-msg').innerHTML = '<h3>De dónde salió</h3><pre>' +
+      escapar(JSON.stringify(traza.datos, null, 2)) + '</pre>';
+  }
+}
+
+E('b-ne').onclick = async () => {
+  const importe = E('ne-importe').value;
+  const cuerpo = {
+    journalCode: E('ne-libro').value,
+    entryDate: E('ne-fecha').value,
+    description: E('ne-desc').value,
+    status: E('ne-status').value,
+    lines: [
+      { accountCode: E('ne-debe').value, debit: importe, credit: '0' },
+      { accountCode: E('ne-haber').value, debit: '0', credit: importe },
+    ],
+    source: { type: 'MANUAL' },
+  };
+  if (E('ne-just').value) cuerpo.manualJustification = E('ne-just').value;
+  if (estado.decisionVigente) cuerpo.decisionId = estado.decisionVigente;
+  const r = await api('POST', '/journal-entries', cuerpo);
+  decir('ne-msg', r, 'Asiento registrado, todavía sin aprobar');
+  if (r.ok) listarAsientos();
+};
+
+// ══ 6 · Libros ════════════════════════════════════════════════════════════
+const rango = () => 'desde=' + E('lib-desde').value + '&hasta=' + E('lib-hasta').value;
+
+function tablaDe(filas, columnas) {
+  if (!filas || filas.length === 0) return '<div class="aviso">Sin movimientos en el rango.</div>';
+  return '<table><thead><tr>' + columnas.map((c) => '<th>' + escapar(c[0]) + '</th>').join('') +
+    '</tr></thead><tbody>' +
+    filas.map((f) => '<tr>' + columnas.map((c) =>
+      '<td class="mono">' + escapar(f[c[1]]) + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table>';
+}
+
+E('b-diario').onclick = async () => {
+  const r = await api('GET', '/books/diario?' + rango());
+  if (!r.ok) return decir('lib-msg', r);
+  limpiar('lib-msg');
+  // El Diario viaja por folios: cada folio trae sus asientos con transporte y
+  // acumulado, que es la formalidad del CCyC art. 327 y no un detalle de armado.
+  const asientos = [];
+  for (const folio of (r.datos.folios || [])) {
+    for (const a of (folio.asientos || [])) asientos.push(Object.assign({ folio: folio.numero }, a));
+  }
+  E('lib-salida').innerHTML =
+    '<div class="aviso">Asientos: ' + escapar(r.datos.asientos) +
+    ' · Debe ' + escapar(r.datos.totales.debe) + ' · Haber ' + escapar(r.datos.totales.haber) +
+    (r.datos.cumpleFormalidades ? '' : ' · <span class="p p-mal">formalidades incumplidas</span>') +
+    '</div>' +
+    tablaDe(asientos,
+      [['Folio','folio'],['Fecha','fecha'],['Libro','libro'],['N.º','numero'],
+       ['Descripción','descripcion'],['Estado','estado']]);
+  pintarAccionesDeLibro('DIARIO');
+};
+
+E('b-mayor').onclick = async () => {
+  const r = await api('GET', '/books/mayor?' + rango());
+  if (!r.ok) return decir('lib-msg', r);
+  limpiar('lib-msg');
+  E('lib-salida').innerHTML = tablaDe(r.datos.cuentas || [],
+    [['Cuenta','codigo'],['Nombre','nombre'],['Saldo inicial','saldoInicial'],
+     ['Debe','totalDebe'],['Haber','totalHaber'],['Saldo','saldoFinal']]);
+  pintarAccionesDeLibro('MAYOR');
+};
+
+E('b-balance').onclick = async () => {
+  const r = await api('GET', '/reports/trial-balance?' + rango());
+  if (!r.ok) return decir('lib-msg', r);
+  limpiar('lib-msg');
+  E('lib-salida').innerHTML =
+    (r.datos.cuadra === false
+      ? '<div class="aviso error">' + escapar(r.datos.aviso || 'El balance no cuadra.') + '</div>'
+      : '<div class="aviso ok">El balance cuadra.</div>') +
+    tablaDe(r.datos.lineas || [],
+      [['Cuenta','codigo'],['Nombre','nombre'],['Saldo inicial','saldoInicial'],
+       ['Débitos','debitos'],['Créditos','creditos'],['Saldo','saldoFinal']]);
+  E('lib-acciones').innerHTML = '';
+  if (puede('ledger:verify')) {
+    const b = document.createElement('button');
+    b.textContent = 'Verificar el Mayor contra el Diario';
+    b.className = 'sec';
+    b.onclick = async () => {
+      const v = await api('POST', '/books/ledger-verification',
+        { desde: E('lib-desde').value, hasta: E('lib-hasta').value });
+      decir('lib-msg', v, 'Verificación ejecutada y registrada');
+    };
+    E('lib-acciones').appendChild(b);
   }
 };
 
-// ── 8 · Corrección ────────────────────────────────────────────────────────
-E('b-corr').onclick = async () => {
-  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision/supersede', {
-    supersedeId: estado.decision,
-    resultado: E('corr-res').value,
-    motivo: E('corr-motivo').value,
-  });
-  decir('corr-msg', r, 'Decisión corregida — la anterior queda SUPERSEDIDA');
-  if (r.ok) estado.decision = r.datos.decisionId;
+E('b-emisiones').onclick = async () => {
+  const r = await api('GET', '/books/emissions');
+  if (!r.ok) return decir('lib-msg', r);
+  limpiar('lib-msg');
+  E('lib-salida').innerHTML = tablaDe(r.datos.emisiones || [],
+    [['Libro','libro'],['Desde','desde'],['Hasta','hasta'],['Asientos','asientos'],
+     ['Formalidades','cumpleFormalidades'],['SHA-256','sha256'],['Emitido','emitidoEl']]);
+  E('lib-acciones').innerHTML = '';
 };
 
-// ── 9 · Asiento ───────────────────────────────────────────────────────────
-E('b-asiento').onclick = async () => {
-  const importe = E('as-importe').value;
-  const r = await api('POST', '/journal-entries', {
-    journalCode: E('as-libro').value,
-    entryDate: E('as-fecha').value,
-    description: E('as-desc').value,
-    currency: 'ARS',
-    lines: [
-      { accountCode: E('as-debe').value, debit: importe, credit: '0' },
-      { accountCode: E('as-haber').value, debit: '0', credit: importe },
-    ],
-    source: { type: 'INVOICE', id: estado.tt },
-    decisionId: estado.decision,
-  });
-  decir('asiento-msg', r, 'Asiento registrado (todavía sin aprobar)');
-  if (r.ok && r.datos.id) { estado.asiento = r.datos.id; E('b-aprobar').disabled = false; }
+function pintarAccionesDeLibro(libro) {
+  const caja = E('lib-acciones');
+  caja.innerHTML = '';
+  if (!puede('book:emit')) return;
+  const b = document.createElement('button');
+  b.textContent = 'Emitir el ' + libro + ' con su hash';
+  b.onclick = async () => {
+    const r = await api('POST', '/books/emissions',
+      { libro, desde: E('lib-desde').value, hasta: E('lib-hasta').value });
+    decir('lib-msg', r, 'Libro emitido: el hash queda registrado');
+  };
+  caja.appendChild(b);
+}
+
+// ══ 7 · Estados y notas ═══════════════════════════════════════════════════
+/**
+ * `GET /statements` **arma** el estado desde el Mayor; no lista los emitidos.
+ *
+ * Se puede pedir cuantas veces haga falta: sobre los mismos asientos da lo
+ * mismo. Lo que se guarda es lo que una persona emite. No hay hoy una ruta que
+ * liste los estados ya emitidos — está anotado como gap y no se inventa acá.
+ */
+async function listarEstados() {
+  const fy = await api('GET', '/fiscal-years');
+  const sel = E('est-fy');
+  sel.innerHTML = '';
+  for (const e of ((fy.datos && fy.datos.fiscalYears) || [])) {
+    const o = document.createElement('option');
+    o.value = e.id; o.textContent = e.code + ' (' + e.startDate + ' → ' + e.endDate + ')';
+    sel.appendChild(o);
+  }
+  if (sel.options.length === 0) {
+    E('est-msg').innerHTML = '<div class="aviso">No hay ejercicios cargados todavía.</div>';
+  }
+}
+
+E('b-est-armar').onclick = async () => {
+  const ejercicio = E('est-fy').value;
+  if (!ejercicio) return;
+  const r = await api('GET', '/statements?ejercicio=' + ejercicio + '&tipo=' + E('est-tipo').value);
+  if (!r.ok) return decir('est-msg', r);
+
+  const estadoContable = r.datos;
+  E('est-msg').innerHTML = estadoContable.emisible
+    ? '<div class="aviso ok">El estado se puede emitir.</div>'
+    : '<div class="aviso">No emisible: ' + escapar(estadoContable.motivo || '') + '</div>';
+
+  const cuerpo = E('t-est').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const renglon of (estadoContable.renglones || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(renglon.codigo) + '</td>' +
+      '<td style="padding-left:' + ((renglon.nivel || 0) * 1.2 + 0.45) + 'rem">' +
+        escapar(renglon.etiqueta) + '</td>' +
+      '<td class="mono">' + escapar(renglon.importe) + '</td>' +
+      '<td><span class="clic">de dónde sale</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      E('est-detalle').innerHTML = '<h3>' + escapar(renglon.etiqueta) + '</h3>' +
+        '<p class="ayuda">Las cuentas que componen el renglón, tal como las devolvió ' +
+        'la API. Un renglón emitido además se traza por su identificador.</p>' +
+        '<pre>' + escapar(JSON.stringify(renglon, null, 2)) + '</pre>';
+    };
+    cuerpo.appendChild(tr);
+  }
+
+  const acciones = E('est-acciones');
+  acciones.innerHTML = '';
+  // El botón de emitir solo aparece si el estado es emisible **y** el rol puede
+  // firmarlo. Ofrecerlo cuando la API va a devolver 409 es enseñar a ignorar los
+  // errores.
+  if (estadoContable.emisible && puede('statement:issue')) {
+    const b = document.createElement('button');
+    b.textContent = 'Emitir este estado';
+    b.onclick = async () => {
+      const emitido = await api('POST', '/statements/issue',
+        { ejercicio, tipo: E('est-tipo').value });
+      decir('est-msg', emitido, 'Estado emitido con su hash');
+      if (emitido.ok && emitido.datos && emitido.datos.id) abrirNotas(emitido.datos.id);
+    };
+    acciones.appendChild(b);
+  }
 };
 
-E('b-aprobar').onclick = async () => {
-  decir('asiento-msg', await api('POST', '/journal-entries/' + estado.asiento + '/approve'),
-    'Aprobado: recién ahora se proyecta al Mayor');
-};
+async function abrirNotas(id) {
+  const paquete = await api('GET', '/statements/' + id + '/package');
+  const verificacion = await api('GET', '/statements/' + id + '/notes/verify');
+  const caja = E('est-detalle');
+  caja.innerHTML = '<h3>Paquete y notas</h3>';
 
-// ── 10 · Libros ───────────────────────────────────────────────────────────
-const rango = () => 'desde=' + E('lib-desde').value + '&hasta=' + E('lib-hasta').value;
-const mostrar = (r) => { E('libros-out').textContent = JSON.stringify(r.datos, null, 2); };
+  if (verificacion.ok) {
+    const v = verificacion.datos;
+    caja.innerHTML += v.consistente
+      ? '<div class="aviso ok">Las cifras de las notas coinciden con el estado (' +
+        escapar(v.cifras) + ' verificadas).</div>'
+      : '<div class="aviso error">Las notas no coinciden con el estado.<pre>' +
+        escapar(JSON.stringify(v.errores, null, 2)) + '</pre></div>';
+  }
+  if (paquete.ok) {
+    caja.innerHTML += '<pre>' + escapar(JSON.stringify(paquete.datos, null, 2)) + '</pre>';
+  }
+  if (puede('note:write')) {
+    const b = document.createElement('button');
+    b.textContent = 'Generar notas';
+    b.className = 'sec';
+    b.onclick = async () => {
+      const r = await api('POST', '/statements/' + id + '/notes/generate', {});
+      decir('est-msg', r, 'Notas generadas en borrador: entran a la bandeja para aprobarse');
+      if (r.ok) abrirNotas(id);
+    };
+    caja.appendChild(b);
+  }
+}
 
-E('b-diario').onclick = async () => mostrar(await api('GET', '/books/diario?' + rango()));
-E('b-mayor').onclick = async () => mostrar(await api('GET', '/books/mayor?' + rango()));
-E('b-balance').onclick = async () => mostrar(await api('GET', '/reports/trial-balance?' + rango()));
-E('b-traza').onclick = async () => {
-  const partes = {};
-  partes.operacion = (await api('GET', '/documents/' + estado.documento + '/tax-transaction')).datos;
-  partes.afectacion = (await api('GET', '/tax-transactions/' + estado.tt + '/afectacion')).datos;
-  partes.decisiones = (await api('GET', '/comprobantes/' + estado.tt + '/decision/historial')).datos;
-  E('libros-out').textContent = JSON.stringify(partes, null, 2);
-};
+// ══ 8 · Períodos y cierre ═════════════════════════════════════════════════
+async function listarPeriodos() {
+  const per = await api('GET', '/periods');
+  if (!per.ok) return decir('per-msg', per);
+  limpiar('per-msg');
 
-// Fechas por defecto: el ejercicio corriente, para no tipear en cada prueba.
-const hoy = new Date().toISOString().slice(0, 10);
-E('tt-fecha').value = hoy; E('as-fecha').value = hoy;
-E('lib-desde').value = hoy.slice(0, 4) + '-01-01';
-E('lib-hasta').value = hoy.slice(0, 4) + '-12-31';
+  const cuerpo = E('t-per').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of ((per.datos && per.datos.periods) || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + escapar(p.number) + '</td>' +
+      '<td class="mono">' + escapar(p.startDate) + '</td>' +
+      '<td class="mono">' + escapar(p.endDate) + '</td>' +
+      '<td>' + pastilla(p.status) + '</td><td></td>';
+    const acciones = tr.lastElementChild;
+
+    // Cada botón existe solo si el permiso está y la transición es legal. La
+    // base admite ABIERTO → BLOQUEADO → CERRADO y no salta pasos.
+    if (p.status === 'ABIERTO' && puede('period:block')) {
+      acciones.appendChild(botonPeriodo('Bloquear', p.id, 'block', true));
+    }
+    if (p.status === 'BLOQUEADO' && puede('period:close')) {
+      acciones.appendChild(botonPeriodo('Cerrar', p.id, 'close', true));
+    }
+    if (p.status === 'CERRADO' && puede('period:reopen')) {
+      acciones.appendChild(botonPeriodo('Reabrir', p.id, 'reopen', true, true));
+    }
+    cuerpo.appendChild(tr);
+  }
+
+  const fy = await api('GET', '/fiscal-years');
+  const cuerpoFy = E('t-fy').querySelector('tbody');
+  cuerpoFy.innerHTML = '';
+  for (const e of ((fy.datos && fy.datos.fiscalYears) || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td class="mono">' + escapar(e.code) + '</td>' +
+      '<td class="mono">' + escapar(e.startDate) + '</td>' +
+      '<td class="mono">' + escapar(e.endDate) + '</td>' +
+      '<td>' + pastilla(e.status) + '</td><td></td>';
+    if (puede('fiscal_year:close') && e.status === 'ABIERTO') {
+      const b = document.createElement('button');
+      b.textContent = 'Ver checklist de pre-cierre';
+      b.className = 'sec';
+      b.onclick = () => preCerrar(e.id);
+      tr.lastElementChild.appendChild(b);
+    }
+    cuerpoFy.appendChild(tr);
+  }
+}
+E('b-per-listar').onclick = () => listarPeriodos();
+
+function botonPeriodo(texto, id, accion, pideMotivo, pideContrafirma) {
+  const caja = document.createElement('div');
+  const b = document.createElement('button');
+  b.textContent = texto;
+  b.className = 'sec';
+  b.onclick = async () => {
+    const cuerpo = {};
+    if (pideMotivo) {
+      const motivo = caja.querySelector('.motivo');
+      cuerpo.motivo = motivo ? motivo.value : '';
+    }
+    if (pideContrafirma) {
+      const c = caja.querySelector('.contrafirma');
+      cuerpo.contrafirmadoPor = c ? c.value : '';
+    }
+    // Las tres rutas, escritas enteras. Armarlas con `'/periods/' + id + '/' +
+    // accion` funcionaría igual y dejaría al barrido de contrato sin poder
+    // comprobar que existen: una URL que el test no puede reconstruir es una URL
+    // que nadie va a verificar hasta que falle en producción.
+    const r = accion === 'block' ? await api('POST', '/periods/' + id + '/block', cuerpo)
+      : accion === 'close' ? await api('POST', '/periods/' + id + '/close', cuerpo)
+      : await api('POST', '/periods/' + id + '/reopen', cuerpo);
+    decir('per-msg', r, texto + ': hecho');
+    if (r.ok) listarPeriodos();
+  };
+  caja.innerHTML = '<input class="motivo" placeholder="motivo">' +
+    (pideContrafirma ? '<input class="contrafirma" placeholder="quién contrafirma">' : '');
+  caja.appendChild(b);
+  return caja;
+}
+
+async function preCerrar(fiscalYearId) {
+  const r = await api('POST', '/fiscal-years/' + fiscalYearId + '/pre-close', {});
+  const caja = E('cierre-checklist');
+  if (!r.ok) return decir('per-msg', r);
+
+  const items = r.datos.checklist || [];
+  caja.innerHTML = '<h3>Checklist de pre-cierre</h3><div class="tabla"><table><thead><tr>' +
+    '<th>Control</th><th>Descripción</th><th>Detalle</th><th></th></tr></thead><tbody>' +
+    items.map((i) =>
+      '<tr><td class="mono">' + escapar(i.codigo) + '</td>' +
+      '<td>' + escapar(i.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(i.detalle) + '</td>' +
+      '<td>' + (i.cumple ? '<span class="p p-bien">cumple</span>'
+        : (i.bloquea ? '<span class="p p-mal">bloquea el cierre</span>'
+                     : '<span class="p p-ojo">pendiente</span>')) + '</td></tr>').join('') +
+    '</tbody></table></div>' +
+    (r.datos.puedeCerrar
+      ? '<div class="aviso ok">El ejercicio se puede cerrar.</div>'
+      : '<div class="aviso">Hay controles bloqueantes sin cumplir. Se resuelven en la bandeja.</div>');
+}
+
+// ══ 9 · Auditoría ═════════════════════════════════════════════════════════
+async function listarAuditoria(cursor) {
+  const q = new URLSearchParams({ limite: '50' });
+  const mapa = [['au-accion','action'],['au-tipo','objectType'],['au-obj','objectId'],
+                ['au-actor','actorType'],['au-desde','desde'],['au-hasta','hasta']];
+  for (const par of mapa) if (E(par[0]).value) q.set(par[1], E(par[0]).value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/audit?' + q.toString());
+  if (!r.ok) return decir('au-msg', r);
+  limpiar('au-msg');
+
+  const cuerpo = E('t-au').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  for (const e of (r.datos.eventos || [])) {
+    const tr = document.createElement('tr');
+    // «Quién» y «qué clase de quién» en columnas distintas: que algo lo haya
+    // propuesto un modelo y que lo haya firmado una persona no es lo mismo.
+    const clase = e.actorType === 'AI' ? 'p-ia' : e.actorType === 'SYSTEM' ? 'p-neu' : 'p-bien';
+    tr.innerHTML =
+      '<td class="mono">' + escapar(String(e.ocurridoEn).replace('T', ' ').slice(0, 19)) + '</td>' +
+      '<td class="mono">' + escapar(e.actor) + '</td>' +
+      '<td><span class="p ' + clase + '">' + escapar(e.actorType) + '</span></td>' +
+      '<td class="mono">' + escapar(e.accion) + '</td>' +
+      '<td class="mono">' + escapar(e.objetoTipo) + '</td>' +
+      '<td>' + escapar(e.motivo || '—') + '</td>' +
+      '<td><span class="clic">antes / después</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      E('au-detalle').innerHTML =
+        '<h3>' + escapar(e.accion) + '</h3>' +
+        '<div class="dos"><div><h3>Antes</h3><pre>' +
+          escapar(JSON.stringify(e.antes, null, 2)) + '</pre></div>' +
+        '<div><h3>Después</h3><pre>' +
+          escapar(JSON.stringify(e.despues, null, 2)) + '</pre></div></div>';
+    };
+    cuerpo.appendChild(tr);
+  }
+  estado.cursores.au = r.datos.cursor;
+  E('b-au-mas').hidden = !r.datos.cursor;
+}
+E('b-au').onclick = () => listarAuditoria();
+E('b-au-mas').onclick = () => listarAuditoria(estado.cursores.au);
+
+// ══ 10 · Configuración ════════════════════════════════════════════════════
+async function cargarConfig() {
+  const caja = E('cfg-salida');
+  caja.innerHTML = '';
+  limpiar('cfg-msg');
+
+  const empresa = await api('GET', '/companies/current');
+  if (empresa.ok) {
+    const c = empresa.datos.company || {};
+    caja.innerHTML += '<h3>Empresa</h3><dl class="kv">' +
+      fila('Razón social', c.legalName) + fila('CUIT', c.cuit) +
+      fila('Tipo', c.entityType) + fila('Jurisdicción', c.jurisdiction) +
+      fila('Organismo', c.regulator) + fila('Cierre de ejercicio', c.fiscalYearEnd) +
+      fila('Marco contable', (empresa.datos.reportingFramework || {}).framework || 'sin fijar') +
+      '</dl>';
+    caja.innerHTML += '<h3>Tu acceso</h3><div class="aviso">' +
+      (empresa.datos.roles || []).map((r) => '<span class="p p-neu">' + escapar(r) + '</span>').join(' ') +
+      '<br><span class="mono">' + escapar((empresa.datos.permissions || []).join(' · ')) + '</span></div>';
+  }
+
+  if (puede('user:read')) {
+    const u = await api('GET', '/companies/current/users');
+    if (u.ok) {
+      caja.innerHTML += '<h3>Personas con acceso</h3>' +
+        tablaDe(u.datos.users || u.datos.usuarios || [],
+          [['Nombre','fullName'],['Correo','email'],['Rol','role'],['Desde','validFrom']]);
+    }
+  }
+
+  if (puede('arca_credential:manage')) {
+    const cred = await api('GET', '/companies/current/arca/credentials');
+    const cap = await api('GET', '/companies/current/arca/capabilities');
+    caja.innerHTML += '<h3>ARCA — certificados</h3>' +
+      (cred.ok
+        ? tablaDe(cred.datos.credenciales || cred.datos.credentials || [],
+            [['Ambiente','environment'],['CUIT','cuit'],['Huella','fingerprint'],
+             ['Vence','notAfter'],['Estado','status']])
+        : '<div class="aviso">Sin certificados cargados.</div>');
+    if (cap.ok) {
+      caja.innerHTML += '<h3>ARCA — servicios habilitados</h3><pre>' +
+        escapar(JSON.stringify(cap.datos, null, 2)) + '</pre>';
+    }
+  }
+
+  if (puede('rule:read')) {
+    const gaps = await api('GET', '/normative/gaps');
+    if (gaps.ok) {
+      const huecos = gaps.datos.gaps || gaps.datos.huecos || [];
+      caja.innerHTML += '<h3>Huecos normativos abiertos</h3>' +
+        '<p class="ayuda">Cada uno bloquea algo. Un hueco no se cierra desde acá: ' +
+        'cerrarlo exige una fuente oficial archivada y una firma, y eso todavía no ' +
+        'tiene camino en el sistema.</p>' +
+        tablaDe(huecos, [['Tema','topic'],['Qué bloquea','blocks'],['Estado','status']]);
+    }
+  }
+}
+E('b-cfg').onclick = () => cargarConfig();
+
 </script>
 </body>
 </html>

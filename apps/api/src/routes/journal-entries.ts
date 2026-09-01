@@ -48,6 +48,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, notFound } from '../http/errors.js';
+import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 
 const MODOS_REDONDEO = ['HALF_UP', 'HALF_EVEN', 'DOWN', 'UP'] as const;
 
@@ -425,14 +426,18 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
         hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         status: z.enum(['BORRADOR', 'PROPUESTO', 'APROBADO', 'ANULADO']).optional(),
         limite: z.coerce.number().int().min(1).max(500).default(100),
+        cursor: z.string().max(512).optional(),
       })
       .parse(request.query);
+
+    const [cursorFecha, cursorId] = parametrosDeCorte(corteDe(query.cursor));
 
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
-        const result = await tx.query(
-          `SELECT id, journal_code AS "libro", entry_number AS "numero", entry_date AS "fecha",
+        const result = await tx.query<{ id: string; fecha: string }>(
+          `SELECT id, journal_code AS "libro", entry_number AS "numero",
+                  entry_date::text AS "fecha",
                   description AS "descripcion", kind, status, currency,
                   total_debit AS "debe", total_credit AS "haber",
                   source_type AS "origenTipo", source_id AS "origenId",
@@ -442,11 +447,30 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
               AND ($2::date IS NULL OR entry_date >= $2::date)
               AND ($3::date IS NULL OR entry_date <= $3::date)
               AND ($4::text IS NULL OR status = $4)
-            ORDER BY entry_date, journal_code, entry_number
-            LIMIT $5`,
-          [tenant.companyId, query.desde ?? null, query.hasta ?? null, query.status ?? null, query.limite],
+              -- Keyset ASCENDENTE: el Diario se lee del más viejo al más nuevo, y
+              -- el orden de la página tiene que ser el orden del libro. El
+              -- desempate por id lo vuelve total; journal_code y entry_number
+              -- no servían porque el par puede repetirse entre ejercicios.
+              AND ($5::date IS NULL
+                   OR (entry_date, id) > ($5::date, $6::uuid))
+            ORDER BY entry_date, id
+            LIMIT $7`,
+          [
+            tenant.companyId,
+            query.desde ?? null,
+            query.hasta ?? null,
+            query.status ?? null,
+            cursorFecha,
+            cursorId,
+            query.limite + 1,
+          ],
         );
-        return { asientos: result.rows };
+
+        const pagina = armarPagina(result.rows, query.limite, (fila) => ({
+          fecha: fila.fecha,
+          id: fila.id,
+        }));
+        return { asientos: pagina.items, cursor: pagina.cursor, limite: pagina.limite };
       },
     );
   });
