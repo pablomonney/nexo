@@ -83,9 +83,11 @@ NIVEL 0  (hecho)   núcleo contable · fiscal · normativo · auditoría
 NIVEL 1  (hecho)   maestro de terceros                        0047
 NIVEL 2  (hecho)   maestro de productos y servicios           0048
 NIVEL 2b (hecho)   renglones de comprobante — une 1 y 2       0049
-NIVEL 3            ventas  ·  compras          ← necesitan 1 y 2
+NIVEL 3  (hecho)   ciclo comercial: presupuesto → pedido → factura  0050
+         (hecho)   la bandeja pasa a ser extensible por dominio     0051
+NIVEL 3b           compras: recepción de mercadería  ← habilita stock
 NIVEL 4            tesorería y cuenta corriente ← necesita 3
-NIVEL 5            stock                        ← necesita 2 y 3
+NIVEL 5            stock                        ← necesita 2 y 3b
 NIVEL 6            activos fijos · producción · RRHH
 NIVEL 7            Integration Hub · conectores
 NIVEL 8            BI · analítica · IA sobre datos reales

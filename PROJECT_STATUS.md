@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 73 archivos de test, 1390 tests,
-112 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 74 archivos de test, 1406 tests,
+128 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -44,6 +44,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
+| **Ciclo comercial** | **TERMINADO** | **`ciclo-comercial` (16 tests)** |
 
 ## 3. En curso
 
@@ -54,26 +55,38 @@ Nada bloqueado a mitad de camino. Los últimos tres bloques cerrados:
 | 0047 | Maestro de terceros y cuenta corriente derivada (ADR-013) |
 | 0048 | Maestro de productos y servicios, sin alícuotas guardadas (§6) |
 | 0049 | Renglones de comprobante, con el candado diferido que los hace cerrar |
+| 0050 | Ciclo comercial: presupuesto → pedido → factura (ADR-014) |
+| 0051 | La bandeja pasa a ser unión de vistas por dominio, extensible |
 
-Con la 0049 los dos maestros dejan de ser tablas y pasan a ser parte del
-circuito: un comprobante puede decir qué producto se movió y a quién.
+El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
+pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
+aceptado y sin facturar aparece en la bandeja, y desaparece de ella cuando se
+factura — no cuando alguien lo marca, porque no hay forma de marcarlo.
 
 ## 4. Lo que sigue, por dependencias
 
 El orden no es preferencia: cada línea necesita la anterior.
 
-1. **Comprobantes de venta** (presupuesto → pedido → factura) sobre terceros y
-   productos, emitiendo por el circuito fiscal que ya existe.
-2. **Compras** (orden → recepción → factura de proveedor), simétrico.
-3. **Tesorería con cuenta corriente**: cobranzas, pagos e imputación contra los
+1. **Compras**: recepción de mercadería y factura de proveedor. La mitad
+   `COMPRAS` de `commercial_documents` ya existe y está probada; falta el paso
+   de recepción, que es el que habilita el stock.
+2. **Tesorería con cuenta corriente**: cobranzas, pagos e imputación contra los
    saldos que ya deriva `party_balances`.
-4. **Stock**: depósitos y movimientos que no son comprobantes. Hoy existe
+3. **Stock**: depósitos y movimientos que no son comprobantes. Hoy existe
    `product_movements`, que es movimiento **facturado** y no existencias — la
    diferencia está dicha en la propia respuesta de la API para que nadie la
    confunda.
-5. **Activos fijos y amortizaciones.**
-6. **Integration Hub** y conectores.
-7. **BI / analítica** sobre eventos.
+4. **Activos fijos y amortizaciones.**
+5. **Integration Hub** y conectores.
+6. **BI / analítica** sobre eventos.
+
+### Decisiones de producto que aparecieron acá
+
+- **Remitos y entregas parciales.** Un pedido que se factura en dos veces no
+  está modelado. No es una limitación técnica: hay que decidir si NEXO admite
+  facturación parcial y con qué reglas.
+- **Listas de precios.** `products.list_price` es un precio único. Precios por
+  cliente, por cantidad o por lista todavía no existen.
 
 ## 5. Bloqueado por decisión de producto
 
@@ -90,15 +103,17 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
 |---|---|---|
 | 17 valores de estado muertos | Clasificados en la FASE 4 (`MUERTO` / `GAP_DE_PRODUCTO` / `DERIVADO`), **no** removidos de los CHECK | MENOR — documentada |
 | `alerts` y `audit_findings` | Tablas sin escritores productivos; deliberadamente fuera de la bandeja | MENOR |
-| Sin remoto git | El repositorio no tiene `origin`: no hay copia fuera de esta máquina | **IMPORTANTE** |
 | Sin `npm start` | La API no lee `.env` por sí sola ni tiene script de arranque | IMPORTANTE |
+| Backup sin restauración probada | Existe `C:\Users\SaludCapilar\Backups\NEXO`. Un backup que nunca se restauró es una hipótesis, no una copia (§66) | IMPORTANTE |
 | Base de desarrollo vacía | `aai` no tiene usuarios ni empresas; el primer admin se crea con `POST /auth/register-first-admin` | MENOR |
 
 ## 7. Riesgos vivos
 
-- **Copia de seguridad inexistente.** Sin remoto y sin backups probados, el
-  trabajo entero depende de un disco. Es el riesgo más alto del proyecto y no
-  es técnico de resolver.
+- **Restauración nunca probada.** Hay remoto (`origin`, GitHub) y hay un backup
+  de `aai` en `C:\Users\SaludCapilar\Backups\NEXO`. Falta lo que convierte un
+  backup en una copia: restaurarlo una vez y comprobar que la base restaurada
+  pasa `audit:estructura` y `ledger:verify`. Hasta que eso ocurra, el RPO y el
+  RTO son estimaciones.
 - **Certificados de ARCA fuera del repositorio** (`C:\ARCA\`), como debe ser
   (§27). Su pérdida bloquea la integración fiscal.
 - **El WSAA entrega un solo ticket por CUIT y servicio**, sin caché en disco:
@@ -122,3 +137,4 @@ siguen reportando por separado.
 | 011 | Los permisos se resuelven *con* la empresa en contexto |
 | 012 | Sueldos son otro dominio; entran por el mismo puente |
 | **013** | **El tercero es un maestro por empresa; el comprobante conserva lo que declaró** |
+| **014** | **La factura no se guarda dos veces: el pedido se convierte en operación fiscal** |

@@ -124,6 +124,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="operaciones">Operaciones</button>
   <button data-vista="terceros">Terceros</button>
   <button data-vista="productos">Productos</button>
+  <button data-vista="comercial">Comercial</button>
   <button data-vista="asientos">Asientos</button>
   <button data-vista="libros">Libros</button>
   <button data-vista="estados">Estados y notas</button>
@@ -261,6 +262,96 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 </section>
 
 <!-- ══ Operaciones fiscales ═══════════════════════════════════════════════ -->
+<!-- ══ Comercial ══════════════════════════════════════════════════════════ -->
+<section id="v-comercial" hidden>
+  <h2>Presupuestos y pedidos</h2>
+  <p class="ayuda">Antes de que haya factura. Estos documentos <strong>no tienen efecto
+    fiscal</strong>: no llevan CAE, no van al subdiario y no producen asiento. Un
+    presupuesto rechazado no deja ninguna huella contable. Al facturarse, el pedido
+    se convierte en una operación fiscal — no se copia a una tabla aparte.</p>
+  <div class="fila">
+    <div><label>Dirección</label><select id="com-dir">
+      <option value="">ambas</option><option>VENTAS</option><option>COMPRAS</option></select></div>
+    <div><label>Tipo</label><select id="com-tipo">
+      <option value="">todos</option><option>PRESUPUESTO</option><option>PEDIDO</option></select></div>
+    <div><label>Estado</label><select id="com-status">
+      <option value="">todos</option><option>BORRADOR</option><option>EMITIDO</option>
+      <option>ACEPTADO</option><option>RECHAZADO</option><option>FACTURADO</option>
+      <option>ANULADO</option></select></div>
+    <div><label>Vencidos</label><select id="com-vencido">
+      <option value="">todos</option><option value="si">solo vencidos</option>
+      <option value="no">no vencidos</option></select></div>
+  </div>
+  <button id="b-com" class="sec">Buscar</button>
+  <button id="b-com-mas" class="sec" hidden>Ver más</button>
+  <div id="com-msg"></div>
+  <div class="tabla"><table id="t-com"><thead><tr>
+    <th>Número</th><th>Tipo</th><th>Cliente / proveedor</th><th>Fecha</th>
+    <th>Válido hasta</th><th>Total</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="com-alta" hidden><summary>Nuevo presupuesto o pedido</summary><div>
+    <div class="fila">
+      <div><label>Dirección</label><select id="com-n-dir">
+        <option>VENTAS</option><option>COMPRAS</option></select></div>
+      <div><label>Tipo</label><select id="com-n-tipo">
+        <option>PRESUPUESTO</option><option>PEDIDO</option></select></div>
+      <div><label>Tercero</label><select id="com-n-tercero"></select></div>
+      <div><label>Fecha</label><input id="com-n-fecha" type="date"></div>
+      <div><label>Válido hasta (solo presupuesto)</label><input id="com-n-valido" type="date"></div>
+    </div>
+    <button id="b-com-alta">Crear en borrador</button>
+    <div id="com-alta-msg"></div>
+  </div></details>
+
+  <div id="com-detalle" hidden>
+    <h3 id="com-titulo"></h3>
+    <dl class="kv" id="com-kv"></dl>
+    <div class="tabla"><table id="t-com-lin"><thead><tr>
+      <th>#</th><th>Producto</th><th>Descripción</th><th>Cantidad</th>
+      <th>Precio</th><th>Trato</th><th>Neto</th><th>IVA</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="com-acciones"></div>
+    <div id="com-accion-msg"></div>
+
+    <details class="grupo" id="com-renglones" hidden><summary>Cargar el detalle</summary><div>
+      <p class="ayuda">Solo mientras está en borrador. Lo que se le mandó al cliente
+        no se edita: para corregirlo se emite una revisión que reemplaza a esta.</p>
+      <div class="fila">
+        <div><label>Producto</label><select id="com-r-producto"></select></div>
+        <div><label>Descripción</label><input id="com-r-desc"></div>
+        <div><label>Cantidad</label><input id="com-r-cant" inputmode="decimal" value="1"></div>
+        <div><label>Precio unitario</label><input id="com-r-precio" inputmode="decimal"></div>
+        <div><label>Frente al impuesto</label><select id="com-r-trato">
+          <option>GRAVADO</option><option>EXENTO</option><option>NO_GRAVADO</option></select></div>
+        <div><label>Neto</label><input id="com-r-neto" inputmode="decimal"></div>
+        <div><label>IVA</label><input id="com-r-iva" inputmode="decimal" value="0"></div>
+      </div>
+      <button id="b-com-r-add" class="sec">Agregar renglón</button>
+      <button id="b-com-r-guardar">Guardar el detalle</button>
+      <div id="com-r-msg"></div>
+      <div class="tabla"><table id="t-com-borrador"><thead><tr>
+        <th>Descripción</th><th>Cantidad</th><th>Neto</th><th>IVA</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div></details>
+
+    <details class="grupo" id="com-facturar" hidden><summary>Facturar</summary><div>
+      <p class="ayuda">Los importes <strong>no se escriben acá</strong>: salen de los
+        renglones que el cliente aceptó. Este paso registra la operación fiscal; no pide
+        CAE ni emite ante ARCA, que es un paso aparte.</p>
+      <div class="fila">
+        <div><label>Tipo de comprobante</label><input id="com-f-tipo" type="number" value="1"></div>
+        <div><label>Punto de venta</label><input id="com-f-pv" type="number" value="1"></div>
+        <div><label>Número</label><input id="com-f-nro" type="number"></div>
+        <div><label>Fecha</label><input id="com-f-fecha" type="date"></div>
+      </div>
+      <button id="b-com-facturar">Registrar la operación fiscal</button>
+      <div id="com-f-msg"></div>
+    </div></details>
+  </div>
+</section>
+
 <!-- ══ Productos ══════════════════════════════════════════════════════════ -->
 <section id="v-productos" hidden>
   <h2>Productos y servicios</h2>
@@ -618,9 +709,9 @@ const estado = {
   empresa: null, empresas: [], permisos: [], roles: [],
   vista: 'login', migas: [],
   documento: null, campos: [], tt: null, operacion: null, asiento: null,
-  tercero: null,
+  tercero: null, comercial: null, comercialBorrador: [],
   cuentas: [], documentosSinOperacion: [],
-  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null },
+  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null },
   filtros: {},
 };
 
@@ -669,7 +760,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','asientos','libros','estados','cierre','auditoria','config'];
+                'terceros','productos','comercial','asientos','libros','estados','cierre','auditoria','config'];
 
 function ir(vista, migas) {
   estado.vista = vista;
@@ -698,6 +789,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'operaciones') listarOperaciones();
     if (v === 'terceros') listarTerceros();
     if (v === 'productos') listarProductos();
+    if (v === 'comercial') listarComerciales();
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
@@ -798,7 +890,7 @@ async function usarEmpresa(id) {
 function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
-    terceros: 'party:read', productos: 'product:read',
+    terceros: 'party:read', productos: 'product:read', comercial: 'commercial:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
     auditoria: 'audit:read', config: 'company:read',
@@ -960,6 +1052,11 @@ async function abrirPendiente(item) {
       ir('asientos', migas);
       await listarAsientos();
       await abrirAsiento(item.entityId);
+      return;
+    case 'commercial_documents':
+      ir('comercial', migas);
+      await listarComerciales();
+      await abrirComercial(item.entityId);
       return;
     case 'periods':
     case 'accounting_closures':
@@ -1195,6 +1292,243 @@ function pintarDuplicados(duplicados) {
 }
 
 // ══ 4 · Operaciones fiscales ══════════════════════════════════════════════
+// ══ Comercial ═════════════════════════════════════════════════════════════
+async function listarComerciales(cursor) {
+  E('com-alta').hidden = !puede('commercial:write');
+  if (!cursor) await cargarTercerosParaComercial();
+
+  const q = new URLSearchParams({ limite: '25' });
+  const mapa = [['com-dir','direccion'],['com-tipo','tipo'],
+                ['com-status','status'],['com-vencido','vencido']];
+  for (const par of mapa) if (E(par[0]).value) q.set(par[1], E(par[0]).value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/commercial-documents?' + q.toString());
+  if (!r.ok) return decir('com-msg', r);
+  limpiar('com-msg');
+
+  const cuerpo = E('t-com').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  const docs = r.datos.documentos || [];
+  if (docs.length === 0 && !cursor) {
+    E('com-msg').innerHTML = '<div class="aviso">Sin documentos con estos filtros.</div>';
+  }
+
+  for (const d of docs) {
+    const tr = document.createElement('tr');
+    // Vencido va aparte del estado, no reemplazándolo: son dos preguntas
+    // distintas y la pantalla no las mezcla.
+    tr.innerHTML =
+      '<td class="mono">' + escapar(d.direccion) + ' ' + escapar(d.numero) + '</td>' +
+      '<td>' + escapar(d.tipo) + '</td>' +
+      '<td>' + escapar(d.razonSocial) + '</td>' +
+      '<td class="mono">' + escapar(d.fecha) + '</td>' +
+      '<td class="mono">' + escapar(d.validoHasta || '—') +
+        (d.vencido ? ' <span class="p p-ojo">vencido</span>' : '') + '</td>' +
+      '<td class="mono">' + escapar(d.total) + '</td>' +
+      '<td>' + pastilla(d.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirComercial(d.id);
+    cuerpo.appendChild(tr);
+  }
+
+  estado.cursores.com = r.datos.cursor;
+  E('b-com-mas').hidden = !r.datos.cursor;
+}
+
+async function abrirComercial(id) {
+  const r = await api('GET', '/commercial-documents/' + id);
+  if (!r.ok) return decir('com-msg', r);
+  limpiar('com-msg');
+
+  estado.comercial = id;
+  estado.comercialBorrador = [];
+  E('com-detalle').hidden = false;
+
+  const d = r.datos.documento;
+  E('com-titulo').textContent = d.tipo + ' ' + d.direccion + ' N° ' + d.numero;
+  E('com-kv').innerHTML =
+    '<dt>Tercero</dt><dd>' + escapar(d.razonSocial) + '</dd>' +
+    '<dt>Fecha</dt><dd class="mono">' + escapar(d.fecha) + '</dd>' +
+    '<dt>Válido hasta</dt><dd class="mono">' + escapar(d.validoHasta || '—') +
+      (d.vencido ? ' <span class="p p-ojo">vencido</span>' : '') + '</dd>' +
+    '<dt>Estado</dt><dd>' + pastilla(d.status) + '</dd>' +
+    '<dt>Neto</dt><dd class="mono">' + escapar(d.neto) + '</dd>' +
+    '<dt>IVA</dt><dd class="mono">' + escapar(d.iva) + '</dd>' +
+    '<dt>Total</dt><dd class="mono"><strong>' + escapar(d.total) + '</strong></dd>' +
+    (d.operacionFiscalId
+      ? '<dt>Operación fiscal</dt><dd class="mono">' + escapar(d.operacionFiscalId) + '</dd>'
+      : '');
+
+  const lineas = E('t-com-lin').querySelector('tbody');
+  lineas.innerHTML = '';
+  for (const l of (r.datos.renglones || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.linea) + '</td>' +
+      '<td class="mono">' + escapar(l.productoCodigo || '—') + '</td>' +
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + ' ' + escapar(l.unidad) + '</td>' +
+      '<td class="mono">' + escapar(l.precioUnitario) + '</td>' +
+      '<td>' + escapar(l.tratamiento) + '</td>' +
+      '<td class="mono">' + escapar(l.neto) + '</td>' +
+      '<td class="mono">' + escapar(l.iva) + '</td>';
+    lineas.appendChild(tr);
+  }
+
+  // Cada botón aparece solo si la transición existe desde este estado Y quien
+  // mira tiene el permiso que la ejecuta. Un botón que la API va a rechazar no
+  // es una funcionalidad: es una promesa incumplida.
+  const acciones = [];
+  if (puede('commercial:write')) {
+    if (d.status === 'BORRADOR') acciones.push(['emit', 'Emitir', false]);
+    if (d.status === 'EMITIDO') acciones.push(['accept', 'Aceptar', false]);
+    if (d.status === 'EMITIDO') acciones.push(['reject', 'Rechazar', true]);
+    if (d.status === 'BORRADOR' || d.status === 'EMITIDO' || d.status === 'ACEPTADO') {
+      acciones.push(['cancel', 'Anular', true]);
+    }
+  }
+  const caja = E('com-acciones');
+  caja.innerHTML = '';
+  for (const a of acciones) {
+    const boton = document.createElement('button');
+    boton.className = 'sec';
+    boton.textContent = a[1];
+    boton.onclick = () => accionComercial(id, a[0], a[2]);
+    caja.appendChild(boton);
+  }
+
+  E('com-renglones').hidden = !(d.status === 'BORRADOR' && puede('commercial:write'));
+  // Facturar es un acto contable y lleva su propio permiso.
+  E('com-facturar').hidden = !(d.status === 'ACEPTADO' && puede('journal_entry:create'));
+
+  await cargarProductosParaComercial();
+  ir('comercial', ['Presupuestos y pedidos', d.tipo + ' ' + d.numero]);
+}
+
+async function accionComercial(id, accion, pideMotivo) {
+  let motivo;
+  if (pideMotivo) {
+    motivo = window.prompt('¿Por qué? Queda en la bitácora.');
+    if (motivo === null || motivo.trim().length < 3) {
+      E('com-accion-msg').innerHTML =
+        '<div class="aviso mal">Sin motivo no se registra.</div>';
+      return;
+    }
+  }
+  // Las cuatro rutas se escriben completas: el barrido S-12 no puede
+  // reconstruir una URL armada con una variable en el medio.
+  const url = accion === 'emit' ? '/commercial-documents/' + id + '/emit'
+    : accion === 'accept' ? '/commercial-documents/' + id + '/accept'
+    : accion === 'reject' ? '/commercial-documents/' + id + '/reject'
+    : '/commercial-documents/' + id + '/cancel';
+
+  const r = await api('POST', url, motivo === undefined ? {} : { motivo: motivo.trim() });
+  decir('com-accion-msg', r, 'Listo.');
+  if (r.ok) await abrirComercial(id);
+}
+
+async function cargarTercerosParaComercial() {
+  if (!puede('party:read')) return;
+  const r = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('com-n-tercero');
+  sel.innerHTML = '';
+  for (const t of (r.datos.terceros || [])) {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.razonSocial + (t.numeroDocumento ? ' · ' + t.numeroDocumento : '');
+    sel.appendChild(o);
+  }
+  if (sel.options.length === 0) {
+    E('com-alta-msg').innerHTML =
+      '<div class="aviso">No hay terceros cargados. Un presupuesto es siempre <em>para ' +
+      'alguien</em>: primero dalo de alta en Terceros.</div>';
+  }
+}
+
+async function cargarProductosParaComercial() {
+  if (!puede('product:read')) return;
+  const r = await api('GET', '/products?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('com-r-producto');
+  sel.innerHTML = '<option value="">— sin producto del maestro —</option>';
+  for (const p of (r.datos.productos || [])) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.codigo + ' · ' + p.nombre;
+    sel.appendChild(o);
+  }
+}
+
+E('b-com').onclick = () => listarComerciales();
+E('b-com-mas').onclick = () => listarComerciales(estado.cursores.com);
+
+E('b-com-r-add').onclick = () => {
+  const renglon = {
+    descripcion: E('com-r-desc').value.trim(),
+    cantidad: E('com-r-cant').value.trim(),
+    precioUnitario: E('com-r-precio').value.trim(),
+    tratamiento: E('com-r-trato').value,
+    neto: E('com-r-neto').value.trim(),
+    iva: E('com-r-iva').value.trim() || '0',
+  };
+  if (E('com-r-producto').value) renglon.productoId = E('com-r-producto').value;
+  if (renglon.descripcion === '' || renglon.neto === '') {
+    E('com-r-msg').innerHTML =
+      '<div class="aviso mal">Falta la descripción o el neto.</div>';
+    return;
+  }
+  estado.comercialBorrador.push(renglon);
+  limpiar('com-r-msg');
+
+  const cuerpo = E('t-com-borrador').querySelector('tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td>' + escapar(renglon.descripcion) + '</td>' +
+    '<td class="mono">' + escapar(renglon.cantidad) + '</td>' +
+    '<td class="mono">' + escapar(renglon.neto) + '</td>' +
+    '<td class="mono">' + escapar(renglon.iva) + '</td>';
+  cuerpo.appendChild(tr);
+};
+
+E('b-com-r-guardar').onclick = async () => {
+  const r = await api('PUT', '/commercial-documents/' + estado.comercial + '/lines',
+    { renglones: estado.comercialBorrador });
+  decir('com-r-msg', r, 'Detalle guardado.');
+  if (r.ok) {
+    E('t-com-borrador').querySelector('tbody').innerHTML = '';
+    await abrirComercial(estado.comercial);
+  }
+};
+
+E('b-com-facturar').onclick = async () => {
+  const r = await api('POST', '/commercial-documents/' + estado.comercial + '/invoice', {
+    cbteTipo: Number(E('com-f-tipo').value),
+    puntoVenta: Number(E('com-f-pv').value),
+    numero: Number(E('com-f-nro').value),
+    fecha: E('com-f-fecha').value,
+  });
+  decir('com-f-msg', r, 'Operación fiscal registrada. Falta pedir el CAE ante ARCA.');
+  if (r.ok) await abrirComercial(estado.comercial);
+};
+
+E('b-com-alta').onclick = async () => {
+  const cuerpo = {
+    direccion: E('com-n-dir').value,
+    tipo: E('com-n-tipo').value,
+    terceroId: E('com-n-tercero').value,
+    fecha: E('com-n-fecha').value,
+  };
+  if (E('com-n-valido').value) cuerpo.validoHasta = E('com-n-valido').value;
+  const r = await api('POST', '/commercial-documents', cuerpo);
+  decir('com-alta-msg', r, 'Documento creado en borrador.');
+  if (r.ok) {
+    await listarComerciales();
+    await abrirComercial(r.datos.id);
+  }
+};
+
 // ══ Productos ═════════════════════════════════════════════════════════════
 async function listarProductos(cursor) {
   E('pro-alta').hidden = !puede('product:write');

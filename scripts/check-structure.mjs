@@ -56,6 +56,9 @@ const CHECKS = [
   ['products', 'products_gravado_con_impuesto', 'Un producto gravado dice qué impuesto le aplica'],
   ['products', 'products_servicio_sin_stock', 'Un servicio no tiene existencias'],
   ['tax_transaction_lines', 'ttl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
+  ['commercial_documents', 'cd_facturado_con_operacion', 'FACTURADO si y solo si hay operación fiscal'],
+  ['commercial_documents', 'cd_anulado_con_motivo', 'Una anulación sin motivo no se registra'],
+  ['commercial_document_lines', 'cdl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
   ['note_figures', 'nf_con_origen', 'A-2: una cifra con importe tiene linaje detrás'],
@@ -86,6 +89,9 @@ const TRIGGERS = [
   ['tax_transaction_lines', 'ttl_renglones_cierran', '0049: el detalle cierra con la cabecera (diferido)'],
   ['tax_transactions', 'tt_renglones_cierran', '0049: cambiar la cabecera no descuadra el detalle'],
   ['tax_transaction_lines', 'ttl_editables', 'El detalle de un comprobante imputado no se edita'],
+  ['commercial_documents', 'commercial_documents_transicion', '0050: la máquina de estados vive en la base'],
+  ['commercial_documents', 'commercial_documents_no_delete', 'Un presupuesto emitido no se borra'],
+  ['commercial_document_lines', 'cdl_editables', 'Lo que se le ofreció al cliente no se edita'],
   ['ledger_movements', 'ledger_movements_immutable', 'El Mayor no se edita ni se borra'],
   ['accounting_closures', 'accounting_closures_inmutable', 'Lo que fundamentó un cierre no cambia'],
   ['accounting_closures', 'accounting_closures_no_delete', 'Un cierre no se borra'],
@@ -124,6 +130,8 @@ const INDICES = [
   ['notes_una_sucesora', 'Una nota reemplaza como mucho a una anterior'],
   ['parties_documento_unico', 'Un documento, un tercero, por empresa'],
   ['products_code_unico', 'Un código, un producto, por empresa'],
+  ['cd_una_operacion', 'Una operación fiscal nace de un solo documento comercial'],
+  ['cd_una_sucesora', 'Un documento reemplaza como mucho a uno anterior'],
 ];
 
 /**
@@ -142,6 +150,9 @@ const FK_CON_EMPRESA = [
   ['products', 'products_cuenta_compra_fk', 'Un producto no apunta a la cuenta de compra de otra empresa'],
   ['tax_transaction_lines', 'ttl_comprobante_fk', 'Un renglón no cuelga del comprobante de otra empresa'],
   ['tax_transaction_lines', 'ttl_producto_fk', 'Un renglón no cita el producto de otra empresa'],
+  ['commercial_documents', 'cd_party_fk', 'No se presupuesta al tercero de otra empresa'],
+  ['commercial_documents', 'cd_tax_transaction_fk', 'La factura resultante es de la misma empresa'],
+  ['commercial_document_lines', 'cdl_documento_fk', 'Un renglón no cuelga del documento de otra empresa'],
 ];
 
 /**
@@ -160,6 +171,8 @@ const RLS_FORZADO = [
   'parties', 'party_roles',
   // El maestro de productos (0048): precios, márgenes y costos de la empresa.
   'products', 'tax_transaction_lines',
+  // El ciclo comercial (0050): precios ofrecidos y pedidos de cada empresa.
+  'commercial_documents', 'commercial_document_lines', 'commercial_counters',
 ];
 
 /**
@@ -176,7 +189,10 @@ const VISTAS_INVOKER = [
   'ai_answer_metrics',
   // La bandeja de trabajo (0045). Lee veinte tablas con RLS forzado: sin
   // `security_invoker` repartiría el trabajo pendiente de todas las empresas.
-  'work_queue',
+  // La bandeja es una unión de vistas por dominio desde la 0051. Las tres
+  // llevan `security_invoker`: una sola sin él en cualquier eslabón de la
+  // cadena saltearía el RLS y repartiría el trabajo de todas las empresas.
+  'work_queue', 'work_queue_nucleo', 'work_queue_comercial',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',

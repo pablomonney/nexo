@@ -73,6 +73,10 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // El balance que no cuadra se cuelga del ejercicio. Va con `report:read`
   // porque lo que hay que mirar para resolverlo es el balance de sumas y saldos.
   fiscal_years: 'report:read',
+  // El ciclo comercial (0051). Quien puede leer presupuestos y pedidos ve los
+  // que esperan facturación; quien no, no los ve — y su bandeja es más corta,
+  // que es la respuesta correcta y no un 403.
+  commercial_documents: 'commercial:read',
 };
 
 const CATEGORIAS = [

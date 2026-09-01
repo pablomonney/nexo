@@ -26,6 +26,7 @@ import { workQueueRoutes } from './routes/work-queue.js';
 import { auditRoutes } from './routes/audit.js';
 import { partyRoutes } from './routes/parties.js';
 import { productRoutes } from './routes/products.js';
+import { comercialRoutes } from './routes/comercial.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -111,6 +112,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(accountRoutes);
   await app.register(partyRoutes);
   await app.register(productRoutes);
+  await app.register(comercialRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
