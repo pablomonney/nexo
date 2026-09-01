@@ -77,6 +77,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // que esperan facturación; quien no, no los ve — y su bandeja es más corta,
   // que es la respuesta correcta y no un 403.
   commercial_documents: 'commercial:read',
+  // Stock (0054). Las ramas cuelgan del producto: quien no puede leer el
+  // maestro no ve avisos sobre existencias que no puede consultar.
+  products: 'product:read',
 };
 
 const CATEGORIAS = [

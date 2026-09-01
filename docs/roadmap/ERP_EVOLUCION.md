@@ -87,7 +87,7 @@ NIVEL 3  (hecho)   ciclo comercial: presupuesto → pedido → factura  0050
          (hecho)   la bandeja pasa a ser extensible por dominio     0051
 NIVEL 3b (hecho)   compras: recepción y conciliación de tres puntas 0052
 NIVEL 4  (hecho)   imputación, composición y antigüedad de saldos   0053
-NIVEL 5            stock                        ← necesita 2 y 3b
+NIVEL 5  (hecho)   depósitos, movimientos y existencias derivadas   0054
 NIVEL 6            activos fijos · producción · RRHH
 NIVEL 7            Integration Hub · conectores
 NIVEL 8            BI · analítica · IA sobre datos reales

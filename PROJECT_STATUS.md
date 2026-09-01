@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 76 archivos de test, 1436 tests,
-150 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 77 archivos de test, 1449 tests,
+167 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -47,6 +47,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Ciclo comercial** | **TERMINADO** | **`ciclo-comercial` (16 tests)** |
 | **Recepción y conciliación de compras** | **TERMINADO** | **`recepcion-de-compras` (14 tests)** |
 | **Imputación y antigüedad de saldos** | **TERMINADO** | **`imputacion-de-cobros` (16 tests)** |
+| **Stock: depósitos y existencias** | **TERMINADO** | **`stock` (13 tests)** |
 
 ## 3. En curso
 
@@ -61,6 +62,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0051 | La bandeja pasa a ser unión de vistas por dominio, extensible |
 | 0052 | Recepción de mercadería y conciliación de tres puntas en compras |
 | 0053 | Imputación de cobros, composición y antigüedad de saldos (ADR-015) |
+| 0054 | Depósitos, libro de movimientos y existencias derivadas |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -71,11 +73,9 @@ factura — no cuando alguien lo marca, porque no hay forma de marcarlo.
 
 El orden no es preferencia: cada línea necesita la anterior.
 
-1. **Stock**: depósitos y movimientos que no son comprobantes. Las dos fuentes
-   ya existen —`goods_receipts` para lo que entra y `tax_transaction_lines`
-   para lo que sale— y falta el módulo que las convierta en existencias. Hoy
-   `product_movements` es movimiento **facturado**, no stock, y las respuestas
-   de la API lo dicen para que nadie lo confunda.
+1. **Valuación de existencias.** Hoy el stock son cantidades. Cuánto valen
+   —PPP, FIFO o costo de reposición— es una decisión contable con norma
+   detrás, y sin ella no hay costo de mercadería vendida automático.
 2. **Activos fijos y amortizaciones.**
 3. **Integration Hub** y conectores.
 4. **BI / analítica** sobre eventos.
@@ -92,6 +92,12 @@ El orden no es preferencia: cada línea necesita la anterior.
   no existe: imputar es siempre manual (ADR-015 §7).
 - **Condiciones de pago por comprobante y cuotas.** El plazo es del tercero;
   una factura con condiciones distintas o en tres cuotas no se puede expresar.
+- **Salida de stock al facturar.** Hoy es un paso aparte porque el comprobante
+  no dice de qué depósito salió. Un depósito por defecto por empresa lo haría
+  automático — y sería inventar el dato más importante del movimiento cada vez
+  que la empresa tenga más de uno. La bandeja lo señala mientras tanto.
+- **Valuación de existencias.** Cantidades sí, valores no. Elegir PPP o FIFO es
+  una decisión contable con norma detrás, no un detalle de implementación.
 
 ## 5. Bloqueado por decisión de producto
 

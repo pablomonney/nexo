@@ -39,6 +39,7 @@ const SELECT_RECEPCION = `
   o.number AS "ordenNumero", r.party_id AS "proveedorId",
   p.razon_social AS "proveedor", r.received_at::text AS "fecha",
   r.remito_numero AS "remito", r.notes AS notas, r.status,
+  r.warehouse_id AS "depositoId",
   r.motivo_anulacion AS "motivoAnulacion", r.created_at AS "creadoEn"`;
 
 const DESDE_RECEPCION = `
@@ -144,6 +145,10 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
         fecha,
         remito: z.string().max(60).nullish(),
         notas: z.string().max(2000).nullish(),
+        // Dónde entra la mercadería. Opcional al crear el borrador —puede no
+        // saberse todavía dónde se va a descargar— y obligatorio para confirmar
+        // si algún renglón lleva un producto con stock (migración 0054).
+        depositoId: z.string().uuid().nullish(),
       })
       .parse(request.body);
 
@@ -179,13 +184,14 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
           const r = await tx.query<{ id: string; number: number }>(
             `INSERT INTO goods_receipts
                (company_id, number, commercial_document_id, party_id, received_at,
-                remito_numero, notes, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                remito_numero, notes, created_by, warehouse_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
              RETURNING id, number`,
             [
               tenant.companyId, numero.rows[0]!.next_commercial_number,
               body.ordenId ?? null, body.proveedorId, body.fecha,
               body.remito ?? null, body.notas ?? null, `user:${auth.user.userId}`,
+              body.depositoId ?? null,
             ],
           );
 
@@ -298,6 +304,11 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
     requirePermission(tenant, 'receipt:write');
     const auth = requireAuth(request);
     const { receiptId } = z.object({ receiptId: z.string().uuid() }).parse(request.params);
+    // El depósito se puede indicar recién acá: al abrir el borrador puede no
+    // saberse dónde se va a descargar.
+    const body = z
+      .object({ depositoId: z.string().uuid().optional() })
+      .parse(request.body ?? {});
 
     try {
       return await withCompany(
@@ -308,6 +319,13 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
             [receiptId, tenant.companyId],
           );
           if (antes.rowCount === 0) throw notFound('Recepción no encontrada');
+
+          if (body.depositoId !== undefined) {
+            await tx.query(
+              'UPDATE goods_receipts SET warehouse_id = $3 WHERE id = $1 AND company_id = $2',
+              [receiptId, tenant.companyId, body.depositoId],
+            );
+          }
 
           await tx.query(
             "UPDATE goods_receipts SET status = 'CONFIRMADA' WHERE id = $1 AND company_id = $2",
@@ -445,6 +463,15 @@ function traducirRecepcion(error: unknown): unknown {
   }
   if (mensaje.includes('Transición inválida')) {
     return conflictoTipado('TRANSICION_INVALIDA', mensaje.split('CONTEXT')[0]!.trim());
+  }
+  // La proyección a stock corre en el mismo `UPDATE` que confirma (0054): si no
+  // hay depósito, el error llega acá.
+  if (mensaje.includes('E_STOCK_SIN_DEPOSITO')) {
+    return unprocessable(
+      'RECEPCION_SIN_DEPOSITO',
+      'La recepción tiene productos con stock y no dice en qué depósito entraron. ' +
+        'Indicá el depósito al confirmarla.',
+    );
   }
   if (mensaje.includes('sin renglones')) {
     return unprocessable(

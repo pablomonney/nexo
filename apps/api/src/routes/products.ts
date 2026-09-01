@@ -47,6 +47,7 @@ const SELECT_PRODUCTO = `
   p.sales_account_id AS "cuentaVentaId", av.code AS "cuentaVentaCodigo",
   p.purchase_account_id AS "cuentaCompraId", ac.code AS "cuentaCompraCodigo",
   p.tracks_stock AS "llevaStock", p.list_price::text AS "precioLista",
+  p.stock_minimo::text AS "stockMinimo",
   p.currency AS moneda, p.status, p.created_at AS "creadoEn"`;
 
 const DESDE_PRODUCTO = `
@@ -198,6 +199,9 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         cuentaVenta: z.string().min(1).max(40).nullish(),
         cuentaCompra: z.string().min(1).max(40).nullish(),
         llevaStock: z.boolean().default(false),
+        // Mínimo declarado. Sin esto el sistema no avisa que falte stock: no
+        // hay umbral que comparar y un aviso inventado es ruido (0054).
+        stockMinimo: importe.nullish(),
         precioLista: importe.nullish(),
         moneda: z.string().length(3).default('ARS'),
       })
@@ -243,14 +247,14 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
             `INSERT INTO products
                (company_id, code, name, description, kind, unit, tax_treatment, tax_id,
                 sales_account_id, purchase_account_id, tracks_stock, list_price, currency,
-                created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                stock_minimo, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
              RETURNING id`,
             [
               tenant.companyId, body.codigo, body.nombre, body.descripcion ?? null,
               body.tipo, body.unidad, body.tratamientoImpositivo, taxId,
               await cuenta(body.cuentaVenta), await cuenta(body.cuentaCompra),
-              body.llevaStock, body.precioLista ?? null, body.moneda,
+              body.llevaStock, body.precioLista ?? null, body.moneda, body.stockMinimo ?? null,
               `user:${auth.user.userId}`,
             ],
           );
@@ -298,6 +302,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         cuentaVenta: z.string().min(1).max(40).nullish(),
         cuentaCompra: z.string().min(1).max(40).nullish(),
         precioLista: importe.nullish(),
+        stockMinimo: importe.nullish(),
         status: z.enum(['ACTIVO', 'ARCHIVADO']).optional(),
         // El código no se edita: es la referencia con la que el producto ya
         // figura en presupuestos, remitos y listas impresas. Si está mal, se
@@ -335,6 +340,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
                     sales_account_id    = CASE WHEN $7  THEN $8  ELSE sales_account_id END,
                     purchase_account_id = CASE WHEN $9  THEN $10 ELSE purchase_account_id END,
                     list_price  = CASE WHEN $11 THEN $12 ELSE list_price END,
+                    stock_minimo = CASE WHEN $14 THEN $15 ELSE stock_minimo END,
                     status      = COALESCE($13, status)
               WHERE id = $1 AND company_id = $2`,
             [
@@ -346,6 +352,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
               body.cuentaCompra !== undefined, await cuenta(body.cuentaCompra),
               body.precioLista !== undefined, body.precioLista ?? null,
               body.status ?? null,
+              body.stockMinimo !== undefined, body.stockMinimo ?? null,
             ],
           );
 

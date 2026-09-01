@@ -60,6 +60,9 @@ const CHECKS = [
   ['commercial_documents', 'cd_anulado_con_motivo', 'Una anulación sin motivo no se registra'],
   ['goods_receipts', 'gr_anulada_con_motivo', 'Anular una recepción exige decir por qué'],
   ['party_allocations', 'pa_anulada_con_motivo', 'Anular una imputación exige decir por qué'],
+  ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
+  ['stock_movements', 'sm_tipo_coherente', 'El tipo de movimiento y su origen no se contradicen'],
+  ['stock_movements', 'sm_origen_citado', 'Lo que viene de un hecho registrado dice de cuál'],
   ['commercial_document_lines', 'cdl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
@@ -100,6 +103,11 @@ const TRIGGERS = [
   ['party_allocations', 'party_allocations_valida', '0053: los cuatro candados de la imputación'],
   ['party_allocations', 'party_allocations_no_excede', '0053: no se imputa de más (diferido)'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
+  ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
+  ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
+  ['stock_movements', 'stock_movements_producto_valido', 'Un servicio no mueve existencias'],
+  ['goods_receipts', 'goods_receipts_proyecta_stock', 'A-7 en stock: la entrada la escribe la base'],
+  ['goods_receipts', 'goods_receipts_revierte_stock', 'Anular escribe el contrario, no borra'],
   ['ledger_movements', 'ledger_movements_immutable', 'El Mayor no se edita ni se borra'],
   ['accounting_closures', 'accounting_closures_inmutable', 'Lo que fundamentó un cierre no cambia'],
   ['accounting_closures', 'accounting_closures_no_delete', 'Un cierre no se borra'],
@@ -141,6 +149,7 @@ const INDICES = [
   ['cd_una_operacion', 'Una operación fiscal nace de un solo documento comercial'],
   ['cd_una_sucesora', 'Un documento reemplaza como mucho a uno anterior'],
   ['pa_una_por_par', 'Un movimiento no se imputa dos veces al mismo comprobante'],
+  ['warehouses_code_unico', 'Un código, un depósito, por empresa'],
 ];
 
 /**
@@ -167,6 +176,9 @@ const FK_CON_EMPRESA = [
   ['goods_receipt_lines', 'grl_recepcion_fk', 'Un renglón no cuelga de la recepción de otra empresa'],
   ['party_allocations', 'pa_comprobante_fk', 'No se imputa al comprobante de otra empresa'],
   ['party_allocations', 'pa_linea_fk', 'No se imputa con el movimiento de otra empresa'],
+  ['stock_movements', 'sm_producto_fk', 'No se mueve el producto de otra empresa'],
+  ['stock_movements', 'sm_deposito_fk', 'No se mueve al depósito de otra empresa'],
+  ['goods_receipts', 'gr_warehouse_fk', 'La recepción entra a un depósito de la misma empresa'],
 ];
 
 /**
@@ -191,6 +203,8 @@ const RLS_FORZADO = [
   'goods_receipts', 'goods_receipt_lines',
   // Imputaciones (0053): qué factura cancela cada cobro.
   'party_allocations',
+  // Stock (0054): existencias y depósitos de la empresa.
+  'warehouses', 'stock_movements',
 ];
 
 /**
@@ -211,11 +225,13 @@ const VISTAS_INVOKER = [
   // llevan `security_invoker`: una sola sin él en cualquier eslabón de la
   // cadena saltearía el RLS y repartiría el trabajo de todas las empresas.
   'work_queue', 'work_queue_nucleo', 'work_queue_comercial', 'work_queue_compras',
-  'work_queue_cobranzas',
+  'work_queue_cobranzas', 'work_queue_stock',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
   'invoice_settlement', 'party_aging',
+  // Existencias derivadas (0054).
+  'stock_on_hand', 'stock_by_product',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',

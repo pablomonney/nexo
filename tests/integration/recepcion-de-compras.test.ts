@@ -39,6 +39,7 @@ suite('Recepción de mercadería y conciliación de compras', () => {
   let otroProveedorId: string;
   let productoId: string;
   let cuitProveedor: string;
+  let depositoId: string;
   let numeroCbte = 6000;
 
   const pedir = (
@@ -180,6 +181,15 @@ suite('Recepción de mercadería y conciliación de compras', () => {
         llevaStock: true,
       })
     ).json<{ id: string }>().id;
+
+    // Desde la 0054 una recepción con productos de stock no se confirma sin
+    // decir en qué depósito entró: sin eso no hay movimiento posible.
+    const deposito = await pedir('POST', '/warehouses', {
+      codigo: `DEP-${stamp}`,
+      nombre: 'Depósito de compras',
+    });
+    expect(deposito.statusCode, deposito.body).toBe(201);
+    depositoId = deposito.json<{ id: string }>().id;
   });
 
   afterAll(async () => {
@@ -220,8 +230,10 @@ suite('Recepción de mercadería y conciliación de compras', () => {
 
   /** Recepción confirmada de la cantidad indicada contra una orden. */
   async function recepcionConfirmada(ordenId: string, unidades: string): Promise<string> {
+    // El depósito es obligatorio desde la 0054 cuando algún renglón lleva un
+    // producto con stock: sin él no hay movimiento posible y la base lo corta.
     const alta = await pedir('POST', '/goods-receipts', {
-      ordenId, proveedorId, fecha: '2026-03-03', remito: `R-${stamp}`,
+      ordenId, proveedorId, fecha: '2026-03-03', remito: `R-${stamp}`, depositoId,
     });
     expect(alta.statusCode, alta.body).toBe(201);
     const id = alta.json<{ id: string }>().id;

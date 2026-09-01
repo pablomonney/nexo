@@ -29,6 +29,7 @@ import { productRoutes } from './routes/products.js';
 import { comercialRoutes, vincularFacturaDeCompra } from './routes/comercial.js';
 import { recepcionRoutes } from './routes/recepciones.js';
 import { imputacionRoutes } from './routes/imputaciones.js';
+import { stockRoutes } from './routes/stock.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -118,6 +119,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(vincularFacturaDeCompra);
   await app.register(recepcionRoutes);
   await app.register(imputacionRoutes);
+  await app.register(stockRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
