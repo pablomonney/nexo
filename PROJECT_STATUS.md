@@ -1,8 +1,9 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 82 archivos de test, 1515 tests,
-210 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 82 archivos de test, 1517 tests,
+211 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -54,6 +55,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Señales, proyección y simulación** | **TERMINADO** | **`senales-y-simulacion` (12 tests)** |
 | **Arranque del servidor (`npm start`)** | **TERMINADO** | **`arranque` (8 tests)** |
 | **Backup y restauración verificada** | **TERMINADO** | **`npm run db:restaurar`** |
+| **Integridad de la bitácora** | **TERMINADO** | **`npm run audit:cadena`, gate de `verify`** |
 
 ## 3. En curso
 
@@ -73,6 +75,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0056 | Integration Hub: zona de aterrizaje para lo externo (ADR-016) |
 | 0057 | Analítica: seis vistas, ni una cifra almacenada, cada total abrible |
 | 0058 | Señales contra umbrales declarados, sin modelo de por medio (ADR-017) |
+| 0059 | El detector de adulteraciones de la bitácora podía encontrar y no reportar |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

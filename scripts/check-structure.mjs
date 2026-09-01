@@ -365,6 +365,27 @@ export async function verificarEstructura(client) {
     anotar('FUNCIÓN', `${nombre}(${firma})`, que, fila !== undefined && fila.args === firma);
   }
 
+  // El verificador de la bitácora no puede devolver una columna llamada `found`.
+  //
+  // `FOUND` es una variable booleana que PL/pgSQL define en toda función, y le
+  // gana al parámetro de salida homónimo: la asignación intenta meter un
+  // SHA-256 en un booleano y la función revienta **justo cuando encuentra una
+  // adulteración**. Estuvo así desde la 0008, sobrevivió a la 0025 y a un test
+  // de integración —que solo ejercitaba la cadena sana— y lo encontró
+  // `audit:cadena` la primera vez que alguien recorrió la rama roja (0059).
+  //
+  // Se declara acá porque es un candado sobre la forma, no sobre el
+  // comportamiento: el test prueba que detecta, esto impide que el nombre vuelva.
+  const retorno = await client.query(
+    `SELECT pg_get_function_result(oid) AS r FROM pg_proc WHERE proname = 'verify_audit_chain'`,
+  );
+  anotar(
+    'FUNCIÓN',
+    'verify_audit_chain(uuid)',
+    'No devuelve `found`: colisiona con la variable de PL/pgSQL y rompe al detectar',
+    retorno.rows.length > 0 && !/\bfound\b/i.test(retorno.rows[0].r),
+  );
+
   // El rol de la aplicación no puede saltear el RLS. Es la condición de la que
   // depende todo lo anterior: con `BYPASSRLS`, las políticas son decorativas.
   const rol = await client.query(

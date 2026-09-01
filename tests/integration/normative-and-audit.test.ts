@@ -143,6 +143,69 @@ suite('Bitácora — cadena de hashes', () => {
     expect(result.rowCount).toBe(0);
   });
 
+  /**
+   * La rama que faltaba, y que costó cara.
+   *
+   * Durante siete migraciones el único test de esta función fue el de arriba:
+   * que **no** reporte roturas en una cadena sana. Un verificador que no
+   * verificara nada también lo habría pasado. Y de hecho la función estaba
+   * rota: su parámetro de salida se llamaba `found`, que es una variable
+   * booleana de PL/pgSQL, así que al encontrar una adulteración intentaba meter
+   * un SHA-256 en un booleano y moría con un error de tipos en lugar de
+   * reportarla (migración 0059).
+   *
+   * Este test adultera de verdad. Para lograrlo hay que apagar el trigger que
+   * lo impide, que es exactamente el atacante contra el que la cadena defiende:
+   * alguien con acceso directo a la base. Todo va dentro de una transacción que
+   * se revierte, así que la bitácora queda como estaba.
+   */
+  it('verify_audit_chain SÍ reporta una entrada adulterada', async () => {
+    const objetivo = await client.query<{ id: string }>(
+      'SELECT id FROM audit_logs WHERE company_id = $1 ORDER BY seq DESC LIMIT 1',
+      [fx.companyA],
+    );
+    expect(objetivo.rowCount, 'hace falta al menos una entrada para poder adulterarla').toBe(1);
+
+    await client.query('BEGIN');
+    try {
+      await client.query('ALTER TABLE audit_logs DISABLE TRIGGER USER');
+      await client.query(`UPDATE audit_logs SET motivo = 'adulterado' WHERE id = $1`, [
+        objetivo.rows[0]!.id,
+      ]);
+
+      const rotura = await client.query<{
+        roto_en: string;
+        hash_esperado: string;
+        hash_guardado: string;
+      }>('SELECT * FROM verify_audit_chain($1)', [fx.companyA]);
+
+      expect(rotura.rowCount, 'la adulteración tiene que salir a la luz').toBe(1);
+      expect(rotura.rows[0]!.roto_en).toBe(objetivo.rows[0]!.id);
+      // Los dos hashes, y distintos: un reporte que no dice qué se esperaba no
+      // sirve para investigar, y uno donde coinciden no está comparando nada.
+      expect(rotura.rows[0]!.hash_esperado).not.toBe(rotura.rows[0]!.hash_guardado);
+    } finally {
+      // Deshace también el DISABLE TRIGGER: en PostgreSQL el DDL es
+      // transaccional, así que la tabla vuelve con sus candados puestos.
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('después de revertir, la cadena vuelve a estar sana y el trigger puesto', async () => {
+    // Que el test anterior no deje daño no es un detalle de higiene: si dejara
+    // la bitácora rota o el trigger apagado, todo lo que corra después estaría
+    // pasando por motivos equivocados.
+    const result = await client.query('SELECT * FROM verify_audit_chain($1)', [fx.companyA]);
+    expect(result.rowCount).toBe(0);
+
+    const mensaje = await expectFailure(() =>
+      client.query(`UPDATE audit_logs SET motivo = 'otra vez' WHERE company_id = $1`, [
+        fx.companyA,
+      ]),
+    );
+    expect(mensaje).toMatch(/append-only/);
+  });
+
   it('la bitácora no admite UPDATE ni DELETE ni siquiera como superusuario', async () => {
     const updateMessage = await expectFailure(() =>
       client.query(`UPDATE audit_logs SET motivo = 'alterado' WHERE company_id = $1`, [fx.companyA]),

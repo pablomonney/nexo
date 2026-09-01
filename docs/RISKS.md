@@ -620,3 +620,23 @@ del riesgo: el archivo existía y no servía.
 *Lo que sigue abierto:* la comparación de contenido se informa `SIN EJERCITAR` mientras `aai` no
 tenga datos de negocio, y el tiempo medido es el de restaurar en la misma máquina y el mismo
 disco. El RTO de una restauración real sigue siendo una estimación.
+
+### 🟢 R-22 — Un control cuya rama roja nunca se ejercitó
+
+`verify_audit_chain()` existía desde la migración 0008, con la fórmula correcta y encadenada por
+`seq`. Tenía un test. El test comprobaba que **no** reporta roturas en una cadena sana — y un
+verificador que no verificara nada lo habría pasado igual.
+
+Cuando por fin se recorrió la rama roja, la función no funcionaba: su parámetro de salida se
+llamaba `found`, que es una variable booleana que PL/pgSQL define en toda función y que le gana al
+homónimo. Al encontrar una adulteración intentaba asignar un SHA-256 a un booleano y moría con un
+error de tipos **en lugar de reportarla**. Sobrevivió así a dos migraciones y a siete meses.
+
+*Mitigación:* migración 0059 renombra los parámetros de salida; `audit:estructura` declara que no
+puedan volver a llamarse `found`; y `npm run audit:cadena` —dentro de `verify`— **adultera una
+entrada a propósito** en la base de verificación antes de mirar ninguna cadena real. Si la trampa
+no se detecta, el script falla aunque todas las cadenas den verde, porque un verificador ciego las
+daría verdes igual.
+
+*La lección, que vale para todo control de este repositorio:* un gate que solo se vio en verde no
+está probado, está declarado. La pregunta no es «¿pasa el control?» sino «¿alguien lo vio fallar?».
