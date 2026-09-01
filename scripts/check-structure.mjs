@@ -66,6 +66,11 @@ const CHECKS = [
   ['fixed_assets', 'fa_residual_menor_al_costo', 'El residual no se come el costo: algo hay que amortizar'],
   ['fixed_assets', 'fa_baja_completa', 'Una baja dice cuándo'],
   ['fixed_assets', 'fa_baja_con_motivo', 'Una baja dice por qué'],
+  ['external_records', 'er_resuelto_con_entidad', '0056: RESUELTO exige exactamente una entidad'],
+  ['external_records', 'er_resuelto_firmado', 'Una resolución dice quién y cuándo'],
+  ['external_records', 'er_descarte_con_motivo', 'Descartar lo de afuera exige decir por qué'],
+  ['integration_sync_runs', 'isr_cuentas_cierran', 'Recibidos = nuevos + duplicados'],
+  ['company_integrations', 'ci_token_con_sobre', 'Un secreto cifrado dice con qué se lo envolvió'],
   ['commercial_document_lines', 'cdl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
@@ -114,6 +119,10 @@ const TRIGGERS = [
   ['fixed_assets', 'fixed_assets_cuentas_validas', '0055: las tres cuentas del bien sirven para lo que se usan'],
   ['fixed_assets', 'fixed_assets_no_delete', 'Un bien de uso no se borra'],
   ['fixed_asset_depreciations', 'fixed_asset_depreciations_no_delete', 'Una amortización asentada no se borra'],
+  ['external_records', 'external_records_payload_inmutable', '0056: lo que dijo el proveedor es evidencia'],
+  ['external_records', 'external_records_no_delete', 'Un registro externo se descarta, no se borra'],
+  ['company_integrations', 'company_integrations_proveedor_disponible', 'Lo planificado no se conecta'],
+  ['company_integrations', 'company_integrations_no_delete', 'Una integración se desconecta, no se borra'],
   ['ledger_movements', 'ledger_movements_immutable', 'El Mayor no se edita ni se borra'],
   ['accounting_closures', 'accounting_closures_inmutable', 'Lo que fundamentó un cierre no cambia'],
   ['accounting_closures', 'accounting_closures_no_delete', 'Un cierre no se borra'],
@@ -189,6 +198,9 @@ const FK_CON_EMPRESA = [
   ['fixed_assets', 'fa_cuenta_fk', 'El bien no apunta a la cuenta de otra empresa'],
   ['fixed_asset_depreciations', 'fad_asiento_fk', 'La amortización no cita el asiento de otra empresa'],
   ['fixed_asset_improvements', 'fai_bien_fk', 'Una mejora no cuelga del bien de otra empresa'],
+  ['external_records', 'er_integracion_fk', 'Un registro no cuelga de la integración de otra empresa'],
+  ['external_records', 'er_party_fk', 'No se resuelve contra el tercero de otra empresa'],
+  ['integration_sync_runs', 'isr_integracion_fk', 'Una corrida es de la integración de su empresa'],
 ];
 
 /**
@@ -217,6 +229,8 @@ const RLS_FORZADO = [
   'warehouses', 'stock_movements',
   // Bienes de uso (0055): costos, vidas útiles y valor de libros.
   'fixed_assets', 'fixed_asset_improvements', 'fixed_asset_depreciations',
+  // Integration Hub (0056): qué trajo cada plataforma externa.
+  'company_integrations', 'integration_sync_runs', 'external_records',
 ];
 
 /**
@@ -238,6 +252,7 @@ const VISTAS_INVOKER = [
   // cadena saltearía el RLS y repartiría el trabajo de todas las empresas.
   'work_queue', 'work_queue_nucleo', 'work_queue_comercial', 'work_queue_compras',
   'work_queue_cobranzas', 'work_queue_stock', 'work_queue_activos',
+  'work_queue_integraciones',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
@@ -246,6 +261,8 @@ const VISTAS_INVOKER = [
   'stock_on_hand', 'stock_by_product',
   // Plan de amortización y valor de libros (0055).
   'asset_depreciation_schedule', 'asset_book_value',
+  // Salud de las integraciones (0056).
+  'integration_health',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',

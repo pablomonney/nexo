@@ -82,6 +82,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   products: 'product:read',
   // Bienes de uso (0055). La amortización pendiente cuelga del bien.
   fixed_assets: 'asset:read',
+  // Integration Hub (0056). Lo que llegó de afuera y espera resolución.
+  external_records: 'integration:read',
+  company_integrations: 'integration:read',
 };
 
 const CATEGORIAS = [

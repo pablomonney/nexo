@@ -90,7 +90,8 @@ NIVEL 4  (hecho)   imputación, composición y antigüedad de saldos   0053
 NIVEL 5  (hecho)   depósitos, movimientos y existencias derivadas   0054
 NIVEL 6  (hecho)   bienes de uso y amortizaciones                  0055
                    producción · RRHH ← siguen pendientes
-NIVEL 7            Integration Hub · conectores
+NIVEL 7  (hecho)   Integration Hub: zona de aterrizaje             0056
+                   conectores por API ← falta el adaptador de cada plataforma
 NIVEL 8            BI · analítica · IA sobre datos reales
 NIVEL 9            suscripciones y control interno del propio NEXO
 ```
