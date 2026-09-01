@@ -59,6 +59,15 @@ const datosDeContacto = {
   codigoPostal: z.string().max(20).nullish(),
   pais: z.string().length(2).optional(),
   observaciones: z.string().max(2000).nullish(),
+  /**
+   * Condición de pago acordada, en días.
+   *
+   * `null` no es «cero días»: significa que no se declaró, y entonces el
+   * sistema **no afirma que ningún comprobante de este tercero esté vencido**.
+   * Deducir el plazo de la fecha del comprobante sería inventar un acuerdo
+   * (migración 0053).
+   */
+  diasDePago: z.number().int().min(0).max(3650).nullish(),
 };
 
 const SELECT_TERCERO = `
@@ -66,7 +75,8 @@ const SELECT_TERCERO = `
   p.razon_social AS "razonSocial", p.nombre_fantasia AS "nombreFantasia",
   p.condicion_iva AS "condicionIva", p.email, p.telefono, p.domicilio,
   p.localidad, p.provincia, p.codigo_postal AS "codigoPostal", p.pais,
-  p.observaciones, p.status, p.created_at AS "creadoEn", p.created_by AS "creadoPor",
+  p.observaciones, p.dias_de_pago AS "diasDePago",
+  p.status, p.created_at AS "creadoEn", p.created_by AS "creadoPor",
   coalesce(
     (SELECT array_agg(r.role ORDER BY r.role) FROM party_roles r
       WHERE r.party_id = p.id AND r.company_id = p.company_id),
@@ -175,15 +185,16 @@ export async function partyRoutes(app: FastifyInstance): Promise<void> {
             `INSERT INTO parties
                (company_id, tipo_documento, numero_documento, razon_social, nombre_fantasia,
                 condicion_iva, email, telefono, domicilio, localidad, provincia,
-                codigo_postal, pais, observaciones, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                codigo_postal, pais, observaciones, dias_de_pago, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              RETURNING id`,
             [
               tenant.companyId, body.tipoDocumento, numero, body.razonSocial,
               body.nombreFantasia ?? null, body.condicionIva ?? 'DESCONOCIDA',
               body.email ?? null, body.telefono ?? null, body.domicilio ?? null,
               body.localidad ?? null, body.provincia ?? null, body.codigoPostal ?? null,
-              body.pais ?? 'AR', body.observaciones ?? null, `user:${auth.user.userId}`,
+              body.pais ?? 'AR', body.observaciones ?? null, body.diasDePago ?? null,
+              `user:${auth.user.userId}`,
             ],
           );
           const id = result.rows[0]!.id;
@@ -310,7 +321,8 @@ export async function partyRoutes(app: FastifyInstance): Promise<void> {
                   provincia       = CASE WHEN $16 THEN $17 ELSE provincia END,
                   codigo_postal   = CASE WHEN $18 THEN $19 ELSE codigo_postal END,
                   pais            = COALESCE($20, pais),
-                  observaciones   = CASE WHEN $21 THEN $22 ELSE observaciones END
+                  observaciones   = CASE WHEN $21 THEN $22 ELSE observaciones END,
+                  dias_de_pago    = CASE WHEN $23 THEN $24 ELSE dias_de_pago END
             WHERE id = $1 AND company_id = $2
             RETURNING id`,
           [
@@ -328,6 +340,7 @@ export async function partyRoutes(app: FastifyInstance): Promise<void> {
             body.codigoPostal !== undefined, body.codigoPostal ?? null,
             body.pais ?? null,
             body.observaciones !== undefined, body.observaciones ?? null,
+            body.diasDePago !== undefined, body.diasDePago ?? null,
           ],
         );
 

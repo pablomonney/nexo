@@ -519,6 +519,8 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
         <option>CONSUMIDOR_FINAL</option><option>NO_CATEGORIZADO</option></select></div>
       <div><label>Correo</label><input id="ter-email" type="email"></div>
       <div><label>Teléfono</label><input id="ter-tel"></div>
+      <div><label>Condición de pago (días)</label><input id="ter-plazo" type="number" min="0"
+        placeholder="vacío = sin plazo acordado"></div>
     </div>
     <div class="fila">
       <div><label>Roles</label>
@@ -533,6 +535,33 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div id="ter-detalle" hidden>
     <h3 id="ter-titulo"></h3>
     <dl class="kv" id="ter-kv"></dl>
+
+    <div id="ter-saldo" hidden>
+      <h4>Composición y antigüedad del saldo</h4>
+      <div id="ter-saldo-alcance"></div>
+      <div class="tabla"><table id="t-ter-aging"><thead><tr>
+        <th>Sentido</th><th>Hasta 30</th><th>31 a 60</th><th>61 a 90</th>
+        <th>Más de 90</th><th>Vencido</th><th>Pendiente</th>
+      </tr></thead><tbody></tbody></table></div>
+
+      <div class="tabla"><table id="t-ter-pend"><thead><tr>
+        <th>Fecha</th><th>Comprobante</th><th>Total</th><th>Imputado</th>
+        <th>Pendiente</th><th>Vencimiento</th><th>Mora</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+
+      <details class="grupo" id="ter-imputar" hidden><summary>Imputar un cobro o pago</summary><div>
+        <p class="ayuda">Qué factura cancela un cobro <strong>no se deduce</strong>: un cliente
+          que debe tres facturas iguales y paga una puede estar pagando cualquiera. Por eso se
+          declara, y queda firmado en la bitácora.</p>
+        <div class="fila">
+          <div><label>Comprobante</label><select id="ter-i-cbte"></select></div>
+          <div><label>Movimiento sin imputar</label><select id="ter-i-mov"></select></div>
+          <div><label>Importe</label><input id="ter-i-importe" inputmode="decimal"></div>
+        </div>
+        <button id="b-ter-imputar">Imputar</button>
+        <div id="ter-i-msg"></div>
+      </div></details>
+    </div>
     <div id="ter-cc-msg"></div>
     <div class="tabla"><table id="t-ter-cc"><thead><tr>
       <th>Fecha</th><th>Asiento</th><th>Cuenta</th><th>Detalle</th><th>Debe</th><th>Haber</th>
@@ -1983,8 +2012,101 @@ async function abrirTercero(id, cursor) {
 
   estado.cursores.terCc = r.datos.cursor;
   E('b-ter-cc-mas').hidden = !r.datos.cursor;
+
+  await cargarSaldoDelTercero(id);
   ir('terceros', ['Terceros', t.razonSocial]);
 }
+
+async function cargarSaldoDelTercero(id) {
+  E('ter-saldo').hidden = !puede('allocation:read');
+  if (!puede('allocation:read')) return;
+
+  const r = await api('GET', '/parties/' + id + '/saldo');
+  if (!r.ok) return;
+
+  // El alcance se muestra siempre, no solo cuando falta el plazo: quien lee la
+  // antigüedad tiene que saber si el sistema está afirmando mora o solo
+  // contando días desde el comprobante.
+  E('ter-saldo-alcance').innerHTML =
+    '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const aging = E('t-ter-aging').querySelector('tbody');
+  aging.innerHTML = '';
+  for (const a of (r.datos.antiguedad || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(a.direccion) + '</td>' +
+      '<td class="mono">' + escapar(a.hasta30 || '0') + '</td>' +
+      '<td class="mono">' + escapar(a.de31a60 || '0') + '</td>' +
+      '<td class="mono">' + escapar(a.de61a90 || '0') + '</td>' +
+      '<td class="mono">' + escapar(a.masDe90 || '0') + '</td>' +
+      '<td class="mono">' + escapar(a.vencido) + '</td>' +
+      '<td class="mono"><strong>' + escapar(a.pendiente) + '</strong></td>';
+    aging.appendChild(tr);
+  }
+
+  const pend = E('t-ter-pend').querySelector('tbody');
+  pend.innerHTML = '';
+  const sel = E('ter-i-cbte');
+  sel.innerHTML = '';
+  for (const c of (r.datos.comprobantes || [])) {
+    const tr = document.createElement('tr');
+    // La mora se muestra solo si está fundada. Sin condición declarada va un
+    // guión, no un cero: cero días de mora sería una afirmación.
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.fecha) + '</td>' +
+      '<td class="mono">' + escapar(c.direccion) + ' ' + escapar(c.puntoVenta) + '-' +
+        escapar(c.numero) + '</td>' +
+      '<td class="mono">' + escapar(c.total) + '</td>' +
+      '<td class="mono">' + escapar(c.imputado) + '</td>' +
+      '<td class="mono"><strong>' + escapar(c.pendiente) + '</strong></td>' +
+      '<td class="mono">' + escapar(c.vencimiento || 'sin plazo acordado') + '</td>' +
+      '<td>' + (c.vencimientoDeclarado
+        ? (c.diasDeMora > 0
+            ? '<span class="p p-ojo">' + escapar(c.diasDeMora) + ' días</span>'
+            : 'al día')
+        : '—') + '</td>' +
+      '<td class="mono">' + escapar(c.antiguedadDias) + ' d</td>';
+    pend.appendChild(tr);
+
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.puntoVenta + '-' + c.numero + ' · pendiente ' + c.pendiente;
+    sel.appendChild(o);
+  }
+
+  E('ter-imputar').hidden = !puede('allocation:write');
+  if (puede('allocation:write')) await cargarMovimientosSinImputar(id);
+}
+
+async function cargarMovimientosSinImputar(id) {
+  const r = await api('GET', '/parties/' + id + '/movimientos-sin-imputar');
+  const sel = E('ter-i-mov');
+  sel.innerHTML = '';
+  if (!r.ok) return;
+  for (const m of (r.datos.movimientos || [])) {
+    const o = document.createElement('option');
+    o.value = m.lineaId;
+    o.textContent = m.fecha + ' · asiento ' + m.numeroAsiento + ' · ' + m.lado +
+      ' · disponible ' + m.disponible;
+    sel.appendChild(o);
+  }
+  if (sel.options.length === 0) {
+    E('ter-i-msg').innerHTML =
+      '<div class="aviso">No hay movimientos sin imputar de este tercero. Un cobro se ' +
+      'registra como asiento aprobado; recién ahí se puede decir qué factura cancela.</div>';
+  }
+}
+
+E('b-ter-imputar').onclick = async () => {
+  const r = await api('POST', '/party-allocations', {
+    taxTransactionId: E('ter-i-cbte').value,
+    journalEntryLineId: E('ter-i-mov').value,
+    importe: E('ter-i-importe').value.trim(),
+  });
+  decir('ter-i-msg', r, 'Imputación registrada.');
+  if (r.ok) await abrirTercero(estado.tercero);
+};
 
 E('b-ter').onclick = () => listarTerceros();
 E('b-ter-mas').onclick = () => listarTerceros(estado.cursores.ter);
@@ -2013,6 +2135,9 @@ E('b-ter-alta').onclick = async () => {
   if (tipo !== 'SIN_IDENTIFICAR') cuerpo.numeroDocumento = E('ter-doc').value.trim();
   if (E('ter-email').value) cuerpo.email = E('ter-email').value;
   if (E('ter-tel').value) cuerpo.telefono = E('ter-tel').value;
+  // Vacío no es cero: significa que no se acordó plazo, y entonces el sistema
+  // no va a afirmar que ninguna factura de este tercero esté vencida.
+  if (E('ter-plazo').value !== '') cuerpo.diasDePago = Number(E('ter-plazo').value);
 
   const r = await api('POST', '/parties', cuerpo);
   decir('ter-alta-msg', r, 'Tercero dado de alta.');

@@ -59,6 +59,7 @@ const CHECKS = [
   ['commercial_documents', 'cd_facturado_con_operacion', 'FACTURADO si y solo si hay operación fiscal'],
   ['commercial_documents', 'cd_anulado_con_motivo', 'Una anulación sin motivo no se registra'],
   ['goods_receipts', 'gr_anulada_con_motivo', 'Anular una recepción exige decir por qué'],
+  ['party_allocations', 'pa_anulada_con_motivo', 'Anular una imputación exige decir por qué'],
   ['commercial_document_lines', 'cdl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
@@ -96,6 +97,9 @@ const TRIGGERS = [
   ['goods_receipts', 'goods_receipts_transicion', '0052: la máquina de estados de la recepción'],
   ['goods_receipts', 'goods_receipts_no_delete', 'Una recepción confirmada no se borra'],
   ['goods_receipt_lines', 'grl_editables', 'Lo que se confirmó que llegó no se edita'],
+  ['party_allocations', 'party_allocations_valida', '0053: los cuatro candados de la imputación'],
+  ['party_allocations', 'party_allocations_no_excede', '0053: no se imputa de más (diferido)'],
+  ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['ledger_movements', 'ledger_movements_immutable', 'El Mayor no se edita ni se borra'],
   ['accounting_closures', 'accounting_closures_inmutable', 'Lo que fundamentó un cierre no cambia'],
   ['accounting_closures', 'accounting_closures_no_delete', 'Un cierre no se borra'],
@@ -136,6 +140,7 @@ const INDICES = [
   ['products_code_unico', 'Un código, un producto, por empresa'],
   ['cd_una_operacion', 'Una operación fiscal nace de un solo documento comercial'],
   ['cd_una_sucesora', 'Un documento reemplaza como mucho a uno anterior'],
+  ['pa_una_por_par', 'Un movimiento no se imputa dos veces al mismo comprobante'],
 ];
 
 /**
@@ -160,6 +165,8 @@ const FK_CON_EMPRESA = [
   ['goods_receipts', 'gr_party_fk', 'No se recibe del proveedor de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
   ['goods_receipt_lines', 'grl_recepcion_fk', 'Un renglón no cuelga de la recepción de otra empresa'],
+  ['party_allocations', 'pa_comprobante_fk', 'No se imputa al comprobante de otra empresa'],
+  ['party_allocations', 'pa_linea_fk', 'No se imputa con el movimiento de otra empresa'],
 ];
 
 /**
@@ -182,6 +189,8 @@ const RLS_FORZADO = [
   'commercial_documents', 'commercial_document_lines', 'commercial_counters',
   // Recepción de mercadería (0052): qué llegó y cuándo.
   'goods_receipts', 'goods_receipt_lines',
+  // Imputaciones (0053): qué factura cancela cada cobro.
+  'party_allocations',
 ];
 
 /**
@@ -202,8 +211,11 @@ const VISTAS_INVOKER = [
   // llevan `security_invoker`: una sola sin él en cualquier eslabón de la
   // cadena saltearía el RLS y repartiría el trabajo de todas las empresas.
   'work_queue', 'work_queue_nucleo', 'work_queue_comercial', 'work_queue_compras',
+  'work_queue_cobranzas',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
+  // Composición y antigüedad de saldos (0053): la cartera de la empresa.
+  'invoice_settlement', 'party_aging',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',
