@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (18 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (20 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -105,14 +105,11 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
 
 ### Lo que falta dentro de lo hecho
 
-- **Cuatro módulos TERMINADOS sin pantalla.** Los encontró el barrido S-12 la
-  primera vez que se lo hizo mirar en la dirección inversa —«¿qué ruta existe y
-  nadie puede alcanzar?»—, y no estaban en ninguna lista. Son
-  `vat` (subdiarios y Libro IVA, que es núcleo fiscal), `banks` (la conciliación
-  bancaria), `notes` (se generan desde Estados, pero aprobarlas y revisarlas no
-  se puede) y `arca` (se carga una credencial y no se puede revocar). Están
-  declarados en `SIN_PANTALLA` con el motivo verdadero: **falta**, no «se
-  decidió que no».
+- **Exportar y presentar el Libro de IVA Digital.** No es una pantalla que
+  falte: los diseños de registro **no están en la resolución** —el art. 8° los
+  remite al micrositio de ARCA, que no está archivado— y ambos endpoints
+  contestan `501` con su fundamento. Inventar un layout produciría un archivo
+  rechazado, o peor, uno aceptado con los campos corridos (§30, §47).
 - **Valuación de existencias.** Hoy el stock son cantidades. Cuánto valen —PPP,
   FIFO o costo de reposición— es una decisión contable con norma detrás, y sin
   ella no hay costo de mercadería vendida automático.

@@ -136,20 +136,15 @@ const SIN_PANTALLA = new Map<string, string>([
   ['predictions', 'La revisión de propuestas de IA todavía no tiene pantalla (ver bandeja)'],
   ['cost-centers', 'Se eligen dentro de cada asiento; no tienen ABM propio todavía'],
 
-  // ── Deuda declarada, no decisión ──────────────────────────────────────────
-  //
-  // Estos cuatro los encontró este mismo control la primera vez que corrió, y
-  // no estaban en ninguna lista de pendientes: son módulos TERMINADOS y
-  // probados, sin forma de usarlos desde la consola. Figuran acá con su motivo
-  // verdadero —«falta», no «se decidió que no»— y en PROJECT_STATUS §4.
-  //
-  // Que una excepción diga la verdad es lo único que la separa de un permiso
-  // permanente para no hacer el trabajo.
-  ['vat', 'PENDIENTE: subdiarios y Libro IVA no tienen pantalla, y son núcleo fiscal'],
-  ['banks', 'PENDIENTE: la conciliación bancaria está probada y no tiene pantalla'],
-  ['notes', 'PENDIENTE: las notas se generan desde Estados; aprobarlas y revisarlas, no'],
-  ['arca', 'PENDIENTE: se puede cargar una credencial y no revocarla'],
 ]);
+
+// Nota para quien venga después: acá hubo cuatro excepciones más —`vat`,
+// `banks`, `notes` y `arca`—, todas módulos TERMINADOS y probados a los que no
+// se llegaba desde la consola. Las encontró este mismo control la primera vez
+// que corrió, y **duraron un commit**: se declararon con su motivo verdadero
+// («falta», no «se decidió que no») y en el bloque siguiente se les hizo la
+// pantalla. Es el uso que la lista tiene que tener. Una excepción que se queda
+// es un permiso permanente para no hacer el trabajo.
 
 suite('S-12 — la consola solo llama a rutas que existen', () => {
   let app: FastifyInstance;

@@ -128,6 +128,8 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="recepciones">Recepciones</button>
   <button data-vista="stock">Existencias</button>
   <button data-vista="activos">Bienes de uso</button>
+  <button data-vista="iva">IVA</button>
+  <button data-vista="bancos">Bancos</button>
   <button data-vista="integraciones">Integraciones</button>
   <button data-vista="analitica">Analítica</button>
   <button data-vista="analisis">Señales</button>
@@ -806,6 +808,93 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </div></details>
 </section>
 
+<!-- ══ IVA ════════════════════════════════════════════════════════════════ -->
+<section id="v-iva" hidden>
+  <h2>IVA: subdiarios y Libro Digital</h2>
+  <p class="ayuda">El sistema <strong>arma</strong> el libro y dice qué lo bloquea; generarlo
+    es un acto aparte, con su permiso, porque el art.&nbsp;12 encadena los períodos: si el
+    anterior no se generó, la presentación «solo podrá efectuarse» después, y dejar generar
+    igual produciría una secuencia que el portal rechaza.</p>
+
+  <div class="fila">
+    <div><label>Año</label><input id="iva-anio" inputmode="numeric" maxlength="4"></div>
+    <div><label>Mes</label><input id="iva-mes" inputmode="numeric" maxlength="2"></div>
+  </div>
+  <button id="b-iva" class="sec">Ver el período</button>
+  <div id="iva-msg"></div>
+
+  <h3>Libro de IVA Digital</h3>
+  <dl class="kv" id="iva-libro"></dl>
+  <div id="iva-bloqueos"></div>
+  <div id="iva-acciones"></div>
+  <div id="iva-acc-msg"></div>
+
+  <h3>Subdiarios</h3>
+  <p class="ayuda">Los comprobantes <strong>excluidos</strong> se muestran arriba y no al
+    final de la lista: uno que quedó fuera de los totales y solo aparece si alguien scrollea
+    es un comprobante que nadie va a ir a buscar.</p>
+  <div class="fila">
+    <div><label>Dirección</label><select id="iva-dir">
+      <option>VENTAS</option><option>COMPRAS</option></select></div>
+  </div>
+  <button id="b-iva-sub" class="sec">Ver subdiario</button>
+  <div id="iva-sub-msg"></div>
+  <dl class="kv" id="iva-sub-totales"></dl>
+  <div id="iva-sub-excluidos"></div>
+  <div class="tabla"><table id="t-iva-sub"><thead><tr>
+    <th>Fecha</th><th>Tipo</th><th>P.V.</th><th>Número</th><th>CUIT</th><th>Razón social</th>
+    <th>Neto</th><th>IVA</th><th>No gravado</th><th>Exento</th><th>Percepciones</th><th>Total</th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+
+<!-- ══ Bancos ═════════════════════════════════════════════════════════════ -->
+<section id="v-bancos" hidden>
+  <h2>Bancos y conciliación</h2>
+  <p class="ayuda">La conciliación se <strong>propone</strong> y se confirma de a una. No hay
+    «aceptar todas»: la norma pide intervención humana, y un botón que acepta todo junto es
+    exactamente cómo esa intervención se vuelve un trámite.</p>
+
+  <div class="fila">
+    <div><label>Cuenta</label><select id="ban-cuenta"></select></div>
+    <div><label>Desde</label><input id="ban-desde" type="date"></div>
+    <div><label>Hasta</label><input id="ban-hasta" type="date"></div>
+  </div>
+  <button id="b-ban" class="sec">Actualizar cuentas</button>
+  <div id="ban-msg"></div>
+  <div class="tabla"><table id="t-ban"><thead><tr>
+    <th>Banco</th><th>CBU</th><th>Alias</th><th>Número</th><th>Moneda</th>
+    <th>Cuenta contable</th><th>Estado</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="ban-importar" hidden><summary>Importar un extracto</summary><div>
+    <p class="ayuda">El extracto entra con su mapeo de columnas y sus saldos declarados. Si no
+      trae columna de saldo, la cadena <strong>no se puede verificar</strong> — y eso se
+      informa, porque no es lo mismo que haberla verificado y que dé bien.</p>
+    <div class="fila">
+      <div><label>Mapeo (layoutId)</label><input id="ban-layout" maxlength="60"></div>
+      <div><label>Saldo inicial</label><input id="ban-si" inputmode="decimal"></div>
+      <div><label>Saldo final</label><input id="ban-sf" inputmode="decimal"></div>
+    </div>
+    <div><label>Contenido del CSV</label><textarea id="ban-csv" rows="6"></textarea></div>
+    <button id="b-ban-importar">Importar</button>
+    <div id="ban-imp-msg"></div>
+  </div></details>
+
+  <h3>Propuesta de conciliación</h3>
+  <p class="ayuda">Es una lectura: se puede volver a pedir cuantas veces haga falta y no
+    guarda nada. Lo que se guarda es cada confirmación, una por una.</p>
+  <div class="fila">
+    <div><label>Saldo según extracto</label><input id="ban-saldo" inputmode="decimal"></div>
+    <div><label>Ventana (días)</label><input id="ban-ventana" inputmode="numeric" placeholder="por defecto"></div>
+  </div>
+  <button id="b-ban-proponer" class="sec">Proponer</button>
+  <div id="ban-prop-msg"></div>
+  <dl class="kv" id="ban-acta"></dl>
+  <div class="tabla"><table id="t-ban-prop"><thead><tr>
+    <th>Tipo</th><th>Confianza</th><th>Movimientos</th><th>Líneas de asiento</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+
 <!-- ══ Integraciones ══════════════════════════════════════════════════════ -->
 <section id="v-integraciones" hidden>
   <h2>Integraciones</h2>
@@ -1169,7 +1258,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
                 'terceros','productos','comercial','recepciones','stock','activos',
-                'integraciones','analitica','analisis',
+                'iva','bancos','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
 function ir(vista, migas) {
@@ -1203,6 +1292,8 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'recepciones') listarRecepciones();
     if (v === 'stock') listarStock();
     if (v === 'activos') listarActivos();
+    if (v === 'iva') cargarIva();
+    if (v === 'bancos') listarBancos();
     if (v === 'integraciones') listarIntegraciones();
     if (v === 'analitica') cargarAnalitica();
     if (v === 'analisis') listarSenales();
@@ -1308,6 +1399,7 @@ function aplicarPermisosANav() {
     documentos: 'document:read', operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
+    iva: 'vat_book:read', bancos: 'bank:read',
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
@@ -2878,6 +2970,216 @@ E('b-act-baja').onclick = async () => {
   if (r.ok) { listarActivos(); abrirActivo(estado.activo); }
 };
 
+// ══ 4b2 · IVA ═════════════════════════════════════════════════════════════
+async function cargarIva() {
+  const anio = E('iva-anio').value;
+  const mes = E('iva-mes').value;
+  if (!anio || !mes) {
+    E('iva-msg').innerHTML = '<div class="aviso">Indicá año y mes.</div>';
+    return;
+  }
+
+  const r = await api('GET', '/vat/books/' + anio + '/' + mes);
+  if (!r.ok) return decir('iva-msg', r);
+  limpiar('iva-msg');
+
+  const l = r.datos;
+  E('iva-libro').innerHTML =
+    fila('Período', l.periodo ? l.periodo.anio + '-' + String(l.periodo.mes).padStart(2, '0') : '—') +
+    fila('Vencimiento', l.vencimiento) +
+    fila('Comprobantes de compra', l.comprobantesCompras) +
+    fila('Comprobantes de venta', l.comprobantesVentas) +
+    fila('Sin movimiento', l.sinMovimiento ? 'sí — la obligación se cumple igual, informando la novedad' : 'no') +
+    fila('Fuente', l.fuente ? l.fuente.norma : '—');
+
+  // Los bloqueos van con su fundamento normativo al lado. Un «no se puede» sin
+  // el artículo que lo dice es indistinguible de un capricho del sistema.
+  const b = l.bloqueos || [];
+  E('iva-bloqueos').innerHTML = b.length === 0
+    ? '<div class="aviso ok">Sin bloqueos para generar este período.</div>'
+    : b.map((x) => '<div class="aviso error"><strong>' + escapar(x.codigo) + '</strong><br>' +
+        escapar(x.mensaje) + '<br><span class="ayuda">' + escapar(x.fundamento) + '</span></div>').join('');
+
+  const acciones = E('iva-acciones');
+  acciones.innerHTML = '';
+  if (puede('vat_book:generate') && b.length === 0) {
+    const boton = document.createElement('button');
+    boton.textContent = 'Generar el libro del período';
+    boton.onclick = async () => {
+      const g = await api('POST', '/vat/books/' + anio + '/' + mes + '/generate', {});
+      decir('iva-acc-msg', g, 'Libro generado');
+      if (g.ok) cargarIva();
+    };
+    acciones.appendChild(boton);
+  }
+
+  // Presentar y exportar existen y contestan 501 con su motivo: los diseños de
+  // registro no están en la resolución. Se ofrece el botón igual —y no se
+  // esconde— porque la respuesta es información útil: dice por qué no se puede
+  // y con qué fundamento, en vez de dejar la pantalla muda.
+  if (puede('vat_book:generate')) {
+    const p = document.createElement('button');
+    p.textContent = '¿Se puede presentar?';
+    p.className = 'sec';
+    p.onclick = async () => {
+      const x = await api('POST', '/vat/books/' + anio + '/' + mes + '/present', {});
+      decir('iva-acc-msg', x, 'Presentado');
+    };
+    acciones.appendChild(p);
+
+    const e = document.createElement('button');
+    e.textContent = '¿Se puede exportar el archivo?';
+    e.className = 'sec';
+    e.onclick = async () => {
+      const x = await api('GET', '/vat/books/export-file');
+      decir('iva-acc-msg', x, 'Archivo generado');
+    };
+    acciones.appendChild(e);
+  }
+}
+
+async function cargarSubdiario() {
+  const anio = E('iva-anio').value;
+  const mes = E('iva-mes').value;
+  const dir = E('iva-dir').value;
+  if (!anio || !mes) {
+    E('iva-sub-msg').innerHTML = '<div class="aviso">Indicá año y mes arriba.</div>';
+    return;
+  }
+
+  const r = await api('GET', '/vat/subdiarios/' + dir + '/' + anio + '/' + mes);
+  if (!r.ok) return decir('iva-sub-msg', r);
+  limpiar('iva-sub-msg');
+
+  const t = r.datos.totales || {};
+  E('iva-sub-totales').innerHTML =
+    fila('Neto', t.neto) + fila('IVA', t.iva) + fila('No gravado', t.noGravado) +
+    fila('Exento', t.exento) + fila('Percepciones', t.percepciones) + fila('Total', t.total) +
+    fila('Desde', r.datos.desde) + fila('Hasta', r.datos.hasta);
+
+  const ex = r.datos.excluidos || [];
+  E('iva-sub-excluidos').innerHTML = ex.length === 0 ? ''
+    : '<div class="aviso error"><strong>' + ex.length +
+      ' comprobante(s) quedaron fuera de estos totales</strong><pre>' +
+      escapar(JSON.stringify(ex, null, 2)) + '</pre></div>';
+
+  const cuerpo = E('t-iva-sub').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const g of r.datos.renglones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(g.fecha) + '</td><td>' + escapar(g.tipo) + '</td>' +
+      '<td class="mono">' + escapar(g.puntoVenta) + '</td>' +
+      '<td class="mono">' + escapar(g.numero) + '</td>' +
+      '<td class="mono">' + escapar(g.cuit || '—') + '</td>' +
+      '<td>' + escapar(g.razonSocial || '—') + '</td>' +
+      '<td class="mono">' + escapar(g.neto) + '</td><td class="mono">' + escapar(g.iva) + '</td>' +
+      '<td class="mono">' + escapar(g.noGravado) + '</td><td class="mono">' + escapar(g.exento) + '</td>' +
+      '<td class="mono">' + escapar(g.percepciones) + '</td><td class="mono">' + escapar(g.total) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-iva').onclick = () => cargarIva();
+E('b-iva-sub').onclick = () => cargarSubdiario();
+
+// ══ 4b3 · Bancos ══════════════════════════════════════════════════════════
+async function listarBancos() {
+  E('ban-importar').hidden = !puede('bank:import');
+
+  const r = await api('GET', '/banks/accounts');
+  if (!r.ok) return decir('ban-msg', r);
+  limpiar('ban-msg');
+
+  const cuerpo = E('t-ban').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const sel = E('ban-cuenta');
+  const previo = sel.value;
+  sel.innerHTML = '';
+  for (const c of r.datos.cuentas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(c.banco) + '</td><td class="mono">' + escapar(c.cbu || '—') + '</td>' +
+      '<td class="mono">' + escapar(c.alias || '—') + '</td>' +
+      '<td class="mono">' + escapar(c.numero || '—') + '</td>' +
+      '<td>' + escapar(c.moneda) + '</td>' +
+      '<td class="mono">' + escapar(c.cuentaCodigo) + ' — ' + escapar(c.cuentaNombre) + '</td>' +
+      '<td>' + pastilla(c.estado) + '</td>';
+    cuerpo.appendChild(tr);
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.banco + ' — ' + (c.alias || c.numero || c.cbu || '');
+    sel.appendChild(o);
+  }
+  sel.value = previo;
+}
+
+E('b-ban').onclick = () => listarBancos();
+
+E('b-ban-importar').onclick = async () => {
+  const r = await api('POST', '/banks/accounts/' + E('ban-cuenta').value + '/statements', {
+    layoutId: E('ban-layout').value,
+    desde: E('ban-desde').value,
+    hasta: E('ban-hasta').value,
+    saldoInicial: E('ban-si').value,
+    saldoFinal: E('ban-sf').value,
+    contenido: E('ban-csv').value,
+  });
+  decir('ban-imp-msg', r, 'Extracto importado');
+};
+
+E('b-ban-proponer').onclick = async () => {
+  const cuenta = E('ban-cuenta').value;
+  const cuerpoPedido = {
+    desde: E('ban-desde').value,
+    hasta: E('ban-hasta').value,
+    saldoSegunExtracto: E('ban-saldo').value,
+  };
+  if (E('ban-ventana').value) cuerpoPedido.ventanaDias = Number(E('ban-ventana').value);
+
+  const r = await api('POST', '/banks/accounts/' + cuenta + '/reconciliations/propose', cuerpoPedido);
+  if (!r.ok) return decir('ban-prop-msg', r);
+  limpiar('ban-prop-msg');
+
+  const a = r.datos;
+  E('ban-acta').innerHTML =
+    fila('Saldo según extracto', a.saldoSegunExtracto) +
+    fila('Saldo según libro', a.saldoSegunLibro) +
+    fila('Ajuste neto', a.ajusteNeto) +
+    fila('Saldo conciliado', a.saldoConciliado) +
+    fila('¿Cierra?', a.cierra ? 'sí' : 'no') +
+    fila('Explicación', a.explicacion) +
+    fila('Cobertura', typeof a.cobertura === 'object' ? JSON.stringify(a.cobertura) : a.cobertura);
+
+  const cuerpo = E('t-ban-prop').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of a.propuestas || []) {
+    const tr = document.createElement('tr');
+    // El score se muestra como lo que es —una señal de la máquina— y nunca con
+    // el aspecto de una conciliación ya hecha. Confirmarla es de una persona.
+    tr.innerHTML =
+      '<td>' + escapar(p.tipo) + '</td>' +
+      '<td><span class="p p-ia">' + escapar(p.score) + '</span></td>' +
+      '<td class="mono">' + escapar((p.movimientoIds || []).join(', ')) + '</td>' +
+      '<td class="mono">' + escapar((p.entryLineIds || []).join(', ')) + '</td>' +
+      '<td>' + (puede('bank:reconcile') ? '<span class="clic">confirmar esta</span>' : '') + '</td>';
+    const boton = tr.querySelector('.clic');
+    if (boton) boton.onclick = async () => {
+      // Una por una y con el id de la conciliación a mano. No hay «confirmar
+      // todas» a propósito: ver R-25.
+      const rec = prompt('Id de la conciliación guardada para imputar esta propuesta:');
+      if (!rec) return;
+      const c = await api('POST', '/banks/reconciliations/' + rec + '/matches', {
+        bankTransactionId: (p.movimientoIds || [])[0],
+        entryLineId: (p.entryLineIds || [])[0],
+        matchType: p.tipo,
+        score: p.score,
+      });
+      decir('ban-prop-msg', c, 'Conciliación confirmada');
+    };
+    cuerpo.appendChild(tr);
+  }
+};
+
 // ══ 4d · Integraciones ════════════════════════════════════════════════════
 async function listarIntegraciones() {
   E('int-conectar').hidden = !puede('integration:connect');
@@ -3471,7 +3773,66 @@ async function abrirNotas(id) {
         escapar(JSON.stringify(v.errores, null, 2)) + '</pre></div>';
   }
   if (paquete.ok) {
-    caja.innerHTML += '<pre>' + escapar(JSON.stringify(paquete.datos, null, 2)) + '</pre>';
+    // `completo` dice que las notas que hay están aprobadas. NO dice que estén
+    // todas las que la ley exige: eso el sistema no lo sabe, y el propio
+    // endpoint lo declara como REQUIRES_EXTERNAL_INPUT. Se muestran las dos
+    // cosas juntas para que no se lea una por la otra.
+    caja.innerHTML +=
+      '<div class="aviso' + (paquete.datos.completo ? ' ok' : '') + '">' +
+      (paquete.datos.completo
+        ? 'Todas las notas vigentes están aprobadas.'
+        : 'Hay notas sin aprobar o sin evidencia.') +
+      '<br><span class="ayuda">' + escapar(paquete.datos.motivoObligatoriedad) + '</span></div>';
+
+    const tabla = document.createElement('div');
+    tabla.className = 'tabla';
+    tabla.innerHTML =
+      '<table><thead><tr><th>N.º</th><th>Título</th><th>Tipo</th><th>Versión</th>' +
+      '<th>Evidencia</th><th>Cifras</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>';
+    const cuerpo = tabla.querySelector('tbody');
+
+    for (const n of paquete.datos.notas || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(n.numero) + '</td><td>' + escapar(n.titulo) + '</td>' +
+        '<td>' + escapar(n.tipo) + '</td><td class="mono">' + escapar(n.version) + '</td>' +
+        '<td>' + (n.evidencia === 'INSUFFICIENT_EVIDENCE'
+          ? '<span class="p p-mal">insuficiente</span>' : '<span class="p p-bien">' + escapar(n.evidencia) + '</span>') + '</td>' +
+        '<td class="mono">' + escapar(n.cifras) + '</td>' +
+        '<td>' + pastilla(n.status) + '</td><td class="acciones"></td>';
+      const acciones = tr.querySelector('.acciones');
+
+      // Aprobar solo aparece sobre un BORRADOR con evidencia suficiente: la base
+      // lo impide igual (`notes_no_se_aprueba_sin_evidencia`), y ofrecer el
+      // botón para que termine en 422 le enseña a la persona que el sistema
+      // falla al azar.
+      if (puede('note:write') && n.status === 'BORRADOR' && n.evidencia !== 'INSUFFICIENT_EVIDENCE') {
+        const b = document.createElement('span');
+        b.className = 'clic'; b.textContent = 'aprobar';
+        b.onclick = async () => {
+          const r = await api('POST', '/notes/' + n.id + '/approve', {});
+          decir('est-msg', r, 'Nota aprobada: alguien se hace cargo de lo que dice');
+          if (r.ok) abrirNotas(id);
+        };
+        acciones.appendChild(b);
+      }
+      // Revisar no reemplaza: encadena una versión nueva que supersede a la
+      // anterior, igual que un contraasiento. Por eso exige motivo.
+      if (puede('note:write') && n.status !== 'SUPERSEDIDA') {
+        const b = document.createElement('span');
+        b.className = 'clic'; b.textContent = ' revisar';
+        b.onclick = async () => {
+          const motivo = prompt('Motivo de la nueva versión (mínimo 10 caracteres):');
+          if (motivo === null || motivo.trim().length < 10) return;
+          const r = await api('POST', '/notes/' + n.id + '/revise', { motivo: motivo.trim() });
+          decir('est-msg', r, 'Nueva versión: la anterior queda supersedida, no borrada');
+          if (r.ok) abrirNotas(id);
+        };
+        acciones.appendChild(b);
+      }
+      cuerpo.appendChild(tr);
+    }
+    caja.appendChild(tabla);
   }
   if (puede('note:write')) {
     const b = document.createElement('button');
@@ -3664,12 +4025,46 @@ async function cargarConfig() {
   if (puede('arca_credential:manage')) {
     const cred = await api('GET', '/companies/current/arca/credentials');
     const cap = await api('GET', '/companies/current/arca/capabilities');
-    caja.innerHTML += '<h3>ARCA — certificados</h3>' +
-      (cred.ok
-        ? tablaDe(cred.datos.credenciales || cred.datos.credentials || [],
-            [['Ambiente','environment'],['CUIT','cuit'],['Huella','fingerprint'],
-             ['Vence','notAfter'],['Estado','status']])
-        : '<div class="aviso">Sin certificados cargados.</div>');
+    caja.innerHTML += '<h3>ARCA — certificados</h3>';
+    const certificados = cred.ok
+      ? (cred.datos.credenciales || cred.datos.credentials || [])
+      : [];
+    if (certificados.length === 0) {
+      caja.innerHTML += '<div class="aviso">Sin certificados cargados.</div>';
+    } else {
+      const tabla = document.createElement('div');
+      tabla.className = 'tabla';
+      tabla.innerHTML =
+        '<table><thead><tr><th>Ambiente</th><th>CUIT</th><th>Huella</th>' +
+        '<th>Vence</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>';
+      const cuerpo = tabla.querySelector('tbody');
+      for (const c of certificados) {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + escapar(c.environment) + '</td><td class="mono">' + escapar(c.cuit) + '</td>' +
+          '<td class="mono">' + escapar(c.fingerprint) + '</td>' +
+          '<td class="mono">' + escapar(c.notAfter) + '</td>' +
+          '<td>' + pastilla(c.status) + '</td><td class="acciones"></td>';
+        // Se podía cargar un certificado y no revocarlo. Un certificado
+        // comprometido que no se puede dar de baja desde el sistema obliga a
+        // tocar la base a mano, que es peor que cualquier pantalla fea.
+        if (c.status !== 'REVOCADA' && c.status !== 'REVOKED') {
+          const b = document.createElement('span');
+          b.className = 'clic'; b.textContent = 'revocar';
+          b.onclick = async () => {
+            const motivo = prompt('Motivo de la revocación (mínimo 10 caracteres):');
+            if (motivo === null || motivo.trim().length < 10) return;
+            const r = await api('POST', '/arca/credentials/' + c.id + '/revoke',
+              { motivo: motivo.trim() });
+            decir('cfg-msg', r, 'Certificado revocado');
+            if (r.ok) cargarConfig();
+          };
+          tr.querySelector('.acciones').appendChild(b);
+        }
+        cuerpo.appendChild(tr);
+      }
+      caja.appendChild(tabla);
+    }
     if (cap.ok) {
       caja.innerHTML += '<h3>ARCA — servicios habilitados</h3><pre>' +
         escapar(JSON.stringify(cap.datos, null, 2)) + '</pre>';
