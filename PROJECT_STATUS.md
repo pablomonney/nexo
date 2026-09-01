@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 81 archivos de test, 1507 tests,
+**Estado del árbol:** `verify` en verde — 82 archivos de test, 1515 tests,
 210 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -52,6 +52,8 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Integration Hub** | **TERMINADO** | **`integration-hub` (18 tests)** |
 | **Analítica con trazabilidad** | **TERMINADO** | **`analitica` (13 tests)** |
 | **Señales, proyección y simulación** | **TERMINADO** | **`senales-y-simulacion` (12 tests)** |
+| **Arranque del servidor (`npm start`)** | **TERMINADO** | **`arranque` (8 tests)** |
+| **Backup y restauración verificada** | **TERMINADO** | **`npm run db:restaurar`** |
 
 ## 3. En curso
 
@@ -146,7 +148,7 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
 |---|---|---|
 | 17 valores de estado muertos | Clasificados en la FASE 4 (`MUERTO` / `GAP_DE_PRODUCTO` / `DERIVADO`), **no** removidos de los CHECK | MENOR — documentada |
 | `alerts` y `audit_findings` | Tablas sin escritores productivos; deliberadamente fuera de la bandeja | MENOR |
-| Sin `npm start` | La API no lee `.env` por sí sola ni tiene script de arranque | IMPORTANTE |
+| KMS ausente | Los sobres de credenciales usan `local:` fuera de producción; `desenvolver()` se niega a abrirlos con `NODE_ENV=production`. El cliente de KMS que pide SECURITY.md §5 no existe todavía, así que hoy **no hay arranque en producción posible** con ARCA real | IMPORTANTE |
 | Backup restaurado sobre base vacía | `npm run db:restaurar` demuestra el camino de vuelta, pero la comparación de contenido se informa **SIN EJERCITAR**: `aai` no tiene ni una fila de negocio. El día que tenga datos reales, este control recién empieza a decir algo | MENOR — el mecanismo está probado |
 | Base de desarrollo vacía | `aai` no tiene usuarios ni empresas; el primer admin se crea con `POST /auth/register-first-admin` | MENOR |
 
@@ -195,3 +197,24 @@ siguen reportando por separado.
 | **015** | **El vencimiento no se deduce y la imputación no se adivina: se declaran** |
 | **016** | **Un conector no escribe en el motor contable: deposita y una persona resuelve** |
 | **017** | **Detectar, proyectar y simular son aritmética determinista: no llevan modelo** |
+
+## 10. Cómo se levanta
+
+```
+npm run db:setup     # crea la base, migra y siembra los catálogos
+npm start            # compila y levanta la API
+```
+
+El arranque **se niega a levantar** si la base quedó atrás de las migraciones, y
+dice cuáles faltan y con qué comando se arreglan. No migra solo: un servidor que
+corrige el esquema al reiniciarse aplica DDL que nadie pidió.
+
+Después de escuchar imprime en qué modo corre cada integración. Los defaults de
+`config.ts` son deliberadamente inertes —OCR `none`, IA `none`, ARCA `mock`— y
+esa es la decisión correcta (§30), pero sin el resumen son invisibles: alguien
+puede constatar un comprobante contra el mock y creer que habló con el organismo.
+
+```
+npm run db:backup    # copia de resguardo
+npm run db:restaurar # la restaura en una base descartable y la verifica
+```

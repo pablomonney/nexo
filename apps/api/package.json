@@ -13,6 +13,10 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./arranque": {
+      "types": "./dist/arranque.d.ts",
+      "default": "./dist/arranque.js"
+    },
     "./arca/credential-store": {
       "types": "./dist/arca/credential-store.d.ts",
       "default": "./dist/arca/credential-store.js"
