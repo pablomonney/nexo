@@ -92,7 +92,8 @@ NIVEL 6  (hecho)   bienes de uso y amortizaciones                  0055
                    producción · RRHH ← siguen pendientes
 NIVEL 7  (hecho)   Integration Hub: zona de aterrizaje             0056
                    conectores por API ← falta el adaptador de cada plataforma
-NIVEL 8            BI · analítica · IA sobre datos reales
+NIVEL 8  (hecho)   analítica con trazabilidad hasta la fila         0057
+                   IA sobre datos reales ← sigue pendiente
 NIVEL 9            suscripciones y control interno del propio NEXO
 ```
 

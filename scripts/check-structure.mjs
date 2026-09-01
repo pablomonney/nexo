@@ -263,6 +263,10 @@ const VISTAS_INVOKER = [
   'asset_depreciation_schedule', 'asset_book_value',
   // Salud de las integraciones (0056).
   'integration_health',
+  // Analítica (0057). Seis vistas, ni una cifra almacenada: sin
+  // `security_invoker` un tablero mostraría las ventas de todas las empresas.
+  'analytics_operaciones_mensuales', 'analytics_por_producto', 'analytics_por_tercero',
+  'analytics_cobertura_de_detalle', 'analytics_flujo_bancario', 'analytics_resumen',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',

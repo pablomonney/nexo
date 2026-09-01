@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 79 archivos de test, 1482 tests,
-200 objetos estructurales presentes, 0 discrepancias en el Mayor.
+**Estado del árbol:** `verify` en verde — 80 archivos de test, 1495 tests,
+206 objetos estructurales presentes, 0 discrepancias en el Mayor.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
 Si algo figura como TERMINADO, existe el código, el test y el candado. Si algo
@@ -50,6 +50,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Stock: depósitos y existencias** | **TERMINADO** | **`stock` (13 tests)** |
 | **Bienes de uso y amortizaciones** | **TERMINADO** | **`bienes-de-uso` (15 tests)** |
 | **Integration Hub** | **TERMINADO** | **`integration-hub` (18 tests)** |
+| **Analítica con trazabilidad** | **TERMINADO** | **`analitica` (13 tests)** |
 
 ## 3. En curso
 
@@ -67,6 +68,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0054 | Depósitos, libro de movimientos y existencias derivadas |
 | 0055 | Bienes de uso: plan de amortización calculado y valor de libros |
 | 0056 | Integration Hub: zona de aterrizaje para lo externo (ADR-016) |
+| 0057 | Analítica: seis vistas, ni una cifra almacenada, cada total abrible |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -84,8 +86,10 @@ sigue ya no es contabilidad:
    de cada plataforma —Tiendanube, Mercado Pago, Meta y Google Ads, bancos— y
    sus credenciales. Cada uno es un módulo que llama a
    `POST /integrations/:id/records` y nada más.
-2. **BI / analítica** sobre eventos.
+2. **IA sobre datos reales.** Ahora hay sobre qué: detección de desvíos,
+   proyección y simulación. Con la forma que fija ADR-001 — propone, no escribe.
 3. **Producción y RRHH.** RRHH tiene ADR-012 escrito y sin implementar.
+4. **Suscripciones y control interno del propio NEXO** (§31–§35).
 
 ### Lo que falta dentro de lo hecho
 

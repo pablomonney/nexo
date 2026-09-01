@@ -32,6 +32,7 @@ import { imputacionRoutes } from './routes/imputaciones.js';
 import { stockRoutes } from './routes/stock.js';
 import { activoRoutes } from './routes/activos.js';
 import { integracionRoutes } from './routes/integraciones.js';
+import { analiticaRoutes } from './routes/analitica.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -124,6 +125,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(stockRoutes);
   await app.register(activoRoutes);
   await app.register(integracionRoutes);
+  await app.register(analiticaRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);

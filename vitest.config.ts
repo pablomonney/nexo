@@ -83,6 +83,28 @@ export default defineConfig({
     setupFiles: ['tests/setup-env.ts'],
     include: ['packages/**/src/**/*.test.ts', 'tests/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+
+    /**
+     * Los cinco segundos por defecto de vitest dejaron de alcanzar, y no porque
+     * algo se haya vuelto lento.
+     *
+     * Lo que pasó: la suite creció a ochenta archivos que corren en paralelo, y
+     * cada uno de integración da de alta usuarios con Argon2 —caro a propósito—
+     * y hace el baile completo de MFA en su `beforeAll`. Con la CPU saturada, un
+     * test que solo tarda 784 ms cuando corre aislado supera los cinco segundos
+     * de reloj.
+     *
+     * Se midió antes de tocar esto, porque un timeout que se sube sin mirar es
+     * la forma más común de tapar un defecto: `work_queue` —la consulta que
+     * disparó el fallo, hoy unión de siete vistas— resuelve en **20 ms**. El
+     * problema es contención de máquina, no una consulta pesada.
+     *
+     * Veinte segundos son veinticinco veces lo que tarda el test más lento
+     * aislado: sigue cortando enseguida si algo se cuelga de verdad, que es lo
+     * único que un timeout tiene que hacer.
+     */
+    testTimeout: 20_000,
+    hookTimeout: 30_000,
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts', 'apps/api/src/**/*.ts'],
