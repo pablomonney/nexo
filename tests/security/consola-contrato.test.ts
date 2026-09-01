@@ -124,6 +124,33 @@ function llamadasDe(html: string): { metodo: string; url: string }[] {
   return salida;
 }
 
+/**
+ * Dominios de la API sin pantalla, a propósito. El motivo es parte del contrato:
+ * la lista es lo que obliga a decidir si una ausencia es una decisión o un
+ * olvido, y por eso agregar una línea acá tiene que costar una explicación.
+ */
+const SIN_PANTALLA = new Map<string, string>([
+  ['health', 'Sondas de infraestructura, no vistas'],
+  ['consola', 'Es la consola misma: se sirve, no se consume'],
+  ['organizations', 'Administración del estudio, anterior a elegir empresa'],
+  ['predictions', 'La revisión de propuestas de IA todavía no tiene pantalla (ver bandeja)'],
+  ['cost-centers', 'Se eligen dentro de cada asiento; no tienen ABM propio todavía'],
+
+  // ── Deuda declarada, no decisión ──────────────────────────────────────────
+  //
+  // Estos cuatro los encontró este mismo control la primera vez que corrió, y
+  // no estaban en ninguna lista de pendientes: son módulos TERMINADOS y
+  // probados, sin forma de usarlos desde la consola. Figuran acá con su motivo
+  // verdadero —«falta», no «se decidió que no»— y en PROJECT_STATUS §4.
+  //
+  // Que una excepción diga la verdad es lo único que la separa de un permiso
+  // permanente para no hacer el trabajo.
+  ['vat', 'PENDIENTE: subdiarios y Libro IVA no tienen pantalla, y son núcleo fiscal'],
+  ['banks', 'PENDIENTE: la conciliación bancaria está probada y no tiene pantalla'],
+  ['notes', 'PENDIENTE: las notas se generan desde Estados; aprobarlas y revisarlas, no'],
+  ['arca', 'PENDIENTE: se puede cargar una credencial y no revocarla'],
+]);
+
 suite('S-12 — la consola solo llama a rutas que existen', () => {
   let app: FastifyInstance;
   let html = '';
@@ -173,6 +200,88 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
     expect(
       huerfanas,
       'La consola llama a rutas que no existen:\n  ' + huerfanas.join('\n  '),
+    ).toEqual([]);
+  });
+
+  /**
+   * La dirección inversa, y la que faltaba.
+   *
+   * El barrido de arriba impide que la consola llame a una ruta que no existe.
+   * No decía nada del caso opuesto —una ruta que existe y que nadie puede
+   * alcanzar— y ese resultó ser el que estaba pasando: al cerrar la evolución a
+   * ERP, **veintisiete endpoints de cinco dominios** (existencias, bienes de
+   * uso, integraciones, analítica y señales) estaban escritos, probados, con
+   * migración y con permiso, y sin una sola pantalla desde donde usarlos. Todo
+   * verde, y el trabajo invisible para la persona que tenía que usarlo.
+   *
+   * ## Por qué compara dominios y no rutas
+   *
+   * Porque es lo único que este barrido puede afirmar con certeza. Lee el HTML
+   * como texto, y la consola arma varias URL en tiempo de ejecución —
+   * `const url = accion === 'emit' ? … : …` y después `api('POST', url)`—:
+   * ahí no hay literal que leer, y una comparación ruta por ruta marcaría en
+   * rojo acciones que sí tienen botón. Un control con falsos rojos dura hasta
+   * que alguien lo apaga.
+   *
+   * Comparar el primer segmento contesta la pregunta que importa —«¿este
+   * dominio tiene puerta?»— y es exactamente la que estaba sin contestar. Que
+   * cada acción dentro del dominio tenga su botón lo defienden los tests de
+   * navegación, ejercitando las pantallas contra datos reales.
+   */
+  it('cada dominio de la API tiene puerta de entrada en la consola', () => {
+    const inalcanzables: string[] = [];
+    const conPuerta = new Set(
+      llamadasDe(html).map((l) => l.url.split('/')[1] ?? '').filter((s) => s !== ''),
+    );
+
+    for (const ruta of app.routeTable) {
+      if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(ruta.method)) continue;
+      const dominio = ruta.url.split('/')[1] ?? '';
+      if (dominio === '' || conPuerta.has(dominio) || SIN_PANTALLA.has(dominio)) continue;
+      if (!inalcanzables.includes(dominio)) inalcanzables.push(dominio);
+    }
+
+    expect(
+      inalcanzables,
+      'Estos dominios de la API existen y no hay forma de llegar a ellos desde la consola.\n' +
+        'Agregales pantalla, o declarálos en SIN_PANTALLA con el motivo:\n  ' +
+        inalcanzables.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('la lista de excepciones no acumula dominios que ya no existen', () => {
+    // Una excepción que sobrevive a su dominio convierte la lista en decoración:
+    // el día que el nombre vuelva con otro significado quedaría exento sin que
+    // nadie lo haya decidido.
+    const registrados = new Set(app.routeTable.map((r) => r.url.split('/')[1] ?? ''));
+    const fantasmas = [...SIN_PANTALLA.keys()].filter((d) => !registrados.has(d));
+    expect(
+      fantasmas,
+      'Estas excepciones ya no corresponden a ningún dominio:\n  ' + fantasmas.join('\n  '),
+    ).toEqual([]);
+  });
+
+  /**
+   * Un `id` mal escrito no rompe una pantalla: rompe la consola entera.
+   *
+   * Los manejadores se asignan a nivel de módulo —`E('b-stk').onclick = …`— así
+   * que un `E()` que devuelve `null` lanza durante la carga del script y **toda
+   * la página queda muerta**, incluidas las pantallas que no tienen nada que ver.
+   * La consola no tiene build ni typechecker que lo ataje, y una errata de una
+   * letra en un archivo de tres mil líneas no se ve leyendo.
+   */
+  it('cada E(id) de la consola tiene su elemento en el HTML', () => {
+    const declarados = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]!));
+    const usados = new Set([...html.matchAll(/E\('([^']+)'\)/g)].map((m) => m[1]!));
+
+    expect(usados.size, 'el barrido tiene que encontrar referencias: no pasa por vacío')
+      .toBeGreaterThan(100);
+
+    const huerfanos = [...usados].filter((u) => !declarados.has(u));
+    expect(
+      huerfanos,
+      'Estos E(id) no tienen elemento. Cada uno mata la consola entera al cargar:\n  ' +
+        huerfanos.join('\n  '),
     ).toEqual([]);
   });
 

@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 82 archivos de test, 1517 tests,
+**Estado del árbol:** `verify` en verde — 82 archivos de test, 1520 tests,
 211 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (13 pantallas) | TERMINADO | `consola-contrato` (S-12) |
+| Consola web (18 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -105,6 +105,14 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
 
 ### Lo que falta dentro de lo hecho
 
+- **Cuatro módulos TERMINADOS sin pantalla.** Los encontró el barrido S-12 la
+  primera vez que se lo hizo mirar en la dirección inversa —«¿qué ruta existe y
+  nadie puede alcanzar?»—, y no estaban en ninguna lista. Son
+  `vat` (subdiarios y Libro IVA, que es núcleo fiscal), `banks` (la conciliación
+  bancaria), `notes` (se generan desde Estados, pero aprobarlas y revisarlas no
+  se puede) y `arca` (se carga una credencial y no se puede revocar). Están
+  declarados en `SIN_PANTALLA` con el motivo verdadero: **falta**, no «se
+  decidió que no».
 - **Valuación de existencias.** Hoy el stock son cantidades. Cuánto valen —PPP,
   FIFO o costo de reposición— es una decisión contable con norma detrás, y sin
   ella no hay costo de mercadería vendida automático.

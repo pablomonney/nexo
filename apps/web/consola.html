@@ -126,6 +126,11 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="productos">Productos</button>
   <button data-vista="comercial">Comercial</button>
   <button data-vista="recepciones">Recepciones</button>
+  <button data-vista="stock">Existencias</button>
+  <button data-vista="activos">Bienes de uso</button>
+  <button data-vista="integraciones">Integraciones</button>
+  <button data-vista="analitica">Analítica</button>
+  <button data-vista="analisis">Señales</button>
   <button data-vista="asientos">Asientos</button>
   <button data-vista="libros">Libros</button>
   <button data-vista="estados">Estados y notas</button>
@@ -657,6 +662,307 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </div>
 </section>
 
+<!-- ══ Stock ══════════════════════════════════════════════════════════════ -->
+<section id="v-stock" hidden>
+  <h2>Existencias</h2>
+  <p class="ayuda">Cuánto hay y dónde. La existencia <strong>no se guarda</strong>: se suma
+    del libro de movimientos cada vez que se la mira, y ese libro no admite correcciones —
+    un error se arregla con otro movimiento, igual que un asiento se anula por contraasiento.
+    Acá hay <em>cantidades</em>, no valores: cuánto vale el stock depende de elegir PPP o
+    FIFO, que es una decisión contable con norma detrás y todavía no está tomada.</p>
+
+  <div class="fila">
+    <div><label>Depósito</label><select id="stk-dep"><option value="">todos (total por producto)</option></select></div>
+    <div style="flex:1"><label>&nbsp;</label>
+      <label class="chk"><input type="checkbox" id="stk-min"> Solo bajo el mínimo</label></div>
+  </div>
+  <button id="b-stk" class="sec">Ver existencias</button>
+  <div id="stk-msg"></div>
+  <div class="tabla"><table id="t-stk"><thead><tr>
+    <th>Código</th><th>Producto</th><th>Unidad</th><th>Existencia</th>
+    <th>Mínimo</th><th>Depósitos</th><th>Último movimiento</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="stk-detalle" hidden class="grupo">
+    <h3 id="stk-det-titulo">Movimientos</h3>
+    <p class="ayuda">El libro completo del producto: de dónde vino cada unidad y adónde fue.
+      Las entradas por recepción las escribe el circuito de compras, no una persona.</p>
+    <div class="tabla"><table id="t-stk-mov"><thead><tr>
+      <th>Fecha</th><th>Depósito</th><th>Tipo</th><th>Cantidad</th>
+      <th>Origen</th><th>Motivo</th><th>Registró</th>
+    </tr></thead><tbody></tbody></table></div>
+    <button id="b-stk-mov-mas" class="sec" hidden>Ver más</button>
+    <div id="stk-det-msg"></div>
+  </div>
+
+  <details class="grupo" id="stk-depositos" hidden><summary>Depósitos</summary><div>
+    <div class="tabla"><table id="t-stk-dep"><thead><tr>
+      <th>Código</th><th>Nombre</th><th>Dirección</th><th>Estado</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="fila">
+      <div><label>Código</label><input id="stk-d-codigo" maxlength="40"></div>
+      <div><label>Nombre</label><input id="stk-d-nombre" maxlength="200"></div>
+      <div><label>Dirección</label><input id="stk-d-dir" maxlength="300"></div>
+    </div>
+    <button id="b-stk-d-alta">Dar de alta el depósito</button>
+    <div id="stk-d-msg"></div>
+  </div></details>
+
+  <details class="grupo" id="stk-mover" hidden><summary>Registrar un movimiento</summary><div>
+    <p class="ayuda">La salida por venta <strong>no se genera sola al facturar</strong>: el
+      comprobante no dice de qué depósito salió, y elegir uno por defecto sería inventar el
+      dato más importante del movimiento. La bandeja avisa mientras falte.</p>
+    <div class="fila">
+      <div><label>Movimiento</label><select id="stk-m-tipo">
+        <option value="salida">Salida por venta</option>
+        <option value="ajuste">Ajuste por recuento o rotura</option>
+        <option value="transferencia">Transferencia entre depósitos</option></select></div>
+      <div><label>Producto</label><select id="stk-m-prod"></select></div>
+      <div><label>Cantidad</label><input id="stk-m-cant" inputmode="decimal"></div>
+      <div><label>Fecha</label><input id="stk-m-fecha" type="date"></div>
+    </div>
+    <div class="fila">
+      <div><label>Depósito<span id="stk-m-lbl-dep"></span></label><select id="stk-m-dep"></select></div>
+      <div id="stk-m-destino-caja" hidden><label>Depósito destino</label><select id="stk-m-destino"></select></div>
+      <div id="stk-m-venta-caja"><label>Comprobante de venta (id)</label><input id="stk-m-venta" maxlength="60"></div>
+      <div id="stk-m-sentido-caja" hidden><label>Sentido</label><select id="stk-m-sentido">
+        <option>POSITIVO</option><option>NEGATIVO</option></select></div>
+    </div>
+    <div class="fila">
+      <div style="flex:1"><label>Motivo<span id="stk-m-lbl-motivo"></span></label><input id="stk-m-motivo" maxlength="500"></div>
+    </div>
+    <button id="b-stk-mover">Registrar</button>
+    <div id="stk-m-msg"></div>
+  </div></details>
+</section>
+
+<!-- ══ Bienes de uso ══════════════════════════════════════════════════════ -->
+<section id="v-activos" hidden>
+  <h2>Bienes de uso</h2>
+  <p class="ayuda">El plan de amortización <strong>se calcula, no se guarda</strong>: lo que
+    queda registrado es qué ejercicio se contabilizó y con qué asiento, nunca el importe —
+    que se recalcula siempre desde el valor de origen, la vida útil y las mejoras. Solo
+    método <span class="mono">LINEAL</span>: cada método adicional tiene consecuencias sobre
+    la RT que lo admite y sobre el impuesto, y elegirlo no es una decisión técnica.</p>
+
+  <div class="fila">
+    <div><label>Estado</label><select id="act-status">
+      <option value="">todos</option><option>ALTA</option><option>BAJA</option></select></div>
+  </div>
+  <button id="b-act" class="sec">Listar</button>
+  <div id="act-msg"></div>
+  <div class="tabla"><table id="t-act"><thead><tr>
+    <th>Código</th><th>Denominación</th><th>Alta</th><th>Valor origen</th>
+    <th>Vida útil</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="act-detalle" hidden class="grupo">
+    <h3 id="act-det-titulo">Bien</h3>
+    <div id="act-det-ficha"></div>
+    <h4>Plan de amortización</h4>
+    <p class="ayuda">Cada ejercicio con sus meses computados. La columna «asiento» dice si ya
+      se contabilizó: sin asiento, la cuota está calculada pero todavía no tiene efecto contable.</p>
+    <div class="tabla"><table id="t-act-plan"><thead><tr>
+      <th>Ejercicio</th><th>Meses</th><th>Cuota</th><th>Acumulada</th>
+      <th>Valor residual</th><th>Asiento</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div id="act-det-msg"></div>
+
+    <details class="grupo" id="act-acciones" hidden><summary>Registrar una mejora o dar de baja</summary><div>
+      <p class="ayuda">Una mejora aumenta el valor amortizable desde su fecha; no reescribe
+        las cuotas ya contabilizadas.</p>
+      <div class="fila">
+        <div><label>Fecha</label><input id="act-mej-fecha" type="date"></div>
+        <div><label>Importe</label><input id="act-mej-importe" inputmode="decimal"></div>
+        <div style="flex:1"><label>Descripción</label><input id="act-mej-desc" maxlength="300"></div>
+      </div>
+      <button id="b-act-mejora" class="sec">Registrar mejora</button>
+      <div class="fila">
+        <div><label>Fecha de baja</label><input id="act-baja-fecha" type="date"></div>
+        <div style="flex:1"><label>Motivo</label><input id="act-baja-motivo" maxlength="500"></div>
+      </div>
+      <button id="b-act-baja" class="sec">Dar de baja</button>
+      <div id="act-acc-msg"></div>
+    </div></details>
+  </div>
+
+  <details class="grupo" id="act-alta" hidden><summary>Dar de alta un bien</summary><div>
+    <p class="ayuda">Las cuentas son las del bien y las de su amortización. Sin ellas el
+      asiento no tendría dónde imputarse, y el sistema no las adivina.</p>
+    <div class="fila">
+      <div><label>Código</label><input id="act-codigo" maxlength="60"></div>
+      <div><label>Denominación</label><input id="act-denom" maxlength="200"></div>
+      <div><label>Fecha de alta</label><input id="act-fecha" type="date"></div>
+      <div><label>Valor de origen</label><input id="act-valor" inputmode="decimal"></div>
+      <div><label>Vida útil (meses)</label><input id="act-vida" inputmode="numeric"></div>
+    </div>
+    <div class="fila">
+      <div><label>Cuenta del bien</label><input id="act-cta-bien" maxlength="40" placeholder="código"></div>
+      <div><label>Cuenta amortización acumulada</label><input id="act-cta-acum" maxlength="40" placeholder="código"></div>
+      <div><label>Cuenta de gasto</label><input id="act-cta-gasto" maxlength="40" placeholder="código"></div>
+    </div>
+    <button id="b-act-alta">Dar de alta</button>
+    <div id="act-alta-msg"></div>
+  </div></details>
+</section>
+
+<!-- ══ Integraciones ══════════════════════════════════════════════════════ -->
+<section id="v-integraciones" hidden>
+  <h2>Integraciones</h2>
+  <p class="ayuda">Lo que llega de afuera <strong>aterriza, no entra</strong>. Un conector
+    deposita lo que informó el proveedor y una persona decide qué es: nada escribe en el
+    motor contable por su cuenta. El registro externo conserva su contenido original
+    intacto aunque se lo descarte, porque sigue siendo prueba de lo que el proveedor dijo.</p>
+
+  <h3>Proveedores</h3>
+  <div class="tabla"><table id="t-int-prov"><thead><tr>
+    <th>Código</th><th>Nombre</th><th>Categoría</th><th>Estado</th><th>Autenticación</th><th>Notas</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="int-prov-alcance" class="ayuda"></div>
+
+  <h3>Conectadas en esta empresa</h3>
+  <button id="b-int" class="sec">Actualizar</button>
+  <div id="int-msg"></div>
+  <div class="tabla"><table id="t-int"><thead><tr>
+    <th>Alias</th><th>Proveedor</th><th>Cuenta externa</th><th>Estado</th>
+    <th>Sin resolver</th><th>Resueltos</th><th>Última sincronización</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="int-conectar" hidden><summary>Conectar una fuente</summary><div>
+    <p class="ayuda">Solo se puede conectar un proveedor <span class="mono">DISPONIBLE</span>.
+      Uno <span class="mono">PLANIFICADO</span> lo rechaza la base, no esta pantalla.</p>
+    <div class="fila">
+      <div><label>Proveedor</label><select id="int-prov"></select></div>
+      <div><label>Cuenta externa</label><input id="int-cuenta" maxlength="200"></div>
+      <div><label>Alias</label><input id="int-alias" maxlength="120"></div>
+    </div>
+    <button id="b-int-conectar">Conectar</button>
+    <div id="int-con-msg"></div>
+  </div></details>
+
+  <h3>Registros que esperan resolución</h3>
+  <div class="fila">
+    <div><label>Estado</label><select id="int-r-status">
+      <option value="SIN_RESOLVER">sin resolver</option><option value="RESUELTO">resueltos</option>
+      <option value="DESCARTADO">descartados</option><option value="">todos</option></select></div>
+  </div>
+  <button id="b-int-reg" class="sec">Buscar</button>
+  <button id="b-int-reg-mas" class="sec" hidden>Ver más</button>
+  <div id="int-reg-msg"></div>
+  <div class="tabla"><table id="t-int-reg"><thead><tr>
+    <th>Recibido</th><th>Tipo</th><th>Id externo</th><th>Estado</th><th>Resolución</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="int-reg-detalle" hidden class="grupo">
+    <h4>Registro externo</h4>
+    <p class="ayuda">Esto es lo que informó el proveedor, tal cual llegó. Vincularlo con una
+      entidad de NEXO es <strong>una afirmación de una persona</strong>, y por eso queda
+      firmada en la bitácora.</p>
+    <pre id="int-reg-payload" class="mono"></pre>
+    <div class="fila" id="int-reg-acciones" hidden>
+      <div><label>Vincular con</label><select id="int-r-destino">
+        <option value="tercero">un tercero</option><option value="producto">un producto</option>
+        <option value="comprobante">un comprobante</option>
+        <option value="documentoComercial">un documento comercial</option></select></div>
+      <div style="flex:1"><label>Id de la entidad</label><input id="int-r-entidad" maxlength="60"></div>
+    </div>
+    <button id="b-int-resolver" class="sec" hidden>Vincular</button>
+    <div class="fila" id="int-reg-descarte" hidden>
+      <div style="flex:1"><label>Motivo del descarte</label><input id="int-r-motivo" maxlength="500"></div>
+    </div>
+    <button id="b-int-descartar" class="sec" hidden>Descartar</button>
+    <div id="int-reg-det-msg"></div>
+  </div>
+</section>
+
+<!-- ══ Analítica ══════════════════════════════════════════════════════════ -->
+<section id="v-analitica" hidden>
+  <h2>Analítica</h2>
+  <p class="ayuda">Ni una cifra de esta pantalla está guardada en ningún lado: todas se
+    calculan al mirarlas, desde los hechos. Por eso <strong>no hay margen ni rentabilidad</strong>:
+    para eso hace falta el costo de la mercadería vendida, y el stock hoy lleva cantidades
+    y no valores. Estimarlo sería inventarlo.</p>
+  <button id="b-ana" class="sec">Actualizar</button>
+  <div id="ana-msg"></div>
+  <dl class="kv" id="ana-resumen"></dl>
+
+  <h3>Cobertura del detalle</h3>
+  <p class="ayuda">Qué porción de lo facturado tiene renglones y tercero identificado. Un
+    informe sobre la mitad de las ventas no se puede leer igual que uno sobre todas.</p>
+  <div class="tabla"><table id="t-ana-cob"><thead><tr>
+    <th>Dirección</th><th>Comprobantes</th><th>Con detalle</th><th>Con tercero</th>
+    <th>Neto total</th><th>Neto con detalle</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Por producto</h3>
+  <div class="tabla"><table id="t-ana-pro"><thead><tr>
+    <th>Código</th><th>Producto</th><th>Dirección</th><th>Comprobantes</th>
+    <th>Cantidad</th><th>Neto</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Por tercero</h3>
+  <div class="tabla"><table id="t-ana-ter"><thead><tr>
+    <th>Razón social</th><th>Documento</th><th>Comprobantes</th><th>Neto</th>
+    <th>Primera</th><th>Última</th><th>Días sin operar</th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+
+<!-- ══ Señales ════════════════════════════════════════════════════════════ -->
+<section id="v-analisis" hidden>
+  <h2>Señales y escenarios</h2>
+  <p class="ayuda">Acá no interviene ningún modelo. Detectar un desvío es una
+    <strong>comparación</strong> contra un umbral que la empresa declaró; proyectar una
+    cobranza es una <strong>extrapolación</strong> de plazos ya acordados; simular es una
+    <strong>función de parámetros explícitos</strong>. Usar un modelo las volvería
+    irreproducibles, que es justo lo contrario de lo que sirve acá: cada fila trae la cuenta
+    para rehacerla a mano.</p>
+
+  <div class="fila">
+    <div style="flex:1"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="sen-desvios"> Solo lo que supera un umbral</label></div>
+  </div>
+  <button id="b-sen" class="sec">Ver señales</button>
+  <div id="sen-msg"></div>
+  <div class="tabla"><table id="t-sen"><thead><tr>
+    <th>Tipo</th><th>Sujeto</th><th>Valor</th><th>Comparado con</th>
+    <th>Umbral</th><th>¿Desvío?</th><th>Cómo se calcula</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="sen-umbrales"><summary>Umbrales declarados</summary><div>
+    <p class="ayuda">Un umbral vacío significa que el sistema <strong>informa el hecho y no lo
+      llama desvío</strong>. No hay valores por defecto a propósito: escribir que una caída del
+      20&nbsp;% es una alerta sería inventar una regla que ninguna empresa acordó, y lo que en
+      una es catástrofe en otra es estacionalidad.</p>
+    <div class="fila">
+      <div><label>Caída de ventas (%)</label><input id="sen-u-caida" inputmode="decimal"></div>
+      <div><label>Concentración de un cliente (%)</label><input id="sen-u-conc" inputmode="decimal"></div>
+      <div><label>Días para considerar inactivo</label><input id="sen-u-dias" inputmode="numeric"></div>
+      <div><label>Mora de cartera (%)</label><input id="sen-u-mora" inputmode="decimal"></div>
+    </div>
+    <button id="b-sen-umbrales">Declarar</button>
+    <div id="sen-u-msg"></div>
+  </div></details>
+
+  <h3>Proyección de cobranzas</h3>
+  <p class="ayuda">Solo proyecta comprobantes de terceros con condición de pago declarada:
+    sin plazo acordado no hay fecha que proyectar, y ponerle una sería inventar el acuerdo.</p>
+  <button id="b-sen-cobranzas" class="sec">Calcular</button>
+  <dl class="kv" id="sen-cobranzas"></dl>
+  <div id="sen-cob-msg"></div>
+
+  <h3>Simular un escenario</h3>
+  <p class="ayuda">No se guarda: es una función de sus parámetros sobre cifras reales, y se
+    rehace llamando de nuevo con los mismos números.</p>
+  <div class="fila">
+    <div><label>Meses de base</label><input id="sen-s-meses" inputmode="numeric" value="12"></div>
+    <div><label>Variación de precio (%)</label><input id="sen-s-precio" inputmode="decimal" value="0"></div>
+    <div><label>Variación de volumen (%)</label><input id="sen-s-vol" inputmode="decimal" value="0"></div>
+  </div>
+  <button id="b-sen-simular">Simular</button>
+  <div id="sen-s-msg"></div>
+  <dl class="kv" id="sen-s-resultado"></dl>
+  <div id="sen-s-supuestos"></div>
+</section>
+
 <!-- ══ Asientos ═══════════════════════════════════════════════════════════ -->
 <section id="v-asientos" hidden>
   <h2>Asientos</h2>
@@ -811,8 +1117,9 @@ const estado = {
   documento: null, campos: [], tt: null, operacion: null, asiento: null,
   tercero: null, comercial: null, comercialBorrador: [],
   recepcion: null, recepcionBorrador: [],
+  depositos: [], stockProducto: null, activo: null, registroExterno: null,
   cuentas: [], documentosSinOperacion: [],
-  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null },
+  cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
 };
 
@@ -861,7 +1168,9 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','comercial','recepciones','asientos','libros','estados','cierre','auditoria','config'];
+                'terceros','productos','comercial','recepciones','stock','activos',
+                'integraciones','analitica','analisis',
+                'asientos','libros','estados','cierre','auditoria','config'];
 
 function ir(vista, migas) {
   estado.vista = vista;
@@ -892,6 +1201,11 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'productos') listarProductos();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
+    if (v === 'stock') listarStock();
+    if (v === 'activos') listarActivos();
+    if (v === 'integraciones') listarIntegraciones();
+    if (v === 'analitica') cargarAnalitica();
+    if (v === 'analisis') listarSenales();
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
@@ -993,6 +1307,8 @@ function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', comercial: 'commercial:read', recepciones: 'receipt:read',
+    stock: 'stock:read', activos: 'asset:read',
+    integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
     auditoria: 'audit:read', config: 'company:read',
@@ -2264,6 +2580,608 @@ E('b-afec').onclick = async () => {
   });
   decir('afec-msg', r, 'Afectación declarada');
   if (r.ok) { listarOperaciones(); abrirOperacion(estado.tt); }
+};
+
+// ══ 4b · Existencias ══════════════════════════════════════════════════════
+//
+// Ni un número de esta pantalla se calcula acá. La existencia la deriva la base
+// del libro de movimientos, y `bajoMinimo` también: la consola solo elige el
+// color con el que se muestra lo que ya vino resuelto.
+async function listarStock() {
+  E('stk-depositos').hidden = !puede('stock:read');
+  E('stk-mover').hidden = !puede('stock:write') && !puede('stock:adjust');
+
+  const depositos = await api('GET', '/warehouses');
+  if (depositos.ok) {
+    estado.depositos = depositos.datos.depositos || [];
+    pintarDepositos();
+  }
+
+  // Solo los productos que llevan existencias. Ofrecer un servicio en el
+  // selector de movimientos sería ofrecer una acción que la API rechaza: no se
+  // puede mover el stock de algo que declaró no tenerlo.
+  const productos = await api('GET', '/products?status=ACTIVO&tipo=PRODUCTO&limite=200');
+  if (productos.ok) {
+    const s = E('stk-m-prod');
+    const previo = s.value;
+    s.innerHTML = '';
+    for (const p of (productos.datos.productos || []).filter((p) => p.llevaStock)) {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.codigo + ' — ' + p.nombre;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+
+  const q = new URLSearchParams();
+  if (E('stk-dep').value) q.set('depositoId', E('stk-dep').value);
+  if (E('stk-min').checked) q.set('soloBajoMinimo', 'si');
+
+  const r = await api('GET', '/stock?' + q.toString());
+  if (!r.ok) return decir('stk-msg', r);
+  limpiar('stk-msg');
+
+  const cuerpo = E('t-stk').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const filas = r.datos.existencias || [];
+  if (filas.length === 0) {
+    E('stk-msg').innerHTML = '<div class="aviso">Sin existencias con estos filtros.</div>';
+  }
+
+  for (const e of filas) {
+    const tr = document.createElement('tr');
+    // Bajo el mínimo se marca solo cuando la empresa **declaró** un mínimo. Sin
+    // mínimo declarado no hay nada que comparar, y pintar de rojo una fila
+    // porque «parece poco» sería inventar el criterio del negocio.
+    const bajo = e.bajoMinimo === true;
+    tr.innerHTML =
+      '<td class="mono">' + escapar(e.codigo) + '</td>' +
+      '<td>' + escapar(e.nombre) + '</td>' +
+      '<td>' + escapar(e.unidad) + '</td>' +
+      '<td class="mono">' + (bajo ? '<span class="p p-mal">' + escapar(e.existencia) + '</span>'
+                                  : escapar(e.existencia)) + '</td>' +
+      '<td class="mono">' + escapar(e.stockMinimo === null ? 'sin declarar' : e.stockMinimo) + '</td>' +
+      '<td>' + escapar(r.datos.porDeposito ? e.movimientos : (e.depositos === undefined ? '—' : e.depositos)) + '</td>' +
+      '<td class="mono">' + escapar(e.ultimoMovimiento || '—') + '</td>' +
+      '<td><span class="clic">movimientos</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirStockDeProducto(e.productoId, e.nombre);
+    cuerpo.appendChild(tr);
+  }
+}
+
+function pintarDepositos() {
+  const cuerpo = E('t-stk-dep').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const d of estado.depositos) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(d.codigo) + '</td><td>' + escapar(d.nombre) + '</td>' +
+      '<td>' + escapar(d.direccion || '—') + '</td><td>' + pastilla(d.status) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+  for (const sel of ['stk-dep', 'stk-m-dep', 'stk-m-destino']) {
+    const s = E(sel);
+    const previo = s.value;
+    s.innerHTML = sel === 'stk-dep' ? '<option value="">todos (total por producto)</option>' : '';
+    for (const d of estado.depositos) {
+      const o = document.createElement('option');
+      o.value = d.id; o.textContent = d.codigo + ' — ' + d.nombre;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+}
+
+async function abrirStockDeProducto(id, nombre, cursor) {
+  estado.stockProducto = id;
+  const q = new URLSearchParams({ limite: '50' });
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/products/' + id + '/stock?' + q.toString());
+  if (!r.ok) return decir('stk-det-msg', r);
+
+  E('stk-detalle').hidden = false;
+  E('stk-det-titulo').textContent = 'Movimientos — ' + nombre;
+  limpiar('stk-det-msg');
+
+  if (r.datos.llevaStock === false) {
+    E('stk-det-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  }
+
+  const cuerpo = E('t-stk-mov').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  for (const m of r.datos.movimientos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(m.fecha) + '</td>' +
+      '<td class="mono">' + escapar(m.depositoCodigo) + '</td>' +
+      '<td>' + escapar(m.tipo) + '</td>' +
+      '<td class="mono">' + escapar(m.cantidad) + '</td>' +
+      '<td>' + escapar(m.origenTipo) + '</td>' +
+      '<td>' + escapar(m.motivo || '—') + '</td>' +
+      '<td class="mono">' + escapar(m.creadoPor) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+  estado.cursores.stk = r.datos.cursor;
+  E('b-stk-mov-mas').hidden = !r.datos.cursor;
+}
+
+E('b-stk').onclick = () => listarStock();
+E('b-stk-mov-mas').onclick = () =>
+  abrirStockDeProducto(estado.stockProducto, E('stk-det-titulo').textContent, estado.cursores.stk);
+
+E('b-stk-d-alta').onclick = async () => {
+  const r = await api('POST', '/warehouses', {
+    codigo: E('stk-d-codigo').value,
+    nombre: E('stk-d-nombre').value,
+    direccion: E('stk-d-dir').value || undefined,
+  });
+  decir('stk-d-msg', r, 'Depósito dado de alta');
+  if (r.ok) listarStock();
+};
+
+// El formulario cambia según el movimiento porque los tres piden cosas
+// distintas y ninguno acepta las del otro: la salida exige el comprobante que
+// la origina, el ajuste exige motivo, y la transferencia exige dos depósitos.
+E('stk-m-tipo').onchange = () => {
+  const t = E('stk-m-tipo').value;
+  E('stk-m-destino-caja').hidden = t !== 'transferencia';
+  E('stk-m-venta-caja').hidden = t !== 'salida';
+  E('stk-m-sentido-caja').hidden = t !== 'ajuste';
+  E('stk-m-lbl-dep').textContent = t === 'transferencia' ? ' de origen' : '';
+  E('stk-m-lbl-motivo').textContent = t === 'ajuste' ? ' (obligatorio)' : ' (opcional)';
+};
+
+E('b-stk-mover').onclick = async () => {
+  const t = E('stk-m-tipo').value;
+  const comun = {
+    productoId: E('stk-m-prod').value,
+    cantidad: E('stk-m-cant').value,
+    fecha: E('stk-m-fecha').value,
+  };
+  let r;
+  if (t === 'salida') {
+    r = await api('POST', '/stock-movements/salida', Object.assign({}, comun, {
+      depositoId: E('stk-m-dep').value,
+      taxTransactionId: E('stk-m-venta').value,
+    }));
+  } else if (t === 'ajuste') {
+    r = await api('POST', '/stock-movements/ajuste', Object.assign({}, comun, {
+      depositoId: E('stk-m-dep').value,
+      sentido: E('stk-m-sentido').value,
+      motivo: E('stk-m-motivo').value,
+    }));
+  } else {
+    r = await api('POST', '/stock-movements/transferencia', Object.assign({}, comun, {
+      origenDepositoId: E('stk-m-dep').value,
+      destinoDepositoId: E('stk-m-destino').value,
+      motivo: E('stk-m-motivo').value || undefined,
+    }));
+  }
+  decir('stk-m-msg', r, 'Movimiento registrado');
+  if (r.ok) listarStock();
+};
+
+// ══ 4c · Bienes de uso ════════════════════════════════════════════════════
+async function listarActivos() {
+  E('act-alta').hidden = !puede('asset:write');
+
+  const q = new URLSearchParams();
+  if (E('act-status').value) q.set('status', E('act-status').value);
+
+  const r = await api('GET', '/fixed-assets?' + q.toString());
+  if (!r.ok) return decir('act-msg', r);
+  limpiar('act-msg');
+
+  const cuerpo = E('t-act').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const bienes = r.datos.bienes || [];
+  if (bienes.length === 0) {
+    E('act-msg').innerHTML = '<div class="aviso">Sin bienes de uso con estos filtros.</div>';
+  }
+  for (const b of bienes) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(b.codigo) + '</td>' +
+      '<td>' + escapar(b.nombre) + '</td>' +
+      '<td class="mono">' + escapar(b.fechaAlta) + '</td>' +
+      '<td class="mono">' + escapar(b.costo) + '</td>' +
+      '<td>' + escapar(b.vidaUtilMeses) + ' meses</td>' +
+      '<td>' + pastilla(b.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirActivo(b.id);
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function abrirActivo(id) {
+  const r = await api('GET', '/fixed-assets/' + id);
+  if (!r.ok) return decir('act-msg', r);
+
+  estado.activo = id;
+  E('act-detalle').hidden = false;
+  E('act-acciones').hidden = !puede('asset:write');
+  limpiar('act-det-msg');
+
+  const b = r.datos.bien;
+  const v = r.datos.valor;
+  E('act-det-titulo').textContent = b.codigo + ' — ' + b.nombre;
+  E('act-det-ficha').innerHTML =
+    '<dl class="kv">' +
+    fila('Valor de origen', b.costo) +
+    fila('Valor residual declarado', b.valorResidual) +
+    fila('Vida útil', b.vidaUtilMeses + ' meses') +
+    fila('Método', b.metodo) +
+    fila('Cuenta del bien', b.cuentaBien) +
+    fila('Amortización acumulada', b.cuentaAcumulada) +
+    fila('Cuenta de gasto', b.cuentaGasto) +
+    fila('Mejoras registradas', (r.datos.mejoras || []).length) +
+    (v ? fila('Base amortizable', v.base) + fila('Amortizado', v.amortizado) +
+         fila('Valor de libros', v.valorDeLibros) +
+         fila('Ejercicios pendientes', v.ejerciciosPendientes) : '') +
+    (b.status === 'BAJA' ? fila('Baja', b.fechaBaja + ' — ' + (b.motivoBaja || '')) : '') +
+    '</dl>';
+
+  const cuerpo = E('t-act-plan').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.plan || []) {
+    const tr = document.createElement('tr');
+    // La cuota se muestra tal como la calculó la base. La consola no la suma ni
+    // la prorratea: si acá se hiciera una cuenta, habría dos verdades sobre el
+    // mismo número y la que se ve no sería la que se contabiliza.
+    tr.innerHTML =
+      '<td>' + escapar(c.ejercicio) + '</td>' +
+      '<td>' + escapar(c.meses) + '</td>' +
+      '<td class="mono">' + escapar(c.amortizacion) + '</td>' +
+      '<td class="mono">' + escapar(c.base) + '</td>' +
+      '<td class="mono">—</td>' +
+      '<td>' + (c.entryId
+        ? '<span class="p p-bien">contabilizada</span>'
+        : '<span class="p p-ojo">calculada, sin asiento</span>') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-act').onclick = () => listarActivos();
+
+E('b-act-alta').onclick = async () => {
+  const r = await api('POST', '/fixed-assets', {
+    codigo: E('act-codigo').value,
+    nombre: E('act-denom').value,
+    costo: E('act-valor').value,
+    fechaAlta: E('act-fecha').value,
+    vidaUtilMeses: Number(E('act-vida').value),
+    cuentaBien: E('act-cta-bien').value,
+    cuentaAcumulada: E('act-cta-acum').value,
+    cuentaGasto: E('act-cta-gasto').value,
+  });
+  decir('act-alta-msg', r, 'Bien dado de alta');
+  if (r.ok) listarActivos();
+};
+
+E('b-act-mejora').onclick = async () => {
+  const r = await api('POST', '/fixed-assets/' + estado.activo + '/improvements', {
+    descripcion: E('act-mej-desc').value,
+    importe: E('act-mej-importe').value,
+    fecha: E('act-mej-fecha').value,
+  });
+  decir('act-acc-msg', r, 'Mejora registrada');
+  if (r.ok) abrirActivo(estado.activo);
+};
+
+E('b-act-baja').onclick = async () => {
+  const r = await api('POST', '/fixed-assets/' + estado.activo + '/baja', {
+    fecha: E('act-baja-fecha').value,
+    motivo: E('act-baja-motivo').value,
+  });
+  decir('act-acc-msg', r, 'Bien dado de baja');
+  if (r.ok) { listarActivos(); abrirActivo(estado.activo); }
+};
+
+// ══ 4d · Integraciones ════════════════════════════════════════════════════
+async function listarIntegraciones() {
+  E('int-conectar').hidden = !puede('integration:connect');
+
+  const prov = await api('GET', '/integration-providers');
+  if (prov.ok) {
+    const cuerpo = E('t-int-prov').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    const sel = E('int-prov');
+    sel.innerHTML = '';
+    for (const p of prov.datos.proveedores || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(p.code) + '</td><td>' + escapar(p.nombre) + '</td>' +
+        '<td>' + escapar(p.categoria) + '</td>' +
+        '<td>' + (p.estado === 'DISPONIBLE'
+          ? '<span class="p p-bien">DISPONIBLE</span>'
+          : '<span class="p p-neu">PLANIFICADO</span>') + '</td>' +
+        '<td>' + escapar(p.autenticacion || '—') + '</td>' +
+        '<td>' + escapar(p.notas || '—') + '</td>';
+      cuerpo.appendChild(tr);
+      // Solo los disponibles entran al selector. Ofrecer uno PLANIFICADO sería
+      // ofrecer un botón que la base rechaza — y el rechazo está bien puesto,
+      // el que estaría mal es el botón.
+      if (p.estado === 'DISPONIBLE') {
+        const o = document.createElement('option');
+        o.value = p.code; o.textContent = p.nombre;
+        sel.appendChild(o);
+      }
+    }
+    E('int-prov-alcance').textContent = prov.datos.alcance || '';
+  }
+
+  const r = await api('GET', '/integrations');
+  if (!r.ok) return decir('int-msg', r);
+  limpiar('int-msg');
+
+  const cuerpo = E('t-int').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const i of r.datos.integraciones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(i.alias) + '</td><td>' + escapar(i.proveedorNombre) + '</td>' +
+      '<td class="mono">' + escapar(i.cuentaExterna) + '</td>' +
+      '<td>' + pastilla(i.status) +
+        (i.tokenVencido ? ' <span class="p p-mal">token vencido</span>' : '') + '</td>' +
+      '<td class="mono">' + escapar(i.sinResolver) + '</td>' +
+      '<td class="mono">' + escapar(i.resueltos) + '</td>' +
+      '<td class="mono">' + escapar(i.ultimaSincronizacion || 'nunca') + '</td>' +
+      '<td>' + (i.status === 'CONECTADA' && puede('integration:connect')
+        ? '<span class="clic">desconectar</span>' : '') + '</td>';
+    const boton = tr.querySelector('.clic');
+    if (boton) boton.onclick = async () => {
+      const d = await api('POST', '/integrations/' + i.id + '/disconnect', {});
+      decir('int-msg', d, 'Integración desconectada');
+      if (d.ok) listarIntegraciones();
+    };
+    cuerpo.appendChild(tr);
+  }
+
+  listarRegistrosExternos();
+}
+
+async function listarRegistrosExternos(cursor) {
+  const q = new URLSearchParams({ limite: '25' });
+  if (E('int-r-status').value) q.set('status', E('int-r-status').value);
+  if (cursor) q.set('cursor', cursor);
+
+  const r = await api('GET', '/external-records?' + q.toString());
+  if (!r.ok) return decir('int-reg-msg', r);
+  limpiar('int-reg-msg');
+
+  const cuerpo = E('t-int-reg').querySelector('tbody');
+  if (!cursor) cuerpo.innerHTML = '';
+  const filas = r.datos.registros || [];
+  if (filas.length === 0 && !cursor) {
+    E('int-reg-msg').innerHTML = '<div class="aviso">Nada que resolver con estos filtros.</div>';
+  }
+  for (const e of filas) {
+    const tr = document.createElement('tr');
+    const resolucion = e.terceroId ? 'tercero' : e.productoId ? 'producto'
+      : e.comprobanteId ? 'comprobante' : e.documentoComercialId ? 'documento comercial'
+      : e.motivoDescarte ? 'descartado: ' + e.motivoDescarte : '—';
+    tr.innerHTML =
+      '<td class="mono">' + escapar(e.fecha) + '</td>' +
+      '<td>' + escapar(e.kind) + '</td>' +
+      '<td class="mono">' + escapar(e.externalId) + '</td>' +
+      '<td>' + pastilla(e.status) + '</td>' +
+      '<td>' + escapar(resolucion) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirRegistroExterno(e);
+    cuerpo.appendChild(tr);
+  }
+  estado.cursores.ext = r.datos.cursor;
+  E('b-int-reg-mas').hidden = !r.datos.cursor;
+}
+
+function abrirRegistroExterno(e) {
+  estado.registroExterno = e.id;
+  E('int-reg-detalle').hidden = false;
+  limpiar('int-reg-det-msg');
+  E('int-reg-payload').textContent = JSON.stringify(e.payload, null, 2);
+
+  // Resolver y descartar solo se ofrecen mientras el registro los admita: sobre
+  // uno ya resuelto la API contesta REGISTRO_YA_RESUELTO, y aprender que el
+  // sistema falla al azar es peor que no ver el botón.
+  const abierto = e.status === 'SIN_RESOLVER';
+  const puedeResolver = abierto && puede('integration:resolve');
+  E('int-reg-acciones').hidden = !puedeResolver;
+  E('b-int-resolver').hidden = !puedeResolver;
+  E('int-reg-descarte').hidden = !puedeResolver;
+  E('b-int-descartar').hidden = !puedeResolver;
+}
+
+E('b-int').onclick = () => listarIntegraciones();
+E('b-int-reg').onclick = () => listarRegistrosExternos();
+E('b-int-reg-mas').onclick = () => listarRegistrosExternos(estado.cursores.ext);
+
+E('b-int-conectar').onclick = async () => {
+  const r = await api('POST', '/integrations', {
+    provider: E('int-prov').value,
+    cuentaExterna: E('int-cuenta').value,
+    alias: E('int-alias').value,
+  });
+  decir('int-con-msg', r, 'Fuente conectada');
+  if (r.ok) listarIntegraciones();
+};
+
+E('b-int-resolver').onclick = async () => {
+  const r = await api('POST', '/external-records/' + estado.registroExterno + '/resolve', {
+    destino: E('int-r-destino').value,
+    entidadId: E('int-r-entidad').value,
+  });
+  decir('int-reg-det-msg', r, 'Registro vinculado');
+  if (r.ok) { E('int-reg-detalle').hidden = true; listarIntegraciones(); }
+};
+
+E('b-int-descartar').onclick = async () => {
+  const r = await api('POST', '/external-records/' + estado.registroExterno + '/discard', {
+    motivo: E('int-r-motivo').value,
+  });
+  decir('int-reg-det-msg', r, 'Registro descartado');
+  if (r.ok) { E('int-reg-detalle').hidden = true; listarIntegraciones(); }
+};
+
+// ══ 4e · Analítica ════════════════════════════════════════════════════════
+async function cargarAnalitica() {
+  const r = await api('GET', '/analytics/resumen');
+  if (!r.ok) return decir('ana-msg', r);
+  limpiar('ana-msg');
+
+  const s = r.datos.resumen || {};
+  E('ana-resumen').innerHTML =
+    fila('Ventas del mes', s.ventasMes) + fila('Comprobantes de venta', s.ventasComprobantes) +
+    fila('Compras del mes', s.comprasMes) + fila('Comprobantes de compra', s.comprasComprobantes) +
+    fila('A cobrar', s.aCobrar) + fila('Vencido a cobrar', s.vencidoACobrar) +
+    fila('A pagar', s.aPagar) +
+    fila('Productos bajo el mínimo', s.productosBajoMinimo) +
+    fila('Productos en negativo', s.productosEnNegativo) +
+    fila('Pendientes en la bandeja', s.pendientes) +
+    fila('Pendientes que bloquean', s.pendientesBloqueantes);
+
+  const cob = await api('GET', '/analytics/cobertura');
+  if (cob.ok) {
+    const cuerpo = E('t-ana-cob').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const c of cob.datos.cobertura || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapar(c.direccion) + '</td><td class="mono">' + escapar(c.comprobantes) + '</td>' +
+        '<td class="mono">' + escapar(c.conDetalle) + '</td>' +
+        '<td class="mono">' + escapar(c.conTercero) + '</td>' +
+        '<td class="mono">' + escapar(c.netoTotal) + '</td>' +
+        '<td class="mono">' + escapar(c.netoConDetalle) + '</td>';
+      cuerpo.appendChild(tr);
+    }
+  }
+
+  const pro = await api('GET', '/analytics/productos?direccion=VENTAS&limite=20');
+  if (pro.ok) {
+    const cuerpo = E('t-ana-pro').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const p of pro.datos.productos || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(p.codigo) + '</td><td>' + escapar(p.nombre) + '</td>' +
+        '<td>' + escapar(pro.datos.direccion) + '</td>' +
+        '<td class="mono">' + escapar(p.comprobantes) + '</td>' +
+        '<td class="mono">' + escapar(p.cantidad) + '</td>' +
+        '<td class="mono">' + escapar(p.neto) + '</td>';
+      cuerpo.appendChild(tr);
+    }
+  }
+
+  const ter = await api('GET', '/analytics/terceros?direccion=VENTAS&limite=20');
+  if (ter.ok) {
+    const cuerpo = E('t-ana-ter').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const t of ter.datos.terceros || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapar(t.razonSocial) + '</td>' +
+        '<td class="mono">' + escapar((t.tipoDocumento || '') + ' ' + (t.numeroDocumento || '')) + '</td>' +
+        '<td class="mono">' + escapar(t.comprobantes) + '</td>' +
+        '<td class="mono">' + escapar(t.neto) + '</td>' +
+        '<td class="mono">' + escapar(t.primera) + '</td>' +
+        '<td class="mono">' + escapar(t.ultima) + '</td>' +
+        '<td class="mono">' + escapar(t.diasSinOperar) + '</td>';
+      cuerpo.appendChild(tr);
+    }
+  }
+}
+
+E('b-ana').onclick = () => cargarAnalitica();
+
+// ══ 4f · Señales y escenarios ═════════════════════════════════════════════
+async function listarSenales() {
+  const q = new URLSearchParams();
+  if (E('sen-desvios').checked) q.set('soloDesvios', 'si');
+
+  const r = await api('GET', '/analysis/signals?' + q.toString());
+  if (!r.ok) return decir('sen-msg', r);
+  E('sen-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-sen').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const s of r.datos.senales || []) {
+    const tr = document.createElement('tr');
+    // Tres estados, no dos. `null` no es «no supera»: es «la empresa no declaró
+    // contra qué comparar», y mostrarlo como un «no» sería afirmar que el
+    // sistema revisó algo que nadie definió.
+    const veredicto = s.superaUmbral === true ? '<span class="p p-mal">supera</span>'
+      : s.superaUmbral === false ? '<span class="p p-bien">dentro</span>'
+      : '<span class="p p-neu">sin umbral declarado</span>';
+    tr.innerHTML =
+      '<td>' + escapar(s.tipo) + '</td><td>' + escapar(s.sujeto) + '</td>' +
+      '<td class="mono">' + escapar(s.valor) + ' ' + escapar(s.unidad) + '</td>' +
+      '<td class="mono">' + escapar(s.comparadoCon || '—') + '</td>' +
+      '<td class="mono">' + escapar(s.umbral === null ? '—' : s.umbral) + '</td>' +
+      '<td>' + veredicto + '</td>' +
+      '<td class="ayuda">' + escapar(s.metodologia) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  const u = await api('GET', '/analysis/thresholds');
+  if (u.ok && u.datos.umbrales) {
+    E('sen-u-caida').value = u.datos.umbrales.caidaVentasPct || '';
+    E('sen-u-conc').value = u.datos.umbrales.concentracionClientePct || '';
+    E('sen-u-dias').value = u.datos.umbrales.diasClienteInactivo || '';
+    E('sen-u-mora').value = u.datos.umbrales.moraPct || '';
+  }
+}
+
+E('b-sen').onclick = () => listarSenales();
+
+E('b-sen-umbrales').onclick = async () => {
+  // Un campo vacío se manda como null y no se omite: es la diferencia entre
+  // «borrar el umbral» y «dejarlo como estaba», y son dos cosas distintas.
+  const numero = (id) => (E(id).value.trim() === '' ? null : E(id).value.trim());
+  const r = await api('PUT', '/analysis/thresholds', {
+    caidaVentasPct: numero('sen-u-caida'),
+    concentracionClientePct: numero('sen-u-conc'),
+    diasClienteInactivo: numero('sen-u-dias') === null ? null : Number(numero('sen-u-dias')),
+    moraPct: numero('sen-u-mora'),
+  });
+  decir('sen-u-msg', r, 'Umbrales declarados');
+  if (r.ok) listarSenales();
+};
+
+E('b-sen-cobranzas').onclick = async () => {
+  const r = await api('GET', '/analysis/proyeccion-de-cobranzas');
+  if (!r.ok) return decir('sen-cob-msg', r);
+  const p = r.datos.proyeccion || {};
+  E('sen-cobranzas').innerHTML =
+    fila('Vencido', p.vencido) + fila('Próximos 30 días', p.proximos30) +
+    fila('De 31 a 60', p.de31a60) + fila('Más de 60', p.masDe60) +
+    fila('Sin plazo acordado', p.sinPlazoAcordado) +
+    fila('Pendiente total', p.pendienteTotal) +
+    fila('Cubre', r.datos.cubre === null ? 'nada pendiente' : r.datos.cubre);
+  E('sen-cob-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+};
+
+E('b-sen-simular').onclick = async () => {
+  const r = await api('POST', '/analysis/simulate', {
+    meses: Number(E('sen-s-meses').value),
+    variacionDePrecio: Number(E('sen-s-precio').value),
+    variacionDeVolumen: Number(E('sen-s-vol').value),
+  });
+  if (!r.ok) { E('sen-s-resultado').innerHTML = ''; E('sen-s-supuestos').innerHTML = ''; return decir('sen-s-msg', r); }
+  limpiar('sen-s-msg');
+
+  E('sen-s-resultado').innerHTML =
+    fila('Neto facturado (base)', r.datos.base.netoFacturado) +
+    fila('Meses con datos', r.datos.base.mesesConDatos + ' de ' + r.datos.base.mesesPedidos) +
+    fila('Neto proyectado', r.datos.resultado.netoProyectado) +
+    fila('Diferencia', r.datos.resultado.diferencia) +
+    fila('Variación total', r.datos.resultado.variacionTotalPct + ' %');
+
+  // Los supuestos se muestran siempre y con el mismo peso que el número. Una
+  // simulación cuyos supuestos no se ven es un número que engaña.
+  E('sen-s-supuestos').innerHTML =
+    '<div class="aviso"><strong>Sobre qué se apoya este número</strong><ul>' +
+    (r.datos.supuestos || []).map((s) => '<li>' + escapar(s) + '</li>').join('') +
+    '</ul></div>';
 };
 
 // ══ 5 · Asientos ══════════════════════════════════════════════════════════
