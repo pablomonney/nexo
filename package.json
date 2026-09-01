@@ -25,6 +25,8 @@
     "norms:verify": "node scripts/verify-norm-archive.mjs",
     "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run ledger:verify && npm run audit:estructura && npm run audit:invariants && npm run test:coverage",
     "db:create": "node scripts/db-create.mjs",
+    "db:backup": "node scripts/backup-db.mjs",
+    "db:restaurar": "node scripts/restaurar-backup.mjs",
     "db:setup": "npm run db:create && npm run db:migrate && npm run build && npm run catalog:seed && npm run prompts:register && npm run norms:seed && npm run tax:seed && npm run statements:seed",
     "arca:check": "node scripts/arca-check.mjs",
     "catalog:seed": "node scripts/seed-comprobante-types.mjs",

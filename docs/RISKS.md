@@ -595,3 +595,28 @@ de una vez es el modo más confiable de no entregar nada.
 Un motor con reglas cargadas a medias que "parece" funcionar es más peligroso que uno vacío.
 *Mitigación:* niveles `V1..V4` visibles en la UI; una regla `V2` o inferior **no se aplica**, se
 muestra como gap. El sistema prefiere declararse incompleto antes que aparentar completitud.
+
+### 🟢 R-21 — Copia de resguardo sin camino de vuelta
+
+Un archivo de backup que nunca se restauró es una hipótesis, no una copia. El riesgo no es que
+`pg_dump` falle —falla ruidosamente— sino que el archivo exista, tranquilice a todo el mundo, y el
+día que haga falta resulte estar incompleto, desactualizado o irrestaurable.
+
+*Mitigación:* `npm run db:backup` y `npm run db:restaurar`. El segundo restaura en una base
+descartable y hace **tres preguntas separadas**, porque fallan por motivos distintos:
+
+1. ¿están los candados? — `audit:estructura` sobre la restaurada;
+2. ¿cuadra lo que hay? — `ledger:verify --observacional` sobre la restaurada;
+3. ¿está todo lo que había? — conteo tabla por tabla contra la base viva.
+
+La tercera es la que convierte «se restauró» en «es la misma base»: un backup que perdió filas
+pasa las dos primeras sin hacer ruido, porque el esquema sigue completo y un Mayor con menos
+asientos igual cuadra consigo mismo.
+
+*Lo que encontró al estrenarse:* el backup que figuraba como respaldo estaba **nueve migraciones
+atrás** (`schema_migrations`: 58 en la base viva, 49 en la restaurada). Era exactamente la forma
+del riesgo: el archivo existía y no servía.
+
+*Lo que sigue abierto:* la comparación de contenido se informa `SIN EJERCITAR` mientras `aai` no
+tenga datos de negocio, y el tiempo medido es el de restaurar en la misma máquina y el mismo
+disco. El RTO de una restauración real sigue siendo una estimación.

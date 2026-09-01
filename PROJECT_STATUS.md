@@ -147,16 +147,27 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
 | 17 valores de estado muertos | Clasificados en la FASE 4 (`MUERTO` / `GAP_DE_PRODUCTO` / `DERIVADO`), **no** removidos de los CHECK | MENOR — documentada |
 | `alerts` y `audit_findings` | Tablas sin escritores productivos; deliberadamente fuera de la bandeja | MENOR |
 | Sin `npm start` | La API no lee `.env` por sí sola ni tiene script de arranque | IMPORTANTE |
-| Backup sin restauración probada | Existe `C:\Users\SaludCapilar\Backups\NEXO`. Un backup que nunca se restauró es una hipótesis, no una copia (§66) | IMPORTANTE |
+| Backup restaurado sobre base vacía | `npm run db:restaurar` demuestra el camino de vuelta, pero la comparación de contenido se informa **SIN EJERCITAR**: `aai` no tiene ni una fila de negocio. El día que tenga datos reales, este control recién empieza a decir algo | MENOR — el mecanismo está probado |
 | Base de desarrollo vacía | `aai` no tiene usuarios ni empresas; el primer admin se crea con `POST /auth/register-first-admin` | MENOR |
 
 ## 7. Riesgos vivos
 
-- **Restauración nunca probada.** Hay remoto (`origin`, GitHub) y hay un backup
-  de `aai` en `C:\Users\SaludCapilar\Backups\NEXO`. Falta lo que convierte un
-  backup en una copia: restaurarlo una vez y comprobar que la base restaurada
-  pasa `audit:estructura` y `ledger:verify`. Hasta que eso ocurra, el RPO y el
-  RTO son estimaciones.
+- **Restauración probada, y lo que la prueba encontró.** `npm run db:backup` y
+  `npm run db:restaurar` cierran el ciclo: la copia se restaura en una base
+  descartable (`aai_restauracion`, el único espacio de nombres que el script
+  puede borrar) y se le hacen tres preguntas distintas — están los candados,
+  cuadra el Mayor, y **está todo lo que había**, contando fila por fila contra
+  la base viva. La tercera es la que convierte «se restauró» en «es la misma
+  base»: sin ella, un backup que perdió filas pasa las otras dos sin ruido.
+
+  La primera corrida encontró algo real: el backup que figuraba como respaldo
+  era de las 08:06 y estaba **nueve migraciones atrás** (`schema_migrations`:
+  58 contra 49). Ese archivo no reconstruía el sistema de hoy. Con una copia al
+  día el control da verde sobre 104 tablas y 436 filas.
+
+  Sigue faltando el otro lado: el conteo se informa **SIN EJERCITAR** porque
+  `aai` no tiene datos de negocio, y el RTO medido es el de la misma máquina y
+  el mismo disco, no el de una restauración real.
 - **Certificados de ARCA fuera del repositorio** (`C:\ARCA\`), como debe ser
   (§27). Su pérdida bloquea la integración fiscal.
 - **El WSAA entrega un solo ticket por CUIT y servicio**, sin caché en disco:
