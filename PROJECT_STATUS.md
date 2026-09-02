@@ -122,10 +122,10 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0079 | El costo de mercadería vendida llega al Mayor: dos roles más en el mapeo y un asiento propuesto por mes |
 | 0080 | Una nota de crédito resta: el signo sale del catálogo de ARCA y la antigüedad de saldos deja de filtrar los créditos |
 | 0081 | Margen real por producto: la venta contra su costo, y no se afirma si lo facturado no coincide con lo que salió |
-| 0082 | La orden de pago: el documento entre la factura y el pago. «Pagada» exige el asiento imputado a cada comprobante |
+| 0082 | La orden de pago: el documento entre la factura y el pago. «Pagada» exige el asiento imputado a cada comprobante (ADR-021) |
 | 0083 | La nota de crédito dice qué factura corrige: aplicarla traslada saldo de un comprobante al otro, y la cuota baja con él |
 | 0084 | El margen llega a la capa de decisión: vender bajo costo se señala sin umbral —es un hecho— y el margen mínimo se declara |
-| 0085 | La solicitud de compra: pedir no es comprar. Sin precios, y «convertida» exige citar una orden de compra de verdad |
+| 0085 | La solicitud de compra: pedir no es comprar. Sin precios, y «convertida» exige citar una orden de compra de verdad (ADR-021) |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
