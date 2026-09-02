@@ -1,0 +1,20 @@
+# Lo que no tiene que entrar a la imagen.
+#
+# `.env` está primero a propósito: es el archivo que más rápido convierte una
+# imagen en una filtración de credenciales, y una imagen se comparte.
+.env
+.env.*
+!.env.example
+
+node_modules
+**/node_modules
+**/dist
+coverage
+var
+.git
+.github
+tests
+docs
+corpus
+infrastructure/db/sandbox
+*.log

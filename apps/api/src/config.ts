@@ -103,6 +103,18 @@ export const config = {
   /** Registrar la IP en la bitácora queda sujeto a evaluación legal (§21). */
   recordIpInAudit: process.env.AUDIT_RECORD_IP === 'true',
 
+  /**
+   * Token del recolector de métricas.
+   *
+   * Sin él, `GET /metrics` **no existe**: contesta 404 como cualquier ruta
+   * inexistente. No se inventa un token por defecto ni se deja abierto «porque
+   * son solo contadores»: los contadores dicen cuántas empresas operan, a qué
+   * hora y con qué volumen, y eso es información del negocio de alguien.
+   *
+   * Se compara en tiempo constante, como cualquier secreto.
+   */
+  metricsToken: process.env.METRICS_TOKEN ?? null,
+
   issuer: process.env.MFA_ISSUER ?? 'Contabilidad AI',
 } as const;
 

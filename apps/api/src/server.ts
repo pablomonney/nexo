@@ -5,6 +5,10 @@ import { ZodError } from 'zod';
 import { config } from './config.js';
 import { HttpError } from './http/errors.js';
 import { attachContext } from './http/context.js';
+// La comparación en tiempo constante ya existe: duplicarla habría dejado dos
+// implementaciones de lo mismo, y la segunda sin los tests de la primera.
+import { constantTimeEquals } from './auth/crypto.js';
+import { exponerMetricas, registrarPedido } from './observabilidad.js';
 import { accountRoutes } from './routes/accounts.js';
 import { afectacionRoutes } from './routes/afectaciones.js';
 import { arcaRoutes } from './routes/arca.js';
@@ -92,6 +96,43 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   // un lote de cien facturas son cien peticiones, cada una con su resultado.
   await app.register(multipart, {
     limits: { fileSize: config.documents.maxBytes, files: 1, fields: 8 },
+  });
+
+  // ── Métricas ─────────────────────────────────────────────────────────────
+  // Se mide en el borde, no adentro de cada ruta: una métrica que hay que
+  // acordarse de agregar en cada endpoint nuevo mide lo que alguien se acordó.
+  //
+  // La etiqueta es la **plantilla** de la ruta y no la url: con la url
+  // concreta, el recolector guardaría los identificadores de cada empresa.
+  app.addHook('onResponse', async (request, reply) => {
+    registrarPedido(
+      request.method,
+      request.routeOptions.url ?? 'desconocida',
+      reply.statusCode,
+      Math.round(reply.elapsedTime),
+    );
+  });
+
+  /**
+   * El recolector, si hay token declarado.
+   *
+   * Sin `METRICS_TOKEN` la ruta **no existe**: contesta 404 como cualquier otra
+   * inexistente. No se deja abierta «porque son solo contadores»: dicen cuántas
+   * empresas operan, a qué hora y con qué volumen.
+   */
+  app.get('/metrics', async (request, reply) => {
+    const declarado = config.metricsToken;
+    const presentado = String(request.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+
+    if (declarado === null || !constantTimeEquals(presentado, declarado)) {
+      // La misma respuesta con token mal puesto que sin la función habilitada:
+      // distinguirlas diría si el recolector está configurado.
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'No existe' });
+    }
+
+    return reply
+      .header('content-type', 'text/plain; version=0.0.4; charset=utf-8')
+      .send(exponerMetricas());
   });
 
   app.addHook('onRequest', async (request, reply) => {
