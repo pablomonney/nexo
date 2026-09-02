@@ -78,7 +78,15 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
                   s.punto_venta AS "puntoVenta", s.cbte_numero::text AS numero,
                   s.total::text, s.imputado::text, s.pendiente::text,
                   s.vencimiento::text, s.vencimiento_declarado AS "vencimientoDeclarado",
-                  s.dias_de_mora AS "diasDeMora", s.antiguedad_dias AS "antiguedadDias"
+                  s.dias_de_mora AS "diasDeMora", s.antiguedad_dias AS "antiguedadDias",
+                  -- La cantidad de cuotas la consola ya la mostraba y nunca
+                  -- llegaba: la columna existe en la vista desde la 0060 y esta
+                  -- consulta no la traía, así que el plan se veía como «sin
+                  -- plan» siempre.
+                  s.plan_declarado AS "planDeclarado", s.cuotas,
+                  -- Clase y corregido (0083): sin la clase, la pantalla no
+                  -- puede distinguir una factura de la nota que la corrige.
+                  s.clase, s.corregido::text
              FROM invoice_settlement s
             WHERE s.party_id = $1 AND s.company_id = $2
               AND ($3::bool OR s.pendiente > 0)
@@ -615,6 +623,285 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
       throw traducirPlan(error);
     }
   });
+
+  /**
+   * Aplica una nota de crédito o de débito a la factura que corrige (0083).
+   *
+   * No crea ni destruye saldo: traslada importe de un comprobante al otro. El
+   * saldo del tercero era correcto desde la 0080 y sigue igual; lo que cambia
+   * es que cada peso pasa a tener dueño, y al salir a cobrar la lista dice el
+   * número que hay que reclamar.
+   *
+   * Cuánto se aplica y a qué factura lo declara una persona. Con tres facturas
+   * abiertas, el sistema no sabe cuál corrige esa nota, y la convención cómoda
+   * —la más vieja primero— es una suposición sobre qué quedó cancelado.
+   */
+  app.post('/tax-transaction-corrections', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:write');
+    const auth = requireAuth(request);
+
+    const body = z
+      .object({
+        correctoraId: z.string().uuid(),
+        corregidaId: z.string().uuid(),
+        importe: monto,
+        // Obligatoria si la factura tiene plan, prohibida si no. Lo valida el
+        // trigger, que es el que ve el plan.
+        cuotaId: z.string().uuid().nullish(),
+      })
+      .parse(request.body);
+
+    try {
+      const creada = await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const r = await tx.query<{ id: string }>(
+            `INSERT INTO tax_transaction_corrections
+               (company_id, correctora_id, corregida_id, importe, installment_id, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6)
+             RETURNING id`,
+            [
+              tenant.companyId, body.correctoraId, body.corregidaId, body.importe,
+              body.cuotaId ?? null, `user:${auth.user.userId}`,
+            ],
+          );
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'APLICAR_NOTA',
+            objectType: 'tax_transactions',
+            objectId: body.correctoraId,
+            newValue: {
+              correccionId: r.rows[0]!.id,
+              corregidaId: body.corregidaId,
+              importe: body.importe,
+            },
+            motivo: 'Se declara qué factura corrige esta nota y por cuánto.',
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return r.rows[0]!.id;
+        },
+      );
+
+      reply.code(201);
+      return { id: creada };
+    } catch (error) {
+      throw traducirCorreccion(error);
+    }
+  });
+
+  /** Anula una corrección, con motivo. No se borra: el rastro queda. */
+  app.post('/tax-transaction-corrections/:correccionId/cancel', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:write');
+    const auth = requireAuth(request);
+    const { correccionId } = z
+      .object({ correccionId: z.string().uuid() })
+      .parse(request.params);
+    const body = z.object({ motivo: z.string().min(3).max(500) }).parse(request.body);
+
+    try {
+      return await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const r = await tx.query(
+            `UPDATE tax_transaction_corrections
+                SET status = 'ANULADA', motivo_anulacion = $3
+              WHERE id = $1 AND company_id = $2 AND status = 'ACTIVA'
+              RETURNING correctora_id AS "correctoraId"`,
+            [correccionId, tenant.companyId, body.motivo],
+          );
+          if (r.rowCount === 0) throw notFound('Corrección no encontrada o ya anulada');
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'ANULAR_APLICACION_DE_NOTA',
+            objectType: 'tax_transaction_corrections',
+            objectId: correccionId,
+            newValue: { status: 'ANULADA' },
+            motivo: body.motivo,
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return { anulada: true };
+        },
+      );
+    } catch (error) {
+      throw traducirCorreccion(error);
+    }
+  });
+
+  /** Qué corrige este comprobante y qué lo corrigió. */
+  app.get('/tax-transactions/:taxTransactionId/correcciones', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:read');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const estado = await tx.query(
+          `SELECT total::text, imputado::text, corregido::text, pendiente::text, clase
+             FROM invoice_settlement
+            WHERE tax_transaction_id = $1 AND company_id = $2`,
+          [taxTransactionId, tenant.companyId],
+        );
+        if (estado.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+        const correcciones = await tx.query(
+          `SELECT c.id, c.correctora_id AS "correctoraId", c.corregida_id AS "corregidaId",
+                  c.importe::text, c.status, c.motivo_anulacion AS "motivoAnulacion",
+                  c.installment_id AS "cuotaId",
+                  c.created_by AS "declaradaPor", c.created_at AS "declaradaEn",
+                  co.cbte_tipo AS "correctoraTipo", co.punto_venta AS "correctoraPuntoVenta",
+                  co.cbte_numero::text AS "correctoraNumero",
+                  ce.cbte_tipo AS "corregidaTipo", ce.punto_venta AS "corregidaPuntoVenta",
+                  ce.cbte_numero::text AS "corregidaNumero",
+                  (c.correctora_id = $1) AS "estaEsLaNota"
+             FROM tax_transaction_corrections c
+             JOIN tax_transactions co
+               ON co.id = c.correctora_id AND co.company_id = c.company_id
+             JOIN tax_transactions ce
+               ON ce.id = c.corregida_id AND ce.company_id = c.company_id
+            WHERE c.company_id = $2
+              AND (c.correctora_id = $1 OR c.corregida_id = $1)
+            ORDER BY c.created_at`,
+          [taxTransactionId, tenant.companyId],
+        );
+
+        return {
+          comprobante: estado.rows[0],
+          correcciones: correcciones.rows,
+          alcance:
+            'Aplicar una nota no crea ni destruye saldo: traslada importe de un comprobante ' +
+            'al otro. El total del tercero no cambia — cambia de quién es cada peso. Una ' +
+            'corrección anulada sigue en la lista: el rastro de que alguna vez se aplicó no ' +
+            'se borra.',
+        };
+      },
+    );
+  });
+
+  /** Las notas de este tercero que todavía no se aplicaron a ninguna factura. */
+  app.get('/parties/:partyId/notas-sin-aplicar', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:read');
+    const auth = requireAuth(request);
+    const { partyId } = z.object({ partyId: z.string().uuid() }).parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const notas = await tx.query(
+          `SELECT tax_transaction_id AS id, clase, direction AS direccion,
+                  cbte_tipo AS "cbteTipo", punto_venta AS "puntoVenta",
+                  cbte_numero::text AS "cbteNumero", cbte_fecha::text AS "cbteFecha",
+                  total::text, aplicado::text, sin_aplicar::text AS "sinAplicar",
+                  facturas_abiertas AS "facturasAbiertas"
+             FROM notas_sin_aplicar
+            WHERE company_id = $1 AND party_id = $2
+            ORDER BY cbte_fecha, cbte_numero`,
+          [tenant.companyId, partyId],
+        );
+
+        return {
+          notas: notas.rows,
+          alcance:
+            'Una nota sin aplicar no es un error: el saldo del tercero ya la contempla. Lo ' +
+            'que falta es a qué factura corresponde, y sin eso la lista de cobranza no ' +
+            'puede decir cuánto reclamar por cada comprobante.',
+        };
+      },
+    );
+  });
+}
+
+/** Del candado de la corrección al error del dominio. */
+function traducirCorreccion(error: unknown): unknown {
+  const fallo = error as { code?: string; message?: string };
+  const mensaje = fallo.message ?? '';
+
+  const porCodigo: ReadonlyArray<readonly [string, string, string]> = [
+    [
+      'E_CORR_NO_ES_NOTA',
+      'NO_ES_NOTA',
+      'Solo una nota de crédito o de débito corrige a otro comprobante.',
+    ],
+    [
+      'E_CORR_NO_ES_FACTURA',
+      'NO_ES_FACTURA',
+      'Una nota corrige una factura, no otra nota: encadenarlas dejaría la cuenta corriente ' +
+        'sin poder explicar cuál cancela a cuál.',
+    ],
+    [
+      'E_CORR_OTRA_PUNTA',
+      'OTRA_PUNTA',
+      'Una nota de ventas no corrige un comprobante de compras.',
+    ],
+    [
+      'E_CORR_OTRO_TERCERO',
+      'OTRO_TERCERO',
+      'La nota de un tercero no corrige la factura de otro.',
+    ],
+    [
+      'E_CORR_SIN_TERCERO',
+      'COMPROBANTE_SIN_TERCERO',
+      'Los dos comprobantes tienen que estar imputados a un tercero.',
+    ],
+    [
+      'E_CORR_EXCEDE_NOTA',
+      'EXCEDE_LA_NOTA',
+      'Se quiere aplicar más de lo que a la nota le queda sin aplicar.',
+    ],
+    [
+      'E_CORR_EXCEDE_FACTURA',
+      'EXCEDE_LA_FACTURA',
+      'La nota de crédito cancelaría más de lo que la factura debe, y dejaría el comprobante ' +
+        'en negativo sin que haya entrado un peso.',
+    ],
+    [
+      'E_CORR_SIN_CUOTA',
+      'CORRECCION_SIN_CUOTA',
+      'La factura tiene plan de cuotas: la corrección tiene que decir qué cuota baja.',
+    ],
+    [
+      'E_CORR_CUOTA_SIN_PLAN',
+      'CUOTA_SIN_PLAN',
+      'La factura no tiene plan de pagos y la corrección nombra una cuota.',
+    ],
+    [
+      'E_CORR_CUOTA_AJENA',
+      'CUOTA_DE_OTRO_COMPROBANTE',
+      'Esa cuota pertenece a otra factura.',
+    ],
+    [
+      'E_CORR_ANULADA',
+      'CORRECCION_ANULADA',
+      'Una corrección anulada no vuelve: se carga otra.',
+    ],
+    [
+      'E_CORR_NO_SE_BORRA',
+      'CORRECCION_NO_SE_BORRA',
+      'Una corrección se anula con motivo, no se borra.',
+    ],
+  ];
+
+  for (const [interno, publico, texto] of porCodigo) {
+    if (mensaje.includes(interno)) return unprocessable(publico, texto);
+  }
+  if (fallo.code === '23503') {
+    return notFound('Alguno de los comprobantes no existe en esta empresa');
+  }
+  return error;
 }
 
 /**

@@ -643,6 +643,28 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
         <button id="b-ter-imputar">Imputar</button>
         <div id="ter-i-msg"></div>
       </div></details>
+
+      <details class="grupo" id="ter-notas" hidden><summary>Aplicar una nota de crédito o de débito</summary><div>
+        <p class="ayuda">El saldo del tercero <strong>ya está bien</strong> aunque la nota no se
+          aplique: desde la 0080 una nota de crédito resta. Lo que falta sin aplicarla es saber
+          <em>a qué factura</em> corresponde, y sin eso la lista de cobranza no puede decir si
+          hay que reclamar 10.000 o 6.000.</p>
+        <p class="ayuda">Aplicarla no crea ni destruye saldo: traslada importe de un comprobante
+          al otro. Con tres facturas abiertas, cuál corrige esa nota <strong>no se deduce</strong>
+          — la más vieja primero es una suposición sobre qué quedó cancelado.</p>
+        <div class="tabla"><table id="t-ter-notas"><thead><tr>
+          <th>Nota</th><th>Fecha</th><th>Total</th><th>Aplicado</th><th>Sin aplicar</th>
+          <th>Facturas abiertas</th>
+        </tr></thead><tbody></tbody></table></div>
+        <div class="fila">
+          <div><label>Nota</label><select id="ter-n-nota"></select></div>
+          <div><label>Factura que corrige</label><select id="ter-n-factura"></select></div>
+          <div id="ter-n-cuota-caja" hidden><label>Cuota</label><select id="ter-n-cuota"></select></div>
+          <div><label>Importe</label><input id="ter-n-importe" inputmode="decimal"></div>
+        </div>
+        <button id="b-ter-aplicar-nota">Aplicar la nota</button>
+        <div id="ter-n-msg"></div>
+      </div></details>
     </div>
     <div id="ter-cc-msg"></div>
     <div class="tabla"><table id="t-ter-cc"><thead><tr>
@@ -1694,52 +1716,52 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     pagada y la cuenta del proveedor seguiría entera.</p>
 
   <div class="fila">
-    <div><label>Estado</label><select id="op-f-estado">
+    <div><label>Estado</label><select id="odp-f-estado">
       <option value="">todos</option><option>BORRADOR</option><option>APROBADA</option>
       <option>PAGADA</option><option>ANULADA</option></select></div>
-    <div><label>&nbsp;</label><button id="b-op" class="sec">Actualizar</button></div>
+    <div><label>&nbsp;</label><button id="b-odp" class="sec">Actualizar</button></div>
   </div>
-  <div id="op-msg"></div>
-  <div class="tabla"><table id="t-op"><thead><tr>
+  <div id="odp-msg"></div>
+  <div class="tabla"><table id="t-odp"><thead><tr>
     <th>N°</th><th>Fecha</th><th>Proveedor</th><th>Renglones</th><th>Total</th>
     <th>Estado</th><th>Situación</th><th></th>
   </tr></thead><tbody></tbody></table></div>
 
-  <div id="op-detalle" hidden class="grupo">
-    <h3 id="op-det-titulo">Orden</h3>
-    <div class="tabla"><table id="t-op-ren"><thead><tr>
+  <div id="odp-detalle" hidden class="grupo">
+    <h3 id="odp-det-titulo">Orden</h3>
+    <div class="tabla"><table id="t-odp-ren"><thead><tr>
       <th>Comprobante</th><th>Fecha</th><th>Total</th><th>Pendiente</th>
       <th>A pagar</th><th>En otras órdenes</th>
     </tr></thead><tbody></tbody></table></div>
 
-    <div id="op-acciones" hidden>
+    <div id="odp-acciones" hidden>
       <div class="fila">
-        <div><label>Asiento del pago</label><input id="op-asiento" placeholder="uuid del asiento aprobado"></div>
-        <div style="flex:1"><label>Motivo de la anulación</label><input id="op-motivo" maxlength="500"></div>
+        <div><label>Asiento del pago</label><input id="odp-asiento" placeholder="uuid del asiento aprobado"></div>
+        <div style="flex:1"><label>Motivo de la anulación</label><input id="odp-motivo" maxlength="500"></div>
       </div>
-      <button id="b-op-aprobar">Aprobar</button>
-      <button id="b-op-pagar" class="sec">Registrar el pago</button>
-      <button id="b-op-anular" class="sec">Anular</button>
-      <div id="op-acc-msg"></div>
+      <button id="b-odp-aprobar">Aprobar</button>
+      <button id="b-odp-pagar" class="sec">Registrar el pago</button>
+      <button id="b-odp-anular" class="sec">Anular</button>
+      <div id="odp-acc-msg"></div>
     </div>
   </div>
 
-  <details class="grupo" id="op-alta" hidden><summary>Armar una orden</summary><div>
+  <details class="grupo" id="odp-alta" hidden><summary>Armar una orden</summary><div>
     <p class="ayuda">Elegí el proveedor y la consola trae lo que le queda por cobrarte: el
       <em>pendiente</em>, no el total del comprobante. Si otra orden viva ya comprometió esa
       misma factura, se avisa — puede ser un pago en dos partes o un duplicado, y el sistema
       no elige por vos.</p>
     <div class="fila">
-      <div><label>Proveedor</label><select id="op-n-proveedor"></select></div>
-      <div><label>Fecha</label><input id="op-n-fecha" type="date"></div>
-      <div><label>&nbsp;</label><button id="b-op-pagables" class="sec">Ver qué se le debe</button></div>
+      <div><label>Proveedor</label><select id="odp-n-proveedor"></select></div>
+      <div><label>Fecha</label><input id="odp-n-fecha" type="date"></div>
+      <div><label>&nbsp;</label><button id="b-odp-pagables" class="sec">Ver qué se le debe</button></div>
     </div>
-    <div class="tabla"><table id="t-op-pagables"><thead><tr>
+    <div class="tabla"><table id="t-odp-pagables"><thead><tr>
       <th></th><th>Comprobante</th><th>Fecha</th><th>Vence</th><th>Total</th>
       <th>Pendiente</th><th>En otras órdenes</th><th>A pagar</th>
     </tr></thead><tbody></tbody></table></div>
-    <button id="b-op-alta">Armar el borrador</button>
-    <div id="op-alta-msg"></div>
+    <button id="b-odp-alta">Armar el borrador</button>
+    <div id="odp-alta-msg"></div>
   </div></details>
 </section>
 
@@ -3691,8 +3713,99 @@ async function cargarSaldoDelTercero(id) {
   E('ter-plan').hidden = !puede('allocation:read');
   E('ter-sugerencias').hidden = !puede('allocation:write');
   E('ter-imputar').hidden = !puede('allocation:write');
+  E('ter-notas').hidden = !puede('allocation:write');
   if (puede('allocation:write')) await cargarMovimientosSinImputar(id);
+  if (puede('allocation:write')) await cargarNotasSinAplicar(id, r.datos.comprobantes || []);
 }
+
+// ── Notas de crédito y débito, aplicadas a la factura que corrigen ─────────
+//
+// La nota sin aplicar no es un error: el saldo del tercero ya la contempla.
+// Lo que falta es a qué factura corresponde. Por eso esta pantalla no propone
+// ninguna: ofrece las notas y las facturas abiertas, y la elección la hace
+// quien la conoce.
+async function cargarNotasSinAplicar(id, comprobantes) {
+  const r = await api('GET', '/parties/' + id + '/notas-sin-aplicar');
+  if (!r.ok) return decir('ter-n-msg', r);
+  E('ter-n-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-ter-notas').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const sel = E('ter-n-nota');
+  sel.innerHTML = '';
+  for (const n of r.datos.notas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(n.clase) + ' ' + escapar(n.puntoVenta) + '-' +
+        escapar(n.cbteNumero) + '</td>' +
+      '<td class="mono">' + escapar(n.cbteFecha) + '</td>' +
+      '<td class="mono">' + escapar(n.total) + '</td>' +
+      '<td class="mono">' + escapar(n.aplicado) + '</td>' +
+      '<td class="mono"><strong>' + escapar(n.sinAplicar) + '</strong></td>' +
+      '<td class="mono">' + (n.facturasAbiertas > 0
+        ? '<span class="p p-ojo">' + escapar(n.facturasAbiertas) + '</span>'
+        : '0') + '</td>';
+    cuerpo.appendChild(tr);
+
+    const o = document.createElement('option');
+    o.value = n.id;
+    o.textContent = n.clase + ' ' + n.puntoVenta + '-' + n.cbteNumero +
+      ' · sin aplicar ' + n.sinAplicar;
+    sel.appendChild(o);
+  }
+
+  // Solo facturas con saldo: una nota no corrige otra nota, y sobre una
+  // factura saldada no queda nada que cancelar.
+  const facturas = E('ter-n-factura');
+  facturas.innerHTML = '';
+  for (const c of comprobantes) {
+    if (c.clase !== 'FACTURA') continue;
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.puntoVenta + '-' + c.numero + ' · pendiente ' + c.pendiente;
+    o.dataset.cuotas = String(c.cuotas || 0);
+    facturas.appendChild(o);
+  }
+  await ajustarCuotaDeNota();
+}
+
+// Si la factura tiene plan, la corrección nombra la cuota: sin eso el
+// comprobante bajaría y sus cuotas no, que son dos verdades sobre la misma
+// deuda.
+async function ajustarCuotaDeNota() {
+  const opcion = E('ter-n-factura').selectedOptions[0];
+  const conPlan = opcion !== undefined && Number(opcion.dataset.cuotas) > 0;
+  E('ter-n-cuota-caja').hidden = !conPlan;
+  if (!conPlan) return;
+
+  const r = await api('GET', '/tax-transactions/' + opcion.value + '/installments');
+  if (!r.ok) return;
+  const sel = E('ter-n-cuota');
+  sel.innerHTML = '';
+  for (const c of r.datos.cuotas || []) {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = 'Cuota ' + c.numero + ' · vence ' + c.vencimiento +
+      ' · pendiente ' + c.pendiente;
+    sel.appendChild(o);
+  }
+}
+
+E('ter-n-factura').onchange = () => ajustarCuotaDeNota();
+
+E('b-ter-aplicar-nota').onclick = async () => {
+  const cuerpo = {
+    correctoraId: E('ter-n-nota').value,
+    corregidaId: E('ter-n-factura').value,
+    importe: E('ter-n-importe').value,
+  };
+  if (!E('ter-n-cuota-caja').hidden) cuerpo.cuotaId = E('ter-n-cuota').value;
+
+  const r = await api('POST', '/tax-transaction-corrections', cuerpo);
+  decir('ter-n-msg', r,
+    'Nota aplicada. El saldo del tercero no cambió: se trasladó de la nota a la factura.');
+  if (r.ok) await cargarSaldoDelTercero(estado.tercero);
+};
 
 // ── Imputaciones sugeridas ────────────────────────────────────────────────
 //
@@ -5380,17 +5493,17 @@ E('b-chq-mover').onclick = async () => {
 
 // ══ 4c6b · Órdenes de pago ════════════════════════════════════════════════
 async function listarOrdenesDePago() {
-  E('op-alta').hidden = !puede('payment_order:write');
+  E('odp-alta').hidden = !puede('payment_order:write');
   if (puede('payment_order:write')) await cargarProveedoresParaOrden();
 
   const q = new URLSearchParams();
-  if (E('op-f-estado').value) q.set('estado', E('op-f-estado').value);
+  if (E('odp-f-estado').value) q.set('estado', E('odp-f-estado').value);
 
   const r = await api('GET', '/payment-orders?' + q.toString());
-  if (!r.ok) return decir('op-msg', r);
-  E('op-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  if (!r.ok) return decir('odp-msg', r);
+  E('odp-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
 
-  const cuerpo = E('t-op').querySelector('tbody');
+  const cuerpo = E('t-odp').querySelector('tbody');
   cuerpo.innerHTML = '';
   for (const o of r.datos.ordenes || []) {
     const tr = document.createElement('tr');
@@ -5413,7 +5526,7 @@ async function cargarProveedoresParaOrden() {
   if (!puede('party:read')) return;
   const r = await api('GET', '/parties?status=ACTIVO&limite=200');
   if (!r.ok) return;
-  const sel = E('op-n-proveedor');
+  const sel = E('odp-n-proveedor');
   sel.innerHTML = '';
   for (const t of (r.datos.terceros || [])) {
     const o = document.createElement('option');
@@ -5425,17 +5538,17 @@ async function cargarProveedoresParaOrden() {
 
 async function abrirOrdenDePago(id, titulo) {
   const r = await api('GET', '/payment-orders/' + id);
-  if (!r.ok) return decir('op-msg', r);
+  if (!r.ok) return decir('odp-msg', r);
   estado.ordenDePago = id;
-  E('op-detalle').hidden = false;
-  E('op-det-titulo').textContent = titulo + ' · ' + r.datos.orden.situacion;
+  E('odp-detalle').hidden = false;
+  E('odp-det-titulo').textContent = titulo + ' · ' + r.datos.orden.situacion;
   // Las acciones solo si la orden todavía puede moverse: un botón que va a
   // terminar en 422 le enseña a la persona que el sistema falla al azar.
-  E('op-acciones').hidden =
+  E('odp-acciones').hidden =
     !puede('payment_order:approve') ||
     r.datos.orden.estado === 'PAGADA' || r.datos.orden.estado === 'ANULADA';
 
-  const cuerpo = E('t-op-ren').querySelector('tbody');
+  const cuerpo = E('t-odp-ren').querySelector('tbody');
   cuerpo.innerHTML = '';
   for (const l of r.datos.renglones || []) {
     const tr = document.createElement('tr');
@@ -5452,65 +5565,65 @@ async function abrirOrdenDePago(id, titulo) {
   }
 }
 
-E('b-op').onclick = () => listarOrdenesDePago();
-E('op-f-estado').onchange = () => listarOrdenesDePago();
+E('b-odp').onclick = () => listarOrdenesDePago();
+E('odp-f-estado').onchange = () => listarOrdenesDePago();
 
-E('b-op-pagables').onclick = async () => {
-  const r = await api('GET', '/payment-orders/pagables?proveedorId=' + E('op-n-proveedor').value);
-  if (!r.ok) return decir('op-alta-msg', r);
-  E('op-alta-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+E('b-odp-pagables').onclick = async () => {
+  const r = await api('GET', '/payment-orders/pagables?proveedorId=' + E('odp-n-proveedor').value);
+  if (!r.ok) return decir('odp-alta-msg', r);
+  E('odp-alta-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
 
-  const cuerpo = E('t-op-pagables').querySelector('tbody');
+  const cuerpo = E('t-odp-pagables').querySelector('tbody');
   cuerpo.innerHTML = '';
   for (const c of r.datos.comprobantes || []) {
     const tr = document.createElement('tr');
     tr.innerHTML =
-      '<td><input type="checkbox" class="op-sel" data-id="' + escapar(c.id) + '"></td>' +
+      '<td><input type="checkbox" class="odp-sel" data-id="' + escapar(c.id) + '"></td>' +
       '<td class="mono">' + escapar(c.cbteTipo + '-' + c.puntoVenta + '-' + c.cbteNumero) + '</td>' +
       '<td class="mono">' + escapar(c.cbteFecha) + '</td>' +
       '<td class="mono">' + (c.vencimientoDeclarado ? escapar(c.vencimiento) : '—') + '</td>' +
       '<td class="mono">' + escapar(c.total) + '</td>' +
       '<td class="mono">' + escapar(c.pendiente) + '</td>' +
       '<td class="mono">' + escapar(c.comprometido) + '</td>' +
-      '<td><input class="op-imp mono" data-id="' + escapar(c.id) + '" value="' +
+      '<td><input class="odp-imp mono" data-id="' + escapar(c.id) + '" value="' +
         escapar(c.pendiente) + '" inputmode="decimal"></td>';
     cuerpo.appendChild(tr);
   }
 };
 
-E('b-op-alta').onclick = async () => {
+E('b-odp-alta').onclick = async () => {
   const renglones = [];
-  for (const chk of document.querySelectorAll('.op-sel')) {
+  for (const chk of document.querySelectorAll('.odp-sel')) {
     if (!chk.checked) continue;
-    const imp = document.querySelector('.op-imp[data-id="' + chk.dataset.id + '"]');
+    const imp = document.querySelector('.odp-imp[data-id="' + chk.dataset.id + '"]');
     renglones.push({ comprobanteId: chk.dataset.id, importe: imp.value });
   }
   const r = await api('POST', '/payment-orders', {
-    proveedorId: E('op-n-proveedor').value,
-    fecha: E('op-n-fecha').value,
+    proveedorId: E('odp-n-proveedor').value,
+    fecha: E('odp-n-fecha').value,
     renglones,
   });
-  decir('op-alta-msg', r, 'Borrador armado. No compromete nada hasta que se apruebe.');
+  decir('odp-alta-msg', r, 'Borrador armado. No compromete nada hasta que se apruebe.');
   if (r.ok) listarOrdenesDePago();
 };
 
-E('b-op-aprobar').onclick = async () => {
+E('b-odp-aprobar').onclick = async () => {
   const r = await api('POST', '/payment-orders/' + estado.ordenDePago + '/aprobar');
-  decir('op-acc-msg', r, 'Aprobada. La plata todavía no salió: falta el asiento.');
+  decir('odp-acc-msg', r, 'Aprobada. La plata todavía no salió: falta el asiento.');
   if (r.ok) { await listarOrdenesDePago(); await abrirOrdenDePago(estado.ordenDePago, 'Orden'); }
 };
 
-E('b-op-pagar').onclick = async () => {
+E('b-odp-pagar').onclick = async () => {
   const r = await api('POST', '/payment-orders/' + estado.ordenDePago + '/pagar',
-    { asientoId: E('op-asiento').value });
-  decir('op-acc-msg', r, 'Pago registrado contra el asiento.');
+    { asientoId: E('odp-asiento').value });
+  decir('odp-acc-msg', r, 'Pago registrado contra el asiento.');
   if (r.ok) { await listarOrdenesDePago(); await abrirOrdenDePago(estado.ordenDePago, 'Orden'); }
 };
 
-E('b-op-anular').onclick = async () => {
+E('b-odp-anular').onclick = async () => {
   const r = await api('POST', '/payment-orders/' + estado.ordenDePago + '/anular',
-    { motivo: E('op-motivo').value });
-  decir('op-acc-msg', r, 'Anulada, con el motivo escrito.');
+    { motivo: E('odp-motivo').value });
+  decir('odp-acc-msg', r, 'Anulada, con el motivo escrito.');
   if (r.ok) { await listarOrdenesDePago(); await abrirOrdenDePago(estado.ordenDePago, 'Orden'); }
 };
 

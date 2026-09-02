@@ -54,7 +54,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Listas de precios con vigencia, por cliente y cantidad | HECHO |
 | Cuenta corriente, cobranzas, imputación | HECHO |
 | Plan de cuotas por comprobante | HECHO |
-| **Notas de crédito y débito** | PARCIAL — desde la 0080 **restan y suman correctamente** en la cuenta corriente, con el signo tomado del catálogo de ARCA. Lo que sigue faltando es el flujo que las vincule a la factura puntual que corrigen: hoy afectan el saldo del tercero, no un comprobante en particular. |
+| **Notas de crédito y débito** | HECHO — restan y suman con el signo del catálogo de ARCA (0080) y **se aplican a la factura puntual que corrigen** (0083). Aplicarlas traslada saldo de un comprobante al otro sin cambiar el total del tercero; con plan de cuotas, la corrección nombra la cuota. Una nota sin aplicar no es un error y la bandeja lo avisa sin bloquear. |
 | **Remitos y entregas parciales** | DECISIÓN — hay que decidir si NEXO admite facturación parcial y con qué reglas. |
 | **Devoluciones** | DECISIÓN — depende de la anterior. |
 | **Descuentos y promociones** | DECISIÓN — una lista tiene precios, no reglas. «10 % desde la quinta unidad» no se puede expresar. |

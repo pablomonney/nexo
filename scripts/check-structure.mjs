@@ -122,6 +122,8 @@ const CHECKS = [
   ['payment_orders', 'po_anulada_con_motivo', '0082: una orden anulada dice por qué'],
   ['payment_orders', 'po_pagada_con_asiento', '0082: una orden pagada nombra el asiento del pago'],
   ['payment_orders', 'po_aprobada_con_firma', '0082: una orden aprobada dice quién y cuándo'],
+  ['tax_transaction_corrections', 'ttc_no_es_la_misma', '0083: un comprobante no se corrige a sí mismo'],
+  ['tax_transaction_corrections', 'ttc_anulada_con_motivo', '0083: anular una corrección exige decir por qué'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -212,6 +214,8 @@ const TRIGGERS = [
   ['payment_orders', 'po_transicion', '0082: pagar exige que el asiento esté imputado'],
   ['payment_orders', 'po_baja', '0082: una orden que salió del borrador se anula, no se borra'],
   ['payment_order_lines', 'pol_reglas', '0082: no se ordena pagar más de lo que se debe'],
+  ['tax_transaction_corrections', 'ttc_reglas', '0083: una nota corrige una factura del mismo tercero, por lo que le queda'],
+  ['tax_transaction_corrections', 'ttc_no_delete', '0083: una corrección se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
   ['stock_movements', 'stock_movements_producto_valido', 'Un servicio no mueve existencias'],
@@ -308,6 +312,9 @@ const FK_CON_EMPRESA = [
   ['payment_orders', 'po_asiento_fk', 'Una orden no cita el asiento de otra empresa'],
   ['payment_order_lines', 'pol_orden_fk', 'Un renglón no cuelga de la orden de otra empresa'],
   ['payment_order_lines', 'pol_comprobante_fk', 'Un renglón no cita el comprobante de otra empresa'],
+  ['tax_transaction_corrections', 'ttc_correctora_fk', 'Una nota no corrige comprobantes de otra empresa'],
+  ['tax_transaction_corrections', 'ttc_corregida_fk', 'La factura corregida es de la misma empresa'],
+  ['tax_transaction_corrections', 'ttc_cuota_fk', 'La cuota corregida es de la misma empresa'],
   ['check_movements', 'cm_cheque_fk', 'Un movimiento no cuelga del cheque de otra empresa'],
   ['cash_boxes', 'cb_cuenta_fk', 'Una caja no apunta a la cuenta contable de otra empresa'],
   ['cash_sessions', 'cs_caja_fk', 'No se abre la caja de otra empresa'],
@@ -413,6 +420,8 @@ const RLS_FORZADO = [
   'company_stock_valuation',
   // Órdenes de pago (0082): a quién le va a pagar cada empresa y cuánto.
   'payment_orders', 'payment_order_lines',
+  // Correcciones (0083): qué nota corrige qué factura de cada empresa.
+  'tax_transaction_corrections',
 ];
 
 /**
@@ -481,6 +490,8 @@ const VISTAS_INVOKER = [
   'analytics_margen_por_producto',
   // 0082 · La orden de pago con su total derivado y la prueba del pago.
   'payment_order_status', 'payment_order_lines_status', 'work_queue_pagos',
+  // 0083 · La nota aplicada a su factura, y la que todavía no lo está.
+  'notas_sin_aplicar', 'work_queue_correcciones',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
