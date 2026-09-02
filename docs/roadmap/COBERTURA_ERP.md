@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, y otra vez al cerrar CRM)
+**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, CRM y proyectos)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -113,16 +113,25 @@ Alta, mejoras, baja, plan de amortización derivado y valor de libros: HECHO.
 **Métodos distintos de `LINEAL`: DECISIÓN** — cada uno tiene consecuencias sobre
 la RT que lo admite y sobre el impuesto.
 
-## 9 · Lo que no existe en absoluto
+## 9 · Proyectos y servicios
+
+| Área | Estado |
+|---|---|
+| Proyectos, tareas y partes de horas | HECHO — el libro de horas es append-only y un proyecto cerrado no recibe horas nuevas. |
+| Rentabilidad por proyecto | HECHO — ingresos y costos **leídos del Mayor** por el centro de costo del proyecto, menos las horas valuadas. Ninguna cifra se guarda en el módulo. |
+| Valuación de las horas | HECHO con tarifa **declarada** por proyecto y con vigencia. El costo real de una hora sale de la liquidación de sueldos, que está BLOQUEADA: inventarlo sería inventar el sueldo de alguien. Sin tarifa para la fecha, el margen no se afirma. |
+| **Horas por persona y su costo real** | BLOQUEADO — depende de RRHH (ADR-012 §8). |
+| **Facturación por avance** | DECISIÓN — exige definir si se factura por hito, por porcentaje o por horas, y cada opción tiene su tratamiento contable. |
+
+## 10 · Lo que no existe en absoluto
 
 | Módulo | Estado | Qué falta exactamente |
 |---|---|---|
-| **Proyectos y servicios** | LIBRE | Proyectos, tareas, horas, costo y rentabilidad. Se apoya en centros de costo, que ya existen. |
 | **Producción** | DECISIÓN | BOM, órdenes, consumos y mermas se pueden modelar; **el costo del producto terminado no**, porque depende de la valuación de existencias, que está sin decidir. |
 | **RRHH** | BLOQUEADO | ADR-012 §8 deja tres preguntas abiertas y ninguna es técnica: qué convenios se soportan, si se emite el recibo (Ley 27.555) y quién firma la liquidación. Inventar una escala violaría §30. |
 | **Suscripciones del propio NEXO** | PARCIAL/LIBRE | La arquitectura —plan, estado, período, límites— es construible sin precios. Conectar un proveedor de pagos está BLOQUEADO por credenciales. |
 
-## 10 · Contra el mercado
+## 11 · Contra el mercado
 
 Al abrir esta auditoría, lo que los ERP argentinos tenían y NEXO no era:
 cheques, órdenes de compra, remitos, lotes, recuento físico, CRM, sueldos y
@@ -140,6 +149,15 @@ cada empresa— y **no pondera lo que nadie declaró**. Un pipeline con
 probabilidades inventadas produce un número que parece plata y no lo es; acá
 las etapas sin probabilidad se informan aparte y quedan fuera del total. Y el
 embudo no se suma al flujo de fondos: una oportunidad no es un crédito.
+
+Con proyectos pasó algo parecido. Todo ERP de servicios promete «rentabilidad
+por proyecto», y casi siempre la calcula con un costo horario que el sistema se
+inventó o que quedó cargado una vez y nadie volvió a mirar. Acá la tarifa se
+declara con vigencia y se aplica **la del día en que se trabajó**; si falta,
+el margen no se calcula mal: **no se afirma**, y la bandeja dice qué falta para
+poder afirmarlo. Los ingresos y los costos no se cargan en el módulo — se leen
+del Mayor por el centro de costo—, así que la rentabilidad del proyecto y el
+balance no pueden divergir.
 
 A eso se sumó **caja y arqueo**, que no estaba en la lista porque ningún ERP lo
 publicita: lo tienen todos. La diferencia está en qué se hace con la diferencia
@@ -167,14 +185,13 @@ Tango, sino en que **cada número se pueda defender**. Los módulos que faltan h
 que construirlos igual — un ERP sin cheques no compite en Argentina — pero
 construirlos con esa misma disciplina es lo que hace que valga la pena elegirlo.
 
-## 11 · Orden de ejecución
+## 12 · Orden de ejecución
 
 Por dependencia y por valor, entre lo LIBRE:
 
 ~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
-~~4. Caja y arqueo~~ · ~~5. CRM~~ — hechos.
+~~4. Caja y arqueo~~ · ~~5. CRM~~ · ~~6. Proyectos~~ — hechos.
 
-6. **Proyectos** — se apoya en centros de costo.
 7. **Vendedores y comisiones** — el CRM ya existe; falta el vendedor en la venta.
 8. **Sucursales** — hoy se aproxima con centro de costo, que no es lo mismo.
 9. **Suscripciones** — la arquitectura, sin precios ni pasarela.

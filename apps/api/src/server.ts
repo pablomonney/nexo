@@ -39,6 +39,7 @@ import { chequeRoutes } from './routes/cheques.js';
 import { recuentoRoutes } from './routes/recuentos.js';
 import { cajaRoutes } from './routes/caja.js';
 import { crmRoutes } from './routes/crm.js';
+import { proyectoRoutes } from './routes/proyectos.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -138,6 +139,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(recuentoRoutes);
   await app.register(cajaRoutes);
   await app.register(crmRoutes);
+  await app.register(proyectoRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);

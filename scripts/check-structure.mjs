@@ -73,6 +73,11 @@ const CHECKS = [
   // 0069 · Una oportunidad es de alguien. Sin tercero ni prospecto, el embudo
   // cuenta plata que no se le puede pedir a nadie.
   ['crm_opportunities', 'co_alguien', '0069: la oportunidad nombra al tercero o al prospecto'],
+  // 0070 · Cerrar un proyecto sin decir por qué deja sin explicación el número
+  // con el que se lo cerró.
+  ['projects', 'pj_cierre_completo', '0070: un proyecto cerrado dice cuándo y por qué'],
+  ['projects', 'pj_fin_no_anterior', '0070: no termina antes de empezar'],
+  ['project_hour_rates', 'phr_vigencia_coherente', '0070: una tarifa no deja de regir antes de regir'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -159,6 +164,13 @@ const TRIGGERS = [
   ['crm_stage_transitions', 'cstr_transicion', '0069: perder exige motivo, y lo cerrado no se reabre'],
   ['crm_activities', 'cac_no_update', '0069: lo que se hizo, se hizo'],
   ['crm_activities', 'cac_no_delete', '0069: una visita borrada deja un seguimiento que parece mejor de lo que fue'],
+  // 0070 · Una hora cargada y después borrada deja un proyecto que parece más
+  // rentable de lo que fue; y un proyecto cerrado no recibe horas nuevas.
+  ['time_entries', 'te_no_update', '0070: el parte de horas no se edita'],
+  ['time_entries', 'te_no_delete', '0070: el parte de horas no se borra'],
+  ['time_entries', 'te_proyecto_abierto', '0070: no se le cargan horas a un proyecto cerrado'],
+  ['projects', 'projects_no_delete', '0070: un proyecto se cierra o se cancela, no se borra'],
+  ['project_hour_rates', 'phr_una_por_fecha', '0070: una sola tarifa vigente por proyecto y fecha'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -219,6 +231,8 @@ const INDICES = [
   ['cs_una_abierta_por_caja', 'Una sola sesión abierta por caja'],
   ['cst_code_unico', '0069: un código, una etapa del embudo, por empresa'],
   ['cst_orden_unico', '0069: dos etapas en la misma posición dejan el embudo sin orden'],
+  ['pj_code_unico', '0070: un código, un proyecto, por empresa'],
+  ['pjt_code_unico', '0070: un código, una tarea, por proyecto'],
   ['fixed_assets_code_unico', 'Un código, un bien de uso, por empresa'],
 ];
 
@@ -258,6 +272,12 @@ const FK_CON_EMPRESA = [
   ['crm_stage_transitions', 'cstr_oportunidad_fk', 'Una transición no cuelga de la oportunidad de otra empresa'],
   ['crm_stage_transitions', 'cstr_etapa_fk', 'No se mueve a la etapa de otra empresa'],
   ['crm_activities', 'cac_oportunidad_fk', 'Una actividad no cuelga de la oportunidad de otra empresa'],
+  ['projects', 'pj_party_fk', 'Un proyecto no es del cliente de otra empresa'],
+  ['projects', 'pj_centro_fk', 'Un proyecto no se mide por el centro de costo de otra empresa'],
+  ['project_tasks', 'pjt_proyecto_fk', 'Una tarea no cuelga del proyecto de otra empresa'],
+  ['time_entries', 'te_proyecto_fk', 'Las horas no se cargan al proyecto de otra empresa'],
+  ['time_entries', 'te_tarea_fk', 'Las horas no citan la tarea de otra empresa'],
+  ['project_hour_rates', 'phr_proyecto_fk', 'Una tarifa no rige para el proyecto de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -319,6 +339,9 @@ const RLS_FORZADO = [
   // CRM (0069): a quién le está por vender cada empresa. Sin RLS, la cartera
   // de prospectos de un estudio se leería desde la empresa de al lado.
   'crm_stages', 'crm_opportunities', 'crm_stage_transitions', 'crm_activities',
+  // Proyectos (0070): horas y rentabilidad por trabajo. Sin RLS, el margen de
+  // una empresa se leería desde otra.
+  'projects', 'project_tasks', 'time_entries', 'project_hour_rates',
 ];
 
 /**
@@ -357,6 +380,10 @@ const VISTAS_INVOKER = [
   // CRM (0069). La etapa actual y el embudo son derivados: sin security_invoker
   // el embudo de una empresa sumaría las oportunidades de otra.
   'crm_opportunity_status', 'analytics_embudo', 'work_queue_crm',
+  // Proyectos (0070). Las horas valuadas y la rentabilidad son derivadas, y la
+  // segunda lee el Mayor: sin security_invoker mezclaría empresas.
+  'project_time_valuation', 'project_status', 'analytics_proyectos',
+  'work_queue_proyectos',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

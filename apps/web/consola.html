@@ -128,6 +128,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="terceros">Terceros</button>
   <button data-vista="productos">Productos</button>
   <button data-vista="crm">CRM</button>
+  <button data-vista="proyectos">Proyectos</button>
   <button data-vista="precios">Precios</button>
   <button data-vista="comercial">Comercial</button>
   <button data-vista="recepciones">Recepciones</button>
@@ -916,6 +917,121 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     </div>
     <button id="b-act-alta">Dar de alta</button>
     <div id="act-alta-msg"></div>
+  </div></details>
+</section>
+
+<!-- ══ Proyectos ══════════════════════════════════════════════════════════ -->
+<section id="v-proyectos" hidden>
+  <h2>Proyectos</h2>
+  <p class="ayuda">Los ingresos y los costos <strong>no se cargan acá</strong>: salen del Mayor,
+    por el centro de costo que el proyecto cita. Un módulo con sus propios totales sería una
+    segunda contabilidad, y cuando dos no coinciden gana la que alguien tipeó.
+    Las horas se valúan a la tarifa que la empresa <strong>declaró</strong> y que regía el día
+    en que se trabajaron: el costo real de una hora sale de la liquidación de sueldos, que no
+    existe, e inventarlo sería inventar el sueldo de alguien.</p>
+
+  <button id="b-proy" class="sec">Actualizar</button>
+  <div id="proy-msg"></div>
+  <div class="tabla"><table id="t-proy"><thead><tr>
+    <th>Código</th><th>Proyecto</th><th>Cliente</th><th>Centro</th><th>Horas</th>
+    <th>Avance</th><th>Ingresos</th><th>Costos</th><th>Horas $</th><th>Margen</th>
+    <th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Cuál deja plata</h3>
+  <p class="ayuda">Es la pregunta que ningún estado contable contesta. Los proyectos con margen
+    <strong>«no se puede afirmar»</strong> no están al final por castigo: les falta el centro de
+    costo o les faltan tarifas, y cada uno dice cuál de las dos.</p>
+  <div class="tabla"><table id="t-proy-rent"><thead><tr>
+    <th>Proyecto</th><th>Margen</th><th>%</th><th>Por qué</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="proy-detalle" hidden class="grupo">
+    <h3 id="proy-det-titulo">Proyecto</h3>
+
+    <h4>Tareas</h4>
+    <div class="tabla"><table id="t-proy-tareas"><thead><tr>
+      <th>Código</th><th>Tarea</th><th>Estimadas</th><th>Cargadas</th><th>Estado</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Tarifas declaradas</h4>
+    <div class="tabla"><table id="t-proy-tarifas"><thead><tr>
+      <th>Desde</th><th>Hasta</th><th>Tarifa</th><th>Moneda</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Partes de horas</h4>
+    <div class="tabla"><table id="t-proy-partes"><thead><tr>
+      <th>Fecha</th><th>Quién</th><th>Tarea</th><th>Horas</th><th>Tarifa</th><th>Costo</th>
+      <th>Detalle</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="proy-operar" hidden>
+      <h4>Cargar horas</h4>
+      <div class="fila">
+        <div><label>Fecha</label><input id="proy-h-fecha" type="date"></div>
+        <div><label>Horas</label><input id="proy-h-horas" inputmode="decimal"></div>
+        <div><label>Quién</label><input id="proy-h-persona" maxlength="120"></div>
+        <div><label>Tarea</label><select id="proy-h-tarea">
+          <option value="">— sin tarea —</option>
+        </select></div>
+        <div style="flex:1"><label>Detalle</label><input id="proy-h-detalle" maxlength="500"></div>
+        <div><label>&nbsp;</label><button id="b-proy-horas" class="sec">Cargar</button></div>
+      </div>
+      <div id="proy-h-msg"></div>
+
+      <h4>Declarar tarifa</h4>
+      <div class="fila">
+        <div><label>Tarifa por hora</label><input id="proy-r-tarifa" inputmode="decimal"></div>
+        <div><label>Desde</label><input id="proy-r-desde" type="date"></div>
+        <div><label>Hasta</label><input id="proy-r-hasta" type="date"></div>
+        <div><label>&nbsp;</label><button id="b-proy-tarifa" class="sec">Declarar</button></div>
+      </div>
+      <div id="proy-r-msg"></div>
+
+      <h4>Nueva tarea</h4>
+      <div class="fila">
+        <div><label>Código</label><input id="proy-t-codigo" maxlength="40"></div>
+        <div style="flex:1"><label>Nombre</label><input id="proy-t-nombre" maxlength="200"></div>
+        <div><label>Estimadas</label><input id="proy-t-horas" inputmode="decimal"></div>
+        <div><label>&nbsp;</label><button id="b-proy-tarea" class="sec">Agregar</button></div>
+      </div>
+      <div id="proy-t-msg"></div>
+
+      <h4>Cerrar</h4>
+      <div class="fila">
+        <div><label>Cómo</label><select id="proy-c-status">
+          <option>CERRADO</option><option>CANCELADO</option>
+        </select></div>
+        <div><label>Fecha</label><input id="proy-c-fecha" type="date"></div>
+        <div style="flex:1"><label>Motivo</label><input id="proy-c-motivo" maxlength="500"></div>
+      </div>
+      <p class="ayuda">Desde el cierre el proyecto no recibe más horas: cambiarían el resultado
+        contra el que se cerró. Cerrar <strong>no genera ningún asiento</strong> — es
+        información de gestión, no un hecho contable.</p>
+      <button id="b-proy-cerrar">Cerrar el proyecto</button>
+      <div id="proy-c-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="proy-alta" hidden><summary>Abrir un proyecto</summary><div>
+    <div class="fila">
+      <div><label>Código</label><input id="proy-n-codigo" maxlength="40"></div>
+      <div style="flex:1"><label>Nombre</label><input id="proy-n-nombre" maxlength="200"></div>
+      <div style="flex:1"><label>Cliente</label><select id="proy-n-tercero">
+        <option value="">— proyecto interno —</option>
+      </select></div>
+    </div>
+    <div class="fila">
+      <div><label>Centro de costo</label><input id="proy-n-centro" maxlength="40" placeholder="código"></div>
+      <div><label>Inicio</label><input id="proy-n-inicio" type="date"></div>
+      <div><label>Fin estimado</label><input id="proy-n-fin" type="date"></div>
+      <div><label>Presupuesto de horas</label><input id="proy-n-horas" inputmode="decimal"></div>
+      <div><label>&nbsp;</label><button id="b-proy-alta" class="sec">Abrir</button></div>
+    </div>
+    <p class="ayuda">Sin centro de costo las horas se pueden cargar, pero ningún ingreso ni
+      ningún gasto se puede atribuir al proyecto — y la bandeja lo avisa. El presupuesto de
+      horas es opcional: pasarse es contra un plan, y si no hay plan no hay exceso.</p>
+    <div id="proy-alta-msg"></div>
   </div></details>
 </section>
 
@@ -1708,6 +1824,7 @@ const estado = {
   comercialFecha: null, comercialTercero: null, cheque: null,
   sesionCaja: null, sesionCajaTitulo: '',
   oportunidad: null, oportunidadTitulo: '',
+  proyecto: null, proyectoTitulo: '',
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1758,7 +1875,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','crm','precios','comercial','recepciones','stock','activos',
+                'terceros','productos','crm','proyectos','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
@@ -1790,6 +1907,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'terceros') listarTerceros();
     if (v === 'productos') listarProductos();
     if (v === 'crm') listarCrm();
+    if (v === 'proyectos') listarProyectos();
     if (v === 'precios') listarPrecios();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
@@ -1903,7 +2021,7 @@ function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
-    crm: 'crm:read',
+    crm: 'crm:read', proyectos: 'project:read',
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
@@ -4414,6 +4532,211 @@ E('b-chq-mover').onclick = async () => {
   const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
+};
+
+// ══ 4c5 · Proyectos ═══════════════════════════════════════════════════════
+async function listarProyectos() {
+  E('proy-alta').hidden = !puede('project:write');
+
+  const r = await api('GET', '/projects');
+  if (!r.ok) return decir('proy-msg', r);
+  E('proy-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-proy').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of r.datos.proyectos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(p.codigo) + '</td>' +
+      '<td>' + escapar(p.nombre) + '</td>' +
+      '<td>' + escapar(p.cliente || 'interno') + '</td>' +
+      // Sin centro de costo no hay nada que atribuir: se marca, no se oculta.
+      '<td>' + (p.centroCodigo
+        ? escapar(p.centroCodigo) : '<span class="p p-ojo">falta</span>') + '</td>' +
+      '<td class="mono">' + escapar(p.horas) + '</td>' +
+      '<td class="mono">' + (p.avancePct === null
+        ? '<span class="p p-neu">sin presupuesto</span>' : escapar(p.avancePct) + ' %') + '</td>' +
+      '<td class="mono">' + escapar(p.ingresos) + '</td>' +
+      '<td class="mono">' + escapar(p.costos) + '</td>' +
+      '<td class="mono">' + (p.costoHoras === null
+        ? '<span class="p p-neu">sin tarifa</span>' : escapar(p.costoHoras)) + '</td>' +
+      // `null` es «no se puede afirmar», no «cero».
+      '<td class="mono">' + (p.margen === null
+        ? '<span class="p p-neu">no se afirma</span>'
+        : (Number(p.margen) < 0
+            ? '<span class="p p-mal">' + escapar(p.margen) + '</span>'
+            : '<span class="p p-bien">' + escapar(p.margen) + '</span>')) + '</td>' +
+      '<td>' + pastilla(p.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirProyecto(p.id, p.codigo + ' — ' + p.nombre);
+    cuerpo.appendChild(tr);
+  }
+
+  const rent = await api('GET', '/analysis/proyectos');
+  if (rent.ok) {
+    const c = E('t-proy-rent').querySelector('tbody');
+    c.innerHTML = '';
+    for (const p of rent.datos.proyectos || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapar(p.codigo) + '</td>' +
+        '<td class="mono">' + (p.margen === null
+          ? '<span class="p p-neu">no se puede afirmar</span>' : escapar(p.margen)) + '</td>' +
+        '<td class="mono">' + (p.margenPct === null ? '—' : escapar(p.margenPct) + ' %') + '</td>' +
+        '<td>' + escapar(p.metodologia) + '</td>';
+      c.appendChild(tr);
+    }
+  }
+
+  const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (terceros.ok) {
+    const s = E('proy-n-tercero');
+    const previo = s.value;
+    s.innerHTML = '<option value="">— proyecto interno —</option>';
+    for (const t of terceros.datos.terceros || []) {
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.razonSocial;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+}
+
+async function abrirProyecto(id, titulo) {
+  const r = await api('GET', '/projects/' + id);
+  if (!r.ok) return decir('proy-msg', r);
+
+  estado.proyecto = id;
+  estado.proyectoTitulo = titulo;
+  E('proy-detalle').hidden = false;
+  E('proy-det-titulo').textContent = titulo + ' — ' + r.datos.proyecto.status;
+  // Un proyecto cerrado no recibe horas: ofrecer el formulario sería ofrecer un
+  // pedido que vuelve con 409.
+  E('proy-operar').hidden = !puede('project:write') || r.datos.proyecto.status !== 'ABIERTO';
+  limpiar('proy-h-msg');
+  limpiar('proy-r-msg');
+
+  const tareas = E('t-proy-tareas').querySelector('tbody');
+  tareas.innerHTML = '';
+  const sel = E('proy-h-tarea');
+  sel.innerHTML = '<option value="">— sin tarea —</option>';
+  for (const t of r.datos.tareas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(t.codigo) + '</td>' +
+      '<td>' + escapar(t.nombre) + '</td>' +
+      '<td class="mono">' + escapar(t.estimadoHoras || '—') + '</td>' +
+      '<td class="mono">' + escapar(t.horas) + '</td>' +
+      '<td>' + pastilla(t.status) + '</td>';
+    tareas.appendChild(tr);
+
+    const o = document.createElement('option');
+    o.value = t.id; o.textContent = t.codigo + ' — ' + t.nombre;
+    sel.appendChild(o);
+  }
+
+  const tarifas = E('t-proy-tarifas').querySelector('tbody');
+  tarifas.innerHTML = '';
+  for (const t of r.datos.tarifas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(t.vigenciaDesde) + '</td>' +
+      '<td class="mono">' + escapar(t.vigenciaHasta || 'sin fin') + '</td>' +
+      '<td class="mono">' + escapar(t.tarifa) + '</td>' +
+      '<td>' + escapar(t.moneda) + '</td>';
+    tarifas.appendChild(tr);
+  }
+
+  const partes = E('t-proy-partes').querySelector('tbody');
+  partes.innerHTML = '';
+  for (const p of r.datos.partes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(p.fecha) + '</td>' +
+      '<td>' + escapar(p.persona) + '</td>' +
+      '<td class="mono">' + escapar(p.tareaCodigo || '—') + '</td>' +
+      '<td class="mono">' + escapar(p.horas) + '</td>' +
+      '<td class="mono">' + escapar(p.tarifa || '—') + '</td>' +
+      '<td class="mono">' + (p.costo === null
+        ? '<span class="p p-ojo">sin tarifa ese día</span>' : escapar(p.costo)) + '</td>' +
+      '<td>' + escapar(p.detalle) + '</td>';
+    partes.appendChild(tr);
+  }
+}
+
+E('b-proy').onclick = () => listarProyectos();
+
+E('b-proy-alta').onclick = async () => {
+  const cuerpo = {
+    codigo: E('proy-n-codigo').value,
+    nombre: E('proy-n-nombre').value,
+    fechaInicio: E('proy-n-inicio').value,
+  };
+  if (E('proy-n-tercero').value) cuerpo.terceroId = E('proy-n-tercero').value;
+  if (E('proy-n-centro').value.trim()) cuerpo.centroDeCosto = E('proy-n-centro').value.trim();
+  if (E('proy-n-fin').value) cuerpo.fechaFinEstimada = E('proy-n-fin').value;
+  if (E('proy-n-horas').value.trim()) cuerpo.presupuestoHoras = E('proy-n-horas').value.trim();
+
+  const r = await api('POST', '/projects', cuerpo);
+  decir('proy-alta-msg', r, 'Proyecto abierto');
+  if (r.ok) listarProyectos();
+};
+
+E('b-proy-tarea').onclick = async () => {
+  const cuerpo = { codigo: E('proy-t-codigo').value, nombre: E('proy-t-nombre').value };
+  if (E('proy-t-horas').value.trim()) cuerpo.estimadoHoras = E('proy-t-horas').value.trim();
+
+  const r = await api('POST', '/projects/' + estado.proyecto + '/tasks', cuerpo);
+  decir('proy-t-msg', r, 'Tarea agregada');
+  if (r.ok) abrirProyecto(estado.proyecto, estado.proyectoTitulo);
+};
+
+E('b-proy-horas').onclick = async () => {
+  const cuerpo = {
+    fecha: E('proy-h-fecha').value,
+    horas: E('proy-h-horas').value,
+    persona: E('proy-h-persona').value,
+    detalle: E('proy-h-detalle').value,
+  };
+  if (E('proy-h-tarea').value) cuerpo.tareaId = E('proy-h-tarea').value;
+
+  const r = await api('POST', '/projects/' + estado.proyecto + '/time-entries', cuerpo);
+  decir('proy-h-msg', r, 'Horas cargadas');
+  if (r.ok) {
+    E('proy-h-horas').value = '';
+    E('proy-h-detalle').value = '';
+    await listarProyectos();
+    await abrirProyecto(estado.proyecto, estado.proyectoTitulo);
+  }
+};
+
+E('b-proy-tarifa').onclick = async () => {
+  const cuerpo = { tarifa: E('proy-r-tarifa').value, vigenciaDesde: E('proy-r-desde').value };
+  if (E('proy-r-hasta').value) cuerpo.vigenciaHasta = E('proy-r-hasta').value;
+
+  const r = await api('POST', '/projects/' + estado.proyecto + '/rates', cuerpo);
+  decir('proy-r-msg', r, 'Tarifa declarada. Desde acá las horas de esas fechas se costean.');
+  if (r.ok) {
+    await listarProyectos();
+    await abrirProyecto(estado.proyecto, estado.proyectoTitulo);
+  }
+};
+
+E('b-proy-cerrar').onclick = async () => {
+  const r = await api('POST', '/projects/' + estado.proyecto + '/close', {
+    status: E('proy-c-status').value,
+    fecha: E('proy-c-fecha').value,
+    motivo: E('proy-c-motivo').value,
+  });
+  if (r.ok) {
+    E('proy-c-msg').innerHTML = '<div class="aviso">Proyecto cerrado. Margen al cerrar: ' +
+      escapar(r.datos.margenAlCerrar === null ? 'no se puede afirmar' : r.datos.margenAlCerrar) +
+      '. No se generó ningún asiento.</div>';
+    await listarProyectos();
+    await abrirProyecto(estado.proyecto, estado.proyectoTitulo);
+  } else {
+    decir('proy-c-msg', r);
+  }
 };
 
 // ══ 4c4 · CRM ═════════════════════════════════════════════════════════════

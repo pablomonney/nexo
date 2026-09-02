@@ -105,6 +105,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // CRM (0069). El embudo es información comercial: quien no puede verlo no
   // recibe avisos sobre oportunidades que no puede abrir.
   crm_opportunities: 'crm:read',
+  // Proyectos (0070). La rentabilidad por trabajo es información de gestión:
+  // quien no puede verla no recibe avisos sobre proyectos que no puede abrir.
+  projects: 'project:read',
 };
 
 const CATEGORIAS = [
