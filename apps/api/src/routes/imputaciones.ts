@@ -30,6 +30,11 @@ import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { conflict, notFound, unprocessable } from '../http/errors.js';
 import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
+import {
+  sugerirImputaciones,
+  type MovimientoDisponible,
+  type PendienteImputable,
+} from '../imputaciones/sugerir.js';
 
 const monto = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importe con hasta dos decimales');
 
@@ -204,6 +209,87 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
         );
 
         return { movimientos: r.rows };
+      },
+    );
+  });
+
+  /**
+   * Imputaciones sugeridas. **No imputa nada.**
+   *
+   * Es la forma que ADR-015 §7 dejó admitida y que faltaba: proponer y que una
+   * persona confirme. La respuesta trae las tres categorías por separado
+   * —propuestas, ambiguas y sin propuesta— porque significan cosas distintas y
+   * un solo listado las haría ver igual.
+   */
+  app.get('/parties/:partyId/imputaciones-sugeridas', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:read');
+    requirePermission(tenant, 'journal_entry:read');
+    const auth = requireAuth(request);
+    const { partyId } = z.object({ partyId: z.string().uuid() }).parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const movimientos = await tx.query<MovimientoDisponible>(
+          `SELECT l.id AS "lineaId", e.entry_date::text AS fecha,
+                  e.entry_number AS "numeroAsiento",
+                  (l.debit + l.credit - coalesce(im.usado, 0))::text AS disponible
+             FROM journal_entry_lines l
+             JOIN journal_entries e ON e.id = l.entry_id AND e.company_id = l.company_id
+             LEFT JOIN LATERAL (
+                   SELECT sum(x.importe) AS usado
+                     FROM party_allocations x
+                    WHERE x.journal_entry_line_id = l.id AND x.status = 'ACTIVA'
+                  ) im ON true
+            WHERE l.party_id = $1 AND l.company_id = $2
+              AND e.status = 'APROBADO'
+              AND e.source_id IS NULL
+              AND (l.debit + l.credit) > coalesce(im.usado, 0)
+            ORDER BY e.entry_date, l.id
+            LIMIT 200`,
+          [partyId, tenant.companyId],
+        );
+
+        // El universo de lo cancelable son las cuotas cuando hay plan y el
+        // comprobante entero cuando no. La misma unión que usa la proyección de
+        // cobranzas, por el mismo motivo: una factura en cuotas no se cancela
+        // de una sola vez y proponerla entera sería proponer algo imposible.
+        const pendientes = await tx.query<PendienteImputable>(
+          `SELECT s.tax_transaction_id AS "taxTransactionId",
+                  NULL::uuid AS "installmentId",
+                  s.punto_venta || '-' || s.cbte_numero AS etiqueta,
+                  s.pendiente::text, s.cbte_fecha::text AS fecha,
+                  s.dias_de_mora AS "diasDeMora"
+             FROM invoice_settlement s
+            WHERE s.company_id = $2 AND s.party_id = $1
+              AND s.pendiente > 0 AND NOT s.plan_declarado
+           UNION ALL
+           SELECT i.tax_transaction_id AS "taxTransactionId",
+                  i.installment_id AS "installmentId",
+                  i.punto_venta || '-' || i.cbte_numero || ' cuota ' || i.numero AS etiqueta,
+                  i.pendiente::text, i.cbte_fecha::text AS fecha,
+                  i.dias_de_mora AS "diasDeMora"
+             FROM installment_settlement i
+            WHERE i.company_id = $2 AND i.party_id = $1 AND i.pendiente > 0
+            ORDER BY fecha`,
+          [partyId, tenant.companyId],
+        );
+
+        const sugerencias = sugerirImputaciones(movimientos.rows, pendientes.rows);
+
+        return {
+          ...sugerencias,
+          metodologia:
+            'El importe exacto es una precondición, no parte del puntaje: un cobro que entra ' +
+            'como pago parcial en varias facturas no produce propuesta, porque elegir una ' +
+            'sería suponer qué se pagó. El puntaje solo ordena entre candidatos que ya ' +
+            'coinciden en importe, y viaja con las señales que lo componen.',
+          alcance:
+            'Nada de esto quedó guardado. Cada propuesta se confirma de a una con POST ' +
+            '/party-allocations, y esa confirmación —no esta lectura— es la que queda firmada ' +
+            'en la bitácora.',
+        };
       },
     );
   });

@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 83 archivos de test, 1533 tests,
+**Estado del árbol:** `verify` en verde — 84 archivos de test, 1548 tests,
 217 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (21 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (22 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -56,7 +56,8 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Arranque del servidor (`npm start`)** | **TERMINADO** | **`arranque` (8 tests)** |
 | **Backup y restauración verificada** | **TERMINADO** | **`npm run db:restaurar`** |
 | **Integridad de la bitácora** | **TERMINADO** | **`npm run audit:cadena`, gate de `verify`** |
-| **Plan de pagos por comprobante** | **TERMINADO** | **`plan-de-pagos` (13 tests)** |
+| **Plan de pagos por comprobante** | **TERMINADO** | **`plan-de-pagos` (15 tests)** |
+| **Imputaciones sugeridas** | **TERMINADO** | **`sugerir-imputaciones` (13 tests)** |
 
 ## 3. En curso
 
@@ -131,9 +132,9 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
 - **Pronóstico con método.** La proyección de cobranzas extrapola plazos ya
   declarados; no predice demanda. Un pronóstico real exige elegir un método con
   nombre, y eso es una decisión de producto pendiente (ADR-017 §6).
-- **Imputación automática sugerida.** Se podría *proponer* una imputación por
-  antigüedad y que una persona la confirme — la forma que ADR-001 admite. Hoy
-  no existe: imputar es siempre manual (ADR-015 §7).
+- **Agrupar cobros en una propuesta.** Que dos cobros juntos cancelen una
+  factura es plausible, y abre el mismo espacio combinatorio que el motor
+  bancario tuvo que acotar con un tope. Sin necesidad demostrada, no se hizo.
 - **Generar el plan de cuotas.** La consola ayuda a tipearlo —n cuotas cada
   tantos días, con el resto en la última para que cierre al centavo— y lo que se
   guarda es lo que quedó en los campos. El sistema **no** genera planes: un plan

@@ -514,6 +514,75 @@ suite('Plan de pagos por comprobante', () => {
     }
   });
 
+  it('la sugerencia propone la cuota exacta y no guarda nada', async () => {
+    const tt = await factura('700.00', enDias(-40));
+    expect(
+      (await pedir('PUT', `/tax-transactions/${tt}/installments`, {
+        cuotas: [
+          // Importes que ningún otro test de este archivo usa: el cliente es
+          // compartido, y dos pendientes iguales harían el caso ambiguo — que es
+          // lo correcto y no lo que este test quiere probar.
+          { vencimiento: enDias(-5), importe: '273.00' },
+          { vencimiento: enDias(25), importe: '427.00' },
+        ],
+      })).statusCode,
+    ).toBe(200);
+
+    // Un cobro por el importe exacto de la primera cuota.
+    const linea = await cobro('273.00');
+
+    const antes = await db.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM party_allocations WHERE company_id = $1",
+      [empresa],
+    );
+
+    const r = await pedir('GET', `/parties/${clienteId}/imputaciones-sugeridas`);
+    expect(r.statusCode, r.body).toBe(200);
+    const cuerpo = r.json<{
+      propuestas: { lineaId: string; installmentId: string | null; importe: string; score: number }[];
+      alcance: string;
+    }>();
+
+    const propuesta = cuerpo.propuestas.find((p) => p.lineaId === linea);
+    expect(propuesta, 'el cobro coincide exactamente con la cuota 1').toBeDefined();
+    expect(propuesta!.installmentId, 'propone la cuota, no el comprobante entero').not.toBeNull();
+    expect(propuesta!.importe).toBe('273.00');
+
+    const despues = await db.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM party_allocations WHERE company_id = $1",
+      [empresa],
+    );
+    expect(despues.rows[0]!.n, 'una sugerencia no imputa').toBe(antes.rows[0]!.n);
+    expect(cuerpo.alcance).toContain('quedó guardado');
+  });
+
+  it('la propuesta se puede confirmar tal cual y la API la acepta', async () => {
+    // Es lo que separa una sugerencia útil de un adorno: que el cuerpo que
+    // propone sea exactamente el que POST /party-allocations admite.
+    const tt = await factura('380.00', enDias(-40));
+    expect(
+      (await pedir('PUT', `/tax-transactions/${tt}/installments`, {
+        cuotas: [{ vencimiento: enDias(15), importe: '380.00' }],
+      })).statusCode,
+    ).toBe(200);
+    const linea = await cobro('380.00');
+
+    const propuesta = (
+      await pedir('GET', `/parties/${clienteId}/imputaciones-sugeridas`)
+    ).json<{
+      propuestas: { lineaId: string; taxTransactionId: string; installmentId: string | null; importe: string }[];
+    }>().propuestas.find((p) => p.lineaId === linea)!;
+
+    const confirmada = await pedir('POST', '/party-allocations', {
+      taxTransactionId: propuesta.taxTransactionId,
+      journalEntryLineId: propuesta.lineaId,
+      importe: propuesta.importe,
+      installmentId: propuesta.installmentId,
+    });
+
+    expect(confirmada.statusCode, confirmada.body).toBe(201);
+  });
+
   it('las vistas del plan conservan security_invoker', async () => {
     const r = await db.query<{ relname: string; reloptions: string[] | null }>(
       `SELECT relname, reloptions FROM pg_class

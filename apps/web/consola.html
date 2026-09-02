@@ -93,6 +93,9 @@ th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--tin
        margin:.6rem 0;border-radius:0 4px 4px 0;font-size:.85rem}
 .aviso.error{background:var(--mal-bg);border-left-color:var(--mal);color:var(--mal)}
 .aviso.ok{background:var(--bien-bg);border-left-color:var(--bien);color:var(--bien)}
+/* Ni error ni confirmación: algo que pide una decisión humana. Los tokens
+   --ojo ya significaban eso en las pastillas; acá se usa lo mismo. */
+.aviso.ojo{background:var(--ojo-bg);border-left-color:var(--ojo);color:var(--ojo)}
 pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wrap;
     word-break:break-word;max-height:22rem;overflow:auto}
 .mono{font-family:var(--mono);font-size:.78rem}
@@ -583,6 +586,21 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
           <button id="b-ter-plan-guardar">Declarar el plan</button>
           <div id="ter-p-msg"></div>
         </div>
+      </div></details>
+
+      <details class="grupo" id="ter-sugerencias" hidden><summary>Imputaciones sugeridas</summary><div>
+        <p class="ayuda">Propuestas, no imputaciones: <strong>nada de esto se guarda</strong>
+          hasta que alguien confirma. Solo se propone lo que coincide por el
+          <strong>importe exacto</strong>. Un cobro que entra en varias facturas como pago
+          parcial no genera propuesta: elegir una sería suponer qué se pagó.</p>
+        <button id="b-ter-sug" class="sec">Buscar propuestas</button>
+        <div id="ter-sug-msg"></div>
+        <div class="tabla"><table id="t-ter-sug"><thead><tr>
+          <th>Movimiento</th><th>Cancelaría</th><th>Importe</th><th>Confianza</th>
+          <th>Por qué</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+        <div id="ter-sug-ambiguas"></div>
+        <div id="ter-sug-sin"></div>
       </div></details>
 
       <details class="grupo" id="ter-imputar" hidden><summary>Imputar un cobro o pago</summary><div>
@@ -2519,9 +2537,64 @@ async function cargarSaldoDelTercero(id) {
   }
 
   E('ter-plan').hidden = !puede('allocation:read');
+  E('ter-sugerencias').hidden = !puede('allocation:write');
   E('ter-imputar').hidden = !puede('allocation:write');
   if (puede('allocation:write')) await cargarMovimientosSinImputar(id);
 }
+
+// ── Imputaciones sugeridas ────────────────────────────────────────────────
+//
+// La pantalla trata las tres categorías distinto a propósito. Una propuesta se
+// confirma con un clic; una ambigüedad se muestra entera y sin ordenar, porque
+// romper el empate por antigüedad es una convención y no un hecho; y lo que no
+// tiene propuesta dice por qué, en vez de quedar afuera en silencio.
+async function cargarSugerencias() {
+  const r = await api('GET', '/parties/' + estado.tercero + '/imputaciones-sugeridas');
+  if (!r.ok) return decir('ter-sug-msg', r);
+  E('ter-sug-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.metodologia) + '</div>';
+
+  const cuerpo = E('t-ter-sug').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of r.datos.propuestas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(p.lineaId.slice(0, 8)) + '</td>' +
+      '<td>' + escapar(p.etiqueta) + '</td>' +
+      '<td class="mono">' + escapar(p.importe) + '</td>' +
+      // Color de sugerencia de máquina, nunca el de algo ya hecho.
+      '<td><span class="p p-ia">' + escapar(p.score) + '</span></td>' +
+      '<td class="ayuda">' + (p.senales || []).map((s) => escapar(s.detalle)).join(' ') + '</td>' +
+      '<td><span class="clic">confirmar</span></td>';
+    tr.querySelector('.clic').onclick = async () => {
+      const c = await api('POST', '/party-allocations', {
+        taxTransactionId: p.taxTransactionId,
+        journalEntryLineId: p.lineaId,
+        importe: p.importe,
+        installmentId: p.installmentId,
+      });
+      decir('ter-sug-msg', c, 'Imputación confirmada');
+      if (c.ok) { await abrirTercero(estado.tercero); await cargarSugerencias(); }
+    };
+    cuerpo.appendChild(tr);
+  }
+  if ((r.datos.propuestas || []).length === 0) {
+    E('t-ter-sug').querySelector('tbody').innerHTML =
+      '<tr><td colspan="6">Sin propuestas por importe exacto.</td></tr>';
+  }
+
+  E('ter-sug-ambiguas').innerHTML = (r.datos.ambiguas || []).map((a) =>
+    '<div class="aviso ojo"><strong>Movimiento ' + escapar(a.lineaId.slice(0, 8)) +
+    ': el sistema no elige</strong><br>' + escapar(a.motivo) +
+    '<ul>' + a.candidatos.map((c) =>
+      '<li>' + escapar(c.etiqueta) + ' · ' + escapar(c.importe) + '</li>').join('') +
+    '</ul></div>').join('');
+
+  E('ter-sug-sin').innerHTML = (r.datos.sinPropuesta || []).map((s) =>
+    '<div class="aviso">Movimiento ' + escapar(s.lineaId.slice(0, 8)) + ': ' +
+    escapar(s.motivo) + '</div>').join('');
+}
+
+E('b-ter-sug').onclick = () => cargarSugerencias();
 
 // ── Plan de pagos ─────────────────────────────────────────────────────────
 async function verPlan() {

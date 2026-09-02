@@ -17,6 +17,10 @@
       "types": "./dist/arranque.d.ts",
       "default": "./dist/arranque.js"
     },
+    "./imputaciones/sugerir": {
+      "types": "./dist/imputaciones/sugerir.d.ts",
+      "default": "./dist/imputaciones/sugerir.js"
+    },
     "./arca/credential-store": {
       "types": "./dist/arca/credential-store.d.ts",
       "default": "./dist/arca/credential-store.js"
