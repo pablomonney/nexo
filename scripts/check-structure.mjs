@@ -84,6 +84,10 @@ const CHECKS = [
   // explicación de origen.
   ['branches', 'br_cierre_completo', '0072: una sucursal cerrada dice cuándo y por qué'],
   ['branch_points_of_sale', 'bpv_vigencia_coherente', '0072: un punto de venta no deja de ser de una boca antes de serlo'],
+  // 0073 · Suspender o cancelar un plan sin decir por qué deja al cliente sin
+  // explicación de un corte que le afecta el servicio.
+  ['company_subscriptions', 'cs_baja_con_motivo', '0073: suspender o cancelar exige decir por qué'],
+  ['company_subscriptions', 'cs_vigencia_coherente', '0073: un plan no deja de regir antes de regir'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -185,6 +189,9 @@ const TRIGGERS = [
   // contaría dos veces y el total de la empresa dejaría de cerrar.
   ['branch_points_of_sale', 'bpv_uno_por_fecha', '0072: un punto de venta es de una sola sucursal por vez'],
   ['branches', 'branches_no_delete', '0072: una sucursal se cierra; borrarla deja sus ventas sin origen'],
+  // 0073 · Con dos planes vigentes, el tope aplicable saldría por orden de
+  // carga: azar disfrazado de regla.
+  ['company_subscriptions', 'csu_una_por_fecha', '0073: un plan vigente por empresa y por fecha'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -371,6 +378,9 @@ const RLS_FORZADO = [
   // Sucursales (0072): dónde factura cada empresa. Sin RLS, el mapa de bocas de
   // una se leería desde otra.
   'branches', 'branch_points_of_sale',
+  // Suscripciones (0073): qué plan tiene cada empresa. Sin RLS, una vería el
+  // plan y el uso de otra.
+  'company_subscriptions',
 ];
 
 /**
@@ -419,6 +429,9 @@ const VISTAS_INVOKER = [
   // Sucursales (0072). La atribución de ventas y el desempeño por boca son
   // derivados y leen el Mayor: sin security_invoker cruzarían empresas.
   'branch_sales', 'branch_status', 'analytics_sucursales', 'work_queue_sucursales',
+  // Suscripciones (0073). El uso se cuenta en el momento sobre tablas con RLS:
+  // sin security_invoker contaría los comprobantes de todas las empresas.
+  'subscription_usage', 'subscription_status', 'work_queue_suscripcion',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

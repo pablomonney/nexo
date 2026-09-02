@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, CRM, proyectos, comisiones y sucursales)
+**Fecha:** 2026-09-02 (revisada al cerrar los ocho bloques LIBRE del orden de ejecución)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -129,7 +129,7 @@ la RT que lo admite y sobre el impuesto.
 |---|---|---|
 | **Producción** | DECISIÓN | BOM, órdenes, consumos y mermas se pueden modelar; **el costo del producto terminado no**, porque depende de la valuación de existencias, que está sin decidir. |
 | **RRHH** | BLOQUEADO | ADR-012 §8 deja tres preguntas abiertas y ninguna es técnica: qué convenios se soportan, si se emite el recibo (Ley 27.555) y quién firma la liquidación. Inventar una escala violaría §30. |
-| **Suscripciones del propio NEXO** | PARCIAL/LIBRE | La arquitectura —plan, estado, período, límites— es construible sin precios. Conectar un proveedor de pagos está BLOQUEADO por credenciales. |
+| **Suscripciones del propio NEXO** | PARCIAL | La arquitectura está: catálogo de planes, topes declarados, plan por empresa con vigencia y uso contado en el momento. **Precios: DECISIÓN** —no está tomada, y escribir un número la tomaría—. **Cobro: BLOQUEADO** por credenciales del proveedor de pagos. |
 
 ## 11 · Contra el mercado
 
@@ -191,9 +191,12 @@ Por dependencia y por valor, entre lo LIBRE:
 
 ~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
 ~~4. Caja y arqueo~~ · ~~5. CRM~~ · ~~6. Proyectos~~ ·
-~~7. Vendedores y comisiones~~ · ~~8. Sucursales~~ — hechos.
+~~7. Vendedores y comisiones~~ · ~~8. Sucursales~~ · ~~9. Suscripciones~~ — hechos.
 
-9. **Suscripciones** — la arquitectura, sin precios ni pasarela.
+**No queda ningún módulo LIBRE en esta lista.** Lo que sigue exige una decisión
+de producto o una fuente externa: retenciones, remitos, valuación de existencias,
+métodos de amortización, producción, RRHH, el layout del Libro IVA Digital y las
+credenciales de los conectores. Cada uno está clasificado arriba con el motivo.
 
 Cada uno entra con su lado de decisión, por ADR-018: un módulo que registra y no
 alimenta la decisión está sin terminar.

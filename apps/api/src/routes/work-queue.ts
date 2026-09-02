@@ -114,6 +114,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Sucursales (0072). Cómo le va a cada boca: quien no puede verlas no recibe
   // avisos sobre puntos de venta que no puede declarar.
   branches: 'branch:read',
+  // Suscripción (0073). Es del propio NEXO, no del negocio del cliente: quien
+  // no administra el plan no recibe avisos sobre él.
+  company_subscriptions: 'subscription:read',
 };
 
 const CATEGORIAS = [

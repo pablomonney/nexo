@@ -148,6 +148,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="estados">Estados y notas</button>
   <button data-vista="cierre">Períodos y cierre</button>
   <button data-vista="auditoria">Auditoría</button>
+  <button data-vista="suscripcion">Plan</button>
   <button data-vista="config">Configuración</button>
   <button data-vista="empresa" class="sec">Cambiar empresa</button>
 </nav>
@@ -1961,6 +1962,51 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div id="au-detalle"></div>
 </section>
 
+<!-- ══ Plan ═══════════════════════════════════════════════════════════════ -->
+<section id="v-suscripcion" hidden>
+  <h2>Plan</h2>
+  <p class="ayuda">Exceder un tope <strong>no bloquea nada</strong>. Un sistema contable que se
+    niega a registrar un hecho por una cuestión comercial deja los libros incompletos, y eso no
+    se arregla pagando después: el hecho ya pasó y quedó sin asentar. Acá se mide y se avisa.</p>
+
+  <button id="b-sub" class="sec">Actualizar</button>
+  <dl class="kv" id="sub-plan"></dl>
+  <div id="sub-msg"></div>
+
+  <h3>Uso contra los topes</h3>
+  <div class="tabla"><table id="t-sub-uso"><thead><tr>
+    <th>Recurso</th><th>Uso</th><th>Tope declarado</th><th>Estado</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Historial</h3>
+  <div class="tabla"><table id="t-sub-hist"><thead><tr>
+    <th>Plan</th><th>Estado</th><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Declaró</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Planes disponibles</h3>
+  <div class="tabla"><table id="t-sub-planes"><thead><tr>
+    <th>Código</th><th>Plan</th><th>Descripción</th><th>Topes declarados</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="sub-planes-alcance" class="ayuda"></div>
+
+  <details class="grupo" id="sub-declarar" hidden><summary>Declarar el plan</summary><div>
+    <div class="fila">
+      <div><label>Plan</label><select id="sub-n-plan"></select></div>
+      <div><label>Estado</label><select id="sub-n-estado">
+        <option value="ACTIVA">Activa</option><option value="PRUEBA">Prueba</option>
+      </select></div>
+      <div><label>Desde</label><input id="sub-n-desde" type="date"></div>
+      <div><label>Hasta</label><input id="sub-n-hasta" type="date"></div>
+      <div><label>&nbsp;</label><button id="b-sub-declarar" class="sec">Declarar</button></div>
+    </div>
+    <p class="ayuda">Cambiar de plan es un hecho con fecha: se declara uno nuevo y el anterior
+      queda cerrado. Así el histórico dice qué plan regía cuando se hizo cada cosa.
+      <strong>No se piden datos de tarjeta</strong> — cobrar es tarea de un proveedor de pagos,
+      y este sistema no guarda número, vencimiento ni código de seguridad.</p>
+    <div id="sub-n-msg"></div>
+  </div></details>
+</section>
+
 <!-- ══ Configuración ══════════════════════════════════════════════════════ -->
 <section id="v-config" hidden>
   <h2>Configuración</h2>
@@ -2045,7 +2091,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','caja','integraciones','analitica','analisis',
-                'asientos','libros','estados','cierre','auditoria','config'];
+                'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
 
 function ir(vista, migas) {
   estado.vista = vista;
@@ -2094,6 +2140,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
     if (v === 'auditoria') listarAuditoria();
+    if (v === 'suscripcion') cargarSuscripcion();
     if (v === 'config') cargarConfig();
   };
 }
@@ -2200,6 +2247,7 @@ function aplicarPermisosANav() {
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
     auditoria: 'audit:read', config: 'company:read',
+    suscripcion: 'subscription:read',
   };
   for (const b of document.querySelectorAll('nav button')) {
     const p = requiere[b.dataset.vista];
@@ -6490,6 +6538,98 @@ E('b-au').onclick = () => listarAuditoria();
 E('b-au-mas').onclick = () => listarAuditoria(estado.cursores.au);
 
 // ══ 10 · Configuración ════════════════════════════════════════════════════
+// ══ 8b · Plan del propio NEXO ═════════════════════════════════════════════
+async function cargarSuscripcion() {
+  E('sub-declarar').hidden = !puede('subscription:write');
+
+  const planes = await api('GET', '/subscription-plans');
+  if (planes.ok) {
+    const cuerpo = E('t-sub-planes').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    const sel = E('sub-n-plan');
+    const previo = sel.value;
+    sel.innerHTML = '';
+    for (const p of planes.datos.planes || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(p.codigo) + '</td>' +
+        '<td>' + escapar(p.nombre) + '</td>' +
+        '<td>' + escapar(p.descripcion || '—') + '</td>' +
+        // Un plan sin topes no es «ilimitado»: es un plan cuyos topes nadie
+        // declaró todavía, y decirlo así evita prometer lo que no se acordó.
+        '<td class="mono">' + (p.topes.length === 0
+          ? '<span class="p p-neu">sin declarar</span>'
+          : escapar(p.topes.map((t) => t.recurso + ': ' + t.tope).join(' · '))) + '</td>';
+      cuerpo.appendChild(tr);
+
+      if (p.status === 'DISPONIBLE') {
+        const o = document.createElement('option');
+        o.value = p.codigo; o.textContent = p.nombre;
+        sel.appendChild(o);
+      }
+    }
+    sel.value = previo;
+    E('sub-planes-alcance').textContent = planes.datos.alcance;
+  }
+
+  const r = await api('GET', '/subscription');
+  if (!r.ok) return decir('sub-msg', r);
+  E('sub-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const p = r.datos.plan;
+  E('sub-plan').innerHTML = p === null
+    ? fila('Plan', 'sin plan vigente')
+    : fila('Plan', p.nombre) + fila('Estado', p.estado) +
+      fila('Desde', p.vigenciaDesde) + fila('Hasta', p.vigenciaHasta || 'sin fin') +
+      (p.motivo ? fila('Motivo', p.motivo) : '');
+
+  const uso = E('t-sub-uso').querySelector('tbody');
+  uso.innerHTML = '';
+  for (const x of r.datos.recursos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(x.recurso) + '</td>' +
+      '<td class="mono">' + escapar(String(x.uso)) + '</td>' +
+      '<td class="mono">' + (x.tope === null ? '—' : escapar(String(x.tope))) + '</td>' +
+      // Tres estados, no dos: «sin tope declarado» no es «dentro del tope».
+      '<td>' + (x.estado === 'EXCEDIDO'
+        ? '<span class="p p-ojo">EXCEDIDO</span>'
+        : (x.estado === 'SIN_TOPE_DECLARADO'
+            ? '<span class="p p-neu">sin tope declarado</span>'
+            : '<span class="p p-bien">dentro del tope</span>')) + '</td>';
+    uso.appendChild(tr);
+  }
+
+  const hist = E('t-sub-hist').querySelector('tbody');
+  hist.innerHTML = '';
+  for (const h of r.datos.historial || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(h.planCodigo) + '</td>' +
+      '<td>' + pastilla(h.estado) + '</td>' +
+      '<td class="mono">' + escapar(h.vigenciaDesde) + '</td>' +
+      '<td class="mono">' + escapar(h.vigenciaHasta || 'sin fin') + '</td>' +
+      '<td>' + escapar(h.motivo || '—') + '</td>' +
+      '<td class="mono">' + escapar(h.declaradoPor) + '</td>';
+    hist.appendChild(tr);
+  }
+}
+
+E('b-sub').onclick = () => cargarSuscripcion();
+
+E('b-sub-declarar').onclick = async () => {
+  const cuerpo = {
+    plan: E('sub-n-plan').value,
+    estado: E('sub-n-estado').value,
+    vigenciaDesde: E('sub-n-desde').value,
+  };
+  if (E('sub-n-hasta').value) cuerpo.vigenciaHasta = E('sub-n-hasta').value;
+
+  const r = await api('POST', '/subscription', cuerpo);
+  decir('sub-n-msg', r, 'Plan declarado');
+  if (r.ok) cargarSuscripcion();
+};
+
 async function cargarConfig() {
   const caja = E('cfg-salida');
   caja.innerHTML = '';
