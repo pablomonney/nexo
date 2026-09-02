@@ -38,6 +38,7 @@ suite('Stock: depósitos, movimientos y existencias', () => {
   let servicioId: string;
   let central: string;
   let sucursal: string;
+  let numeroVenta = 9300;
 
   const pedir = (method: 'GET' | 'POST' | 'PUT' | 'PATCH', url: string, payload?: unknown) =>
     app.inject({
@@ -431,6 +432,174 @@ suite('Stock: depósitos, movimientos y existencias', () => {
     }
     expect(otras.rowCount).toBe(1);
   });
+
+  // ── Depósito por defecto y salida del comprobante entero (0062) ─────────
+
+  it('sin depósito declarado, la sugerencia lo dice en vez de elegir uno', async () => {
+    const listado = await pedir('GET', '/warehouses');
+    expect(
+      listado.json<{ depositoPorDefecto: string | null }>().depositoPorDefecto,
+      'nadie declaró todavía: null es «no declarado», no «el primero»',
+    ).toBeNull();
+  });
+
+  it('declarar el depósito por defecto queda en la bitácora', async () => {
+    const r = await pedir('PUT', '/warehouses/default', { depositoId: central });
+    expect(r.statusCode, r.body).toBe(200);
+
+    const auditoria = await db.query<{ new_value: { depositoId: string } }>(
+      `SELECT new_value FROM audit_logs
+        WHERE company_id = $1 AND action = 'DECLARAR_DEPOSITO_POR_DEFECTO'
+        ORDER BY seq DESC LIMIT 1`,
+      [empresa],
+    );
+    expect(auditoria.rows[0]!.new_value.depositoId).toBe(central);
+
+    expect(
+      (await pedir('GET', '/warehouses')).json<{ depositoPorDefecto: string }>().depositoPorDefecto,
+    ).toBe(central);
+  });
+
+  it('no se puede declarar por defecto un depósito de otra empresa', async () => {
+    const ajeno = await db.query<{ id: string }>(
+      'SELECT id FROM warehouses WHERE company_id <> $1 LIMIT 1',
+      [empresa],
+    );
+    if (ajeno.rowCount === 0) return; // No hay otra empresa con depósitos: nada que probar.
+
+    const r = await pedir('PUT', '/warehouses/default', { depositoId: ajeno.rows[0]!.id });
+    expect(r.statusCode, r.body).toBe(404);
+  });
+
+  it('la sugerencia arma la salida del comprobante con el depósito declarado', async () => {
+    const venta = await ventaConProducto('4');
+    const r = await pedir('GET', `/tax-transactions/${venta}/salida-sugerida`);
+
+    expect(r.statusCode, r.body).toBe(200);
+    const cuerpo = r.json<{
+      depositoSugerido: string;
+      lineas: { productoId: string; cantidad: string }[];
+      yaRegistrada: boolean;
+      alcance: string;
+    }>();
+
+    expect(cuerpo.depositoSugerido).toBe(central);
+    expect(cuerpo.lineas).toHaveLength(1);
+    expect(cuerpo.lineas[0]!.productoId).toBe(conMinimo);
+    expect(cuerpo.yaRegistrada).toBe(false);
+    expect(cuerpo.alcance, 'una sugerencia dice que es una sugerencia')
+      .toContain('sugerencia');
+  });
+
+  it('registra la salida del comprobante entero y descuenta la existencia', async () => {
+    const antes = await existencia(conMinimo);
+    const venta = await ventaConProducto('3');
+
+    const r = await pedir('POST', `/tax-transactions/${venta}/salida`, {
+      depositoId: central,
+      lineas: [{ productoId: conMinimo, cantidad: '3' }],
+    });
+
+    expect(r.statusCode, r.body).toBe(201);
+    expect(await existencia(conMinimo)).toBe(antes - 3);
+  });
+
+  it('no se registra dos veces la salida del mismo comprobante', async () => {
+    const venta = await ventaConProducto('2');
+    const cuerpo = { depositoId: central, lineas: [{ productoId: conMinimo, cantidad: '2' }] };
+
+    expect((await pedir('POST', `/tax-transactions/${venta}/salida`, cuerpo)).statusCode).toBe(201);
+
+    const repetida = await pedir('POST', `/tax-transactions/${venta}/salida`, cuerpo);
+    expect(repetida.statusCode, repetida.body).toBe(409);
+    // El libro es append-only: la segunda no se puede deshacer, así que se
+    // impide antes y se dice cómo se arregla si hubo diferencia.
+    expect(repetida.json<{ message: string }>().message).toContain('ajuste');
+  });
+
+  it('la salida por venta no se registra sobre una compra', async () => {
+    const compra = await db.query<{ id: string }>(
+      `SELECT id FROM tax_transactions
+        WHERE company_id = $1 AND direction = 'COMPRAS' LIMIT 1`,
+      [empresa],
+    );
+    if (compra.rowCount === 0) return;
+
+    const r = await pedir('POST', `/tax-transactions/${compra.rows[0]!.id}/salida`, {
+      depositoId: central,
+      lineas: [{ productoId: conMinimo, cantidad: '1' }],
+    });
+
+    expect(r.statusCode, r.body).toBe(422);
+    expect(r.json<{ error: string }>().error).toBe('NO_ES_UNA_VENTA');
+  });
+
+  it('el aviso de la bandeja no desaparece por haber declarado un default', async () => {
+    // Lo que la bandeja informa es el hecho —falta la salida—, no la
+    // configuración. Un aviso que se apagara al declarar el default estaría
+    // hablando de otra cosa.
+    const venta = await ventaConProducto('1');
+    const bandeja = await pedir('GET', '/work-queue?limite=200');
+    const items = bandeja.json<{ items: { rama: string; entityId: string }[] }>().items;
+
+    expect(
+      items.some((i) => i.rama === 'VENTA_SIN_SALIDA_DE_STOCK' && i.entityId === venta),
+      'la venta recién facturada sigue esperando su salida',
+    ).toBe(true);
+  });
+
+  /** Una venta con un renglón del producto que lleva stock. */
+  async function ventaConProducto(cantidad: string): Promise<string> {
+    numeroVenta += 1;
+    const forma =
+      `--X\r\nContent-Disposition: form-data; name="file"; filename="v-${stamp}-${numeroVenta}.xml"\r\n` +
+      `Content-Type: application/xml\r\n\r\n<c><n>${numeroVenta}</n></c>\r\n--X--\r\n`;
+
+    const subida = await app.inject({
+      method: 'POST',
+      url: '/documents',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-company-id': empresa,
+        'content-type': 'multipart/form-data; boundary=X',
+      },
+      payload: forma,
+    });
+    expect(subida.statusCode, subida.body).toBe(201);
+
+    const op = await pedir('POST', `/documents/${subida.json<{ id: string }>().id}/tax-transaction`, {
+      direction: 'VENTAS',
+      cbteTipo: 1,
+      puntoVenta: 3,
+      numero: numeroVenta,
+      fecha: new Date().toISOString().slice(0, 10),
+      cuitContraparte: '30500000006',
+      razonSocial: 'Cliente',
+      condicionIva: 'RESPONSABLE_INSCRIPTO',
+      neto: '100.00', iva: '21.00', noGravado: '0', exento: '0', percepciones: '0', total: '121.00',
+    });
+    expect(op.statusCode, op.body).toBe(201);
+    const ttId = op.json<{ taxTransactionId: string }>().taxTransactionId;
+
+    expect(
+      (await pedir('PUT', `/tax-transactions/${ttId}/lines`, {
+        renglones: [
+          {
+            productoId: conMinimo,
+            descripcion: 'Mercadería',
+            cantidad,
+            precioUnitario: (100 / Number(cantidad)).toFixed(4),
+            unidad: 'UNIDAD',
+            tratamiento: 'GRAVADO',
+            neto: '100.00',
+            iva: '21.00',
+          },
+        ],
+      })).statusCode,
+    ).toBe(200);
+
+    return ttId;
+  }
 
   /** La existencia total del producto, como número. */
   async function existencia(productoId: string): Promise<number> {

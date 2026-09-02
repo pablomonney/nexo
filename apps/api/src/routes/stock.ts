@@ -52,7 +52,17 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
              FROM warehouses WHERE company_id = $1 ORDER BY code`,
           [tenant.companyId],
         );
-        return { depositos: r.rows };
+        const porDefecto = await tx.query<{ default_warehouse_id: string | null }>(
+          'SELECT default_warehouse_id FROM companies WHERE id = $1',
+          [tenant.companyId],
+        );
+
+        return {
+          depositos: r.rows,
+          // `null` es «no declarado», no «el primero». La consola necesita la
+          // diferencia para no preseleccionar algo que la empresa no eligió.
+          depositoPorDefecto: porDefecto.rows[0]?.default_warehouse_id ?? null,
+        };
       },
     );
   });
@@ -371,6 +381,239 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       );
       reply.code(201);
       return ids;
+    } catch (error) {
+      throw traducirStock(error);
+    }
+  });
+
+  /**
+   * Declara de qué depósito sale la mercadería cuando nadie dice otra cosa.
+   *
+   * `null` la borra, y volver a no tener default es un estado válido: una
+   * empresa que abre un segundo depósito hace bien en dejar de tener uno
+   * privilegiado.
+   */
+  app.put('/warehouses/default', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'stock:write');
+    const auth = requireAuth(request);
+    const body = z
+      .object({ depositoId: z.string().uuid().nullable() })
+      .parse(request.body);
+
+    try {
+      return await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const antes = await tx.query<{ default_warehouse_id: string | null }>(
+            'SELECT default_warehouse_id FROM companies WHERE id = $1',
+            [tenant.companyId],
+          );
+
+          await tx.query('UPDATE companies SET default_warehouse_id = $2 WHERE id = $1', [
+            tenant.companyId,
+            body.depositoId,
+          ]);
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'DECLARAR_DEPOSITO_POR_DEFECTO',
+            objectType: 'companies',
+            objectId: tenant.companyId,
+            oldValue: { depositoId: antes.rows[0]?.default_warehouse_id ?? null },
+            newValue: { depositoId: body.depositoId },
+            motivo:
+              'Se declara de qué depósito sale la mercadería por defecto. No hace automática ' +
+              'la salida: solo precarga la sugerencia.',
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return { depositoId: body.depositoId };
+        },
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === '23503') {
+        throw notFound('Ese depósito no existe en esta empresa');
+      }
+      throw error;
+    }
+  });
+
+  // ── Salida por venta, comprobante entero (0062) ──────────────────────────
+
+  /**
+   * Qué salida le falta a un comprobante, con el depósito ya elegido si la
+   * empresa declaró uno.
+   *
+   * La bandeja avisa `VENTA_SIN_SALIDA_DE_STOCK` desde la 0054 y no ofrecía
+   * ningún camino: había que abrir el comprobante, anotar los renglones y
+   * cargarlos de a uno. Esto arma el pedido.
+   *
+   * **No descuenta nada.** El depósito declarado precarga la sugerencia; la
+   * mercadería pudo salir de otro lado y solo quien despachó lo sabe.
+   */
+  app.get('/tax-transactions/:taxTransactionId/salida-sugerida', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'stock:read');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const cbte = await tx.query<{ fecha: string; direction: string }>(
+          `SELECT cbte_fecha::text AS fecha, direction
+             FROM tax_transactions WHERE id = $1 AND company_id = $2`,
+          [taxTransactionId, tenant.companyId],
+        );
+        if (cbte.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+        const declarado = await tx.query<{ id: string | null; codigo: string | null }>(
+          `SELECT w.id, w.code AS codigo
+             FROM companies c
+             LEFT JOIN warehouses w
+               ON w.id = c.default_warehouse_id AND w.company_id = c.id
+            WHERE c.id = $1`,
+          [tenant.companyId],
+        );
+
+        // Solo los renglones de productos que llevan existencias. Un servicio
+        // facturado en el mismo comprobante no tiene salida que registrar.
+        const lineas = await tx.query(
+          `SELECT l.product_id AS "productoId", p.code AS codigo, p.name AS nombre,
+                  l.cantidad::text, p.unit AS unidad
+             FROM tax_transaction_lines l
+             JOIN products p ON p.id = l.product_id AND p.company_id = l.company_id
+            WHERE l.tax_transaction_id = $1 AND l.company_id = $2 AND p.tracks_stock
+            ORDER BY p.code`,
+          [taxTransactionId, tenant.companyId],
+        );
+
+        const yaRegistrada = await tx.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM stock_movements
+            WHERE company_id = $1 AND origen_tipo = 'VENTA' AND origen_id = $2`,
+          [tenant.companyId, taxTransactionId],
+        );
+
+        const deposito = declarado.rows[0]?.id ?? null;
+
+        return {
+          fecha: cbte.rows[0]!.fecha,
+          direccion: cbte.rows[0]!.direction,
+          depositoSugerido: deposito,
+          depositoCodigo: declarado.rows[0]?.codigo ?? null,
+          lineas: lineas.rows,
+          yaRegistrada: Number(yaRegistrada.rows[0]!.n) > 0,
+          alcance:
+            deposito === null
+              ? 'La empresa no declaró depósito por defecto, así que hay que elegir uno. ' +
+                'Elegirlo por el sistema sería inventar el dato más importante del movimiento.'
+              : 'El depósito viene del que la empresa declaró por defecto. Es una sugerencia: ' +
+                'la mercadería pudo salir de otro, y eso solo lo sabe quien despachó.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Registra la salida de todo el comprobante, en una sola transacción.
+   *
+   * Existe por la atomicidad y no por comodidad: hacerlo con N llamadas a
+   * `/stock-movements/salida` deja media salida registrada cuando la tercera
+   * falla, y el libro de movimientos es append-only — esa mitad no se borra,
+   * hay que compensarla con ajustes.
+   */
+  app.post('/tax-transactions/:taxTransactionId/salida', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'stock:write');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    const body = z
+      .object({
+        // Se manda siempre, incluso cuando hay default declarado: el pedido
+        // dice de dónde salió la mercadería, y esa afirmación es de quien la
+        // manda, no de una fila de configuración.
+        depositoId: z.string().uuid(),
+        lineas: z
+          .array(z.object({ productoId: z.string().uuid(), cantidad }))
+          .min(1)
+          .max(500),
+      })
+      .parse(request.body);
+
+    try {
+      const ids = await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const cbte = await tx.query<{ fecha: string; direction: string }>(
+            `SELECT cbte_fecha::text AS fecha, direction
+               FROM tax_transactions WHERE id = $1 AND company_id = $2`,
+            [taxTransactionId, tenant.companyId],
+          );
+          if (cbte.rowCount === 0) throw notFound('Comprobante no encontrado');
+          if (cbte.rows[0]!.direction !== 'VENTAS') {
+            throw unprocessable(
+              'NO_ES_UNA_VENTA',
+              'La salida por venta se registra sobre un comprobante de ventas. Lo que entra ' +
+                'por una compra lo registra la recepción de mercadería.',
+            );
+          }
+
+          const yaHay = await tx.query<{ n: string }>(
+            `SELECT count(*)::text AS n FROM stock_movements
+              WHERE company_id = $1 AND origen_tipo = 'VENTA' AND origen_id = $2`,
+            [tenant.companyId, taxTransactionId],
+          );
+          if (Number(yaHay.rows[0]!.n) > 0) {
+            throw conflict(
+              'El comprobante ya tiene salida de stock registrada. El libro de movimientos no ' +
+                'admite correcciones: si sobró o faltó, se arregla con un ajuste.',
+            );
+          }
+
+          const creados: string[] = [];
+          for (const linea of body.lineas) {
+            const r = await tx.query<{ id: string }>(
+              `INSERT INTO stock_movements
+                 (company_id, product_id, warehouse_id, tipo, cantidad, fecha,
+                  origen_tipo, origen_id, created_by)
+               VALUES ($1,$2,$3,'SALIDA',$4,$5,'VENTA',$6,$7)
+               RETURNING id`,
+              [
+                tenant.companyId, linea.productoId, body.depositoId,
+                linea.cantidad, cbte.rows[0]!.fecha, taxTransactionId,
+                `user:${auth.user.userId}`,
+              ],
+            );
+            creados.push(r.rows[0]!.id);
+          }
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'REGISTRAR_SALIDA_DE_STOCK',
+            objectType: 'tax_transactions',
+            objectId: taxTransactionId,
+            newValue: { depositoId: body.depositoId, movimientos: creados.length },
+            motivo:
+              'Se declara de qué depósito salió la mercadería de este comprobante. El ' +
+              'sistema no lo deduce: el comprobante no lo dice.',
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return creados;
+        },
+      );
+      reply.code(201);
+      return { movimientos: ids.length, ids };
     } catch (error) {
       throw traducirStock(error);
     }

@@ -200,6 +200,11 @@ const FK_CON_EMPRESA = [
   ['commercial_documents', 'cd_tax_transaction_fk', 'La factura resultante es de la misma empresa'],
   ['commercial_document_lines', 'cdl_documento_fk', 'Un renglón no cuelga del documento de otra empresa'],
   ['goods_receipts', 'gr_party_fk', 'No se recibe del proveedor de otra empresa'],
+  ['price_list_items', 'pli_lista_fk', 'Un precio no cuelga de la lista de otra empresa'],
+  ['price_list_items', 'pli_producto_fk', 'Un precio no cita el producto de otra empresa'],
+  ['party_price_lists', 'ppl_lista_fk', 'No se asigna la lista de otra empresa'],
+  ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
+  ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
   ['goods_receipt_lines', 'grl_recepcion_fk', 'Un renglón no cuelga de la recepción de otra empresa'],
   ['party_allocations', 'pa_comprobante_fk', 'No se imputa al comprobante de otra empresa'],
@@ -403,6 +408,32 @@ export async function verificarEstructura(client) {
     'verify_audit_chain(uuid)',
     'No devuelve `found`: colisiona con la variable de PL/pgSQL y rompe al detectar',
     retorno.rows.length > 0 && !/\bfound\b/i.test(retorno.rows[0].r),
+  );
+
+  // El depósito por defecto tiene que ser de la propia empresa, y no entra en el
+  // grupo de arriba por un motivo real: ese grupo exige que la primera columna
+  // de la clave se llame `company_id`, y en `companies` la empresa **es** el
+  // `id`. Aflojar la regla general para que entre este caso dejaría pasar
+  // justo el hueco que la regla existe para cerrar, así que va con su propio
+  // candado, más preciso: se comprueban las columnas exactas.
+  const depositoPropio = await client.query(
+    // Se arma la lista como **texto** y no como array: `pg` devuelve un
+    // `text[]` de PostgreSQL como string cuando no tiene el parser del tipo
+    // registrado, y comparar contra algo que a veces es array y a veces string
+    // es cómo un candado empieza a dar falsos verdes.
+    `SELECT string_agg(a.attname, ',' ORDER BY k.ord) AS columnas
+       FROM pg_constraint c
+       CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+       JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+      WHERE c.conname = 'companies_deposito_propio' AND c.contype = 'f'
+      GROUP BY c.oid`,
+  );
+  anotar(
+    'FK + EMPRESA',
+    'companies.companies_deposito_propio',
+    'Lleva (id, default_warehouse_id): el depósito declarado es de la propia empresa',
+    depositoPropio.rows.length > 0 &&
+      depositoPropio.rows[0].columnas === 'id,default_warehouse_id',
   );
 
   // El rol de la aplicación no puede saltear el RLS. Es la condición de la que

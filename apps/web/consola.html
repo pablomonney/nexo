@@ -746,10 +746,31 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div id="stk-det-msg"></div>
   </div>
 
+  <details class="grupo" id="stk-salidas"><summary>Ventas que esperan su salida de stock</summary><div>
+    <p class="ayuda">El comprobante <strong>no dice de qué depósito salió</strong> la mercadería,
+      así que la salida no se genera sola. Si la empresa declaró un depósito por defecto, viene
+      precargado — y sigue siendo una sugerencia: la mercadería pudo salir de otro, y eso solo lo
+      sabe quien despachó.</p>
+    <button id="b-stk-pend" class="sec">Buscar ventas pendientes</button>
+    <div id="stk-pend-msg"></div>
+    <div class="tabla"><table id="t-stk-pend"><thead><tr>
+      <th>Comprobante</th><th>Qué falta descontar</th><th>Depósito</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
+
   <details class="grupo" id="stk-depositos" hidden><summary>Depósitos</summary><div>
     <div class="tabla"><table id="t-stk-dep"><thead><tr>
       <th>Código</th><th>Nombre</th><th>Dirección</th><th>Estado</th>
     </tr></thead><tbody></tbody></table></div>
+    <div class="fila">
+      <div style="flex:1"><label>Depósito por defecto</label><select id="stk-default">
+        <option value="">sin declarar</option></select></div>
+      <div><label>&nbsp;</label><button id="b-stk-default" class="sec">Declarar</button></div>
+    </div>
+    <p class="ayuda">Sin declarar, cada salida elige su depósito. Declararlo <strong>no</strong>
+      hace automática la salida: solo precarga la sugerencia, y la bandeja sigue avisando hasta
+      que la salida exista de verdad — lo que informa es el hecho, no la configuración.</p>
+    <div id="stk-default-msg"></div>
     <div class="fila">
       <div><label>Código</label><input id="stk-d-codigo" maxlength="40"></div>
       <div><label>Nombre</label><input id="stk-d-nombre" maxlength="200"></div>
@@ -1325,7 +1346,7 @@ const estado = {
   tercero: null, comercial: null, comercialBorrador: [],
   recepcion: null, recepcionBorrador: [],
   depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
-  lista: null, listaBorrador: [],
+  lista: null, listaBorrador: [], depositoPorDefecto: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -2977,6 +2998,7 @@ async function listarStock() {
   const depositos = await api('GET', '/warehouses');
   if (depositos.ok) {
     estado.depositos = depositos.datos.depositos || [];
+    estado.depositoPorDefecto = depositos.datos.depositoPorDefecto;
     pintarDepositos();
   }
 
@@ -3042,18 +3064,79 @@ function pintarDepositos() {
       '<td>' + escapar(d.direccion || '—') + '</td><td>' + pastilla(d.status) + '</td>';
     cuerpo.appendChild(tr);
   }
-  for (const sel of ['stk-dep', 'stk-m-dep', 'stk-m-destino']) {
+  for (const sel of ['stk-dep', 'stk-m-dep', 'stk-m-destino', 'stk-default']) {
     const s = E(sel);
     const previo = s.value;
-    s.innerHTML = sel === 'stk-dep' ? '<option value="">todos (total por producto)</option>' : '';
+    s.innerHTML =
+      sel === 'stk-dep' ? '<option value="">todos (total por producto)</option>'
+      : sel === 'stk-default' ? '<option value="">sin declarar</option>'
+      : '';
     for (const d of estado.depositos) {
       const o = document.createElement('option');
       o.value = d.id; o.textContent = d.codigo + ' — ' + d.nombre;
       s.appendChild(o);
     }
-    s.value = previo;
+    // El selector del default arranca en lo declarado; el resto conserva lo que
+    // el usuario tenía elegido.
+    s.value = sel === 'stk-default' ? (estado.depositoPorDefecto ?? '') : previo;
   }
 }
+
+// ── Ventas que esperan su salida ──────────────────────────────────────────
+async function ventasSinSalida() {
+  const r = await api('GET', '/work-queue?entidad=tax_transactions&limite=100');
+  if (!r.ok) return decir('stk-pend-msg', r);
+  limpiar('stk-pend-msg');
+
+  const items = (r.datos.items || []).filter((i) => i.rama === 'VENTA_SIN_SALIDA_DE_STOCK');
+  const cuerpo = E('t-stk-pend').querySelector('tbody');
+  cuerpo.innerHTML = '';
+
+  if (items.length === 0) {
+    E('stk-pend-msg').innerHTML = '<div class="aviso ok">Ninguna venta espera su salida.</div>';
+    return;
+  }
+
+  for (const item of items) {
+    const sug = await api('GET', '/tax-transactions/' + item.entityId + '/salida-sugerida');
+    if (!sug.ok) continue;
+
+    const tr = document.createElement('tr');
+    const lineas = sug.datos.lineas || [];
+    const opciones = estado.depositos.map((d) =>
+      '<option value="' + escapar(d.id) + '"' +
+      (d.id === sug.datos.depositoSugerido ? ' selected' : '') + '>' +
+      escapar(d.codigo + ' — ' + d.nombre) + '</option>').join('');
+
+    tr.innerHTML =
+      '<td>' + escapar(item.motivo) + '</td>' +
+      '<td class="ayuda">' + lineas.map((l) =>
+        escapar(l.codigo + ' × ' + l.cantidad)).join('<br>') + '</td>' +
+      '<td><select class="dep">' + opciones + '</select></td>' +
+      '<td>' + (puede('stock:write') ? '<span class="clic">registrar salida</span>' : '') + '</td>';
+
+    const boton = tr.querySelector('.clic');
+    if (boton) boton.onclick = async () => {
+      const c = await api('POST', '/tax-transactions/' + item.entityId + '/salida', {
+        depositoId: tr.querySelector('.dep').value,
+        lineas: lineas.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
+      });
+      decir('stk-pend-msg', c, 'Salida registrada');
+      if (c.ok) { await listarStock(); await ventasSinSalida(); }
+    };
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-stk-pend').onclick = () => ventasSinSalida();
+
+E('b-stk-default').onclick = async () => {
+  const r = await api('PUT', '/warehouses/default', {
+    depositoId: E('stk-default').value || null,
+  });
+  decir('stk-default-msg', r, 'Depósito por defecto declarado');
+  if (r.ok) listarStock();
+};
 
 async function abrirStockDeProducto(id, nombre, cursor) {
   estado.stockProducto = id;

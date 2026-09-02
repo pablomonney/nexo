@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 85 archivos de test, 1560 tests,
-223 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 85 archivos de test, 1568 tests,
+229 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -59,6 +59,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Plan de pagos por comprobante** | **TERMINADO** | **`plan-de-pagos` (15 tests)** |
 | **Imputaciones sugeridas** | **TERMINADO** | **`sugerir-imputaciones` (13 tests)** |
 | **Listas de precios** | **TERMINADO** | **`listas-de-precios` (12 tests)** |
+| **Salida de stock por comprobante** | **TERMINADO** | **`stock` (21 tests)** |
 
 ## 3. En curso
 
@@ -81,6 +82,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0059 | El detector de adulteraciones de la bitácora podía encontrar y no reportar |
 | 0060 | Plan de cuotas: la proyección de cobranzas dejó de estar equivocada |
 | 0061 | Listas de precios con vigencia, por cliente y por cantidad (§6) |
+| 0062 | Depósito por defecto declarado: la salida deja de ser un trámite |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -142,10 +144,11 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
   tantos días, con el resto en la última para que cierre al centavo— y lo que se
   guarda es lo que quedó en los campos. El sistema **no** genera planes: un plan
   es un acuerdo entre dos partes.
-- **Salida de stock al facturar.** Hoy es un paso aparte porque el comprobante
-  no dice de qué depósito salió. Un depósito por defecto por empresa lo haría
-  automático — y sería inventar el dato más importante del movimiento cada vez
-  que la empresa tenga más de uno. La bandeja lo señala mientras tanto.
+- **Salida de stock automática al facturar.** Sigue sin pasar, y a propósito.
+  La 0062 agregó el depósito **declarado** por la empresa, que precarga la
+  sugerencia y evita tipear el mismo dato cien veces; registrar la salida sigue
+  siendo un acto de una persona, porque la mercadería pudo salir de otro lado y
+  solo quien despachó lo sabe. La bandeja avisa hasta que la salida exista.
 - **Valuación de existencias.** Cantidades sí, valores no. Elegir PPP o FIFO es
   una decisión contable con norma detrás, no un detalle de implementación.
 

@@ -411,6 +411,15 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
    * No lleva autenticación propia: no contiene datos. Todo lo que muestra lo
    * pide autenticado, y el servidor decide qué puede ver.
    */
+  /**
+   * La raíz lleva a la consola.
+   *
+   * Sin esto, quien levanta NEXO y abre `localhost:3001` recibe un 404 pelado y
+   * tiene que adivinar la ruta. Es una línea y evita el peor primer minuto
+   * posible con el producto.
+   */
+  app.get('/', async (_request, reply) => reply.redirect('/consola', 302));
+
   app.get('/consola', async (_request, reply) => {
     const archivo = join(RAIZ_WEB, 'consola.html');
     const html = await readFile(archivo, 'utf8');
