@@ -46,7 +46,8 @@ const SELECT_PRODUCTO = `
   p.tax_id AS "taxId", t.code AS "impuesto",
   p.sales_account_id AS "cuentaVentaId", av.code AS "cuentaVentaCodigo",
   p.purchase_account_id AS "cuentaCompraId", ac.code AS "cuentaCompraCodigo",
-  p.tracks_stock AS "llevaStock", p.list_price::text AS "precioLista",
+  p.tracks_stock AS "llevaStock", p.lleva_lote AS "llevaLote",
+  p.list_price::text AS "precioLista",
   p.stock_minimo::text AS "stockMinimo",
   p.currency AS moneda, p.status, p.created_at AS "creadoEn"`;
 
@@ -199,6 +200,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         cuentaVenta: z.string().min(1).max(40).nullish(),
         cuentaCompra: z.string().min(1).max(40).nullish(),
         llevaStock: z.boolean().default(false),
+        // Trazabilidad por lote (0067). Opt-in: una ferretería no lleva lotes
+        // de tornillos, y obligarla a inventar uno por movimiento convertiría
+        // el campo en ruido.
+        llevaLote: z.boolean().default(false),
         // Mínimo declarado. Sin esto el sistema no avisa que falte stock: no
         // hay umbral que comparar y un aviso inventado es ruido (0054).
         stockMinimo: importe.nullish(),
@@ -209,6 +214,9 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
 
     if (body.tipo === 'SERVICIO' && body.llevaStock) {
       throw badRequest('Un servicio no lleva stock: no ocupa lugar en ningún depósito');
+    }
+    if (body.llevaLote && !body.llevaStock) {
+      throw badRequest('Un producto sin existencias no tiene lotes que rastrear');
     }
     if (body.tratamientoImpositivo === 'GRAVADO' && body.impuesto === undefined) {
       throw badRequest(
@@ -247,15 +255,15 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
             `INSERT INTO products
                (company_id, code, name, description, kind, unit, tax_treatment, tax_id,
                 sales_account_id, purchase_account_id, tracks_stock, list_price, currency,
-                stock_minimo, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                stock_minimo, lleva_lote, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
              RETURNING id`,
             [
               tenant.companyId, body.codigo, body.nombre, body.descripcion ?? null,
               body.tipo, body.unidad, body.tratamientoImpositivo, taxId,
               await cuenta(body.cuentaVenta), await cuenta(body.cuentaCompra),
               body.llevaStock, body.precioLista ?? null, body.moneda, body.stockMinimo ?? null,
-              `user:${auth.user.userId}`,
+              body.llevaLote, `user:${auth.user.userId}`,
             ],
           );
           const id = result.rows[0]!.id;

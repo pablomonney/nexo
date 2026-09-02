@@ -63,6 +63,9 @@ const CHECKS = [
   ['tax_transaction_installments', 'tax_transaction_installments_importe_check', 'Una cuota vale más que cero'],
   ['price_lists', 'pl_vigencia_coherente', 'Una lista no termina antes de empezar'],
   ['checks', 'ck_propio_con_cuenta', 'Un cheque propio sale de una cuenta de la empresa'],
+  ['products', 'products_lote_exige_stock', 'Un producto sin existencias no tiene lotes'],
+  ['stock_counts', 'sc_cerrado_firmado', 'Un recuento cerrado dice quién y cuándo'],
+  ['stock_counts', 'sc_anulado_con_motivo', 'Anular un recuento exige decir por qué'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -129,6 +132,10 @@ const TRIGGERS = [
   // 0064 · La máquina de estados del cheque vive en la base: depositar uno ya
   // acreditado tiene que ser imposible por cualquier camino, no solo por la API.
   ['check_movements', 'cm_transicion', '0064: solo las transiciones que existen'],
+  // 0067 · El lote es obligatorio si el producto lo lleva, y prohibido si no.
+  // Una existencia sin lote sobre un producto trazable no se puede rastrear.
+  ['stock_movements', 'sm_lote_declarado', '0067: el lote se declara si el producto lo lleva'],
+  ['stock_count_lines', 'scl_editable', '0067: un recuento cerrado no se edita'],
   ['check_movements', 'cm_no_update', 'El libro de cheques no se edita'],
   ['check_movements', 'cm_no_delete', 'El libro de cheques no se borra'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
@@ -269,6 +276,8 @@ const RLS_FORZADO = [
   'price_lists', 'price_list_items', 'party_price_lists',
   // Cheques (0064): la cartera es plata, y sin RLS sería plata compartida.
   'checks', 'check_movements',
+  // Recuento físico (0067): sin RLS, el recuento de una empresa se vería en otra.
+  'stock_counts', 'stock_count_lines',
 ];
 
 /**
@@ -298,6 +307,9 @@ const VISTAS_INVOKER = [
   // 0065 · La capa de decisión (ADR-018): el flujo consolidado y la base de
   // señales, que quedó detrás de la vista envolvente al agregar los cheques.
   'analytics_flujo_de_fondos', 'analysis_signals_base',
+  // Lotes y recuento (0067). La existencia por lote y la diferencia contra el
+  // libro son derivadas: sin security_invoker cruzarían empresas.
+  'stock_by_lot', 'stock_count_differences', 'work_queue_lotes',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

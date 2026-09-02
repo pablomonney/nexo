@@ -92,8 +92,8 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Productos, depósitos, movimientos, existencias derivadas | HECHO |
 | Transferencias, ajustes, stock mínimo declarado | HECHO |
 | Salida por comprobante con depósito declarado | HECHO |
-| **Lotes y vencimientos** | LIBRE — son atributos declarados del movimiento. Crítico para alimentos y farmacia. |
-| **Inventario físico (recuento)** | LIBRE — contar, comparar contra la existencia derivada y generar el ajuste. El mecanismo de ajuste ya existe. |
+| **Lotes y vencimientos** | HECHO |
+| **Inventario físico (recuento)** | HECHO |
 | **Valuación de existencias** | DECISIÓN — PPP, FIFO o costo de reposición es una decisión contable con norma detrás. Sin ella no hay costo de mercadería vendida ni margen. |
 
 ## 7 · Tesorería

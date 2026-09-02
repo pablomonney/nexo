@@ -94,6 +94,8 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Cheques (0064). La cartera es plata: quien no puede verla no recibe avisos
   // sobre un cheque que se puede cobrar.
   checks: 'check:read',
+  // Recuento (0067). El ajuste calculado y sin aplicar cuelga del recuento.
+  stock_counts: 'stock:read',
   // Precios (0063). Cuelgan de la lista, y quien no puede leer el maestro de
   // productos no recibe avisos sobre precios que no puede consultar.
   price_lists: 'product:read',

@@ -761,6 +761,42 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     </tr></thead><tbody></tbody></table></div>
   </div></details>
 
+  <details class="grupo" id="stk-recuentos" hidden><summary>Recuento físico</summary><div>
+    <p class="ayuda">Un recuento <strong>no corrige la existencia</strong>: al cerrarlo, cada
+      diferencia contra el libro produce un movimiento de ajuste con su motivo. El libro no se
+      reescribe, se le agrega la corrección — igual que un asiento se anula por contraasiento.
+      Y son <strong>cantidades</strong>: cuánto vale lo que falta depende de la valuación de
+      existencias, que es una decisión contable sin tomar.</p>
+    <div class="fila">
+      <div><label>Depósito</label><select id="rec-n-dep"></select></div>
+      <div><label>Fecha</label><input id="rec-n-fecha" type="date"></div>
+      <div><label>&nbsp;</label><button id="b-rec-abrir" class="sec">Abrir recuento</button></div>
+    </div>
+    <div id="rec-msg"></div>
+    <div class="tabla"><table id="t-rec"><thead><tr>
+      <th>Fecha</th><th>Depósito</th><th>Renglones</th><th>Estado</th><th>Cerró</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="rec-detalle" hidden>
+      <h4 id="rec-det-titulo">Recuento</h4>
+      <div class="fila">
+        <div style="flex:1"><label>Producto</label><select id="rec-l-prod"></select></div>
+        <div><label>Lote</label><input id="rec-l-lote" maxlength="80" placeholder="si lleva"></div>
+        <div><label>Contado</label><input id="rec-l-cant" inputmode="decimal"></div>
+        <div><label>&nbsp;</label><button id="b-rec-agregar" class="sec">Agregar al borrador</button></div>
+      </div>
+      <p class="ayuda">Contar <strong>cero</strong> dice «fui, miré, no hay ninguno» y ajusta por
+        todo lo que el libro decía. Un producto que no aparece en el recuento no se toca: nadie
+        lo miró, y eso no es lo mismo que no haber encontrado nada.</p>
+      <div class="tabla"><table id="t-rec-lin"><thead><tr>
+        <th>Producto</th><th>Lote</th><th>Contado</th><th>Según el libro</th><th>Diferencia</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+      <button id="b-rec-guardar" class="sec">Guardar el recuento</button>
+      <button id="b-rec-cerrar">Cerrar y ajustar</button>
+      <div id="rec-det-msg"></div>
+    </div>
+  </div></details>
+
   <details class="grupo" id="stk-depositos" hidden><summary>Depósitos</summary><div>
     <div class="tabla"><table id="t-stk-dep"><thead><tr>
       <th>Código</th><th>Nombre</th><th>Dirección</th><th>Estado</th>
@@ -1467,6 +1503,7 @@ const estado = {
   recepcion: null, recepcionBorrador: [],
   depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
   lista: null, listaBorrador: [], depositoPorDefecto: null,
+  recuento: null, recuentoBorrador: [],
   comercialFecha: null, comercialTercero: null, cheque: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
@@ -1552,7 +1589,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'precios') listarPrecios();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
-    if (v === 'stock') listarStock();
+    if (v === 'stock') { listarStock().then(() => listarRecuentos()); }
     if (v === 'activos') listarActivos();
     if (v === 'iva') cargarIva();
     if (v === 'bancos') listarBancos();
@@ -3258,6 +3295,137 @@ function pintarDepositos() {
     s.value = sel === 'stk-default' ? (estado.depositoPorDefecto ?? '') : previo;
   }
 }
+
+// ── Recuento físico ───────────────────────────────────────────────────────
+async function listarRecuentos() {
+  E('stk-recuentos').hidden = !puede('stock:count');
+  if (!puede('stock:count')) return;
+
+  const r = await api('GET', '/stock-counts');
+  if (!r.ok) return decir('rec-msg', r);
+  limpiar('rec-msg');
+
+  const cuerpo = E('t-rec').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.recuentos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.fecha) + '</td>' +
+      '<td class="mono">' + escapar(c.depositoCodigo) + '</td>' +
+      '<td class="mono">' + escapar(c.renglones) + '</td>' +
+      '<td>' + pastilla(c.status) + '</td>' +
+      '<td class="mono">' + escapar(c.cerradoPor || '—') + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirRecuento(c.id, c.fecha + ' · ' + c.depositoCodigo);
+    cuerpo.appendChild(tr);
+  }
+
+  // Los depósitos y los productos del selector salen de lo que ya se cargó.
+  const dep = E('rec-n-dep');
+  const previoDep = dep.value;
+  dep.innerHTML = '';
+  for (const d of estado.depositos) {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.codigo + ' — ' + d.nombre;
+    dep.appendChild(o);
+  }
+  dep.value = previoDep;
+
+  const productos = await api('GET', '/products?status=ACTIVO&tipo=PRODUCTO&limite=200');
+  if (productos.ok) {
+    const s = E('rec-l-prod');
+    const previo = s.value;
+    s.innerHTML = '';
+    for (const p of (productos.datos.productos || []).filter((p) => p.llevaStock)) {
+      const o = document.createElement('option');
+      o.value = p.id;
+      // El selector avisa cuáles llevan lote: la API rechaza un renglón sin
+      // lote sobre un producto trazable, y uno con lote sobre uno que no.
+      o.textContent = p.codigo + ' — ' + p.nombre + (p.llevaLote ? ' (lleva lote)' : '');
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+}
+
+async function abrirRecuento(id, titulo) {
+  estado.recuento = id;
+  estado.recuentoBorrador = [];
+  E('rec-detalle').hidden = false;
+  E('rec-det-titulo').textContent = 'Recuento ' + titulo;
+  limpiar('rec-det-msg');
+
+  const r = await api('GET', '/stock-counts/' + id);
+  if (!r.ok) return decir('rec-det-msg', r);
+
+  const cerrado = r.datos.recuento.status !== 'BORRADOR';
+  E('b-rec-guardar').hidden = cerrado;
+  E('b-rec-cerrar').hidden = cerrado;
+
+  const cuerpo = E('t-rec-lin').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const d of r.datos.diferencias || []) {
+    const tr = document.createElement('tr');
+    const dif = Number(d.diferencia);
+    tr.innerHTML =
+      '<td>' + escapar(d.codigo) + '</td>' +
+      '<td class="mono">' + escapar(d.lote || '—') + '</td>' +
+      '<td class="mono">' + escapar(d.contado) + '</td>' +
+      '<td class="mono">' + escapar(d.segunLibro) + '</td>' +
+      // Una diferencia distinta de cero es lo que hay que mirar; cero no.
+      '<td class="mono">' + (dif === 0 ? escapar(d.diferencia)
+        : '<span class="p p-ojo">' + escapar(d.diferencia) + '</span>') + '</td>' +
+      '<td></td>';
+    cuerpo.appendChild(tr);
+    if (!cerrado) {
+      estado.recuentoBorrador.push({
+        productoId: d.productoId,
+        lote: d.lote,
+        cantidad: d.contado,
+      });
+    }
+  }
+}
+
+E('b-rec-abrir').onclick = async () => {
+  const r = await api('POST', '/stock-counts', {
+    depositoId: E('rec-n-dep').value,
+    fecha: E('rec-n-fecha').value,
+  });
+  decir('rec-msg', r, 'Recuento abierto. Todavía no ajusta nada.');
+  if (r.ok) listarRecuentos();
+};
+
+E('b-rec-agregar').onclick = () => {
+  const sel = E('rec-l-prod');
+  estado.recuentoBorrador.push({
+    productoId: sel.value,
+    lote: E('rec-l-lote').value.trim() || null,
+    cantidad: E('rec-l-cant').value.trim(),
+  });
+
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td>' + escapar(sel.options[sel.selectedIndex].textContent) + '</td>' +
+    '<td class="mono">' + escapar(E('rec-l-lote').value || '—') + '</td>' +
+    '<td class="mono">' + escapar(E('rec-l-cant').value) + '</td>' +
+    '<td class="mono">—</td><td class="mono">se calcula al guardar</td><td></td>';
+  E('t-rec-lin').querySelector('tbody').appendChild(tr);
+};
+
+E('b-rec-guardar').onclick = async () => {
+  const r = await api('PUT', '/stock-counts/' + estado.recuento + '/lines', {
+    renglones: estado.recuentoBorrador,
+  });
+  decir('rec-det-msg', r, 'Recuento guardado');
+  if (r.ok) abrirRecuento(estado.recuento, E('rec-det-titulo').textContent);
+};
+
+E('b-rec-cerrar').onclick = async () => {
+  const r = await api('POST', '/stock-counts/' + estado.recuento + '/close', {});
+  decir('rec-det-msg', r, 'Recuento cerrado: las diferencias se ajustaron');
+  if (r.ok) { await listarStock(); await listarRecuentos(); }
+};
 
 // ── Ventas que esperan su salida ──────────────────────────────────────────
 async function ventasSinSalida() {

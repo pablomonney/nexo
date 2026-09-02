@@ -601,6 +601,179 @@ suite('Stock: depósitos, movimientos y existencias', () => {
     return ttId;
   }
 
+  // ── Lotes, vencimientos y recuento (0067) ───────────────────────────────
+
+  it('un producto que lleva lote lo exige en cada movimiento', async () => {
+    const conLote = (
+      await pedir('POST', '/products', {
+        codigo: `LOTE-${stamp}`,
+        nombre: 'Producto con trazabilidad',
+        impuesto: 'IVA',
+        cuentaCompra: '5.1.01',
+        llevaStock: true,
+        llevaLote: true,
+      })
+    ).json<{ id: string }>().id;
+
+    // El candado está en la base: un movimiento sin lote sobre un producto
+    // trazable es una existencia que después no se puede rastrear.
+    await expect(
+      db.query(
+        `INSERT INTO stock_movements
+           (company_id, product_id, warehouse_id, tipo, cantidad, fecha, origen_tipo, motivo, created_by)
+         VALUES ($1,$2,$3,'AJUSTE_POSITIVO',5,'2026-03-03','AJUSTE','sin lote','test')`,
+        [empresa, conLote, central],
+      ),
+    ).rejects.toThrow(/E_STOCK_SIN_LOTE/);
+  });
+
+  it('un producto sin trazabilidad no puede declarar un lote', async () => {
+    await expect(
+      db.query(
+        `INSERT INTO stock_movements
+           (company_id, product_id, warehouse_id, tipo, cantidad, fecha, origen_tipo, motivo, lote, created_by)
+         VALUES ($1,$2,$3,'AJUSTE_POSITIVO',1,'2026-03-03','AJUSTE','con lote','L-1','test')`,
+        [empresa, sinMinimo, central],
+      ),
+    ).rejects.toThrow(/E_STOCK_LOTE_SIN_TRAZABILIDAD/);
+  });
+
+  it('un lote vencido con existencia aparece en la bandeja', async () => {
+    const perecedero = (
+      await pedir('POST', '/products', {
+        codigo: `PER-${stamp}`,
+        nombre: 'Perecedero',
+        impuesto: 'IVA',
+        cuentaCompra: '5.1.01',
+        llevaStock: true,
+        llevaLote: true,
+      })
+    ).json<{ id: string }>().id;
+
+    const ayer = new Date();
+    ayer.setUTCDate(ayer.getUTCDate() - 1);
+    await db.query(
+      `INSERT INTO stock_movements
+         (company_id, product_id, warehouse_id, tipo, cantidad, fecha, origen_tipo,
+          motivo, lote, fecha_vencimiento, created_by)
+       VALUES ($1,$2,$3,'AJUSTE_POSITIVO',12,'2026-03-03','AJUSTE','carga inicial','L-VENCIDO',$4,'test')`,
+      [empresa, perecedero, central, ayer.toISOString().slice(0, 10)],
+    );
+
+    const items = (await pedir('GET', '/work-queue?limite=200'))
+      .json<{ items: { rama: string; entityId: string; motivo: string }[] }>().items;
+    const aviso = items.find((i) => i.rama === 'LOTE_VENCIDO' && i.entityId === perecedero);
+
+    expect(aviso, 'la fecha pasó y quedan unidades').toBeDefined();
+    expect(aviso!.motivo).toContain('L-VENCIDO');
+  });
+
+  it('no hay rama de «próximo a vencer»: sería un umbral que nadie declaró', async () => {
+    const ramas = new Set(
+      (await pedir('GET', '/work-queue?limite=200'))
+        .json<{ items: { rama: string }[] }>().items.map((i) => i.rama),
+    );
+    expect(ramas.has('LOTE_POR_VENCER')).toBe(false);
+  });
+
+  it('el recuento ajusta contra lo derivado y no reescribe el libro', async () => {
+    // La existencia **de ese depósito**, no la total: un recuento se hace en un
+    // depósito, y comparar contra la suma de todos daría una diferencia que no
+    // existe. La vista compara bien; el que medía mal era este test.
+    const enCentral = Number(
+      (await db.query<{ existencia: string }>(
+        `SELECT existencia::text FROM stock_on_hand
+          WHERE company_id = $1 AND product_id = $2 AND warehouse_id = $3`,
+        [empresa, conMinimo, central],
+      )).rows[0]!.existencia,
+    );
+    // Se cuenta **de más**, no de menos: los tests anteriores dejaron este
+    // depósito en negativo a propósito, y una cantidad contada negativa no es
+    // un caso real — no se pueden contar menos de cero unidades.
+    const contado = Math.max(0, enCentral) + 3;
+    const esperado = contado - enCentral;
+    const antes = await existencia(conMinimo);
+    const movimientosAntes = await db.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM stock_movements WHERE company_id = $1',
+      [empresa],
+    );
+
+    const recuento = (
+      await pedir('POST', '/stock-counts', { depositoId: central, fecha: '2026-03-20' })
+    ).json<{ id: string }>().id;
+
+    // Se cuentan dos unidades menos de las que dice el libro.
+    expect(
+      (await pedir('PUT', `/stock-counts/${recuento}/lines`, {
+        renglones: [{ productoId: conMinimo, cantidad: String(contado) }],
+      })).statusCode,
+    ).toBe(200);
+
+    const dif = (await pedir('GET', `/stock-counts/${recuento}`))
+      .json<{ diferencias: { diferencia: string }[]; alcance: string }>();
+    expect(Number(dif.diferencias[0]!.diferencia)).toBe(esperado);
+    expect(dif.alcance, 'informa cantidades, no plata').toContain('cantidades');
+
+    const cierre = await pedir('POST', `/stock-counts/${recuento}/close`, {});
+    expect(cierre.statusCode, cierre.body).toBe(200);
+    expect(cierre.json<{ ajustes: number }>().ajustes).toBe(1);
+    expect(await existencia(conMinimo), 'la existencia se movió por el ajuste')
+      .toBe(antes + esperado);
+
+    // El libro creció: el recuento agregó un movimiento, no editó ninguno.
+    const movimientosDespues = await db.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM stock_movements WHERE company_id = $1',
+      [empresa],
+    );
+    expect(Number(movimientosDespues.rows[0]!.n)).toBe(Number(movimientosAntes.rows[0]!.n) + 1);
+
+    const ajuste = await db.query<{ motivo: string }>(
+      `SELECT motivo FROM stock_movements
+        WHERE company_id = $1 AND origen_tipo = 'AJUSTE'
+        ORDER BY created_at DESC LIMIT 1`,
+      [empresa],
+    );
+    expect(ajuste.rows[0]!.motivo, 'el ajuste dice de dónde salió').toContain('Recuento físico');
+  });
+
+  it('un recuento cerrado no se edita: el ajuste quedaría sin respaldo', async () => {
+    const recuento = (
+      await pedir('POST', '/stock-counts', { depositoId: central, fecha: '2026-03-21' })
+    ).json<{ id: string }>().id;
+    expect((await pedir('POST', `/stock-counts/${recuento}/close`, {})).statusCode).toBe(200);
+
+    const r = await pedir('PUT', `/stock-counts/${recuento}/lines`, {
+      renglones: [{ productoId: conMinimo, cantidad: '1' }],
+    });
+    expect(r.statusCode, r.body).toBe(409);
+    expect(r.json<{ message: string }>().message).toContain('sin respaldo');
+  });
+
+  it('cerrar el recuento no genera ningún asiento, y lo dice', async () => {
+    // Un faltante de inventario tiene consecuencia contable, y ese asiento lo
+    // firma una persona por el camino de siempre.
+    const asientos = await db.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM journal_entries WHERE company_id = $1',
+      [empresa],
+    );
+
+    const recuento = (
+      await pedir('POST', '/stock-counts', { depositoId: central, fecha: '2026-03-22' })
+    ).json<{ id: string }>().id;
+    await pedir('PUT', `/stock-counts/${recuento}/lines`, {
+      renglones: [{ productoId: sinMinimo, cantidad: '0' }],
+    });
+    const cierre = await pedir('POST', `/stock-counts/${recuento}/close`, {});
+
+    expect(cierre.json<{ alcance: string }>().alcance).toContain('No se generó ningún asiento');
+
+    const despues = await db.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM journal_entries WHERE company_id = $1',
+      [empresa],
+    );
+    expect(despues.rows[0]!.n).toBe(asientos.rows[0]!.n);
+  });
+
   /** La existencia total del producto, como número. */
   async function existencia(productoId: string): Promise<number> {
     const r = await pedir('GET', `/products/${productoId}/stock`);
