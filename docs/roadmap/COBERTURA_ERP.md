@@ -102,9 +102,9 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 |---|---|
 | Cuentas bancarias, extractos, conciliación | HECHO |
 | Proyección de cobranzas | HECHO |
-| **Cheques propios y de terceros** | LIBRE — **no existe nada**. En Argentina es una parte central del capital de trabajo y todos los competidores lo tienen. |
+| **Cheques propios y de terceros** | HECHO — cartera, ciclo derivado del libro, y flujo por fecha de pago. |
 | **Caja** | LIBRE — apertura, cierre, arqueo. |
-| **Flujo de fondos proyectado** | PARCIAL — hay cobranzas; falta el lado de los pagos y los cheques. |
+| **Flujo de fondos proyectado** | HECHO — entradas (cobranzas y cheques) y salidas (pagos y órdenes comprometidas), sin doble conteo. |
 
 ## 8 · Activos fijos
 
@@ -124,9 +124,15 @@ la RT que lo admite y sobre el impuesto.
 
 ## 10 · Contra el mercado
 
-Lo que los ERP argentinos tienen y NEXO no: **cheques**, órdenes de compra,
-remitos, lotes, recuento físico, CRM, sueldos, y valuación de stock. De esos,
-cinco son LIBRE y tres exigen una decisión o una norma.
+Al abrir esta auditoría, lo que los ERP argentinos tenían y NEXO no era:
+cheques, órdenes de compra, remitos, lotes, recuento físico, CRM, sueldos y
+valuación de stock.
+
+De esos ocho, **cuatro se cerraron**: cheques y lotes/recuento se construyeron;
+las órdenes de compra ya existían y lo que faltaba era recorrerlas; y el flujo
+de fondos pasó a tener sus dos lados. Quedan **CRM** (LIBRE), **remitos**,
+**valuación de stock** y **sueldos**, y los tres últimos exigen una decisión o
+una norma que no se puede inventar.
 
 Lo que NEXO tiene y los ERP tradicionales normalmente no:
 
@@ -152,12 +158,14 @@ construirlos con esa misma disciplina es lo que hace que valga la pena elegirlo.
 
 Por dependencia y por valor, entre lo LIBRE:
 
-1. **Cheques** — no existe nada, es central en Argentina, y se apoya en
-   tesorería, cuenta corriente y flujo de fondos, todos ya construidos.
-2. **Órdenes de compra** — la recepción ya cita una orden que no existe.
-3. **Lotes, vencimientos y recuento físico** — el mecanismo de ajuste ya está.
-4. **Caja y arqueo.**
+~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ — hechos.
+
+4. **Caja y arqueo** — cierra el lado del efectivo, que hoy es un asiento suelto.
 5. **CRM** — se apoya en terceros y desemboca en el presupuesto, que existe.
 6. **Proyectos** — se apoya en centros de costo.
 7. **Vendedores y comisiones** — necesita CRM o al menos el vendedor en la venta.
-8. **Suscripciones** — la arquitectura, sin precios ni pasarela.
+8. **Sucursales** — hoy se aproxima con centro de costo, que no es lo mismo.
+9. **Suscripciones** — la arquitectura, sin precios ni pasarela.
+
+Cada uno entra con su lado de decisión, por ADR-018: un módulo que registra y no
+alimenta la decisión está sin terminar.
