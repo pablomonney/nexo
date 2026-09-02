@@ -553,8 +553,37 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 
       <div class="tabla"><table id="t-ter-pend"><thead><tr>
         <th>Fecha</th><th>Comprobante</th><th>Total</th><th>Imputado</th>
-        <th>Pendiente</th><th>Vencimiento</th><th>Mora</th><th></th>
+        <th>Pendiente</th><th>Vencimiento</th><th>Mora</th><th>Plan</th>
       </tr></thead><tbody></tbody></table></div>
+
+      <details class="grupo" id="ter-plan" hidden><summary>Condiciones de pago del comprobante</summary><div>
+        <p class="ayuda">Una factura en tres cuotas <strong>no vence una sola vez</strong>.
+          Mientras el plan no se declare, el vencimiento sale del plazo del tercero — y si
+          tampoco está declarado, no hay vencimiento y el sistema no afirma mora.</p>
+        <div class="fila">
+          <div style="flex:1"><label>Comprobante</label><select id="ter-p-cbte"></select></div>
+          <div><label>&nbsp;</label><button id="b-ter-plan-ver" class="sec">Ver el plan</button></div>
+        </div>
+        <div id="ter-p-vencimiento" class="ayuda"></div>
+        <div class="tabla"><table id="t-ter-plan"><thead><tr>
+          <th>Cuota</th><th>Vence</th><th>Importe</th><th>Imputado</th><th>Pendiente</th><th>Mora</th>
+        </tr></thead><tbody></tbody></table></div>
+
+        <div id="ter-p-editor" hidden>
+          <p class="ayuda">Las cuotas tienen que sumar exactamente el total del comprobante.
+            El sistema <strong>no las genera</strong>: un plan es un acuerdo entre dos partes
+            y lo carga quien lo conoce.</p>
+          <div class="fila">
+            <div><label>Cuotas</label><input id="ter-p-n" inputmode="numeric" value="3"></div>
+            <div><label>Primer vencimiento</label><input id="ter-p-desde" type="date"></div>
+            <div><label>Cada (días)</label><input id="ter-p-cada" inputmode="numeric" value="30"></div>
+            <div><label>&nbsp;</label><button id="b-ter-plan-tipear" class="sec">Tipear filas</button></div>
+          </div>
+          <div id="ter-p-filas"></div>
+          <button id="b-ter-plan-guardar">Declarar el plan</button>
+          <div id="ter-p-msg"></div>
+        </div>
+      </div></details>
 
       <details class="grupo" id="ter-imputar" hidden><summary>Imputar un cobro o pago</summary><div>
         <p class="ayuda">Qué factura cancela un cobro <strong>no se deduce</strong>: un cliente
@@ -562,6 +591,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
           declara, y queda firmado en la bitácora.</p>
         <div class="fila">
           <div><label>Comprobante</label><select id="ter-i-cbte"></select></div>
+          <div id="ter-i-cuota-caja" hidden><label>Cuota</label><select id="ter-i-cuota"></select></div>
           <div><label>Movimiento sin imputar</label><select id="ter-i-mov"></select></div>
           <div><label>Importe</label><input id="ter-i-importe" inputmode="decimal"></div>
         </div>
@@ -1206,7 +1236,7 @@ const estado = {
   documento: null, campos: [], tt: null, operacion: null, asiento: null,
   tercero: null, comercial: null, comercialBorrador: [],
   recepcion: null, recepcionBorrador: [],
-  depositos: [], stockProducto: null, activo: null, registroExterno: null,
+  depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -2474,18 +2504,120 @@ async function cargarSaldoDelTercero(id) {
             ? '<span class="p p-ojo">' + escapar(c.diasDeMora) + ' días</span>'
             : 'al día')
         : '—') + '</td>' +
-      '<td class="mono">' + escapar(c.antiguedadDias) + ' d</td>';
+      '<td class="mono">' + escapar(c.antiguedadDias) + ' d</td>' +
+      // «Sin plan» no es un defecto: es que el vencimiento sale de otro lado.
+      // Se muestra igual para que la diferencia sea visible sin abrir nada.
+      '<td>' + (c.cuotas ? '<span class="p p-neu">' + escapar(c.cuotas) + ' cuotas</span>' : '—') + '</td>';
     pend.appendChild(tr);
 
-    const o = document.createElement('option');
-    o.value = c.id;
-    o.textContent = c.puntoVenta + '-' + c.numero + ' · pendiente ' + c.pendiente;
-    sel.appendChild(o);
+    for (const s of [sel, E('ter-p-cbte')]) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.puntoVenta + '-' + c.numero + ' · pendiente ' + c.pendiente;
+      s.appendChild(o);
+    }
   }
 
+  E('ter-plan').hidden = !puede('allocation:read');
   E('ter-imputar').hidden = !puede('allocation:write');
   if (puede('allocation:write')) await cargarMovimientosSinImputar(id);
 }
+
+// ── Plan de pagos ─────────────────────────────────────────────────────────
+async function verPlan() {
+  const tt = E('ter-p-cbte').value;
+  if (!tt) return;
+
+  const r = await api('GET', '/tax-transactions/' + tt + '/installments');
+  if (!r.ok) return decir('ter-p-msg', r);
+  limpiar('ter-p-msg');
+
+  E('ter-p-vencimiento').textContent = r.datos.vencimiento;
+  E('ter-p-editor').hidden = !puede('allocation:write');
+  estado.planTotal = r.datos.total;
+
+  const cuerpo = E('t-ter-plan').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const selCuota = E('ter-i-cuota');
+  selCuota.innerHTML = '';
+
+  for (const c of r.datos.cuotas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.numero) + '</td>' +
+      '<td class="mono">' + escapar(c.vencimiento) + '</td>' +
+      '<td class="mono">' + escapar(c.importe) + '</td>' +
+      '<td class="mono">' + escapar(c.imputado) + '</td>' +
+      '<td class="mono"><strong>' + escapar(c.pendiente) + '</strong></td>' +
+      '<td>' + (c.diasDeMora > 0
+        ? '<span class="p p-ojo">' + escapar(c.diasDeMora) + ' días</span>' : 'al día') + '</td>';
+    cuerpo.appendChild(tr);
+
+    if (Number(c.pendiente) > 0) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = 'cuota ' + c.numero + ' · vence ' + c.vencimiento + ' · pendiente ' + c.pendiente;
+      selCuota.appendChild(o);
+    }
+  }
+
+  // El selector de cuota aparece si y solo si el comprobante tiene plan: la API
+  // rechaza una imputación sin cuota cuando hay plan, y una con cuota cuando no.
+  E('ter-i-cuota-caja').hidden = !r.datos.tienePlan;
+}
+
+/**
+ * Escribe las filas del plan a partir de una periodicidad.
+ *
+ * Es **ayuda para tipear**, no un cálculo del sistema: las filas quedan
+ * editables y lo que se guarda es lo que hay en los campos. El resto va a la
+ * última cuota para que el plan cierre contra el total sin obligar a nadie a
+ * repartir centavos a mano.
+ */
+function tipearPlan() {
+  const n = Math.max(1, Math.min(360, Number(E('ter-p-n').value) || 1));
+  const cada = Number(E('ter-p-cada').value) || 30;
+  const desde = E('ter-p-desde').value;
+  if (!desde) { E('ter-p-msg').innerHTML = '<div class="aviso">Indicá el primer vencimiento.</div>'; return; }
+
+  // En centavos y con enteros: repartir con decimales de punto flotante haría
+  // que la suma no diera el total y el candado de la base lo rechazaría.
+  const totalCent = Math.round(Number(estado.planTotal) * 100);
+  const base = Math.floor(totalCent / n);
+
+  const caja = E('ter-p-filas');
+  caja.innerHTML = '';
+  for (let i = 0; i < n; i += 1) {
+    const d = new Date(desde + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + cada * i);
+    const cent = i === n - 1 ? totalCent - base * (n - 1) : base;
+    const div = document.createElement('div');
+    div.className = 'fila';
+    div.innerHTML =
+      '<div><label>Cuota ' + (i + 1) + ' vence</label>' +
+      '<input class="plan-fecha" type="date" value="' + d.toISOString().slice(0, 10) + '"></div>' +
+      '<div><label>Importe</label>' +
+      '<input class="plan-importe" inputmode="decimal" value="' + (cent / 100).toFixed(2) + '"></div>';
+    caja.appendChild(div);
+  }
+}
+
+E('b-ter-plan-ver').onclick = () => verPlan();
+E('b-ter-plan-tipear').onclick = () => tipearPlan();
+
+E('b-ter-plan-guardar').onclick = async () => {
+  const fechas = [...document.querySelectorAll('#ter-p-filas .plan-fecha')];
+  const importes = [...document.querySelectorAll('#ter-p-filas .plan-importe')];
+  if (fechas.length === 0) {
+    E('ter-p-msg').innerHTML = '<div class="aviso">No hay cuotas cargadas.</div>';
+    return;
+  }
+  const cuotas = fechas.map((f, i) => ({ vencimiento: f.value, importe: importes[i].value }));
+
+  const r = await api('PUT', '/tax-transactions/' + E('ter-p-cbte').value + '/installments', { cuotas });
+  decir('ter-p-msg', r, 'Plan declarado');
+  if (r.ok) { verPlan(); abrirTercero(estado.tercero); }
+};
 
 async function cargarMovimientosSinImputar(id) {
   const r = await api('GET', '/parties/' + id + '/movimientos-sin-imputar');
@@ -2506,12 +2638,25 @@ async function cargarMovimientosSinImputar(id) {
   }
 }
 
+// Cambiar de comprobante recarga su plan: el selector de cuota tiene que
+// mostrar las de esta factura y no las de la anterior.
+E('ter-i-cbte').onchange = () => {
+  E('ter-p-cbte').value = E('ter-i-cbte').value;
+  verPlan();
+};
+
 E('b-ter-imputar').onclick = async () => {
-  const r = await api('POST', '/party-allocations', {
+  const cuerpo = {
     taxTransactionId: E('ter-i-cbte').value,
     journalEntryLineId: E('ter-i-mov').value,
     importe: E('ter-i-importe').value.trim(),
-  });
+  };
+  // La cuota se manda solo si el comprobante tiene plan. Mandarla siempre haría
+  // que la API rechace con CUOTA_SIN_PLAN los comprobantes que no lo tienen.
+  if (!E('ter-i-cuota-caja').hidden && E('ter-i-cuota').value) {
+    cuerpo.installmentId = E('ter-i-cuota').value;
+  }
+  const r = await api('POST', '/party-allocations', cuerpo);
   decir('ter-i-msg', r, 'Imputación registrada.');
   if (r.ok) await abrirTercero(estado.tercero);
 };

@@ -218,6 +218,10 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
         taxTransactionId: z.string().uuid(),
         journalEntryLineId: z.string().uuid(),
         importe: monto,
+        // Obligatoria si el comprobante tiene plan, prohibida si no lo tiene.
+        // No se valida acá: lo hace el trigger, que es el que ve el plan y el
+        // que sigue valiendo cuando alguien entre por otro camino.
+        installmentId: z.string().uuid().nullish(),
       })
       .parse(request.body);
 
@@ -241,12 +245,14 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
 
           const r = await tx.query<{ id: string }>(
             `INSERT INTO party_allocations
-               (company_id, party_id, tax_transaction_id, journal_entry_line_id, importe, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6)
+               (company_id, party_id, tax_transaction_id, journal_entry_line_id, importe,
+                installment_id, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
              RETURNING id`,
             [
               tenant.companyId, partyId, body.taxTransactionId,
-              body.journalEntryLineId, body.importe, `user:${auth.user.userId}`,
+              body.journalEntryLineId, body.importe,
+              body.installmentId ?? null, `user:${auth.user.userId}`,
             ],
           );
 
@@ -362,6 +368,167 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
       },
     );
   });
+
+  // ── Plan de pagos (0060) ─────────────────────────────────────────────────
+
+  /**
+   * El plan de cuotas de un comprobante, con lo pendiente de cada una.
+   *
+   * Sin plan devuelve la lista vacía y dice de dónde sale entonces el
+   * vencimiento. «No tiene plan» y «tiene un plan vacío» no se pueden
+   * distinguir mirando una lista de cero elementos, y mandan a hacer cosas
+   * distintas.
+   */
+  app.get('/tax-transactions/:taxTransactionId/installments', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:read');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const comprobante = await tx.query<{ total: string; dias_de_pago: number | null }>(
+          `SELECT t.total::text, p.dias_de_pago
+             FROM tax_transactions t
+             LEFT JOIN parties p ON p.id = t.party_id AND p.company_id = t.company_id
+            WHERE t.id = $1 AND t.company_id = $2`,
+          [taxTransactionId, tenant.companyId],
+        );
+        if (comprobante.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+        const cuotas = await tx.query(
+          `SELECT installment_id AS id, numero, vencimiento::text, importe::text,
+                  imputado::text, pendiente::text, dias_de_mora AS "diasDeMora"
+             FROM installment_settlement
+            WHERE tax_transaction_id = $1 AND company_id = $2
+            ORDER BY numero`,
+          [taxTransactionId, tenant.companyId],
+        );
+
+        const plazoDelTercero = comprobante.rows[0]!.dias_de_pago;
+
+        return {
+          total: comprobante.rows[0]!.total,
+          tienePlan: cuotas.rows.length > 0,
+          cuotas: cuotas.rows,
+          vencimiento:
+            cuotas.rows.length > 0
+              ? 'Sale del plan: cada cuota tiene el suyo.'
+              : plazoDelTercero === null
+                ? 'No hay: el comprobante no tiene plan y el tercero no tiene condición de pago declarada. NEXO no lo deduce.'
+                : `Sale del tercero: fecha del comprobante más ${String(plazoDelTercero)} días.`,
+        };
+      },
+    );
+  });
+
+  /**
+   * Declara el plan completo. Reemplaza el anterior si lo había.
+   *
+   * Es un `PUT` y no un `POST` por cuota: el plan **cierra contra el total** y
+   * un plan a medio cargar no es un estado válido del mundo. Mandarlo entero
+   * hace que la transacción sea la unidad, y el candado diferido lo verifica al
+   * confirmar.
+   *
+   * Cambiar el plan de un comprobante ya imputado se rechaza: las imputaciones
+   * nombran cuotas, y borrarlas dejaría cobros apuntando a nada.
+   */
+  app.put('/tax-transactions/:taxTransactionId/installments', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'allocation:write');
+    const auth = requireAuth(request);
+    const { taxTransactionId } = z
+      .object({ taxTransactionId: z.string().uuid() })
+      .parse(request.params);
+
+    const body = z
+      .object({
+        cuotas: z
+          .array(
+            z.object({
+              vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+              importe: monto,
+            }),
+          )
+          .min(1)
+          .max(360),
+      })
+      .parse(request.body);
+
+    try {
+      return await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const existe = await tx.query(
+            'SELECT 1 FROM tax_transactions WHERE id = $1 AND company_id = $2',
+            [taxTransactionId, tenant.companyId],
+          );
+          if (existe.rowCount === 0) throw notFound('Comprobante no encontrado');
+
+          const imputadas = await tx.query<{ n: string }>(
+            `SELECT count(*)::text AS n FROM party_allocations
+              WHERE tax_transaction_id = $1 AND company_id = $2 AND status = 'ACTIVA'`,
+            [taxTransactionId, tenant.companyId],
+          );
+          if (Number(imputadas.rows[0]!.n) > 0) {
+            throw conflict(
+              'El comprobante ya tiene cobros imputados a sus cuotas. Anulá las imputaciones ' +
+                'antes de cambiar el plan: si no, quedarían apuntando a cuotas que ya no existen.',
+            );
+          }
+
+          const antes = await tx.query(
+            `SELECT numero, fecha_vencimiento::text, importe::text
+               FROM tax_transaction_installments
+              WHERE tax_transaction_id = $1 AND company_id = $2 ORDER BY numero`,
+            [taxTransactionId, tenant.companyId],
+          );
+
+          await tx.query(
+            'DELETE FROM tax_transaction_installments WHERE tax_transaction_id = $1 AND company_id = $2',
+            [taxTransactionId, tenant.companyId],
+          );
+
+          // El número sale de la posición en el arreglo y no del cuerpo: dos
+          // cuotas con el mismo número serían un plan sin orden, y aceptarlo
+          // para después rechazarlo con un error de índice único no ayuda.
+          for (const [i, cuota] of body.cuotas.entries()) {
+            await tx.query(
+              `INSERT INTO tax_transaction_installments
+                 (company_id, tax_transaction_id, numero, fecha_vencimiento, importe, created_by)
+               VALUES ($1,$2,$3,$4,$5,$6)`,
+              [
+                tenant.companyId, taxTransactionId, i + 1,
+                cuota.vencimiento, cuota.importe, `user:${auth.user.userId}`,
+              ],
+            );
+          }
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'DECLARAR_PLAN_DE_PAGOS',
+            objectType: 'tax_transactions',
+            objectId: taxTransactionId,
+            ...(antes.rowCount === 0 ? {} : { oldValue: { cuotas: antes.rows } }),
+            newValue: { cuotas: body.cuotas },
+            motivo:
+              'Se declara cuándo vence cada parte del comprobante. Sin plan, el vencimiento ' +
+              'sale del plazo del tercero, y sin eso no hay vencimiento.',
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return { taxTransactionId, cuotas: body.cuotas.length };
+        },
+      );
+    } catch (error) {
+      throw traducirPlan(error);
+    }
+  });
 }
 
 /**
@@ -408,6 +575,28 @@ const POR_CODIGO: ReadonlyArray<readonly [string, string, string]> = [
     'El comprobante no está resuelto contra ningún tercero: sin eso no se sabe de quién es ' +
       'la deuda que se cancela.',
   ],
+  // Plan de pagos (0060).
+  [
+    'E_ALLOC_SIN_CUOTA',
+    'IMPUTACION_SIN_CUOTA',
+    'El comprobante tiene un plan de pagos: la imputación tiene que decir qué cuota cancela. ' +
+      'Consultá GET /tax-transactions/:id/installments.',
+  ],
+  [
+    'E_ALLOC_CUOTA_SIN_PLAN',
+    'CUOTA_SIN_PLAN',
+    'El comprobante no tiene plan de pagos y la imputación nombra una cuota.',
+  ],
+  [
+    'E_ALLOC_CUOTA_DE_OTRO_COMPROBANTE',
+    'CUOTA_DE_OTRO_COMPROBANTE',
+    'Esa cuota pertenece a otra factura.',
+  ],
+  [
+    'E_ALLOC_EXCEDE_CUOTA',
+    'IMPUTACION_EXCEDE_CUOTA',
+    'La imputación deja la cuota cancelada por más de lo que la cuota vale.',
+  ],
 ];
 
 function traducirImputacion(error: unknown): unknown {
@@ -422,6 +611,26 @@ function traducirImputacion(error: unknown): unknown {
   }
   if (fallo.code === '23503') {
     return notFound('El movimiento del Mayor no existe en esta empresa');
+  }
+  return error;
+}
+
+/** Del candado del plan al error del dominio. Mismo criterio: por código. */
+function traducirPlan(error: unknown): unknown {
+  const mensaje = (error as { message?: string }).message ?? '';
+
+  if (mensaje.includes('E_PLAN_NO_CIERRA')) {
+    return unprocessable(
+      'PLAN_NO_CIERRA',
+      'Las cuotas no suman el total del comprobante. Un plan que no cierra dejaría una ' +
+        'parte de la factura sin fecha de vencimiento.',
+    );
+  }
+  if (mensaje.includes('E_PLAN_ANTES_DEL_COMPROBANTE')) {
+    return unprocessable(
+      'CUOTA_ANTES_DEL_COMPROBANTE',
+      'Hay una cuota que vence antes de la fecha del comprobante.',
+    );
   }
   return error;
 }

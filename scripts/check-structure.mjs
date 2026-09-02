@@ -60,6 +60,7 @@ const CHECKS = [
   ['commercial_documents', 'cd_anulado_con_motivo', 'Una anulación sin motivo no se registra'],
   ['goods_receipts', 'gr_anulada_con_motivo', 'Anular una recepción exige decir por qué'],
   ['party_allocations', 'pa_anulada_con_motivo', 'Anular una imputación exige decir por qué'],
+  ['tax_transaction_installments', 'tax_transaction_installments_importe_check', 'Una cuota vale más que cero'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
   ['stock_movements', 'sm_tipo_coherente', 'El tipo de movimiento y su origen no se contradicen'],
   ['stock_movements', 'sm_origen_citado', 'Lo que viene de un hecho registrado dice de cuál'],
@@ -111,6 +112,12 @@ const TRIGGERS = [
   ['goods_receipt_lines', 'grl_editables', 'Lo que se confirmó que llegó no se edita'],
   ['party_allocations', 'party_allocations_valida', '0053: los cuatro candados de la imputación'],
   ['party_allocations', 'party_allocations_no_excede', '0053: no se imputa de más (diferido)'],
+  // 0060 · Plan de pagos. El primero hace que las cuotas cierren contra el
+  // total; el segundo, que la imputación diga qué cuota cancela en vez de
+  // adivinarlo consumiendo de la más vieja a la más nueva.
+  ['tax_transaction_installments', 'tti_plan_cierra', '0060: las cuotas suman el total (diferido)'],
+  ['tax_transactions', 'tt_plan_cierra', '0060: cambiar el total no deja el plan sin cerrar'],
+  ['party_allocations', 'pa_nombra_cuota', '0060: con plan, la imputación declara la cuota'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -234,6 +241,8 @@ const RLS_FORZADO = [
   'company_integrations', 'integration_sync_runs', 'external_records',
   // Umbrales declarados (0058): qué considera un desvío cada empresa.
   'analysis_thresholds',
+  // Plan de pagos (0060): sin RLS, las cuotas de una empresa se verían en otra.
+  'tax_transaction_installments',
 ];
 
 /**
@@ -273,6 +282,8 @@ const VISTAS_INVOKER = [
   // Señales deterministas (0058). Sin `security_invoker` un desvío de una
   // empresa aparecería en la bandeja de otra.
   'analysis_signals',
+  // El pendiente por cuota se deriva acá y en ningún otro lado (0060).
+  'installment_settlement',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',

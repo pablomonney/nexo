@@ -182,8 +182,23 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
+        // Con plan de pagos, una factura en tres cuotas tiene tres fechas
+        // distintas y **no se puede ubicar en un solo tramo**: proyectarla
+        // entera al vencimiento de la primera —o de la última— era el defecto
+        // que arregló la 0060. Así que el universo son las cuotas cuando hay
+        // plan, y el comprobante entero cuando no.
         const r = await tx.query(
-          `SELECT
+          `WITH pendientes AS (
+             SELECT pendiente, vencimiento, dias_de_mora, vencimiento_declarado
+               FROM invoice_settlement
+              WHERE company_id = $1 AND direction = 'VENTAS'
+                AND pendiente > 0 AND NOT plan_declarado
+             UNION ALL
+             SELECT s.pendiente, s.vencimiento, s.dias_de_mora, true
+               FROM installment_settlement s
+              WHERE s.company_id = $1 AND s.direction = 'VENTAS' AND s.pendiente > 0
+           )
+           SELECT
              coalesce(sum(pendiente) FILTER (WHERE vencimiento_declarado AND dias_de_mora > 0), 0)::text
                AS "vencido",
              coalesce(sum(pendiente) FILTER (WHERE vencimiento_declarado AND dias_de_mora = 0
@@ -205,8 +220,7 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
              coalesce(sum(pendiente) FILTER (WHERE vencimiento_declarado), 0)::text
                AS "cubierto",
              coalesce(sum(pendiente), 0) > 0 AS "hayPendiente"
-             FROM invoice_settlement
-            WHERE company_id = $1 AND direction = 'VENTAS' AND pendiente > 0`,
+             FROM pendientes`,
           [tenant.companyId],
         );
 
@@ -219,9 +233,11 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
           proyeccion,
           cubre: hayPendiente ? `${cubierto} de ${proyeccion.pendienteTotal}` : null,
           metodologia:
-            'Pendiente de cada comprobante ubicado en el tramo de su vencimiento. El ' +
-            'vencimiento se deriva de la fecha del comprobante más los días de pago ' +
-            'declarados del tercero (migración 0053).',
+            'Cada pendiente ubicado en el tramo de su vencimiento. Con plan de pagos ' +
+            'declarado, la unidad es **la cuota** y no el comprobante: una factura en tres ' +
+            'cuotas tiene tres fechas y ubicarla entera en una sola daría una proyección ' +
+            'equivocada (migración 0060). Sin plan, el vencimiento se deriva de la fecha del ' +
+            'comprobante más los días de pago declarados del tercero (migración 0053).',
           alcance:
             'No proyecta los comprobantes de terceros sin condición de pago declarada: sin ' +
             'plazo acordado no hay fecha que proyectar, y ponerle una sería inventar el ' +

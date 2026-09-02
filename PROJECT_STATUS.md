@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 82 archivos de test, 1520 tests,
-211 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 83 archivos de test, 1533 tests,
+217 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (20 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (21 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -56,6 +56,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Arranque del servidor (`npm start`)** | **TERMINADO** | **`arranque` (8 tests)** |
 | **Backup y restauración verificada** | **TERMINADO** | **`npm run db:restaurar`** |
 | **Integridad de la bitácora** | **TERMINADO** | **`npm run audit:cadena`, gate de `verify`** |
+| **Plan de pagos por comprobante** | **TERMINADO** | **`plan-de-pagos` (13 tests)** |
 
 ## 3. En curso
 
@@ -76,6 +77,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0057 | Analítica: seis vistas, ni una cifra almacenada, cada total abrible |
 | 0058 | Señales contra umbrales declarados, sin modelo de por medio (ADR-017) |
 | 0059 | El detector de adulteraciones de la bitácora podía encontrar y no reportar |
+| 0060 | Plan de cuotas: la proyección de cobranzas dejó de estar equivocada |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -132,8 +134,10 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
 - **Imputación automática sugerida.** Se podría *proponer* una imputación por
   antigüedad y que una persona la confirme — la forma que ADR-001 admite. Hoy
   no existe: imputar es siempre manual (ADR-015 §7).
-- **Condiciones de pago por comprobante y cuotas.** El plazo es del tercero;
-  una factura con condiciones distintas o en tres cuotas no se puede expresar.
+- **Generar el plan de cuotas.** La consola ayuda a tipearlo —n cuotas cada
+  tantos días, con el resto en la última para que cierre al centavo— y lo que se
+  guarda es lo que quedó en los campos. El sistema **no** genera planes: un plan
+  es un acuerdo entre dos partes.
 - **Salida de stock al facturar.** Hoy es un paso aparte porque el comprobante
   no dice de qué depósito salió. Un depósito por defecto por empresa lo haría
   automático — y sería inventar el dato más importante del movimiento cada vez
