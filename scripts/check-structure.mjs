@@ -80,6 +80,10 @@ const CHECKS = [
   ['project_hour_rates', 'phr_vigencia_coherente', '0070: una tarifa no deja de regir antes de regir'],
   // 0071 · Un acuerdo de comisión que deja de regir antes de empezar no es un acuerdo.
   ['commission_schemes', 'cms_vigencia_coherente', '0071: un esquema no deja de regir antes de regir'],
+  // 0072 · Cerrar una sucursal sin decir cuándo ni por qué deja sus ventas sin
+  // explicación de origen.
+  ['branches', 'br_cierre_completo', '0072: una sucursal cerrada dice cuándo y por qué'],
+  ['branch_points_of_sale', 'bpv_vigencia_coherente', '0072: un punto de venta no deja de ser de una boca antes de serlo'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -177,6 +181,10 @@ const TRIGGERS = [
   // carga: azar disfrazado de regla. Y un vendedor con ventas no se borra.
   ['commission_schemes', 'cms_uno_por_fecha', '0071: un solo esquema vigente por vendedor y fecha'],
   ['salespeople', 'salespeople_no_delete', '0071: un vendedor se inactiva; borrarlo deja sus ventas sin dueño'],
+  // 0072 · Con dos sucursales sobre el mismo punto de venta, el comprobante se
+  // contaría dos veces y el total de la empresa dejaría de cerrar.
+  ['branch_points_of_sale', 'bpv_uno_por_fecha', '0072: un punto de venta es de una sola sucursal por vez'],
+  ['branches', 'branches_no_delete', '0072: una sucursal se cierra; borrarla deja sus ventas sin origen'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -240,6 +248,8 @@ const INDICES = [
   ['pj_code_unico', '0070: un código, un proyecto, por empresa'],
   ['pjt_code_unico', '0070: un código, una tarea, por proyecto'],
   ['sp_code_unico', '0071: un código, un vendedor, por empresa'],
+  ['br_code_unico', '0072: un código, una sucursal, por empresa'],
+  ['br_un_deposito_por_sucursal', '0072: un depósito es de una sola sucursal'],
   ['fixed_assets_code_unico', 'Un código, un bien de uso, por empresa'],
 ];
 
@@ -288,6 +298,9 @@ const FK_CON_EMPRESA = [
   ['salespeople', 'sp_party_fk', 'Un vendedor externo no es el tercero de otra empresa'],
   ['tax_transactions', 'tt_vendedor_fk', 'Una venta no se le atribuye al vendedor de otra empresa'],
   ['commission_schemes', 'cms_vendedor_fk', 'Un esquema no rige para el vendedor de otra empresa'],
+  ['branches', 'br_deposito_fk', 'Una sucursal no usa el depósito de otra empresa'],
+  ['branches', 'br_centro_fk', 'Una sucursal no imputa al centro de costo de otra empresa'],
+  ['branch_points_of_sale', 'bpv_sucursal_fk', 'Un punto de venta no cuelga de la sucursal de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -355,6 +368,9 @@ const RLS_FORZADO = [
   // Comisiones (0071): cuánto gana cada vendedor. Sin RLS se leería desde la
   // empresa de al lado.
   'salespeople', 'commission_schemes',
+  // Sucursales (0072): dónde factura cada empresa. Sin RLS, el mapa de bocas de
+  // una se leería desde otra.
+  'branches', 'branch_points_of_sale',
 ];
 
 /**
@@ -400,6 +416,9 @@ const VISTAS_INVOKER = [
   // Comisiones (0071). Lo devengado es derivado y cruza el comprobante con la
   // imputación: sin security_invoker mostraría las ventas de otra empresa.
   'commission_accruals', 'analytics_comisiones', 'work_queue_comisiones',
+  // Sucursales (0072). La atribución de ventas y el desempeño por boca son
+  // derivados y leen el Mayor: sin security_invoker cruzarían empresas.
+  'branch_sales', 'branch_status', 'analytics_sucursales', 'work_queue_sucursales',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

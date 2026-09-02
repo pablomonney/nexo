@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 93 archivos de test, 1668 tests,
-331 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 94 archivos de test, 1678 tests,
+346 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (29 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (30 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -69,6 +69,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **CRM: oportunidades y embudo** | **TERMINADO** | **`crm` (13 tests)** |
 | **Proyectos: horas y rentabilidad** | **TERMINADO** | **`proyectos` (11 tests)** |
 | **Vendedores y comisiones** | **TERMINADO** | **`comisiones` (10 tests)** |
+| **Sucursales** | **TERMINADO** | **`sucursales` (10 tests)** |
 
 ## 3. En curso
 
@@ -101,6 +102,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0069 | CRM: etapas declaradas por la empresa, embudo que no pondera sin probabilidad, y que no entra al flujo de fondos |
 | 0070 | Proyectos: horas valuadas a la tarifa declarada, ingresos y costos leídos del Mayor, y margen que no se afirma cuando falta un dato |
 | 0071 | Vendedores y comisiones: el porcentaje se declara, la base se dice, y devengar no es pagar |
+| 0072 | Sucursales: el punto de venta las ata, la vigencia protege el histórico, y las dos atribuciones se muestran |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

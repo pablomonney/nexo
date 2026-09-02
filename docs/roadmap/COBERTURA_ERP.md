@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, CRM, proyectos y comisiones)
+**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, CRM, proyectos, comisiones y sucursales)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -26,7 +26,7 @@ Clasificación:
 | MFA y sesiones | HECHO | |
 | Auditoría encadenada | HECHO | Con detector probado en rojo (0059). |
 | Centros de costo y de resultado | HECHO | `cost_centers`, `profit_centers`. |
-| **Sucursales** | LIBRE | No existe. Hoy se puede aproximar con centro de costo, que no es lo mismo: una sucursal tiene depósito, punto de venta y personal. |
+| **Sucursales** | HECHO | Depósito, centro de costo y puntos de venta con vigencia. La venta se atribuye por el punto de venta que regía el día del comprobante: no hay columna de sucursal en la factura. |
 | Configuración por empresa | PARCIAL | `system_settings` y marco de reporte; no hay pantalla de preferencias. |
 
 ## 2 · Contabilidad
@@ -191,9 +191,8 @@ Por dependencia y por valor, entre lo LIBRE:
 
 ~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
 ~~4. Caja y arqueo~~ · ~~5. CRM~~ · ~~6. Proyectos~~ ·
-~~7. Vendedores y comisiones~~ — hechos.
+~~7. Vendedores y comisiones~~ · ~~8. Sucursales~~ — hechos.
 
-8. **Sucursales** — hoy se aproxima con centro de costo, que no es lo mismo.
 9. **Suscripciones** — la arquitectura, sin precios ni pasarela.
 
 Cada uno entra con su lado de decisión, por ADR-018: un módulo que registra y no

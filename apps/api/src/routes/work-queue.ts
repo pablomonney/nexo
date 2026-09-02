@@ -111,6 +111,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Comisiones (0071). Cuánto gana cada vendedor es sensible adentro de la
   // empresa: no sigue a `commercial:read`, se concede aparte.
   salespeople: 'commission:read',
+  // Sucursales (0072). Cómo le va a cada boca: quien no puede verlas no recibe
+  // avisos sobre puntos de venta que no puede declarar.
+  branches: 'branch:read',
 };
 
 const CATEGORIAS = [

@@ -130,6 +130,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="crm">CRM</button>
   <button data-vista="proyectos">Proyectos</button>
   <button data-vista="comisiones">Comisiones</button>
+  <button data-vista="sucursales">Sucursales</button>
   <button data-vista="precios">Precios</button>
   <button data-vista="comercial">Comercial</button>
   <button data-vista="recepciones">Recepciones</button>
@@ -918,6 +919,91 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     </div>
     <button id="b-act-alta">Dar de alta</button>
     <div id="act-alta-msg"></div>
+  </div></details>
+</section>
+
+<!-- ══ Sucursales ═════════════════════════════════════════════════════════ -->
+<section id="v-sucursales" hidden>
+  <h2>Sucursales</h2>
+  <p class="ayuda">La sucursal <strong>no se guarda en la factura</strong>: se declara qué puntos
+    de venta son suyos y la atribución se deriva del número que ya viaja en cada comprobante.
+    Con <strong>vigencia</strong>, porque las bocas se mudan: sin fecha, reasignar un punto de
+    venta reescribiría a qué sucursal pertenecen las ventas del año pasado.</p>
+
+  <button id="b-suc" class="sec">Actualizar</button>
+  <dl class="kv" id="suc-sin-atribuir"></dl>
+  <div id="suc-msg"></div>
+  <div class="tabla"><table id="t-suc"><thead><tr>
+    <th>Código</th><th>Sucursal</th><th>Puntos de venta</th><th>Depósito</th><th>Centro</th>
+    <th>Comprobantes</th><th>Ventas (neto)</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Cómo le va a cada boca</h3>
+  <p class="ayuda">Cada sucursal informa <strong>dos atribuciones</strong>: las ventas por punto
+    de venta y lo imputado al centro de costo en el Mayor. Pueden no coincidir, y la diferencia
+    se muestra en vez de promediarse — elegir una y callar la otra daría un número más lindo y
+    menos cierto.</p>
+  <div class="tabla"><table id="t-suc-rend"><thead><tr>
+    <th>Sucursal</th><th>Ventas por PV</th><th>Ingresos imputados</th><th>Costos</th>
+    <th>Resultado</th><th>Brecha</th><th>Por qué</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="suc-detalle" hidden class="grupo">
+    <h3 id="suc-det-titulo">Sucursal</h3>
+
+    <h4>Puntos de venta</h4>
+    <div class="tabla"><table id="t-suc-pv"><thead><tr>
+      <th>Punto de venta</th><th>Desde</th><th>Hasta</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Ventas atribuidas</h4>
+    <div class="tabla"><table id="t-suc-ventas"><thead><tr>
+      <th>Fecha</th><th>Comprobante</th><th>Cliente</th><th>Neto</th><th>Total</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="suc-operar" hidden>
+      <h4>Declarar un punto de venta</h4>
+      <div class="fila">
+        <div><label>Punto de venta</label><input id="suc-p-numero" inputmode="numeric"></div>
+        <div><label>Desde</label><input id="suc-p-desde" type="date"></div>
+        <div><label>Hasta</label><input id="suc-p-hasta" type="date"></div>
+        <div><label>&nbsp;</label><button id="b-suc-punto" class="sec">Declarar</button></div>
+      </div>
+      <p class="ayuda">Un punto de venta pertenece a <strong>una sola</strong> sucursal por vez:
+        con dos, el mismo comprobante se contaría en las dos y el total de la empresa dejaría de
+        cerrar contra la suma de sus bocas.</p>
+      <div id="suc-p-msg"></div>
+
+      <h4>Cerrar la sucursal</h4>
+      <div class="fila">
+        <div><label>Fecha</label><input id="suc-c-fecha" type="date"></div>
+        <div style="flex:1"><label>Motivo</label><input id="suc-c-motivo" maxlength="500"></div>
+        <div><label>&nbsp;</label><button id="b-suc-cerrar">Cerrar</button></div>
+      </div>
+      <p class="ayuda">Cerrar una boca <strong>no cambia de dónde salieron</strong> las facturas
+        del año pasado: sus ventas siguen atribuidas. Si su punto de venta pasa a otra sucursal,
+        declaralo con vigencia desde la fecha del traspaso.</p>
+      <div id="suc-c-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="suc-alta" hidden><summary>Abrir una sucursal</summary><div>
+    <div class="fila">
+      <div><label>Código</label><input id="suc-n-codigo" maxlength="40"></div>
+      <div style="flex:1"><label>Nombre</label><input id="suc-n-nombre" maxlength="200"></div>
+      <div><label>Depósito</label><input id="suc-n-deposito" maxlength="40" placeholder="código"></div>
+      <div><label>Centro de costo</label><input id="suc-n-centro" maxlength="40" placeholder="código"></div>
+    </div>
+    <div class="fila">
+      <div style="flex:1"><label>Dirección</label><input id="suc-n-direccion" maxlength="300"></div>
+      <div><label>Localidad</label><input id="suc-n-localidad" maxlength="120"></div>
+      <div><label>Provincia</label><input id="suc-n-provincia" maxlength="120"></div>
+      <div><label>&nbsp;</label><button id="b-suc-alta" class="sec">Abrir</button></div>
+    </div>
+    <p class="ayuda">Los dos códigos son opcionales y por razones distintas: una oficina puede no
+      tener depósito, pero sin centro de costo sus gastos no se le pueden atribuir y no hay
+      resultado — y la bandeja lo dice.</p>
+    <div id="suc-alta-msg"></div>
   </div></details>
 </section>
 
@@ -1906,6 +1992,7 @@ const estado = {
   oportunidad: null, oportunidadTitulo: '',
   proyecto: null, proyectoTitulo: '',
   vendedor: null, vendedorTitulo: '',
+  sucursal: null, sucursalTitulo: '',
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1956,7 +2043,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','crm','proyectos','comisiones','precios','comercial','recepciones','stock','activos',
+                'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
@@ -1990,6 +2077,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'crm') listarCrm();
     if (v === 'proyectos') listarProyectos();
     if (v === 'comisiones') listarComisiones();
+    if (v === 'sucursales') listarSucursales();
     if (v === 'precios') listarPrecios();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
@@ -2103,7 +2191,7 @@ function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
-    crm: 'crm:read', proyectos: 'project:read', comisiones: 'commission:read',
+    crm: 'crm:read', proyectos: 'project:read', comisiones: 'commission:read', sucursales: 'branch:read',
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
@@ -4614,6 +4702,146 @@ E('b-chq-mover').onclick = async () => {
   const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
+};
+
+// ══ 4c7 · Sucursales ══════════════════════════════════════════════════════
+async function listarSucursales() {
+  E('suc-alta').hidden = !puede('branch:write');
+
+  const r = await api('GET', '/branches');
+  if (!r.ok) return decir('suc-msg', r);
+  E('suc-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-suc').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const s of r.datos.sucursales || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(s.codigo) + '</td>' +
+      '<td>' + escapar(s.nombre) + '</td>' +
+      // Sin punto de venta no se le atribuye ninguna factura: se marca.
+      '<td class="mono">' + (s.puntosDeVenta === 0
+        ? '<span class="p p-ojo">falta</span>' : escapar(s.puntosDetalle || '')) + '</td>' +
+      '<td>' + escapar(s.depositoCodigo || '—') + '</td>' +
+      '<td>' + (s.centroCodigo
+        ? escapar(s.centroCodigo) : '<span class="p p-ojo">falta</span>') + '</td>' +
+      '<td class="mono">' + escapar(String(s.comprobantes)) + '</td>' +
+      '<td class="mono">' + escapar(s.ventasNeto) + '</td>' +
+      '<td>' + pastilla(s.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirSucursal(s.id, s.codigo + ' — ' + s.nombre);
+    cuerpo.appendChild(tr);
+  }
+
+  const an = await api('GET', '/analysis/sucursales');
+  if (an.ok) {
+    const c = E('t-suc-rend').querySelector('tbody');
+    c.innerHTML = '';
+    for (const s of an.datos.sucursales || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapar(s.codigo) + '</td>' +
+        '<td class="mono">' + escapar(s.ventasNeto) + '</td>' +
+        '<td class="mono">' + escapar(s.ingresosImputados) + '</td>' +
+        '<td class="mono">' + escapar(s.costosImputados) + '</td>' +
+        '<td class="mono">' + (s.resultadoImputado === null
+          ? '<span class="p p-neu">sin centro</span>' : escapar(s.resultadoImputado)) + '</td>' +
+        // La brecha entre las dos atribuciones. Cero está bien; distinto de
+        // cero es lo que hay que ir a mirar.
+        '<td class="mono">' + (s.brechaDeAtribucion === null
+          ? '—'
+          : (Number(s.brechaDeAtribucion) === 0
+              ? '<span class="p p-bien">0</span>'
+              : '<span class="p p-ojo">' + escapar(s.brechaDeAtribucion) + '</span>')) + '</td>' +
+        '<td>' + escapar(s.metodologia) + '</td>';
+      c.appendChild(tr);
+    }
+
+    const sa = an.datos.sinAtribuir;
+    // Sin esto, la suma de las sucursales parecería el total de la empresa
+    // cuando no lo es.
+    E('suc-sin-atribuir').innerHTML =
+      fila('Ventas sin sucursal (comprobantes)', sa.comprobantes) +
+      fila('Ventas sin sucursal (neto)', sa.neto);
+  }
+}
+
+async function abrirSucursal(id, titulo) {
+  const r = await api('GET', '/branches/' + id);
+  if (!r.ok) return decir('suc-msg', r);
+
+  estado.sucursal = id;
+  estado.sucursalTitulo = titulo;
+  E('suc-detalle').hidden = false;
+  E('suc-det-titulo').textContent = titulo + ' — ' + r.datos.sucursal.status;
+  E('suc-operar').hidden = !puede('branch:write') || r.datos.sucursal.status !== 'ACTIVA';
+  limpiar('suc-p-msg');
+  limpiar('suc-c-msg');
+
+  const pv = E('t-suc-pv').querySelector('tbody');
+  pv.innerHTML = '';
+  for (const p of r.datos.puntosDeVenta || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(String(p.puntoVenta)) + '</td>' +
+      '<td class="mono">' + escapar(p.vigenciaDesde) + '</td>' +
+      '<td class="mono">' + escapar(p.vigenciaHasta || 'sin fin') + '</td>';
+    pv.appendChild(tr);
+  }
+
+  const ventas = E('t-suc-ventas').querySelector('tbody');
+  ventas.innerHTML = '';
+  for (const v of r.datos.ventas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(v.fecha) + '</td>' +
+      '<td class="mono">' + escapar(v.puntoVenta + '-' + v.numero) + '</td>' +
+      '<td>' + escapar(v.cliente || '—') + '</td>' +
+      '<td class="mono">' + escapar(v.neto) + '</td>' +
+      '<td class="mono">' + escapar(v.total) + '</td>';
+    ventas.appendChild(tr);
+  }
+}
+
+E('b-suc').onclick = () => listarSucursales();
+
+E('b-suc-alta').onclick = async () => {
+  const cuerpo = { codigo: E('suc-n-codigo').value, nombre: E('suc-n-nombre').value };
+  if (E('suc-n-deposito').value.trim()) cuerpo.deposito = E('suc-n-deposito').value.trim();
+  if (E('suc-n-centro').value.trim()) cuerpo.centroDeCosto = E('suc-n-centro').value.trim();
+  if (E('suc-n-direccion').value.trim()) cuerpo.direccion = E('suc-n-direccion').value.trim();
+  if (E('suc-n-localidad').value.trim()) cuerpo.localidad = E('suc-n-localidad').value.trim();
+  if (E('suc-n-provincia').value.trim()) cuerpo.provincia = E('suc-n-provincia').value.trim();
+
+  const r = await api('POST', '/branches', cuerpo);
+  decir('suc-alta-msg', r, 'Sucursal abierta. Falta declararle su punto de venta.');
+  if (r.ok) listarSucursales();
+};
+
+E('b-suc-punto').onclick = async () => {
+  const cuerpo = {
+    puntoVenta: Number(E('suc-p-numero').value),
+    vigenciaDesde: E('suc-p-desde').value,
+  };
+  if (E('suc-p-hasta').value) cuerpo.vigenciaHasta = E('suc-p-hasta').value;
+
+  const r = await api('POST', '/branches/' + estado.sucursal + '/points-of-sale', cuerpo);
+  decir('suc-p-msg', r, 'Punto de venta declarado. Desde esa fecha sus ventas se atribuyen acá.');
+  if (r.ok) { await listarSucursales(); await abrirSucursal(estado.sucursal, estado.sucursalTitulo); }
+};
+
+E('b-suc-cerrar').onclick = async () => {
+  const r = await api('POST', '/branches/' + estado.sucursal + '/close', {
+    fecha: E('suc-c-fecha').value,
+    motivo: E('suc-c-motivo').value,
+  });
+  if (r.ok) {
+    E('suc-c-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+    await listarSucursales();
+    await abrirSucursal(estado.sucursal, estado.sucursalTitulo);
+  } else {
+    decir('suc-c-msg', r);
+  }
 };
 
 // ══ 4c6 · Vendedores y comisiones ═════════════════════════════════════════
