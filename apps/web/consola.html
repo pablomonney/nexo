@@ -873,6 +873,24 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div class="tabla"><table id="t-val-cmv"><thead><tr>
       <th>Mes</th><th>Producto</th><th>Unidades</th><th>Costo</th><th>Sin costear</th>
     </tr></thead><tbody></tbody></table></div>
+
+    <h4>Asiento de costo</h4>
+    <p class="ayuda">El sistema <strong>propone</strong>; el asiento lo carga y lo firma una
+      persona. Automatizarlo exigiría decidir cuándo se asienta —por cada venta, por mes, al
+      cierre— y esa es una política contable que nadie declaró. Si falta el método, si hay
+      salidas sin costear o si faltan las cuentas declaradas, no se propone nada: un asiento
+      armado sobre un promedio incompleto <strong>cuadra igual</strong> y dice una cifra que no
+      es.</p>
+    <div class="fila">
+      <div><label>Mes</label><input id="val-cmv-mes" placeholder="2026-09" maxlength="7"></div>
+      <div><label>&nbsp;</label><button id="b-val-cmv" class="sec">Ver la propuesta</button></div>
+    </div>
+    <div id="val-cmv-msg"></div>
+    <div class="tabla"><table id="t-val-cmv-asiento"><thead><tr>
+      <th>Cuenta</th><th>Debe</th><th>Haber</th><th>Descripción</th>
+    </tr></thead><tbody></tbody></table></div>
+    <button id="b-val-cmv-cargar" hidden>Cargar como asiento en borrador</button>
+    <div id="val-cmv-cargar-msg"></div>
   </div></details>
 
   <details class="grupo" id="stk-depositos" hidden><summary>Depósitos</summary><div>
@@ -2174,7 +2192,7 @@ const estado = {
   proyecto: null, proyectoTitulo: '',
   vendedor: null, vendedorTitulo: '',
   sucursal: null, sucursalTitulo: '',
-  propuesta: null,
+  propuesta: null, propuestaCmv: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -4080,6 +4098,52 @@ async function cargarValuacion() {
     }
   }
 }
+
+E('b-val-cmv').onclick = async () => {
+  const r = await api('GET',
+    '/analysis/costo-de-ventas/asiento-propuesto?mes=' + E('val-cmv-mes').value.trim());
+  if (!r.ok) return decir('val-cmv-msg', r);
+
+  const cuerpo = E('t-val-cmv-asiento').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const l of r.datos.renglones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.accountCode) + '</td>' +
+      '<td class="mono">' + escapar(l.debit) + '</td>' +
+      '<td class="mono">' + escapar(l.credit) + '</td>' +
+      '<td>' + escapar(l.descripcion) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  const hay = (r.datos.renglones || []).length > 0;
+  E('b-val-cmv-cargar').hidden = !hay || !puede('journal_entry:write');
+  estado.propuestaCmv = hay ? r.datos : null;
+  // Cuando no hay propuesta, lo que se muestra es el motivo: es más útil que
+  // una tabla vacía, que se lee como «no pasó nada».
+  E('val-cmv-msg').innerHTML = '<div class="aviso">' +
+    escapar(hay ? r.datos.alcance : r.datos.motivoSinRenglones) + '</div>';
+};
+
+E('b-val-cmv-cargar').onclick = async () => {
+  const p = estado.propuestaCmv;
+  if (p === null) return;
+
+  const r = await api('POST', '/journal-entries', {
+    journalCode: 'GENERAL',
+    entryDate: p.mes + '-01',
+    description: 'Costo de mercadería vendida — ' + p.mes,
+    currency: 'ARS',
+    lines: p.renglones,
+    source: { type: 'MANUAL', id: null },
+    // §24: lo que funda el asiento es que una persona haya mirado la propuesta
+    // y la cargue.
+    manualJustification: p.justificacionSugerida,
+  });
+  decir('val-cmv-cargar-msg', r,
+    'Asiento cargado en borrador. Todavía no toca el Mayor: falta que alguien lo apruebe.');
+  if (r.ok) E('b-val-cmv-cargar').hidden = true;
+};
 
 E('b-val').onclick = async () => {
   const r = await api('PUT', '/stock-valuation', {

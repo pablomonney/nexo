@@ -41,6 +41,11 @@ const ROLES = [
   'IVA_CREDITO',
   'VENTAS',
   'COMPRAS',
+  // Agregados por la 0079: son los que permiten proponer el asiento de costo
+  // de mercadería vendida, que hasta entonces se calculaba y no llegaba al
+  // Mayor.
+  'MERCADERIA',
+  'COSTO_DE_VENTAS',
 ] as const;
 
 /** Para qué se usa cada rol, dicho una vez y en un solo lugar. */
@@ -51,7 +56,19 @@ const PARA_QUE: Readonly<Record<RolContable, string>> = {
   IVA_CREDITO: 'El IVA que paga la empresa y computa contra el débito',
   VENTAS: 'El neto gravado de una venta, cuando el comprobante no tiene renglones con cuenta propia',
   COMPRAS: 'El neto gravado de una compra, cuando el comprobante no tiene renglones con cuenta propia',
+  MERCADERIA: 'El activo que se da de baja al vender: lo que la empresa tiene hasta que lo vende',
+  COSTO_DE_VENTAS: 'El resultado negativo que se reconoce cuando la mercadería sale por venta',
 };
+
+/**
+ * Los dos roles que solo hacen falta con existencias.
+ *
+ * `accounting_map_status` —y con ella la rama de la bandeja— cuenta **solo los
+ * seis primeros** a propósito: una empresa de servicios no tiene mercadería, y
+ * decirle que le falta declarar dónde va su costo sería reclamarle algo que no
+ * le corresponde.
+ */
+const DE_COSTO = new Set<RolContable>(['MERCADERIA', 'COSTO_DE_VENTAS']);
 
 interface FilaMapeo {
   readonly rol: RolContable;
@@ -105,13 +122,19 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
         );
 
         return {
-          // Los seis roles siempre, declarados o no: una lista que solo muestra
-          // lo declarado esconde justamente lo que falta.
+          // Todos los roles siempre, declarados o no: una lista que solo
+          // muestra lo declarado esconde justamente lo que falta.
           roles: ROLES.map((rol) => {
             const fila = porRol.get(rol);
             return {
               rol,
               paraQue: PARA_QUE[rol],
+              // Los dos del costo solo hacen falta si la empresa lleva
+              // existencias. Reclamárselos a un estudio contable sería la misma
+              // clase de error que reclamarle un depósito.
+              necesarioSi: DE_COSTO.has(rol)
+                ? 'Solo si la empresa lleva existencias y quiere asentar su costo'
+                : 'Siempre, para que el sistema pueda proponer el asiento de un comprobante',
               cuenta: fila === undefined ? null : fila.codigo,
               nombre: fila === undefined ? null : fila.nombre,
               exigeTercero: fila === undefined ? null : fila.exige_tercero,
@@ -141,7 +164,7 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
         asignaciones: z
           .array(z.object({ rol: z.enum(ROLES), cuenta: z.string().min(1).max(40) }))
           .min(1)
-          .max(6),
+          .max(8),
       })
       .parse(request.body);
 

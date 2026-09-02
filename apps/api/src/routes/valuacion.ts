@@ -26,6 +26,7 @@ import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
+import { leerMapeo } from './mapeo-contable.js';
 import { conflict, notFound, unprocessable } from '../http/errors.js';
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
@@ -240,6 +241,142 @@ export async function valuacionRoutes(app: FastifyInstance): Promise<void> {
             'salió gratis. ' +
             'Este número **no genera ningún asiento**: el asiento de costo de mercadería ' +
             'vendida lo firma una persona, por el camino de siempre.',
+        };
+      },
+    );
+  });
+
+  /**
+   * El asiento que el costo del mes propone.
+   *
+   * ## No lo registra
+   *
+   * Devuelve los renglones para que se carguen por `POST /journal-entries`,
+   * igual que la propuesta de un comprobante (0074). Automatizarlo exigiría
+   * decidir cuándo se asienta —por cada venta, por mes, al cierre— y esa es una
+   * política contable que nadie declaró. Proponerlo por el mes que se consulta
+   * deja esa elección en quien pide la propuesta.
+   *
+   * ## Y no propone lo que no se puede afirmar
+   *
+   * Sin método de valuación, con salidas sin costear o sin las dos cuentas
+   * declaradas, no hay propuesta. Un asiento de costo armado sobre un promedio
+   * incompleto **cuadra igual** y dice una cifra que no es.
+   */
+  app.get('/analysis/costo-de-ventas/asiento-propuesto', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'stock:read');
+    requirePermission(tenant, 'journal_entry:read');
+    const auth = requireAuth(request);
+    const query = z.object({ mes: z.string().regex(/^\d{4}-\d{2}$/, 'Mes AAAA-MM') })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const mes = `${query.mes}-01`;
+
+        const r = await tx.query<{
+          costo: string | null;
+          salidas_sin_costo: number;
+          productos: number;
+          metodo: string | null;
+          incompleto: boolean;
+          sin_metodo: boolean;
+        }>(
+          `SELECT costo::text, salidas_sin_costo, productos, metodo, incompleto, sin_metodo
+             FROM cogs_por_mes WHERE company_id = $1 AND mes = $2::date`,
+          [tenant.companyId, mes],
+        );
+
+        const mapeo = await leerMapeo(tx, tenant.companyId);
+        const faltan = (['COSTO_DE_VENTAS', 'MERCADERIA'] as const).filter(
+          (rol) => !mapeo.has(rol),
+        );
+
+        const vacia = (motivo: string, rolesFaltantes: readonly string[] = []) => ({
+          mes: query.mes,
+          renglones: [] as unknown[],
+          motivoSinRenglones: motivo,
+          rolesFaltantes,
+          justificacionSugerida: null,
+          alcance:
+            'Una propuesta no es un asiento: no tiene número, no está en ningún libro y no ' +
+            'afecta ningún saldo. Se carga por `POST /journal-entries`, entra en borrador y ' +
+            'la aprueba una persona.',
+        });
+
+        if (r.rowCount === 0) {
+          return vacia(
+            `No hubo salidas por venta en ${query.mes}: no hay costo que asentar.`,
+          );
+        }
+        const f = r.rows[0]!;
+
+        if (f.sin_metodo) {
+          return vacia(
+            'La empresa no declaró método de valuación para ese período: el costo no se ' +
+              'afirma, así que tampoco se propone su asiento.',
+          );
+        }
+        if (f.incompleto) {
+          return vacia(
+            `Hay ${f.salidas_sin_costo} salida(s) sin costear en el mes, porque su producto ` +
+              'tiene entradas sin costo declarado. Un asiento armado con lo que sí tiene ' +
+              'costo cuadra igual y dice una cifra más chica que la real.',
+          );
+        }
+        if (faltan.length > 0) {
+          return vacia(
+            'Falta declarar a qué cuenta va: ' +
+              faltan.join(', ') +
+              '. Sin eso el sistema no elige ninguna: elegirla sería inventar la ' +
+              'contabilidad de esta empresa.',
+            faltan,
+          );
+        }
+
+        const costo = f.costo ?? '0';
+        if (costo === '0' || Number(costo) === 0) {
+          return vacia(`El costo de ${query.mes} es cero: no hay asiento que proponer.`);
+        }
+
+        const descripcion = `Costo de mercadería vendida — ${query.mes}`;
+
+        return {
+          mes: query.mes,
+          // Un renglón por lado. Abrirlo por producto daría un asiento de
+          // doscientas líneas por mes que no lee nadie, y el detalle ya está en
+          // `GET /analysis/costo-de-ventas` con su trazabilidad.
+          renglones: [
+            {
+              accountCode: mapeo.get('COSTO_DE_VENTAS')!.codigo,
+              debit: costo,
+              credit: '0',
+              descripcion,
+            },
+            {
+              accountCode: mapeo.get('MERCADERIA')!.codigo,
+              debit: '0',
+              credit: costo,
+              descripcion,
+            },
+          ],
+          motivoSinRenglones: null,
+          rolesFaltantes: [] as string[],
+          costo,
+          productos: f.productos,
+          metodo: f.metodo,
+          // §24: la propuesta sola no funda el asiento. Lo funda que una persona
+          // la haya mirado y la cargue, y eso es lo que dice este texto.
+          justificacionSugerida:
+            `Costo de mercadería vendida de ${query.mes}, calculado por ${f.metodo} sobre ` +
+            `${f.productos} producto(s) con costo declarado, revisado y aceptado por quien ` +
+            'lo carga.',
+          alcance:
+            'El costo sale del promedio vigente **en el momento de cada salida**, no del de ' +
+            'hoy. La propuesta no registra nada: se carga por `POST /journal-entries`, ' +
+            'entra en borrador y la firma una persona.',
         };
       },
     );

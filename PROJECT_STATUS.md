@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 103 archivos de test, 1742 tests,
-369 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 103 archivos de test, 1745 tests,
+370 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -74,7 +74,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Detección de anomalías del Diario** | **TERMINADO** | **`anomalias` (6 tests)** |
 | **Mapeo contable y propuesta de asiento** | **TERMINADO** | **`mapeo-contable` (8 tests)** |
 | **Puesta en marcha de una empresa** | **TERMINADO** | **`puesta-en-marcha` (10 tests)** |
-| **Valuación de existencias y CMV** | **TERMINADO** | **`valuacion` (11 tests)** |
+| **Valuación de existencias y CMV** | **TERMINADO** | **`valuacion` (14 tests)** |
 | **Conciliación bancaria por HTTP** | **TERMINADO** | **`conciliacion-por-http` (6 tests)** |
 | **Exportaciones a CSV** | **TERMINADO** | **`exportaciones` (5 tests)** |
 | **Imagen, sondas y métricas** | **TERMINADO** | **`metricas` (S-13, 4 tests), `docs/DESPLIEGUE.md`** |
@@ -118,6 +118,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0076 | La puesta en marcha completa: catorce pasos, cinco estados, y un «no aplica» que se deriva |
 | 0077 | Valuación de existencias: el método se declara y solo se ofrece el que se calcula (ADR-020) |
 | 0078 | El costo entra por el renglón de la recepción, que es donde alguien lo tiene a mano |
+| 0079 | El costo de mercadería vendida llega al Mayor: dos roles más en el mapeo y un asiento propuesto por mes |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

@@ -458,6 +458,9 @@ const VISTAS_INVOKER = [
   // tablas con RLS: sin security_invoker valuaría con el stock de otra empresa.
   'stock_movements_ordenados', 'stock_ppp', 'stock_valuation',
   'analytics_costo_de_ventas', 'work_queue_valuacion',
+  // 0079 · El costo del mes en una sola cifra, con las dos razones por las que
+  // puede no ser afirmable.
+  'cogs_por_mes',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

@@ -52,6 +52,7 @@ suite('Valuación de existencias', () => {
   let deposito: string;
   let productoConCosto: string;
   let productoSinCosto: string;
+  let comprobanteDeVenta: string;
   let hoy: string;
 
   const pedir = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown) =>
@@ -223,6 +224,38 @@ suite('Valuación de existencias', () => {
         impuesto: 'IVA',
       })
     ).json<{ id: string }>().id;
+
+    // Una venta de verdad: la salida de stock por venta exige citarla, y es la
+    // única salida que cuenta como costo de mercadería vendida.
+    const forma =
+      `--X\r\nContent-Disposition: form-data; name="file"; filename="val-${stamp}.xml"\r\n` +
+      `Content-Type: application/xml\r\n\r\n<c><n>1</n></c>\r\n--X--\r\n`;
+    const subida = await app.inject({
+      method: 'POST',
+      url: '/documents',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-company-id': empresa,
+        'content-type': 'multipart/form-data; boundary=X',
+      },
+      payload: forma,
+    });
+    expect(subida.statusCode, subida.body).toBe(201);
+
+    const op = await pedir('POST', `/documents/${subida.json<{ id: string }>().id}/tax-transaction`, {
+      direction: 'VENTAS',
+      cbteTipo: 1,
+      puntoVenta: 1,
+      numero: 9001,
+      fecha: hoy,
+      cuitContraparte: `30${stamp}${cuitCheckDigit(`30${stamp}`)}`,
+      razonSocial: `Cliente val ${stamp}`,
+      condicionIva: 'RESPONSABLE_INSCRIPTO',
+      neto: '5000.00', iva: '1050.00', noGravado: '0', exento: '0', percepciones: '0',
+      total: '6050.00',
+    });
+    expect(op.statusCode, op.body).toBe(201);
+    comprobanteDeVenta = op.json<{ taxTransactionId: string }>().taxTransactionId;
   }, 60_000);
 
   afterAll(async () => {
@@ -388,6 +421,121 @@ suite('Valuación de existencias', () => {
     );
     // El asiento de costo de mercadería vendida lo firma una persona.
     expect(despues.rows[0]!.n).toBe(antes.rows[0]!.n);
+  });
+
+  it('el asiento de costo no se propone si falta declarar dónde va', async () => {
+    // Una salida por venta de verdad: es la única que cuenta como costo de
+    // mercadería vendida. El ajuste de antes no era una venta.
+    const mes = hoy.slice(0, 7);
+    const venta = await pedir('POST', '/stock-movements/salida', {
+      productoId: productoConCosto,
+      depositoId: deposito,
+      cantidad: '10',
+      fecha: hoy,
+      taxTransactionId: comprobanteDeVenta,
+    });
+    expect(venta.statusCode, venta.body).toBe(201);
+
+    const r = await pedir('GET', `/analysis/costo-de-ventas/asiento-propuesto?mes=${mes}`);
+    expect(r.statusCode, r.body).toBe(200);
+    const p = r.json<{
+      renglones: unknown[];
+      motivoSinRenglones: string | null;
+      rolesFaltantes: string[];
+    }>();
+
+    expect(p.renglones).toHaveLength(0);
+    expect(p.rolesFaltantes).toEqual(['COSTO_DE_VENTAS', 'MERCADERIA']);
+    expect(p.motivoSinRenglones).toContain('inventar la contabilidad');
+  });
+
+  it('declaradas las cuentas, el asiento se propone y cuadra', async () => {
+    for (const cuenta of [
+      { code: '1.1.05', name: 'Mercadería', type: 'ACTIVO' },
+      { code: '5.1.02', name: 'Costo de mercadería vendida', type: 'COSTO' },
+    ]) {
+      expect((await pedir('POST', '/accounts', cuenta)).statusCode, cuenta.code).toBe(201);
+    }
+
+    // La cuenta del tipo equivocado se rechaza: el costo no es un activo.
+    const alReves = await pedir('PUT', '/accounting-map', {
+      asignaciones: [{ rol: 'COSTO_DE_VENTAS', cuenta: '1.1.05' }],
+    });
+    expect(alReves.statusCode).toBe(422);
+
+    expect(
+      (await pedir('PUT', '/accounting-map', {
+        asignaciones: [
+          { rol: 'MERCADERIA', cuenta: '1.1.05' },
+          { rol: 'COSTO_DE_VENTAS', cuenta: '5.1.02' },
+        ],
+      })).statusCode,
+    ).toBe(200);
+
+    const mes = hoy.slice(0, 7);
+    const p = (await pedir('GET', `/analysis/costo-de-ventas/asiento-propuesto?mes=${mes}`))
+      .json<{
+        renglones: { accountCode: string; debit: string; credit: string }[];
+        costo: string;
+        metodo: string;
+        justificacionSugerida: string;
+      }>();
+
+    expect(p.renglones).toHaveLength(2);
+    // 10 unidades al promedio de 15 = 150.
+    expect(p.costo).toBe('150.00');
+    expect(p.metodo).toBe('PPP');
+
+    const debe = p.renglones.find((l) => l.debit !== '0')!;
+    const haber = p.renglones.find((l) => l.credit !== '0')!;
+    expect(debe.accountCode, 'el costo se reconoce como resultado').toBe('5.1.02');
+    expect(haber.accountCode, 'y la mercadería se da de baja').toBe('1.1.05');
+    expect(debe.debit).toBe(haber.credit);
+    expect(p.justificacionSugerida).toContain('PPP');
+  });
+
+  it('el asiento de costo llega al Mayor por el camino de siempre', async () => {
+    const mes = hoy.slice(0, 7);
+    const p = (await pedir('GET', `/analysis/costo-de-ventas/asiento-propuesto?mes=${mes}`))
+      .json<{
+        renglones: unknown[];
+        justificacionSugerida: string;
+      }>();
+
+    const antes = await db.query<{ saldo: string }>(
+      `SELECT coalesce(sum(lm.debit - lm.credit), 0)::text AS saldo
+         FROM ledger_movements lm
+         JOIN accounts a ON a.id = lm.account_id AND a.company_id = lm.company_id
+        WHERE lm.company_id = $1 AND a.code = '5.1.02'`,
+      [empresa],
+    );
+    expect(antes.rows[0]!.saldo, 'todavía no se asentó nada').toBe('0');
+
+    const alta = await pedir('POST', '/journal-entries', {
+      journalCode: 'GENERAL',
+      entryDate: hoy,
+      description: `Costo de mercadería vendida — ${mes}`,
+      currency: 'ARS',
+      lines: p.renglones,
+      source: { type: 'MANUAL', id: null },
+      manualJustification: p.justificacionSugerida,
+    });
+    expect(alta.statusCode, alta.body).toBe(201);
+    expect(
+      (await pedir('POST', `/journal-entries/${alta.json<{ id: string }>().id}/approve`))
+        .statusCode,
+    ).toBe(200);
+
+    const despues = await db.query<{ saldo: string }>(
+      `SELECT coalesce(sum(lm.debit - lm.credit), 0)::text AS saldo
+         FROM ledger_movements lm
+         JOIN accounts a ON a.id = lm.account_id AND a.company_id = lm.company_id
+        WHERE lm.company_id = $1 AND a.code = '5.1.02'`,
+      [empresa],
+    );
+    // El resultado del ejercicio ya incluye el costo de lo vendido. Es lo que
+    // faltaba para que una venta dejara de figurar entera como ganancia.
+    expect(despues.rows[0]!.saldo).toBe('150.00');
   });
 
   it('las vistas de valuación conservan security_invoker', async () => {
