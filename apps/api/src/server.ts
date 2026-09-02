@@ -37,6 +37,7 @@ import { analisisRoutes } from './routes/analisis.js';
 import { precioRoutes } from './routes/precios.js';
 import { chequeRoutes } from './routes/cheques.js';
 import { recuentoRoutes } from './routes/recuentos.js';
+import { cajaRoutes } from './routes/caja.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -134,6 +135,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(precioRoutes);
   await app.register(chequeRoutes);
   await app.register(recuentoRoutes);
+  await app.register(cajaRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);

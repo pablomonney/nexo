@@ -66,6 +66,10 @@ const CHECKS = [
   ['products', 'products_lote_exige_stock', 'Un producto sin existencias no tiene lotes'],
   ['stock_counts', 'sc_cerrado_firmado', 'Un recuento cerrado dice quién y cuándo'],
   ['stock_counts', 'sc_anulado_con_motivo', 'Anular un recuento exige decir por qué'],
+  // 0068 · Una caja cerrada sin lo contado no es un arqueo: es una caja que
+  // alguien dio por terminada sin contar.
+  ['cash_sessions', 'cs_cerrada_completa', '0068: una sesión cerrada dice cuánto se contó, cuándo y quién'],
+  ['cash_sessions', 'cs_cierre_no_anterior', '0068: no se cierra antes de abrir'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -138,6 +142,11 @@ const TRIGGERS = [
   ['stock_count_lines', 'scl_editable', '0067: un recuento cerrado no se edita'],
   ['check_movements', 'cm_no_update', 'El libro de cheques no se edita'],
   ['check_movements', 'cm_no_delete', 'El libro de cheques no se borra'],
+  // 0068 · La caja también es un libro. Y una sesión ya arqueada no admite un
+  // movimiento nuevo: cambiaría el teórico contra el que se contó.
+  ['cash_movements', 'cmv_no_update', 'El libro de caja no se edita'],
+  ['cash_movements', 'cmv_no_delete', 'El libro de caja no se borra'],
+  ['cash_movements', 'cmv_sesion_abierta', '0068: no se le agrega un movimiento a una caja ya arqueada'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -193,6 +202,9 @@ const INDICES = [
   ['cd_una_sucesora', 'Un documento reemplaza como mucho a uno anterior'],
   ['pa_una_por_par', 'Un movimiento no se imputa dos veces al mismo comprobante'],
   ['warehouses_code_unico', 'Un código, un depósito, por empresa'],
+  // 0068 · Con dos sesiones abiertas en la misma caja, un movimiento no sabría
+  // a cuál pertenece y el arqueo dejaría de significar algo.
+  ['cs_una_abierta_por_caja', 'Una sola sesión abierta por caja'],
   ['fixed_assets_code_unico', 'Un código, un bien de uso, por empresa'],
 ];
 
@@ -222,6 +234,11 @@ const FK_CON_EMPRESA = [
   ['checks', 'ck_cuenta_fk', 'Un cheque no sale de la cuenta bancaria de otra empresa'],
   ['checks', 'ck_asiento_fk', 'Un cheque no cita el asiento de otra empresa'],
   ['check_movements', 'cm_cheque_fk', 'Un movimiento no cuelga del cheque de otra empresa'],
+  ['cash_boxes', 'cb_cuenta_fk', 'Una caja no apunta a la cuenta contable de otra empresa'],
+  ['cash_sessions', 'cs_caja_fk', 'No se abre la caja de otra empresa'],
+  ['cash_sessions', 'cs_asiento_fk', 'Una sesión no cita el asiento de otra empresa'],
+  ['cash_movements', 'cmv_sesion_fk', 'Un movimiento no cuelga de la sesión de otra empresa'],
+  ['cash_movements', 'cmv_party_fk', 'Un movimiento de caja no nombra al tercero de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -278,6 +295,8 @@ const RLS_FORZADO = [
   'checks', 'check_movements',
   // Recuento físico (0067): sin RLS, el recuento de una empresa se vería en otra.
   'stock_counts', 'stock_count_lines',
+  // Caja (0068): efectivo. Sin RLS, el arqueo de una empresa se leería en otra.
+  'cash_boxes', 'cash_sessions', 'cash_movements',
 ];
 
 /**
@@ -310,6 +329,9 @@ const VISTAS_INVOKER = [
   // Lotes y recuento (0067). La existencia por lote y la diferencia contra el
   // libro son derivadas: sin security_invoker cruzarían empresas.
   'stock_by_lot', 'stock_count_differences', 'work_queue_lotes',
+  // Caja y arqueo (0068). El saldo teórico y lo disponible son derivados: sin
+  // security_invoker, el efectivo de una empresa se sumaría al de otra.
+  'cash_session_status', 'analytics_disponible', 'work_queue_caja',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

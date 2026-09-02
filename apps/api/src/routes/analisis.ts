@@ -383,11 +383,65 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
           [tenant.companyId],
         );
 
+        // ADR-018: caja (0068) entra a la decisión por acá. «Entra 100 y sale
+        // 80» no contesta «¿llego a fin de mes?» si no se sabe que había 5.
+        // Sin `cash:read` no se devuelve un saldo a medias —bancos sin caja
+        // sería un punto de partida falso, no uno incompleto— pero tampoco un
+        // 403: la respuesta es más corta y dice por qué.
+        const veCaja = tenant.permissions.has('cash:read');
+        const proyeccion = veCaja
+          ? await tx.query(
+              `WITH inicial AS (
+                 SELECT coalesce(sum(saldo), 0) AS saldo
+                   FROM analytics_disponible WHERE company_id = $1
+               ),
+               neto AS (
+                 SELECT
+                   coalesce(sum(vencido)     FILTER (WHERE sentido = 'ENTRA'), 0)
+                     - coalesce(sum(vencido)     FILTER (WHERE sentido = 'SALE'), 0) AS t0,
+                   coalesce(sum(proximos_30) FILTER (WHERE sentido = 'ENTRA'), 0)
+                     - coalesce(sum(proximos_30) FILTER (WHERE sentido = 'SALE'), 0) AS t1,
+                   coalesce(sum(de_31_a_60)  FILTER (WHERE sentido = 'ENTRA'), 0)
+                     - coalesce(sum(de_31_a_60)  FILTER (WHERE sentido = 'SALE'), 0) AS t2,
+                   coalesce(sum(mas_de_60)   FILTER (WHERE sentido = 'ENTRA'), 0)
+                     - coalesce(sum(mas_de_60)   FILTER (WHERE sentido = 'SALE'), 0) AS t3
+                   FROM analytics_flujo_de_fondos WHERE company_id = $1
+               )
+               SELECT t.tramo, t.neto::text AS neto,
+                      (i.saldo + t.acumulado)::text AS saldo,
+                      (i.saldo + t.acumulado) < 0   AS "quedaEnRojo"
+                 FROM inicial i, neto n,
+                      LATERAL (VALUES
+                        (1, 'VENCIDO',     n.t0, n.t0),
+                        (2, 'PROXIMOS_30', n.t1, n.t0 + n.t1),
+                        (3, 'DE_31_A_60',  n.t2, n.t0 + n.t1 + n.t2),
+                        (4, 'MAS_DE_60',   n.t3, n.t0 + n.t1 + n.t2 + n.t3)
+                      ) AS t(orden, tramo, neto, acumulado)
+                ORDER BY t.orden`,
+              [tenant.companyId],
+            )
+          : null;
+
+        const partida = veCaja
+          ? await tx.query(
+              `SELECT fuente, saldo::text, partidas
+                 FROM analytics_disponible WHERE company_id = $1 ORDER BY fuente`,
+              [tenant.companyId],
+            )
+          : null;
+
         return {
           porFuente: r.rows,
           // Por sentido, no un único número: un neto solo —entradas menos
           // salidas— esconde que la plata entra en marzo y sale en enero.
           consolidado: consolidado.rows,
+          puntoDePartida: partida === null ? null : partida.rows,
+          // El saldo tramo a tramo: de acá sale «¿llego a fin de mes?».
+          saldoProyectado: proyeccion === null ? null : proyeccion.rows,
+          sinPuntoDePartida: veCaja
+            ? null
+            : 'Falta el permiso `cash:read`. El saldo proyectado no se calcula con bancos ' +
+              'solos: sería un punto de partida falso, no uno incompleto.',
           metodologia:
             'ENTRA — COBRANZAS: el pendiente de cada comprobante de venta, o de cada cuota si ' +
             'hay plan, en el tramo de su vencimiento. CHEQUES: los que están en cartera, por su ' +
@@ -404,6 +458,9 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
             'se paga e inventarle una fecha sería inventar el acuerdo. ' +
             'No hay un neto de entradas menos salidas: un solo número escondería que la plata ' +
             'entra en marzo y sale en enero, que es justo lo que hay que ver. ' +
+            '`saldoProyectado` sí acumula, y arranca del `puntoDePartida` —efectivo en cajas ' +
+            'abiertas más saldo contable de bancos—; **deja afuera lo de `sinFecha`**, que ' +
+            'suma al total pero no se puede ubicar en ningún tramo. ' +
             'Es una proyección de lo que **debería** moverse, no un pronóstico.',
         };
       },

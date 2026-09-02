@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02
+**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -103,8 +103,8 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Cuentas bancarias, extractos, conciliación | HECHO |
 | Proyección de cobranzas | HECHO |
 | **Cheques propios y de terceros** | HECHO — cartera, ciclo derivado del libro, y flujo por fecha de pago. |
-| **Caja** | LIBRE — apertura, cierre, arqueo. |
-| **Flujo de fondos proyectado** | HECHO — entradas (cobranzas y cheques) y salidas (pagos y órdenes comprometidas), sin doble conteo. |
+| **Caja y arqueo** | HECHO — el saldo teórico se deriva de los movimientos, lo contado es lo único declarado, y la diferencia va a la bandeja sin umbral: es aritmética, no criterio. |
+| **Flujo de fondos proyectado** | HECHO — entradas (cobranzas y cheques) y salidas (pagos y órdenes comprometidas), sin doble conteo, y **desde un punto de partida**: efectivo en cajas abiertas más saldo contable de bancos. |
 
 ## 8 · Activos fijos
 
@@ -134,6 +134,12 @@ de fondos pasó a tener sus dos lados. Quedan **CRM** (LIBRE), **remitos**,
 **valuación de stock** y **sueldos**, y los tres últimos exigen una decisión o
 una norma que no se puede inventar.
 
+A eso se sumó **caja y arqueo**, que no estaba en la lista porque ningún ERP lo
+publicita: lo tienen todos. La diferencia está en qué se hace con la diferencia
+de arqueo. Acá no hay forma de hacerla desaparecer —no existe el campo que la
+ajuste— y queda en la bandeja hasta que alguien escriba por qué. Un arqueo que
+se puede cuadrar tipeando no es un arqueo.
+
 Lo que NEXO tiene y los ERP tradicionales normalmente no:
 
 - **Trazabilidad hasta la fila.** Cada cifra de la analítica abre los
@@ -158,9 +164,9 @@ construirlos con esa misma disciplina es lo que hace que valga la pena elegirlo.
 
 Por dependencia y por valor, entre lo LIBRE:
 
-~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ — hechos.
+~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
+~~4. Caja y arqueo~~ — hechos.
 
-4. **Caja y arqueo** — cierra el lado del efectivo, que hoy es un asiento suelto.
 5. **CRM** — se apoya en terceros y desemboca en el presupuesto, que existe.
 6. **Proyectos** — se apoya en centros de costo.
 7. **Vendedores y comisiones** — necesita CRM o al menos el vendedor en la venta.

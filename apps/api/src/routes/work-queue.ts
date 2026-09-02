@@ -99,6 +99,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Precios (0063). Cuelgan de la lista, y quien no puede leer el maestro de
   // productos no recibe avisos sobre precios que no puede consultar.
   price_lists: 'product:read',
+  // Caja (0068). La diferencia de arqueo es plata que falta o sobra: quien no
+  // puede ver la caja no recibe avisos sobre su efectivo.
+  cash_sessions: 'cash:read',
 };
 
 const CATEGORIAS = [

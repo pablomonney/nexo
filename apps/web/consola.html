@@ -135,6 +135,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="iva">IVA</button>
   <button data-vista="bancos">Bancos</button>
   <button data-vista="cheques">Cheques</button>
+  <button data-vista="caja">Caja</button>
   <button data-vista="integraciones">Integraciones</button>
   <button data-vista="analitica">Analítica</button>
   <button data-vista="analisis">Señales</button>
@@ -1150,6 +1151,89 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </div></details>
 </section>
 
+<!-- ══ Caja ═══════════════════════════════════════════════════════════════ -->
+<section id="v-caja" hidden>
+  <h2>Caja y arqueo</h2>
+  <p class="ayuda">El saldo teórico <strong>no se carga</strong>: se declara cuánto había al
+    abrir, se registran los movimientos, y la suma es el teórico. Lo único que el sistema no
+    puede derivar es <strong>lo contado</strong>, porque sale de contar billetes.
+    Cerrar con diferencia está permitido; hacerla desaparecer, no: queda escrita y va a la
+    bandeja hasta que alguien explique por qué. Arquear <strong>no genera ningún asiento</strong>
+    — el movimiento de caja del período lo firma una persona, por el camino de siempre.</p>
+
+  <h3>Desde cuánto se arranca</h3>
+  <p class="ayuda">Es lo que le faltaba al flujo de fondos para contestar «¿llego a fin de mes?».
+    <strong>Caja</strong> es el saldo teórico de las sesiones abiertas —lo que debería haber, no
+    lo contado—. <strong>Bancos</strong> es el saldo del <em>Mayor</em> y no el del extracto: la
+    diferencia entre los dos la resuelve la conciliación, no esta lectura.</p>
+  <button id="b-caja" class="sec">Actualizar</button>
+  <dl class="kv" id="caja-disponible"></dl>
+  <div id="caja-msg"></div>
+
+  <h3>Sesiones</h3>
+  <div class="tabla"><table id="t-caja-ses"><thead><tr>
+    <th>Caja</th><th>Abierta</th><th>Inicial</th><th>Ingresos</th><th>Egresos</th>
+    <th>Teórico</th><th>Contado</th><th>Diferencia</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="caja-detalle" hidden class="grupo">
+    <h3 id="caja-det-titulo">Sesión</h3>
+    <div class="tabla"><table id="t-caja-mov"><thead><tr>
+      <th>Fecha</th><th>Tipo</th><th>Importe</th><th>Concepto</th><th>Tercero</th><th>Registró</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="caja-operar" hidden>
+      <h4>Registrar un movimiento</h4>
+      <div class="fila">
+        <div><label>Tipo</label><select id="caja-m-tipo">
+          <option value="INGRESO">Ingreso</option><option value="EGRESO">Egreso</option>
+        </select></div>
+        <div><label>Importe</label><input id="caja-m-importe" inputmode="decimal"></div>
+        <div><label>Fecha</label><input id="caja-m-fecha" type="date"></div>
+        <div style="flex:1"><label>Concepto</label><input id="caja-m-concepto" maxlength="300"></div>
+      </div>
+      <p class="ayuda">El concepto es obligatorio: un movimiento de caja sin concepto es plata
+        que se movió porque sí, y al arquear nadie puede reconstruir qué pasó.</p>
+      <button id="b-caja-mov" class="sec">Registrar</button>
+      <div id="caja-m-msg"></div>
+
+      <h4>Arquear y cerrar</h4>
+      <div class="fila">
+        <div><label>Fecha</label><input id="caja-c-fecha" type="date"></div>
+        <div><label>Contado</label><input id="caja-c-contado" inputmode="decimal"></div>
+        <div style="flex:1"><label>Si no coincide, por qué</label>
+          <input id="caja-c-motivo" maxlength="500" placeholder="opcional al cerrar"></div>
+      </div>
+      <button id="b-caja-cerrar">Cerrar la caja</button>
+      <div id="caja-c-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="caja-abrir" hidden><summary>Abrir una caja</summary><div>
+    <p class="ayuda">El saldo inicial se declara y <strong>no se arrastra del cierre anterior</strong>:
+      arrastrarlo haría que un error de conteo se propague sin que nadie lo vuelva a mirar.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Caja</label><select id="caja-n-caja"></select></div>
+      <div><label>Fecha</label><input id="caja-n-fecha" type="date"></div>
+      <div><label>Saldo inicial</label><input id="caja-n-inicial" inputmode="decimal"></div>
+      <div><label>&nbsp;</label><button id="b-caja-abrir" class="sec">Abrir</button></div>
+    </div>
+    <div id="caja-abrir-msg"></div>
+  </div></details>
+
+  <details class="grupo" id="caja-alta" hidden><summary>Dar de alta una caja</summary><div>
+    <div class="fila">
+      <div><label>Código</label><input id="caja-a-codigo" maxlength="40"></div>
+      <div style="flex:1"><label>Nombre</label><input id="caja-a-nombre" maxlength="200"></div>
+      <div><label>Cuenta contable</label><input id="caja-a-cuenta" maxlength="40" placeholder="código, opcional"></div>
+      <div><label>&nbsp;</label><button id="b-caja-alta" class="sec">Crear</button></div>
+    </div>
+    <p class="ayuda">La cuenta permite comparar el efectivo real contra el Mayor sin que este
+      módulo escriba un asiento.</p>
+    <div id="caja-alta-msg"></div>
+  </div></details>
+</section>
+
 <!-- ══ Integraciones ══════════════════════════════════════════════════════ -->
 <section id="v-integraciones" hidden>
   <h2>Integraciones</h2>
@@ -1505,6 +1589,7 @@ const estado = {
   lista: null, listaBorrador: [], depositoPorDefecto: null,
   recuento: null, recuentoBorrador: [],
   comercialFecha: null, comercialTercero: null, cheque: null,
+  sesionCaja: null, sesionCajaTitulo: '',
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1556,7 +1641,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
                 'terceros','productos','precios','comercial','recepciones','stock','activos',
-                'iva','bancos','cheques','integraciones','analitica','analisis',
+                'iva','bancos','cheques','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
 function ir(vista, migas) {
@@ -1594,6 +1679,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'iva') cargarIva();
     if (v === 'bancos') listarBancos();
     if (v === 'cheques') listarCheques();
+    if (v === 'caja') listarCaja();
     if (v === 'integraciones') listarIntegraciones();
     if (v === 'analitica') cargarAnalitica();
     if (v === 'analisis') listarSenales();
@@ -1701,6 +1787,7 @@ function aplicarPermisosANav() {
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
+    caja: 'cash:read',
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
@@ -4207,6 +4294,153 @@ E('b-chq-mover').onclick = async () => {
   const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
+};
+
+// ══ 4c3 · Caja y arqueo ═══════════════════════════════════════════════════
+async function listarCaja() {
+  E('caja-abrir').hidden = !puede('cash:write');
+  E('caja-alta').hidden = !puede('cash:write');
+
+  const disp = await api('GET', '/analysis/disponible');
+  if (disp.ok) {
+    let html = '';
+    for (const f of disp.datos.porFuente || []) {
+      html += fila(f.fuente === 'CAJA' ? 'Efectivo en caja' : 'Saldo contable en bancos',
+                   f.saldo + '  (' + f.partidas + ')');
+    }
+    E('caja-disponible').innerHTML = html + fila('Total', disp.datos.total);
+  }
+
+  const cajas = await api('GET', '/cash-boxes');
+  if (cajas.ok) {
+    const s = E('caja-n-caja');
+    const previo = s.value;
+    s.innerHTML = '';
+    for (const c of cajas.datos.cajas || []) {
+      // Una caja con sesión abierta no se puede volver a abrir: ofrecerla sería
+      // ofrecer un pedido que la base rechaza.
+      if (c.sesionAbierta) continue;
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.codigo + ' — ' + c.nombre;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+
+  const r = await api('GET', '/cash-sessions');
+  if (!r.ok) return decir('caja-msg', r);
+  E('caja-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-caja-ses').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const s of r.datos.sesiones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(s.cajaCodigo) + '</td>' +
+      '<td class="mono">' + escapar(s.abiertaEl) + '</td>' +
+      '<td class="mono">' + escapar(s.saldoInicial) + '</td>' +
+      '<td class="mono">' + escapar(s.ingresos) + '</td>' +
+      '<td class="mono">' + escapar(s.egresos) + '</td>' +
+      '<td class="mono">' + escapar(s.saldoTeorico) + '</td>' +
+      // `null` es «no se contó», que no es lo mismo que contar cero.
+      '<td class="mono">' + escapar(s.saldoContado === null ? '—' : s.saldoContado) + '</td>' +
+      '<td class="mono">' + (s.diferencia === null
+        ? '<span class="p p-neu">sin contar</span>'
+        : (Number(s.diferencia) === 0
+            ? '<span class="p p-bien">0</span>'
+            : '<span class="p p-mal">' + escapar(s.diferencia) + '</span>')) + '</td>' +
+      '<td>' + pastilla(s.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirSesionDeCaja(s.id, s.cajaCodigo);
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function abrirSesionDeCaja(id, titulo) {
+  const r = await api('GET', '/cash-sessions/' + id);
+  if (!r.ok) return decir('caja-msg', r);
+
+  estado.sesionCaja = id;
+  estado.sesionCajaTitulo = titulo;
+  E('caja-detalle').hidden = false;
+  E('caja-det-titulo').textContent =
+    'Caja ' + titulo + ' — ' + r.datos.sesion.status + ' · teórico ' + r.datos.sesion.saldoTeorico;
+  // Una sesión cerrada ya fue arqueada: no admite movimientos ni un segundo
+  // cierre, y ofrecer el formulario sería ofrecer un pedido que vuelve con 409.
+  E('caja-operar').hidden = !puede('cash:write') || r.datos.sesion.status !== 'ABIERTA';
+  limpiar('caja-m-msg');
+  limpiar('caja-c-msg');
+
+  const cuerpo = E('t-caja-mov').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const m of r.datos.movimientos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(m.fecha) + '</td>' +
+      '<td>' + escapar(m.tipo) + '</td>' +
+      '<td class="mono">' + escapar(m.importe) + '</td>' +
+      '<td>' + escapar(m.concepto) + '</td>' +
+      '<td>' + escapar(m.razonSocial || '—') + '</td>' +
+      '<td class="mono">' + escapar(m.registradoPor) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-caja').onclick = () => listarCaja();
+
+E('b-caja-alta').onclick = async () => {
+  const cuerpo = { codigo: E('caja-a-codigo').value, nombre: E('caja-a-nombre').value };
+  if (E('caja-a-cuenta').value.trim()) cuerpo.cuenta = E('caja-a-cuenta').value.trim();
+  const r = await api('POST', '/cash-boxes', cuerpo);
+  decir('caja-alta-msg', r, 'Caja creada');
+  if (r.ok) listarCaja();
+};
+
+E('b-caja-abrir').onclick = async () => {
+  const r = await api('POST', '/cash-sessions', {
+    cajaId: E('caja-n-caja').value,
+    fecha: E('caja-n-fecha').value,
+    saldoInicial: E('caja-n-inicial').value,
+  });
+  decir('caja-abrir-msg', r, 'Caja abierta. Desde acá el teórico se deriva de los movimientos.');
+  if (r.ok) listarCaja();
+};
+
+E('b-caja-mov').onclick = async () => {
+  const r = await api('POST', '/cash-sessions/' + estado.sesionCaja + '/movimientos', {
+    tipo: E('caja-m-tipo').value,
+    importe: E('caja-m-importe').value,
+    fecha: E('caja-m-fecha').value,
+    concepto: E('caja-m-concepto').value,
+  });
+  decir('caja-m-msg', r, 'Movimiento registrado');
+  if (r.ok) {
+    E('caja-m-importe').value = '';
+    E('caja-m-concepto').value = '';
+    await listarCaja();
+    await abrirSesionDeCaja(estado.sesionCaja, estado.sesionCajaTitulo);
+  }
+};
+
+E('b-caja-cerrar').onclick = async () => {
+  const cuerpo = { fecha: E('caja-c-fecha').value, saldoContado: E('caja-c-contado').value };
+  if (E('caja-c-motivo').value.trim()) cuerpo.motivo = E('caja-c-motivo').value.trim();
+
+  const r = await api('POST', '/cash-sessions/' + estado.sesionCaja + '/close', cuerpo);
+  if (r.ok && Number(r.datos.diferencia) !== 0) {
+    // La diferencia no se corrige: se explica. Decirlo acá evita que alguien
+    // busque el botón que la haga desaparecer, que no existe a propósito.
+    E('caja-c-msg').innerHTML = '<div class="aviso">Cerró con una diferencia de ' +
+      escapar(r.datos.diferencia) + ' contra un teórico de ' + escapar(r.datos.saldoTeorico) +
+      '. Queda registrada y va a la bandeja hasta que alguien explique por qué. ' +
+      'No se generó ningún asiento.</div>';
+  } else {
+    decir('caja-c-msg', r, 'Caja cerrada sin diferencia. No se generó ningún asiento.');
+  }
+  if (r.ok) {
+    await listarCaja();
+    await abrirSesionDeCaja(estado.sesionCaja, estado.sesionCajaTitulo);
+  }
 };
 
 // ══ 4d · Integraciones ════════════════════════════════════════════════════

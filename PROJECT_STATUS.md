@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 89 archivos de test, 1624 tests,
-257 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 90 archivos de test, 1634 tests,
+274 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (25 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (26 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -65,6 +65,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Flujo de fondos: entradas y salidas** | **TERMINADO** | **`cheques`, `ciclo-compras` (ADR-018)** |
 | **Circuito de compras completo** | **TERMINADO** | **`ciclo-compras` (8 tests)** |
 | **Lotes, vencimientos y recuento físico** | **TERMINADO** | **`stock` (28 tests)** |
+| **Caja y arqueo** | **TERMINADO** | **`caja` (10 tests)** |
 
 ## 3. En curso
 
@@ -93,6 +94,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0065 | Los cheques entran a la capa de decisión: flujo consolidado y señal (ADR-018) |
 | 0066 | El flujo de fondos deja de mirar solo un lado: pagos y compromisos |
 | 0067 | Lotes con vencimiento, existencia por lote y recuento que ajusta sin reescribir |
+| 0068 | Caja y arqueo: el teórico se deriva, lo contado se declara, y la diferencia va a la bandeja sin umbral |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
