@@ -102,6 +102,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Caja (0068). La diferencia de arqueo es plata que falta o sobra: quien no
   // puede ver la caja no recibe avisos sobre su efectivo.
   cash_sessions: 'cash:read',
+  // CRM (0069). El embudo es información comercial: quien no puede verlo no
+  // recibe avisos sobre oportunidades que no puede abrir.
+  crm_opportunities: 'crm:read',
 };
 
 const CATEGORIAS = [

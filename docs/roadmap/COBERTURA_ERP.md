@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo)
+**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, y otra vez al cerrar CRM)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -59,6 +59,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | **Devoluciones** | DECISIÓN — depende de la anterior. |
 | **Descuentos y promociones** | DECISIÓN — una lista tiene precios, no reglas. «10 % desde la quinta unidad» no se puede expresar. |
 | **Vendedores y comisiones** | LIBRE |
+| **CRM: prospectos, oportunidades, embudo** | HECHO — el prospecto no ensucia el maestro de terceros, la etapa sale del libro de transiciones, y el embudo pondera **solo** donde la empresa declaró la probabilidad. NEXO no trae un embudo por defecto. |
 
 ## 5 · Compras
 
@@ -116,7 +117,6 @@ la RT que lo admite y sobre el impuesto.
 
 | Módulo | Estado | Qué falta exactamente |
 |---|---|---|
-| **CRM** | LIBRE | Prospectos, oportunidades con etapa, actividades, embudo, conversión a presupuesto. Las etapas se declaran por empresa, no se inventan. |
 | **Proyectos y servicios** | LIBRE | Proyectos, tareas, horas, costo y rentabilidad. Se apoya en centros de costo, que ya existen. |
 | **Producción** | DECISIÓN | BOM, órdenes, consumos y mermas se pueden modelar; **el costo del producto terminado no**, porque depende de la valuación de existencias, que está sin decidir. |
 | **RRHH** | BLOQUEADO | ADR-012 §8 deja tres preguntas abiertas y ninguna es técnica: qué convenios se soportan, si se emite el recibo (Ley 27.555) y quién firma la liquidación. Inventar una escala violaría §30. |
@@ -128,11 +128,18 @@ Al abrir esta auditoría, lo que los ERP argentinos tenían y NEXO no era:
 cheques, órdenes de compra, remitos, lotes, recuento físico, CRM, sueldos y
 valuación de stock.
 
-De esos ocho, **cuatro se cerraron**: cheques y lotes/recuento se construyeron;
-las órdenes de compra ya existían y lo que faltaba era recorrerlas; y el flujo
-de fondos pasó a tener sus dos lados. Quedan **CRM** (LIBRE), **remitos**,
-**valuación de stock** y **sueldos**, y los tres últimos exigen una decisión o
-una norma que no se puede inventar.
+De esos ocho, **cinco se cerraron**: cheques, lotes/recuento y CRM se
+construyeron; las órdenes de compra ya existían y lo que faltaba era
+recorrerlas; y el flujo de fondos pasó a tener sus dos lados. Quedan
+**remitos**, **valuación de stock** y **sueldos**, y los tres exigen una
+decisión o una norma que no se puede inventar.
+
+El CRM entró con la misma disciplina que el resto y eso lo hace distinto de lo
+que ofrece el mercado: no trae un embudo por defecto —un embudo es cómo vende
+cada empresa— y **no pondera lo que nadie declaró**. Un pipeline con
+probabilidades inventadas produce un número que parece plata y no lo es; acá
+las etapas sin probabilidad se informan aparte y quedan fuera del total. Y el
+embudo no se suma al flujo de fondos: una oportunidad no es un crédito.
 
 A eso se sumó **caja y arqueo**, que no estaba en la lista porque ningún ERP lo
 publicita: lo tienen todos. La diferencia está en qué se hace con la diferencia
@@ -165,11 +172,10 @@ construirlos con esa misma disciplina es lo que hace que valga la pena elegirlo.
 Por dependencia y por valor, entre lo LIBRE:
 
 ~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
-~~4. Caja y arqueo~~ — hechos.
+~~4. Caja y arqueo~~ · ~~5. CRM~~ — hechos.
 
-5. **CRM** — se apoya en terceros y desemboca en el presupuesto, que existe.
 6. **Proyectos** — se apoya en centros de costo.
-7. **Vendedores y comisiones** — necesita CRM o al menos el vendedor en la venta.
+7. **Vendedores y comisiones** — el CRM ya existe; falta el vendedor en la venta.
 8. **Sucursales** — hoy se aproxima con centro de costo, que no es lo mismo.
 9. **Suscripciones** — la arquitectura, sin precios ni pasarela.
 

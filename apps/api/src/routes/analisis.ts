@@ -91,6 +91,7 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
                   dias_cliente_inactivo AS "diasClienteInactivo",
                   mora_pct::text AS "moraPct",
                   rechazo_cheques_pct::text AS "rechazoChequesPct",
+                  crm_dias_sin_actividad AS "crmDiasSinActividad",
                   updated_at AS "actualizadoEn", updated_by AS "actualizadoPor"
              FROM analysis_thresholds WHERE company_id = $1`,
           [tenant.companyId],
@@ -123,6 +124,10 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         // Agregado por la 0065. Como todos: opcional, y sin él el sistema informa
         // la proporción de rechazos y no la llama desvío.
         rechazoChequesPct: z.number().gt(0).max(100).nullable().default(null),
+        // Agregado por la 0069. Sin él, el sistema informa hace cuántos días no
+        // se toca una oportunidad y **no lo llama abandono**: vender un galpón
+        // y vender café no tienen el mismo ritmo.
+        crmDiasSinActividad: z.number().int().gt(0).nullable().default(null),
       })
       .parse(request.body);
 
@@ -137,18 +142,21 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         await tx.query(
           `INSERT INTO analysis_thresholds
              (company_id, caida_ventas_pct, concentracion_cliente_pct,
-              dias_cliente_inactivo, mora_pct, rechazo_cheques_pct, updated_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)
+              dias_cliente_inactivo, mora_pct, rechazo_cheques_pct,
+              crm_dias_sin_actividad, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (company_id) DO UPDATE SET
              caida_ventas_pct = EXCLUDED.caida_ventas_pct,
              concentracion_cliente_pct = EXCLUDED.concentracion_cliente_pct,
              dias_cliente_inactivo = EXCLUDED.dias_cliente_inactivo,
              mora_pct = EXCLUDED.mora_pct,
              rechazo_cheques_pct = EXCLUDED.rechazo_cheques_pct,
+             crm_dias_sin_actividad = EXCLUDED.crm_dias_sin_actividad,
              updated_by = EXCLUDED.updated_by`,
           [
             tenant.companyId, body.caidaVentasPct, body.concentracionClientePct,
             body.diasClienteInactivo, body.moraPct, body.rechazoChequesPct,
+            body.crmDiasSinActividad,
             `user:${auth.user.userId}`,
           ],
         );

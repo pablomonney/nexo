@@ -70,6 +70,9 @@ const CHECKS = [
   // alguien dio por terminada sin contar.
   ['cash_sessions', 'cs_cerrada_completa', '0068: una sesión cerrada dice cuánto se contó, cuándo y quién'],
   ['cash_sessions', 'cs_cierre_no_anterior', '0068: no se cierra antes de abrir'],
+  // 0069 · Una oportunidad es de alguien. Sin tercero ni prospecto, el embudo
+  // cuenta plata que no se le puede pedir a nadie.
+  ['crm_opportunities', 'co_alguien', '0069: la oportunidad nombra al tercero o al prospecto'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -147,6 +150,15 @@ const TRIGGERS = [
   ['cash_movements', 'cmv_no_update', 'El libro de caja no se edita'],
   ['cash_movements', 'cmv_no_delete', 'El libro de caja no se borra'],
   ['cash_movements', 'cmv_sesion_abierta', '0068: no se le agrega un movimiento a una caja ya arqueada'],
+  // 0069 · El embudo solo sirve si es comparable: una oportunidad se pierde con
+  // motivo y no se borra, el libro de etapas no se edita, y lo cerrado no se
+  // reabre.
+  ['crm_opportunities', 'crm_opportunities_no_delete', '0069: una oportunidad se pierde, no se borra'],
+  ['crm_stage_transitions', 'cstr_no_update', '0069: el libro de etapas no se edita'],
+  ['crm_stage_transitions', 'cstr_no_delete', '0069: el libro de etapas no se borra'],
+  ['crm_stage_transitions', 'cstr_transicion', '0069: perder exige motivo, y lo cerrado no se reabre'],
+  ['crm_activities', 'cac_no_update', '0069: lo que se hizo, se hizo'],
+  ['crm_activities', 'cac_no_delete', '0069: una visita borrada deja un seguimiento que parece mejor de lo que fue'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -205,6 +217,8 @@ const INDICES = [
   // 0068 · Con dos sesiones abiertas en la misma caja, un movimiento no sabría
   // a cuál pertenece y el arqueo dejaría de significar algo.
   ['cs_una_abierta_por_caja', 'Una sola sesión abierta por caja'],
+  ['cst_code_unico', '0069: un código, una etapa del embudo, por empresa'],
+  ['cst_orden_unico', '0069: dos etapas en la misma posición dejan el embudo sin orden'],
   ['fixed_assets_code_unico', 'Un código, un bien de uso, por empresa'],
 ];
 
@@ -239,6 +253,11 @@ const FK_CON_EMPRESA = [
   ['cash_sessions', 'cs_asiento_fk', 'Una sesión no cita el asiento de otra empresa'],
   ['cash_movements', 'cmv_sesion_fk', 'Un movimiento no cuelga de la sesión de otra empresa'],
   ['cash_movements', 'cmv_party_fk', 'Un movimiento de caja no nombra al tercero de otra empresa'],
+  ['crm_opportunities', 'co_party_fk', 'Una oportunidad no es del tercero de otra empresa'],
+  ['crm_opportunities', 'co_documento_fk', 'Una oportunidad no cita el presupuesto de otra empresa'],
+  ['crm_stage_transitions', 'cstr_oportunidad_fk', 'Una transición no cuelga de la oportunidad de otra empresa'],
+  ['crm_stage_transitions', 'cstr_etapa_fk', 'No se mueve a la etapa de otra empresa'],
+  ['crm_activities', 'cac_oportunidad_fk', 'Una actividad no cuelga de la oportunidad de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -297,6 +316,9 @@ const RLS_FORZADO = [
   'stock_counts', 'stock_count_lines',
   // Caja (0068): efectivo. Sin RLS, el arqueo de una empresa se leería en otra.
   'cash_boxes', 'cash_sessions', 'cash_movements',
+  // CRM (0069): a quién le está por vender cada empresa. Sin RLS, la cartera
+  // de prospectos de un estudio se leería desde la empresa de al lado.
+  'crm_stages', 'crm_opportunities', 'crm_stage_transitions', 'crm_activities',
 ];
 
 /**
@@ -332,6 +354,9 @@ const VISTAS_INVOKER = [
   // Caja y arqueo (0068). El saldo teórico y lo disponible son derivados: sin
   // security_invoker, el efectivo de una empresa se sumaría al de otra.
   'cash_session_status', 'analytics_disponible', 'work_queue_caja',
+  // CRM (0069). La etapa actual y el embudo son derivados: sin security_invoker
+  // el embudo de una empresa sumaría las oportunidades de otra.
+  'crm_opportunity_status', 'analytics_embudo', 'work_queue_crm',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

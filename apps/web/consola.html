@@ -127,6 +127,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="operaciones">Operaciones</button>
   <button data-vista="terceros">Terceros</button>
   <button data-vista="productos">Productos</button>
+  <button data-vista="crm">CRM</button>
   <button data-vista="precios">Precios</button>
   <button data-vista="comercial">Comercial</button>
   <button data-vista="recepciones">Recepciones</button>
@@ -918,6 +919,122 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </div></details>
 </section>
 
+<!-- ══ CRM ════════════════════════════════════════════════════════════════ -->
+<section id="v-crm" hidden>
+  <h2>CRM</h2>
+  <p class="ayuda">La etapa <strong>no se elige</strong>: se registra el paso y la etapa actual
+    sale de la última transición. Perder exige decir por qué —es la única información que un
+    embudo deja para la próxima vez— y una oportunidad cerrada no se reabre: si volvió a haber
+    conversación, es una oportunidad nueva, y así el embudo del mes que viene sigue siendo
+    comparable con el de este.</p>
+
+  <h3>El embudo</h3>
+  <p class="ayuda">NEXO <strong>no trae etapas por defecto</strong>: un embudo es cómo vende esta
+    empresa. Y la probabilidad de cada etapa se declara: sin declararla, se informa el importe
+    estimado y <strong>no se pondera</strong>, porque inventar un 60&nbsp;% da un número que
+    parece plata y no lo es. El embudo <strong>no entra al flujo de fondos</strong>: una
+    oportunidad no es un crédito.</p>
+  <button id="b-crm" class="sec">Actualizar</button>
+  <dl class="kv" id="crm-embudo-resumen"></dl>
+  <div class="tabla"><table id="t-crm-embudo"><thead><tr>
+    <th>#</th><th>Etapa</th><th>Tipo</th><th>Probabilidad</th><th>Cantidad</th>
+    <th>Importe estimado</th><th>Ponderado</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="crm-msg"></div>
+
+  <h3>Oportunidades</h3>
+  <div class="fila">
+    <div><label>Estado</label><select id="crm-f-estado">
+      <option value="">Todas</option><option value="ABIERTA">Abiertas</option>
+      <option value="GANADA">Ganadas</option><option value="PERDIDA">Perdidas</option>
+    </select></div>
+  </div>
+  <div class="tabla"><table id="t-crm-op"><thead><tr>
+    <th>Título</th><th>Quién</th><th>Estimado</th><th>Etapa</th><th>Días en etapa</th>
+    <th>Sin actividad</th><th>Ponderado</th><th>Presupuesto</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="crm-detalle" hidden class="grupo">
+    <h3 id="crm-det-titulo">Oportunidad</h3>
+    <h4>Cómo llegó hasta acá</h4>
+    <div class="tabla"><table id="t-crm-tr"><thead><tr>
+      <th>Fecha</th><th>Etapa</th><th>Tipo</th><th>Motivo</th><th>Registró</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Actividades</h4>
+    <div class="tabla"><table id="t-crm-ac"><thead><tr>
+      <th>Fecha</th><th>Tipo</th><th>Detalle</th><th>Registró</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="crm-operar" hidden>
+      <div class="fila">
+        <div><label>Mover a</label><select id="crm-t-etapa"></select></div>
+        <div><label>Fecha</label><input id="crm-t-fecha" type="date"></div>
+        <div style="flex:1"><label>Motivo<span id="crm-t-lbl"></span></label>
+          <input id="crm-t-motivo" maxlength="500"></div>
+        <div><label>&nbsp;</label><button id="b-crm-mover" class="sec">Registrar el paso</button></div>
+      </div>
+      <div id="crm-t-msg"></div>
+
+      <div class="fila">
+        <div><label>Actividad</label><select id="crm-a-tipo">
+          <option>LLAMADA</option><option>REUNION</option><option>EMAIL</option>
+          <option>VISITA</option><option>OTRA</option>
+        </select></div>
+        <div><label>Fecha</label><input id="crm-a-fecha" type="date"></div>
+        <div style="flex:1"><label>Detalle</label><input id="crm-a-detalle" maxlength="1000"></div>
+        <div><label>&nbsp;</label><button id="b-crm-actividad" class="sec">Registrar</button></div>
+      </div>
+      <div id="crm-a-msg"></div>
+
+      <div class="fila">
+        <div style="flex:1"><label>Presupuesto que salió de acá</label>
+          <input id="crm-p-id" maxlength="60" placeholder="id del documento comercial"></div>
+        <div><label>&nbsp;</label><button id="b-crm-presupuesto" class="sec">Vincular</button></div>
+      </div>
+      <p class="ayuda">CRM <strong>no crea documentos comerciales</strong>: el presupuesto nace
+        del circuito de siempre, con su numeración y su máquina de estados. Acá solo se ata el
+        cabo, y mientras no esté atado la bandeja lo dice.</p>
+      <div id="crm-p-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="crm-alta-op" hidden><summary>Cargar una oportunidad</summary><div>
+    <div class="fila">
+      <div style="flex:1"><label>Título</label><input id="crm-n-titulo" maxlength="200"></div>
+      <div><label>Etapa inicial</label><select id="crm-n-etapa"></select></div>
+      <div><label>Fecha</label><input id="crm-n-fecha" type="date"></div>
+    </div>
+    <div class="fila">
+      <div style="flex:1"><label>Cliente ya registrado</label><select id="crm-n-tercero">
+        <option value="">— todavía no es cliente —</option>
+      </select></div>
+      <div style="flex:1"><label>…o nombre del prospecto</label><input id="crm-n-prospecto" maxlength="200"></div>
+      <div><label>Importe estimado</label><input id="crm-n-importe" inputmode="decimal"></div>
+      <div><label>Cierre estimado</label><input id="crm-n-cierre" type="date"></div>
+    </div>
+    <p class="ayuda">Un prospecto <strong>todavía no es un tercero</strong>: el maestro exige
+      documento, y llenarlo de gente que nunca compró lo vuelve inservible para lo que existe,
+      que es facturar. Basta el nombre hasta que la venta lo justifique.</p>
+    <button id="b-crm-alta-op" class="sec">Cargar</button>
+    <div id="crm-alta-op-msg"></div>
+  </div></details>
+
+  <details class="grupo" id="crm-alta-etapa" hidden><summary>Declarar una etapa</summary><div>
+    <div class="fila">
+      <div><label>Código</label><input id="crm-e-codigo" maxlength="40"></div>
+      <div style="flex:1"><label>Nombre</label><input id="crm-e-nombre" maxlength="200"></div>
+      <div><label>Orden</label><input id="crm-e-orden" inputmode="numeric"></div>
+      <div><label>Tipo</label><select id="crm-e-tipo">
+        <option>ABIERTA</option><option>GANADA</option><option>PERDIDA</option>
+      </select></div>
+      <div><label>Probabilidad %</label><input id="crm-e-prob" inputmode="decimal" placeholder="opcional"></div>
+      <div><label>&nbsp;</label><button id="b-crm-alta-etapa" class="sec">Declarar</button></div>
+    </div>
+    <div id="crm-alta-etapa-msg"></div>
+  </div></details>
+</section>
+
 <!-- ══ Precios ════════════════════════════════════════════════════════════ -->
 <section id="v-precios" hidden>
   <h2>Listas de precios</h2>
@@ -1590,6 +1707,7 @@ const estado = {
   recuento: null, recuentoBorrador: [],
   comercialFecha: null, comercialTercero: null, cheque: null,
   sesionCaja: null, sesionCajaTitulo: '',
+  oportunidad: null, oportunidadTitulo: '',
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1640,7 +1758,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','precios','comercial','recepciones','stock','activos',
+                'terceros','productos','crm','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
@@ -1671,6 +1789,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'operaciones') listarOperaciones();
     if (v === 'terceros') listarTerceros();
     if (v === 'productos') listarProductos();
+    if (v === 'crm') listarCrm();
     if (v === 'precios') listarPrecios();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
@@ -1784,6 +1903,7 @@ function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
+    crm: 'crm:read',
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
@@ -4294,6 +4414,219 @@ E('b-chq-mover').onclick = async () => {
   const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
+};
+
+// ══ 4c4 · CRM ═════════════════════════════════════════════════════════════
+async function listarCrm() {
+  E('crm-alta-op').hidden = !puede('crm:write');
+  E('crm-alta-etapa').hidden = !puede('crm:write');
+
+  const etapas = await api('GET', '/crm/stages');
+  if (etapas.ok) {
+    const lista = etapas.datos.etapas || [];
+    // Sin etapas declaradas el módulo no arranca, y decirlo es más útil que
+    // mostrar tres tablas vacías: un embudo es cómo vende esta empresa.
+    E('crm-msg').innerHTML = lista.length === 0
+      ? '<div class="aviso">Todavía no hay etapas declaradas. Un embudo es cómo vende esta ' +
+        'empresa, así que NEXO no trae uno por defecto: declaralas abajo y el resto del ' +
+        'módulo empieza a funcionar.</div>'
+      : '<div class="aviso">' + escapar(etapas.datos.alcance) + '</div>';
+
+    for (const id of ['crm-n-etapa', 'crm-t-etapa']) {
+      const s = E(id);
+      const previo = s.value;
+      s.innerHTML = '';
+      for (const e of lista) {
+        if (e.status !== 'ACTIVA') continue;
+        const o = document.createElement('option');
+        o.value = e.id;
+        o.textContent = e.orden + ' · ' + e.nombre + (e.tipo === 'ABIERTA' ? '' : ' (' + e.tipo + ')');
+        o.dataset.tipo = e.tipo;
+        s.appendChild(o);
+      }
+      s.value = previo;
+    }
+    marcarMotivoDeEtapa();
+  }
+
+  const embudo = await api('GET', '/analysis/embudo');
+  if (embudo.ok) {
+    const cuerpo = E('t-crm-embudo').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const e of embudo.datos.etapas || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(String(e.orden)) + '</td>' +
+        '<td>' + escapar(e.etapaNombre) + '</td>' +
+        '<td>' + pastilla(e.tipo) + '</td>' +
+        // `null` es «no declarada», no «cero por ciento».
+        '<td class="mono">' + (e.probabilidad === null
+          ? '<span class="p p-neu">sin declarar</span>' : escapar(e.probabilidad) + ' %') + '</td>' +
+        '<td class="mono">' + escapar(String(e.cantidad)) + '</td>' +
+        '<td class="mono">' + escapar(e.importeEstimado) + '</td>' +
+        '<td class="mono">' + (e.valorPonderado === null
+          ? '<span class="p p-neu">no se pondera</span>' : escapar(e.valorPonderado)) + '</td>';
+      tr.title = e.metodologia;
+      cuerpo.appendChild(tr);
+    }
+    E('crm-embudo-resumen').innerHTML =
+      fila('Ponderado de lo abierto', embudo.datos.ponderadoAbierto) +
+      fila('Etapas con oportunidades y sin probabilidad', embudo.datos.etapasSinProbabilidad);
+  }
+
+  const q = new URLSearchParams();
+  if (E('crm-f-estado').value) q.set('estado', E('crm-f-estado').value);
+  const r = await api('GET', '/crm/opportunities?' + q.toString());
+  if (!r.ok) return decir('crm-msg', r);
+
+  const cuerpo = E('t-crm-op').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const o of r.datos.oportunidades || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(o.titulo) + '</td>' +
+      '<td>' + escapar(o.quien) + (o.terceroId ? '' : ' <span class="p p-neu">prospecto</span>') + '</td>' +
+      '<td class="mono">' + escapar(o.importeEstimado || '—') + '</td>' +
+      '<td>' + escapar(o.etapaNombre || '—') + '</td>' +
+      '<td class="mono">' + escapar(String(o.diasEnEtapa === null ? '—' : o.diasEnEtapa)) + '</td>' +
+      // «Nunca se la tocó» y «se la tocó hace mucho» no son lo mismo.
+      '<td class="mono">' + (o.diasSinActividad === null
+        ? '<span class="p p-neu">sin actividad</span>' : escapar(String(o.diasSinActividad))) + '</td>' +
+      '<td class="mono">' + (o.valorPonderado === null ? '—' : escapar(o.valorPonderado)) + '</td>' +
+      '<td>' + (o.estado === 'GANADA' && !o.presupuestoId
+        ? '<span class="p p-ojo">falta</span>'
+        : (o.presupuestoId ? '<span class="p p-bien">sí</span>' : '—')) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirOportunidad(o.id, o.titulo);
+    cuerpo.appendChild(tr);
+  }
+
+  const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (terceros.ok) {
+    const s = E('crm-n-tercero');
+    const previo = s.value;
+    s.innerHTML = '<option value="">— todavía no es cliente —</option>';
+    for (const t of terceros.datos.terceros || []) {
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.razonSocial;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+}
+
+// Pasar a una etapa PERDIDA exige motivo. La API lo rechaza igual — esto evita
+// ofrecer un pedido que va a volver con 422.
+function marcarMotivoDeEtapa() {
+  const s = E('crm-t-etapa');
+  const opcion = s.options[s.selectedIndex];
+  const tipo = opcion ? opcion.dataset.tipo : '';
+  E('crm-t-lbl').textContent = tipo === 'PERDIDA' ? ' (obligatorio)' : ' (opcional)';
+}
+E('crm-t-etapa').onchange = marcarMotivoDeEtapa;
+E('crm-f-estado').onchange = () => listarCrm();
+E('b-crm').onclick = () => listarCrm();
+
+async function abrirOportunidad(id, titulo) {
+  const r = await api('GET', '/crm/opportunities/' + id);
+  if (!r.ok) return decir('crm-msg', r);
+
+  estado.oportunidad = id;
+  estado.oportunidadTitulo = titulo;
+  E('crm-detalle').hidden = false;
+  E('crm-det-titulo').textContent = titulo + ' — ' + r.datos.oportunidad.estado;
+  // Una oportunidad cerrada no se reabre: ofrecer el formulario sería ofrecer
+  // un pedido que vuelve con 409.
+  E('crm-operar').hidden = !puede('crm:write') || r.datos.oportunidad.estado !== 'ABIERTA';
+  limpiar('crm-t-msg');
+  limpiar('crm-a-msg');
+
+  const tr = E('t-crm-tr').querySelector('tbody');
+  tr.innerHTML = '';
+  for (const t of r.datos.transiciones || []) {
+    const f = document.createElement('tr');
+    f.innerHTML =
+      '<td class="mono">' + escapar(t.fecha) + '</td>' +
+      '<td>' + escapar(t.etapaNombre) + '</td>' +
+      '<td>' + pastilla(t.tipo) + '</td>' +
+      '<td>' + escapar(t.motivo || '—') + '</td>' +
+      '<td class="mono">' + escapar(t.registradoPor) + '</td>';
+    tr.appendChild(f);
+  }
+
+  const ac = E('t-crm-ac').querySelector('tbody');
+  ac.innerHTML = '';
+  for (const a of r.datos.actividades || []) {
+    const f = document.createElement('tr');
+    f.innerHTML =
+      '<td class="mono">' + escapar(a.fecha) + '</td>' +
+      '<td>' + escapar(a.tipo) + '</td>' +
+      '<td>' + escapar(a.detalle) + '</td>' +
+      '<td class="mono">' + escapar(a.registradoPor) + '</td>';
+    ac.appendChild(f);
+  }
+}
+
+E('b-crm-alta-etapa').onclick = async () => {
+  const cuerpo = {
+    codigo: E('crm-e-codigo').value,
+    nombre: E('crm-e-nombre').value,
+    orden: Number(E('crm-e-orden').value),
+    tipo: E('crm-e-tipo').value,
+  };
+  // Vacío es «no la declaro», y es distinto de declarar cero.
+  if (E('crm-e-prob').value.trim()) cuerpo.probabilidad = Number(E('crm-e-prob').value);
+
+  const r = await api('POST', '/crm/stages', cuerpo);
+  decir('crm-alta-etapa-msg', r, 'Etapa declarada');
+  if (r.ok) listarCrm();
+};
+
+E('b-crm-alta-op').onclick = async () => {
+  const cuerpo = {
+    titulo: E('crm-n-titulo').value,
+    etapaId: E('crm-n-etapa').value,
+    fecha: E('crm-n-fecha').value,
+  };
+  if (E('crm-n-tercero').value) cuerpo.terceroId = E('crm-n-tercero').value;
+  else if (E('crm-n-prospecto').value.trim()) cuerpo.prospecto = E('crm-n-prospecto').value.trim();
+  if (E('crm-n-importe').value.trim()) cuerpo.importeEstimado = E('crm-n-importe').value.trim();
+  if (E('crm-n-cierre').value) cuerpo.fechaEstimadaCierre = E('crm-n-cierre').value;
+
+  const r = await api('POST', '/crm/opportunities', cuerpo);
+  decir('crm-alta-op-msg', r, 'Oportunidad cargada en su etapa inicial');
+  if (r.ok) listarCrm();
+};
+
+E('b-crm-mover').onclick = async () => {
+  const cuerpo = { etapaId: E('crm-t-etapa').value, fecha: E('crm-t-fecha').value };
+  if (E('crm-t-motivo').value.trim()) cuerpo.motivo = E('crm-t-motivo').value.trim();
+
+  const r = await api('POST', '/crm/opportunities/' + estado.oportunidad + '/transiciones', cuerpo);
+  decir('crm-t-msg', r, 'Paso registrado');
+  if (r.ok) { await listarCrm(); await abrirOportunidad(estado.oportunidad, estado.oportunidadTitulo); }
+};
+
+E('b-crm-actividad').onclick = async () => {
+  const r = await api('POST', '/crm/opportunities/' + estado.oportunidad + '/activities', {
+    tipo: E('crm-a-tipo').value,
+    fecha: E('crm-a-fecha').value,
+    detalle: E('crm-a-detalle').value,
+  });
+  decir('crm-a-msg', r, 'Actividad registrada');
+  if (r.ok) {
+    E('crm-a-detalle').value = '';
+    await listarCrm();
+    await abrirOportunidad(estado.oportunidad, estado.oportunidadTitulo);
+  }
+};
+
+E('b-crm-presupuesto').onclick = async () => {
+  const r = await api('PUT', '/crm/opportunities/' + estado.oportunidad + '/presupuesto', {
+    presupuestoId: E('crm-p-id').value.trim(),
+  });
+  decir('crm-p-msg', r, 'Presupuesto vinculado');
+  if (r.ok) listarCrm();
 };
 
 // ══ 4c3 · Caja y arqueo ═══════════════════════════════════════════════════
