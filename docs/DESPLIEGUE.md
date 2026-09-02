@@ -42,6 +42,7 @@ secretos. Elegirlos es una decisión con costo y con contrato detrás.
 | `SESSION_ABSOLUTE_HOURS` | `12` | — |
 | `LOGIN_MAX_FAILED` | `5` | — |
 | `LOGIN_LOCK_MINUTES` | `15` | — |
+| `LOGIN_RATE_PER_MINUTE` | `30` | Intentos **fallidos** por minuto y por origen sobre las rutas de autenticación. Es por proceso: con varias réplicas el límite efectivo se multiplica por la cantidad de réplicas |
 | `AUDIT_RECORD_IP` | `false` | La bitácora no guarda IP. Activarlo tiene consecuencias legales (§21) |
 | `ARCA_ENVIRONMENT` | `mock` | La constatación no consulta al organismo: informa `NO_VERIFICABLE` |
 | `OCR_ENGINE` | `none` | Los documentos se archivan y la extracción informa `SIN_MOTOR_OCR` |
@@ -76,7 +77,7 @@ migración de este repositorio renombra ni borra una columna en uso.
 | **Gestor de secretos** | `MFA_ENCRYPTION_KEY` y las credenciales de ARCA no pueden vivir en un `.env` de producción. Cuál gestor es una decisión de infraestructura. |
 | **Programación de copias** | Los scripts existen y nadie los agenda. Cada cuánto y cuánto se retiene es una decisión con costo y con obligación legal de conservación detrás. |
 | **Destino de los logs** | Hoy salen por la salida estándar, que es lo correcto para un contenedor. A dónde van después lo decide el proveedor. |
-| **Escalado horizontal** | La aplicación no guarda estado en memoria salvo los contadores de métricas, que son por proceso. Con varias réplicas, el recolector tiene que sumarlas — o aceptar que cada una informe lo suyo. |
+| **Escalado horizontal** | La aplicación guarda dos cosas en memoria y las dos son por proceso: los contadores de métricas y la ventana del límite de intentos. Con varias réplicas, el recolector tiene que sumar las primeras, y el límite efectivo de la segunda se multiplica por la cantidad de réplicas. Contarlo en la base agregaría una escritura por intento fallido en el camino más caliente del sistema, así que la decisión es del tamaño del despliegue. |
 
 ## 5 · Lo que hay que mirar antes de la primera empresa real
 

@@ -3,8 +3,9 @@ import multipart from '@fastify/multipart';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { config } from './config.js';
-import { HttpError } from './http/errors.js';
+import { HttpError, tooManyRequests } from './http/errors.js';
 import { attachContext } from './http/context.js';
+import { contarFallo, puedeIntentar } from './http/limite-de-intentos.js';
 // La comparación en tiempo constante ya existe: duplicarla habría dejado dos
 // implementaciones de lo mismo, y la segunda sin los tests de la primera.
 import { constantTimeEquals } from './auth/crypto.js';
@@ -51,6 +52,29 @@ import { mapeoContableRoutes } from './routes/mapeo-contable.js';
 import { arranqueRoutes } from './routes/arranque.js';
 import { valuacionRoutes } from './routes/valuacion.js';
 import { exportacionRoutes } from './routes/exportaciones.js';
+
+/**
+ * Las rutas donde un intento cuesta poco y probar mil sale gratis.
+ *
+ * No es toda la API: limitar una lectura de la bandeja castigaría a una empresa
+ * que trabaja rápido. Son las tres que aceptan credenciales.
+ */
+const RUTAS_LIMITADAS = new Set([
+  '/auth/login',
+  '/auth/mfa/verify',
+  '/auth/register-first-admin',
+]);
+
+/**
+ * La clave del límite: origen y ruta.
+ *
+ * Por origen, para que un atacante no deje afuera a toda la clientela con un
+ * script; y por ruta, para que quedarse sin intentos de contraseña no impida
+ * confirmar el segundo factor a alguien que ya entró bien.
+ */
+function claveDeLimite(ip: string, url: string): string {
+  return `${ip} ${url.split('?')[0]}`;
+}
 
 export interface RouteEntry {
   readonly method: string;
@@ -105,6 +129,12 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   // La etiqueta es la **plantilla** de la ruta y no la url: con la url
   // concreta, el recolector guardaría los identificadores de cada empresa.
   app.addHook('onResponse', async (request, reply) => {
+    // El límite cuenta **fallos**, no pedidos: el que entra bien no consume
+    // presupuesto. Se cuenta acá porque recién ahora se sabe cómo terminó.
+    if (RUTAS_LIMITADAS.has(request.url.split('?')[0] ?? '') && reply.statusCode >= 400) {
+      contarFallo(claveDeLimite(request.ip, request.url), 60);
+    }
+
     registrarPedido(
       request.method,
       request.routeOptions.url ?? 'desconocida',
@@ -141,6 +171,26 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
     reply.header('Referrer-Policy', 'no-referrer');
     // La API no sirve HTML; una CSP restrictiva no cuesta nada.
     reply.header('Content-Security-Policy', "default-src 'none'");
+
+    // El límite va **antes** de buscar la sesión: si no, cada intento de fuerza
+    // bruta seguiría costando una consulta a la base, que es justo lo que un
+    // atacante quiere.
+    if (RUTAS_LIMITADAS.has(request.url.split('?')[0] ?? '')) {
+      const decision = puedeIntentar(
+        claveDeLimite(request.ip, request.url),
+        config.login.maxPorMinutoPorOrigen,
+        60,
+      );
+      if (!decision.permitido) {
+        reply.header('retry-after', String(decision.esperar));
+        throw tooManyRequests(
+          `Demasiados intentos desde este origen. Probá de nuevo en ${decision.esperar} ` +
+            'segundos. El límite es por origen y por minuto, y es independiente del bloqueo ' +
+            'de la cuenta.',
+        );
+      }
+    }
+
     await attachContext(request);
   });
 

@@ -26,6 +26,19 @@ export const config = {
   login: {
     maxFailedAttempts: Number(process.env.LOGIN_MAX_FAILED ?? 5),
     lockMinutes: Number(process.env.LOGIN_LOCK_MINUTES ?? 15),
+
+    /**
+     * Intentos por minuto y por origen sobre las rutas de autenticación.
+     *
+     * Es distinto del bloqueo de cuenta: aquel protege **una** cuenta de cinco
+     * errores; este ataja al que prueba una contraseña común contra mil
+     * direcciones distintas, que nunca falla cinco veces sobre la misma y por
+     * eso no dispara el bloqueo ni una vez.
+     *
+     * El valor por defecto es holgado a propósito: apretarlo de más echa a un
+     * usuario legítimo que se equivocó tres veces con el teclado en otro idioma.
+     */
+    maxPorMinutoPorOrigen: Number(process.env.LOGIN_RATE_PER_MINUTE ?? 30),
   },
 
   /**

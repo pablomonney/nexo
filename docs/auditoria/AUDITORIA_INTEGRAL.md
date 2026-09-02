@@ -376,5 +376,48 @@ de la bitácora, y el trabajo asíncrono que hoy no existe.
    resto del informe pide para los instrumentos de medición, aplicado a la
    herramienta con la que se escribe.
 
-**Estado del árbol al cerrar:** `verify` en verde — 98 archivos de test, 1.707
-tests, 360 objetos estructurales, 0 discrepancias entre el Mayor y el Diario.
+## 13 · Segunda tanda: la ejecución posterior
+
+Lo que se implementó después, siguiendo el orden de prioridades del §9. Cada
+bloque tiene su commit y sus tests.
+
+| # | Qué | Migración / archivo | Tests |
+|---|---|---|---|
+| P0 | Asistente de puesta en marcha, completo | 0076 | `puesta-en-marcha` (10) |
+| P1 | Valuación de existencias y CMV | 0077, 0078 (ADR-020) | `valuacion` (11) |
+| P1 | Conciliación bancaria: **no se podía abrir** | `banks.ts` | `conciliacion-por-http` (6) |
+| P1 | Selectores en lugar de uuids | consola | (cubierto por S-12) |
+| P1 | Exportaciones a CSV | `exportaciones.ts` | `exportaciones` (5) |
+| P1 | Imagen, sondas y guía de despliegue | `Dockerfile`, `docs/DESPLIEGUE.md` | — |
+| P1 | Métricas apagadas por defecto | `observabilidad.ts` | `metricas` S-13 (4) |
+| P2 | Límite de intentos por origen | `limite-de-intentos.ts` | `limite-de-intentos` S-14 (5) |
+| P2/P3 | SaaS y web: qué falta y por qué | `docs/roadmap/SAAS_Y_WEB.md` | — |
+
+### Tres hallazgos que salieron de construir, no de auditar
+
+1. **`bank_reconciliations` no tenía ni un `INSERT`.** Ni ruta ni trigger. Se
+   podían proponer coincidencias y confirmarlas, pero no crear la conciliación
+   que las sostiene: los dos endpoints existentes eran inalcanzables. Lo
+   destapó la auditoría de selectores — la consola pedía el identificador con un
+   `prompt`, y un campo que pide un uuid sin decir de dónde sacarlo casi siempre
+   está tapando que no hay de dónde.
+
+2. **Los dominios de estado mezclan idiomas.** `ACTIVE`, `ACTIVO`, `ACTIVA`,
+   `APROBADO`. Comparar contra el valor equivocado no falla: cuenta cero. Dos
+   errores propios salieron de ahí en una sola sesión. Queda como **P3** con su
+   evidencia: unificarlos exige migrar datos y romper contratos de la API.
+
+3. **El barrido S-12 tenía un punto ciego.** Marcó el dominio `exports` como
+   inalcanzable cuando sí lo era: las descargas pasan por un ayudante que llama
+   a `fetch` adentro, y el barrido solo conocía dos formas de llamada. Se
+   corrigió el instrumento, no la lista de excepciones.
+
+### Y uno que no era un hallazgo
+
+Estuve por anotar que «cualquier token inválido produce un 500». Lo medí de
+nuevo con el pool de base inicializado y contesta 200: el 500 era del banco de
+pruebas, que no lo inicializaba. Queda escrito acá y en el encabezado de
+`tests/security/metricas.test.ts` para que el próximo no repita el diagnóstico.
+
+**Estado del árbol al cerrar:** `verify` en verde — 103 archivos de test, 1.742
+tests, 369 objetos estructurales, 0 discrepancias entre el Mayor y el Diario.
