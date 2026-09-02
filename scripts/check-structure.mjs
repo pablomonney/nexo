@@ -461,6 +461,8 @@ const VISTAS_INVOKER = [
   // 0079 · El costo del mes en una sola cifra, con las dos razones por las que
   // puede no ser afirmable.
   'cogs_por_mes',
+  // 0081 · La venta contra su costo, con las dos puntas comparadas.
+  'analytics_margen_por_producto',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

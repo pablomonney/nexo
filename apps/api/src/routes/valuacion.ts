@@ -247,6 +247,78 @@ export async function valuacionRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * Cuánto dejó cada producto.
+   *
+   * Es la primera vez que la venta y su costo se miran juntos, y por eso lo
+   * importante de esta ruta no es el número sino cuándo **no** lo da: un margen
+   * calculado sobre menos unidades de las que se facturaron es más grande que el
+   * real, y es el error más peligroso de los dos.
+   */
+  app.get('/analysis/margen', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'stock:read');
+    requirePermission(tenant, 'analysis:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({ desde: fecha.optional(), hasta: fecha.optional() })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const r = await tx.query(
+          `SELECT mes::text, producto_codigo AS codigo, producto_nombre AS nombre,
+                  lleva_stock AS "llevaStock",
+                  unidades_vendidas::text AS "unidadesVendidas",
+                  unidades_salidas::text AS "unidadesSalidas",
+                  venta::text, costo::text, margen::text,
+                  margen_pct::text AS "margenPct",
+                  salidas_sin_costo AS "salidasSinCosto",
+                  renglones_de_credito AS "renglonesDeCredito",
+                  metodologia
+             FROM analytics_margen_por_producto
+            WHERE company_id = $1
+              AND ($2::date IS NULL OR mes >= date_trunc('month', $2::date))
+              AND ($3::date IS NULL OR mes <= $3::date)
+            ORDER BY mes DESC, margen DESC NULLS LAST, producto_codigo`,
+          [tenant.companyId, query.desde ?? null, query.hasta ?? null],
+        );
+
+        // Los totales se suman del lado de la base y **solo** sobre lo
+        // afirmable. Lo demás se cuenta aparte: un total que mezcla márgenes
+        // afirmados con ventas sin costo es un margen inflado.
+        const total = await tx.query<{
+          venta: string; costo: string; margen: string; sin_afirmar: number;
+        }>(
+          `SELECT coalesce(sum(venta) FILTER (WHERE margen IS NOT NULL), 0)::text AS venta,
+                  coalesce(sum(costo) FILTER (WHERE margen IS NOT NULL), 0)::text AS costo,
+                  coalesce(sum(margen), 0)::text                                  AS margen,
+                  count(*) FILTER (WHERE margen IS NULL)::int                     AS sin_afirmar
+             FROM analytics_margen_por_producto
+            WHERE company_id = $1
+              AND ($2::date IS NULL OR mes >= date_trunc('month', $2::date))
+              AND ($3::date IS NULL OR mes <= $3::date)`,
+          [tenant.companyId, query.desde ?? null, query.hasta ?? null],
+        );
+
+        return {
+          porProducto: r.rows,
+          totalAfirmable: total.rows[0],
+          alcance:
+            'El margen se afirma **solo** cuando las dos puntas están completas: hay costo, ' +
+            'no hay salidas sin costear, y lo facturado coincide con lo que salió del ' +
+            'depósito. Si se facturaron diez unidades y salieron seis, el margen sobre esas ' +
+            'seis sería más grande que el real — el error más peligroso de los dos, porque ' +
+            'parece bueno. ' +
+            'Un servicio no tiene costo de mercadería y su margen no se informa como 100 %: ' +
+            'eso sería afirmar que no costó nada producirlo. ' +
+            'Las notas de crédito descuentan de la venta, con el signo del catálogo de ARCA.',
+        };
+      },
+    );
+  });
+
+  /**
    * El asiento que el costo del mes propone.
    *
    * ## No lo registra

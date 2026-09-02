@@ -97,6 +97,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | **Inventario físico (recuento)** | HECHO |
 | **Valuación de existencias** | HECHO para promedio ponderado móvil — el método lo **declara la empresa** y el catálogo dice de cada uno si se calcula. FIFO y costo de reposición siguen PLANIFICADOS, con el motivo escrito (ADR-020). |
 | **Costo de mercadería vendida** | HECHO — se calcula por mes y el sistema **propone su asiento** contra las cuentas declaradas. El asiento lo firma una persona: automatizar el momento es una política contable sin declarar. |
+| **Margen real por producto** | HECHO — venta menos costo, mes a mes. No se afirma cuando lo facturado no coincide con lo que salió del depósito: el margen sobre menos unidades es más grande que el real. |
 
 ## 7 · Tesorería
 

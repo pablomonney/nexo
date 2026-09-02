@@ -538,6 +538,90 @@ suite('Valuación de existencias', () => {
     expect(despues.rows[0]!.saldo).toBe('150.00');
   });
 
+  it('el margen no se afirma si lo facturado no coincide con lo que salió', async () => {
+    // El comprobante de la venta declaró 5.000 de neto sin renglones, y la
+    // salida de stock fue de 10 unidades. Sin renglones no hay unidades
+    // vendidas contra las que comparar, así que el margen no se afirma.
+    const r = await pedir('GET', '/analysis/margen');
+    expect(r.statusCode, r.body).toBe(200);
+    const m = r.json<{
+      porProducto: { codigo: string; margen: string | null; unidadesVendidas: string;
+                     unidadesSalidas: string; metodologia: string }[];
+      totalAfirmable: { sin_afirmar: number };
+      alcance: string;
+    }>();
+
+    const p = m.porProducto.find((x) => x.codigo === `CC-${stamp}`);
+    expect(p, 'el producto que salió del depósito tiene que aparecer').toBeDefined();
+    expect(p!.unidadesSalidas).toBe('10.0000');
+    expect(p!.unidadesVendidas, 'el comprobante no tenía renglones').toBe('0');
+    // Diez que salieron contra cero facturadas: el margen no se afirma.
+    expect(p!.margen).toBeNull();
+    expect(p!.metodologia).toContain('más grande que el real');
+    expect(m.alcance).toContain('parece bueno');
+  });
+
+  it('con las dos puntas completas, el margen se afirma y se puede rehacer', async () => {
+    // Se factura con renglón por el producto: 10 unidades a 300 = 3.000 de
+    // venta, contra un costo de 150 (10 al promedio de 15).
+    const forma =
+      `--X\r\nContent-Disposition: form-data; name="file"; filename="mar-${stamp}.xml"\r\n` +
+      `Content-Type: application/xml\r\n\r\n<c><n>2</n></c>\r\n--X--\r\n`;
+    const subida = await app.inject({
+      method: 'POST',
+      url: '/documents',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-company-id': empresa,
+        'content-type': 'multipart/form-data; boundary=X',
+      },
+      payload: forma,
+    });
+    expect(subida.statusCode, subida.body).toBe(201);
+
+    const op = await pedir('POST', `/documents/${subida.json<{ id: string }>().id}/tax-transaction`, {
+      direction: 'VENTAS',
+      cbteTipo: 1,
+      puntoVenta: 1,
+      numero: 9002,
+      fecha: hoy,
+      cuitContraparte: `30${stamp}${cuitCheckDigit(`30${stamp}`)}`,
+      razonSocial: `Cliente val ${stamp}`,
+      condicionIva: 'RESPONSABLE_INSCRIPTO',
+      neto: '3000.00', iva: '630.00', noGravado: '0', exento: '0', percepciones: '0',
+      total: '3630.00',
+    });
+    expect(op.statusCode, op.body).toBe(201);
+    const segunda = op.json<{ taxTransactionId: string }>().taxTransactionId;
+
+    expect(
+      (await pedir('PUT', `/tax-transactions/${segunda}/lines`, {
+        renglones: [{
+          productoId: productoSinCosto,
+          descripcion: 'Mercadería sin costo',
+          cantidad: '10',
+          precioUnitario: '300.00',
+          tratamiento: 'GRAVADO',
+          // El detalle cierra contra la cabecera: lo exige el candado diferido
+          // de la 0049, y es lo que impide que un renglón diga otra cosa que el
+          // comprobante.
+          neto: '3000.00',
+          iva: '630.00',
+        }],
+      })).statusCode,
+    ).toBe(200);
+
+    const m = (await pedir('GET', '/analysis/margen')).json<{
+      porProducto: { codigo: string; margen: string | null; metodologia: string }[];
+    }>();
+
+    // Este producto tiene entradas sin costo, así que aunque las unidades
+    // cierren el margen sigue sin afirmarse — y dice por qué.
+    const p = m.porProducto.find((x) => x.codigo === `SC-${stamp}`)!;
+    expect(p.margen).toBeNull();
+    expect(p.metodologia).toContain('sin costo');
+  });
+
   it('las vistas de valuación conservan security_invoker', async () => {
     const r = await db.query<{ relname: string; reloptions: string[] | null }>(
       `SELECT relname, reloptions FROM pg_class

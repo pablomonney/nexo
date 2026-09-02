@@ -874,6 +874,20 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <th>Mes</th><th>Producto</th><th>Unidades</th><th>Costo</th><th>Sin costear</th>
     </tr></thead><tbody></tbody></table></div>
 
+    <h4>Margen por producto</h4>
+    <p class="ayuda">Es la primera vez que la venta y su costo se miran juntos. Lo importante
+      no es el número sino cuándo <strong>no</strong> lo da: si se facturaron diez unidades y
+      salieron seis del depósito, el margen sobre esas seis sería más grande que el real — el
+      error más peligroso de los dos, porque parece bueno. Un servicio no tiene costo de
+      mercadería y no se informa con margen del 100 %.</p>
+    <button id="b-val-margen" class="sec">Ver el margen</button>
+    <dl class="kv" id="val-margen-total"></dl>
+    <div id="val-margen-msg"></div>
+    <div class="tabla"><table id="t-val-margen"><thead><tr>
+      <th>Mes</th><th>Producto</th><th>Facturadas</th><th>Salieron</th><th>Venta</th>
+      <th>Costo</th><th>Margen</th><th>%</th><th>Por qué</th>
+    </tr></thead><tbody></tbody></table></div>
+
     <h4>Asiento de costo</h4>
     <p class="ayuda">El sistema <strong>propone</strong>; el asiento lo carga y lo firma una
       persona. Automatizarlo exigiría decidir cuándo se asienta —por cada venta, por mes, al
@@ -4098,6 +4112,44 @@ async function cargarValuacion() {
     }
   }
 }
+
+E('b-val-margen').onclick = async () => {
+  const r = await api('GET', '/analysis/margen');
+  if (!r.ok) return decir('val-margen-msg', r);
+  E('val-margen-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const t = r.datos.totalAfirmable;
+  E('val-margen-total').innerHTML =
+    fila('Venta (solo lo afirmable)', t.venta) +
+    fila('Costo (solo lo afirmable)', t.costo) +
+    fila('Margen afirmable', t.margen) +
+    fila('Renglones sin margen afirmable', t.sin_afirmar);
+
+  const cuerpo = E('t-val-margen').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of r.datos.porProducto || []) {
+    const tr = document.createElement('tr');
+    // Cuando las unidades no coinciden se marcan las dos: es la comparación
+    // que explica por qué no hay margen.
+    const desparejo = p.unidadesVendidas !== p.unidadesSalidas && p.llevaStock;
+    tr.innerHTML =
+      '<td class="mono">' + escapar(p.mes) + '</td>' +
+      '<td>' + escapar(p.codigo + ' — ' + p.nombre) + '</td>' +
+      '<td class="mono">' + (desparejo
+        ? '<span class="p p-ojo">' + escapar(p.unidadesVendidas) + '</span>'
+        : escapar(p.unidadesVendidas)) + '</td>' +
+      '<td class="mono">' + (desparejo
+        ? '<span class="p p-ojo">' + escapar(p.unidadesSalidas) + '</span>'
+        : escapar(p.unidadesSalidas)) + '</td>' +
+      '<td class="mono">' + escapar(p.venta) + '</td>' +
+      '<td class="mono">' + escapar(p.costo === null ? '—' : p.costo) + '</td>' +
+      '<td class="mono">' + (p.margen === null
+        ? '<span class="p p-neu">no se afirma</span>' : escapar(p.margen)) + '</td>' +
+      '<td class="mono">' + (p.margenPct === null ? '—' : escapar(p.margenPct) + ' %') + '</td>' +
+      '<td>' + escapar(p.metodologia) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+};
 
 E('b-val-cmv').onclick = async () => {
   const r = await api('GET',
