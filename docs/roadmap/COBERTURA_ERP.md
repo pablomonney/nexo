@@ -66,9 +66,24 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 |---|---|
 | Proveedores, recepciones, conciliación de tres puntas | HECHO |
 | Cuenta corriente y antigüedad de deuda | HECHO |
-| **Órdenes de compra** | LIBRE — hoy la recepción puede citar una orden que no existe como entidad. |
+| **Órdenes de compra** | HECHO |
 | **Solicitudes de compra** | LIBRE |
 | **Pagos y órdenes de pago** | PARCIAL — el pago es un asiento imputado; no hay orden de pago como documento. |
+
+> **Corrección.** La primera versión de esta tabla decía que las órdenes de
+> compra eran LIBRE, «porque la recepción cita una orden que no existe como
+> entidad». **Era falso.** La orden de compra existe desde la 0050: es un
+> `commercial_document` con `direction = 'COMPRAS'` y `kind = 'PEDIDO'`, la
+> recepción la cita por `commercial_document_id` desde la 0052, y la factura del
+> proveedor se vincula con `link-invoice`.
+>
+> El error fue de método: busqué una tabla llamada `purchase_orders` en vez de
+> mirar si el ciclo comercial era bidireccional. Auditar por nombre de tabla es
+> exactamente la clase de atajo que esta auditoría existía para no cometer.
+>
+> Lo que **sí** faltaba era que alguien recorriera ese camino: la suite del ciclo
+> comercial no mencionaba `COMPRAS` ni una vez. Ahora lo hace
+> `tests/integration/ciclo-compras.test.ts`, y el circuito cierra entero.
 
 ## 6 · Stock
 

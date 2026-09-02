@@ -1284,7 +1284,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     la cumple queda afuera del total, con su motivo a la vista.</p>
   <button id="b-sen-flujo" class="sec">Calcular</button>
   <div class="tabla"><table id="t-sen-flujo"><thead><tr>
-    <th>Fuente</th><th>Partidas</th><th>Vencido</th><th>Próximos 30</th>
+    <th>Sentido</th><th>Fuente</th><th>Partidas</th><th>Vencido</th><th>Próximos 30</th>
     <th>31 a 60</th><th>Más de 60</th><th>Total</th><th>No sumable</th>
   </tr></thead><tbody></tbody></table></div>
   <dl class="kv" id="sen-flujo-total"></dl>
@@ -4403,6 +4403,8 @@ E('b-sen-flujo').onclick = async () => {
   for (const f of r.datos.porFuente || []) {
     const tr = document.createElement('tr');
     tr.innerHTML =
+      '<td>' + (f.sentido === 'SALE'
+        ? '<span class="p p-mal">SALE</span>' : '<span class="p p-bien">ENTRA</span>') + '</td>' +
       '<td>' + escapar(f.fuente) + '</td>' +
       '<td class="mono">' + escapar(f.partidas) + '</td>' +
       '<td class="mono">' + escapar(f.vencido) + '</td>' +
@@ -4419,12 +4421,13 @@ E('b-sen-flujo').onclick = async () => {
     if (f.motivoNoSumable) motivos += '<li>' + escapar(f.motivoNoSumable) + '</li>';
   }
 
-  const c = r.datos.consolidado || {};
-  E('sen-flujo-total').innerHTML =
+  // Dos bloques y no un neto: un solo número escondería que la plata entra en
+  // marzo y sale en enero, que es justo lo que hay que ver.
+  E('sen-flujo-total').innerHTML = (r.datos.consolidado || []).map((c) =>
+    fila(c.sentido === 'SALE' ? '── SALE ──' : '── ENTRA ──', '') +
     fila('Vencido', c.vencido) + fila('Próximos 30 días', c.proximos30) +
     fila('De 31 a 60', c.de31a60) + fila('Más de 60', c.masDe60) +
-    fila('Total consolidado', c.total) +
-    fila('Fuera del total', c.noSumable);
+    fila('Total', c.total) + fila('Fuera del total', c.noSumable)).join('');
 
   E('sen-flujo-msg').innerHTML =
     '<div class="aviso">' + escapar(r.datos.metodologia) + '</div>' +

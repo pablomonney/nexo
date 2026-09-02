@@ -353,7 +353,7 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
         const r = await tx.query<{ fuente: string; no_sumable: string }>(
-          `SELECT fuente, partidas,
+          `SELECT sentido, fuente, partidas,
                   coalesce(total, 0)::text        AS total,
                   coalesce(vencido, 0)::text      AS vencido,
                   coalesce(proximos_30, 0)::text  AS "proximos30",
@@ -364,38 +364,47 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
                   motivo_no_sumable               AS "motivoNoSumable"
              FROM analytics_flujo_de_fondos
             WHERE company_id = $1
-            ORDER BY fuente`,
+            ORDER BY sentido DESC, fuente`,
           [tenant.companyId],
         );
 
         // El total consolidado se suma en `numeric`, del lado de la base: plata
         // que sale como decimal exacto y vuelve por IEEE 754 ya no es la misma.
         const consolidado = await tx.query(
-          `SELECT coalesce(sum(total), 0)::text        AS total,
+          `SELECT sentido,
+                  coalesce(sum(total), 0)::text        AS total,
                   coalesce(sum(vencido), 0)::text      AS vencido,
                   coalesce(sum(proximos_30), 0)::text  AS "proximos30",
                   coalesce(sum(de_31_a_60), 0)::text   AS "de31a60",
                   coalesce(sum(mas_de_60), 0)::text    AS "masDe60",
                   coalesce(sum(no_sumable), 0)::text   AS "noSumable"
-             FROM analytics_flujo_de_fondos WHERE company_id = $1`,
+             FROM analytics_flujo_de_fondos WHERE company_id = $1
+            GROUP BY sentido`,
           [tenant.companyId],
         );
 
         return {
           porFuente: r.rows,
-          consolidado: consolidado.rows[0],
+          // Por sentido, no un único número: un neto solo —entradas menos
+          // salidas— esconde que la plata entra en marzo y sale en enero.
+          consolidado: consolidado.rows,
           metodologia:
-            'Cobranzas: el pendiente de cada comprobante —o de cada cuota, si hay plan— ' +
-            'ubicado en el tramo de su vencimiento. Cheques: los que están en cartera, por su ' +
-            'fecha de pago declarada. Se suman porque el doble conteo tiene una condición ' +
-            'derivable y no se cumple: un cheque que cita un asiento ya redujo el crédito que ' +
-            'lo originó.',
+            'ENTRA — COBRANZAS: el pendiente de cada comprobante de venta, o de cada cuota si ' +
+            'hay plan, en el tramo de su vencimiento. CHEQUES: los que están en cartera, por su ' +
+            'fecha de pago declarada. SALE — PAGOS: lo mismo del lado de compras. COMPROMETIDO: ' +
+            'órdenes de compra aceptadas y todavía sin facturar. ' +
+            'Ninguna fuente se pisa con otra, y en los dos casos por la misma razón: el ' +
+            'solapamiento tiene una condición derivable. Un cheque que cita un asiento ya ' +
+            'redujo el crédito que lo originó; una orden facturada deja de ser compromiso y ' +
+            'pasa a ser deuda, y ese estado lo pone el circuito al vincular la factura.',
           alcance:
-            '`noSumable` es lo que quedó afuera del total y por qué: un cheque sin asiento no ' +
-            'está en el Mayor, así que el crédito que lo originó sigue figurando pendiente y ' +
-            'sumarlo contaría la misma plata dos veces. `sinFecha` es lo que no se puede ubicar ' +
-            'en ningún tramo porque nadie declaró su vencimiento. Es una proyección de lo ' +
-            'que **debería** entrar, no un pronóstico de lo que va a entrar.',
+            '`noSumable` es lo que quedó afuera del total y por qué. `sinFecha` es lo que suma ' +
+            'al total y no se puede ubicar en ningún tramo porque nadie declaró su vencimiento: ' +
+            'las órdenes comprometidas son todas así, porque una orden aceptada no dice cuándo ' +
+            'se paga e inventarle una fecha sería inventar el acuerdo. ' +
+            'No hay un neto de entradas menos salidas: un solo número escondería que la plata ' +
+            'entra en marzo y sale en enero, que es justo lo que hay que ver. ' +
+            'Es una proyección de lo que **debería** moverse, no un pronóstico.',
         };
       },
     );

@@ -516,24 +516,26 @@ suite('Cheques', () => {
     // originó sigue figurando pendiente, así que sumarlo contaría lo mismo dos
     // veces. No se decide por opción: sale de un hecho de la base.
     const antes = (await pedir('GET', '/analysis/flujo-de-fondos'))
-      .json<{ consolidado: Record<string, string> }>().consolidado;
+      .json<{ consolidado: { sentido: string; total: string; noSumable: string }[] }>()
+      .consolidado.find((c) => c.sentido === 'ENTRA') ?? { total: '0', noSumable: '0' };
 
     await chequeRecibido('777.00', enDias(10));
 
     const r = await pedir('GET', '/analysis/flujo-de-fondos');
     expect(r.statusCode, r.body).toBe(200);
     const cuerpo = r.json<{
-      consolidado: Record<string, string>;
+      consolidado: { sentido: string; total: string; noSumable: string }[];
       porFuente: { fuente: string; noSumable: string; motivoNoSumable: string | null }[];
       alcance: string;
     }>();
+    const entra = cuerpo.consolidado.find((c) => c.sentido === 'ENTRA')!;
 
     expect(
-      Number(cuerpo.consolidado['total']) - Number(antes['total']),
+      Number(entra.total) - Number(antes.total),
       'sin asiento no entra al total',
     ).toBe(0);
     expect(
-      Number(cuerpo.consolidado['noSumable']) - Number(antes['noSumable']),
+      Number(entra.noSumable) - Number(antes.noSumable),
       'pero se informa aparte, no se omite',
     ).toBe(777);
 
@@ -544,7 +546,8 @@ suite('Cheques', () => {
 
   it('con asiento citado, el mismo cheque sí suma', async () => {
     const antes = (await pedir('GET', '/analysis/flujo-de-fondos'))
-      .json<{ consolidado: Record<string, string> }>().consolidado;
+      .json<{ consolidado: { sentido: string; total: string; noSumable: string }[] }>()
+      .consolidado.find((c) => c.sentido === 'ENTRA') ?? { total: '0', noSumable: '0' };
 
     // Un asiento cualquiera aprobado: lo que importa es que el cheque lo cite,
     // porque eso significa que el cobro llegó al Mayor.
@@ -583,10 +586,11 @@ suite('Cheques', () => {
     ).toBe(201);
 
     const despues = (await pedir('GET', '/analysis/flujo-de-fondos'))
-      .json<{ consolidado: Record<string, string> }>().consolidado;
+      .json<{ consolidado: { sentido: string; total: string; proximos30: string }[] }>()
+      .consolidado.find((c) => c.sentido === 'ENTRA')!;
 
-    expect(Number(despues['total']) - Number(antes['total'])).toBe(888);
-    expect(Number(despues['proximos30']) - Number(antes['proximos30'])).toBe(888);
+    expect(Number(despues.total) - Number(antes.total)).toBe(888);
+    expect(Number(despues.proximos30) - Number(antes.proximos30)).toBe(888);
   });
 
   it('la señal de rechazos informa la proporción y no la juzga sin umbral', async () => {
