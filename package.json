@@ -25,7 +25,7 @@
     "db:status": "node scripts/migrate.mjs status",
     "db:reset": "node scripts/migrate.mjs reset",
     "norms:verify": "node scripts/verify-norm-archive.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run ledger:verify && npm run audit:cadena && npm run audit:estructura && npm run audit:invariants && npm run test:coverage",
+    "verify": "npm run typecheck && npm run lint && npm run lint:arch && npm run check:no-float && npm run norms:verify && npm run verify:arranque && npm run ledger:verify && npm run audit:cadena && npm run audit:estructura && npm run audit:invariants && npm run test:coverage",
     "db:create": "node scripts/db-create.mjs",
     "db:backup": "node scripts/backup-db.mjs",
     "db:restaurar": "node scripts/restaurar-backup.mjs",
@@ -56,6 +56,7 @@
     "circuito:demo": "node scripts/circuito-demo.mjs",
     "audit:estructura": "node scripts/check-structure.mjs",
     "verify:db": "node scripts/verification-db.mjs",
+    "verify:arranque": "node scripts/verify-primer-arranque.mjs",
     "ci": "node scripts/pipeline.mjs",
     "ci:desde-cero": "node scripts/pipeline.mjs --desde-cero"
   },

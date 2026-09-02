@@ -178,7 +178,7 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
 | `alerts` y `audit_findings` | Tablas sin escritores productivos; deliberadamente fuera de la bandeja | MENOR |
 | KMS ausente | Los sobres de credenciales usan `local:` fuera de producción; `desenvolver()` se niega a abrirlos con `NODE_ENV=production`. El cliente de KMS que pide SECURITY.md §5 no existe todavía, así que hoy **no hay arranque en producción posible** con ARCA real | IMPORTANTE |
 | Backup restaurado sobre base vacía | `npm run db:restaurar` demuestra el camino de vuelta, pero la comparación de contenido se informa **SIN EJERCITAR**: `aai` no tiene ni una fila de negocio. El día que tenga datos reales, este control recién empieza a decir algo | MENOR — el mecanismo está probado |
-| Base de desarrollo vacía | `aai` no tiene usuarios ni empresas; el primer admin se crea con `POST /auth/register-first-admin` | MENOR |
+| Base de desarrollo vacía | `aai` no tiene usuarios ni empresas; el primer admin se crea con `POST /auth/register-first-admin`, y ese camino ahora lo recorre `npm run verify:arranque` en cada `verify` | MENOR |
 
 ## 7. Riesgos vivos
 
@@ -226,7 +226,30 @@ siguen reportando por separado.
 | **016** | **Un conector no escribe en el motor contable: deposita y una persona resuelve** |
 | **017** | **Detectar, proyectar y simular son aritmética determinista: no llevan modelo** |
 
-## 10. Cómo se levanta
+## 10. El primer arranque
+
+`npm run verify:arranque` recorre el día uno sobre una base **vacía de verdad**,
+que crea y destruye: primer admin → sesión → estudio → empresa → rol → MFA →
+plan de cuentas → ejercicio → bandeja. Está dentro de `verify`.
+
+Existe porque `POST /auth/register-first-admin` —lo primero que hace cualquiera
+con NEXO— aparecía en todo el repositorio **solo dentro de una lista de
+exclusión**: el barrido de autenticación la saltea, con razón, y nadie más la
+tocaba. El camino que abre el producto no lo había recorrido nadie.
+
+Al recorrerlo aparecieron **dos pasos que no son evidentes desde afuera**, y los
+dos están bien:
+
+1. **Crear la empresa no da acceso a operarla.** El fundador recibe «No tenés
+   acceso a esta empresa» sobre algo que acaba de crear, y tiene que asignarse
+   un rol con `POST /companies/:id/roles`. Es coherente con el modelo —el dueño
+   de un estudio no es automáticamente el contador de cada cliente— y corta el
+   día uno en seco. Cambiarlo es una decisión de producto, no un arreglo.
+2. **El rol contable exige segundo factor.** Ahí el sistema se defiende bien: el
+   rechazo trae el camino adentro («Configuralo en `/auth/mfa/setup` antes de
+   continuar»), que es como tiene que verse un error.
+
+## 11. Cómo se levanta
 
 ```
 npm run db:setup     # crea la base, migra y siembra los catálogos
