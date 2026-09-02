@@ -69,7 +69,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Cuenta corriente y antigüedad de deuda | HECHO |
 | **Órdenes de compra** | HECHO |
 | **Solicitudes de compra** | LIBRE |
-| **Pagos y órdenes de pago** | PARCIAL — el pago es un asiento imputado; no hay orden de pago como documento. |
+| **Pagos y órdenes de pago** | HECHO — la orden se arma sobre el pendiente real, se aprueba y cita el asiento del pago. Marcarla pagada exige que ese asiento esté imputado a cada uno de sus comprobantes: sin eso, la orden diría pagada y la cuenta del proveedor seguiría entera. |
 
 > **Corrección.** La primera versión de esta tabla decía que las órdenes de
 > compra eran LIBRE, «porque la recepción cita una orden que no existe como

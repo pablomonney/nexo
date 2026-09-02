@@ -117,6 +117,11 @@ const CHECKS = [
   ['tax_transactions', 'tt_constatacion_arca_con_consulta', 'Una constatación de ARCA muestra la consulta que la produjo'],
   ['tax_transactions', 'tt_constatacion_declarada_firmada', 'Una constatación declarada lleva firma y fecha'],
   ['accounting_decisions', 'decision_correccion_con_motivo', 'Corregir una decisión exige decir qué cambió'],
+  // 0082 · Una orden anulada sin motivo, o pagada sin asiento, serían dos
+  // formas de decir algo sin poder demostrarlo.
+  ['payment_orders', 'po_anulada_con_motivo', '0082: una orden anulada dice por qué'],
+  ['payment_orders', 'po_pagada_con_asiento', '0082: una orden pagada nombra el asiento del pago'],
+  ['payment_orders', 'po_aprobada_con_firma', '0082: una orden aprobada dice quién y cuándo'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -202,6 +207,11 @@ const TRIGGERS = [
   // 0077 · Con dos métodos vigentes el mismo producto tendría dos costos.
   ['company_stock_valuation', 'csv_uno_por_fecha', '0077: un método de valuación vigente por vez'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
+  // 0082 · «Pagada» sin el asiento imputado sería una palabra al lado de un
+  // hecho que puede no haber ocurrido.
+  ['payment_orders', 'po_transicion', '0082: pagar exige que el asiento esté imputado'],
+  ['payment_orders', 'po_baja', '0082: una orden que salió del borrador se anula, no se borra'],
+  ['payment_order_lines', 'pol_reglas', '0082: no se ordena pagar más de lo que se debe'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
   ['stock_movements', 'stock_movements_producto_valido', 'Un servicio no mueve existencias'],
@@ -294,6 +304,10 @@ const FK_CON_EMPRESA = [
   ['party_price_lists', 'ppl_lista_fk', 'No se asigna la lista de otra empresa'],
   ['checks', 'ck_cuenta_fk', 'Un cheque no sale de la cuenta bancaria de otra empresa'],
   ['checks', 'ck_asiento_fk', 'Un cheque no cita el asiento de otra empresa'],
+  ['payment_orders', 'po_proveedor_fk', 'Una orden no se arma sobre el proveedor de otra empresa'],
+  ['payment_orders', 'po_asiento_fk', 'Una orden no cita el asiento de otra empresa'],
+  ['payment_order_lines', 'pol_orden_fk', 'Un renglón no cuelga de la orden de otra empresa'],
+  ['payment_order_lines', 'pol_comprobante_fk', 'Un renglón no cita el comprobante de otra empresa'],
   ['check_movements', 'cm_cheque_fk', 'Un movimiento no cuelga del cheque de otra empresa'],
   ['cash_boxes', 'cb_cuenta_fk', 'Una caja no apunta a la cuenta contable de otra empresa'],
   ['cash_sessions', 'cs_caja_fk', 'No se abre la caja de otra empresa'],
@@ -397,6 +411,8 @@ const RLS_FORZADO = [
   // Valuación (0077): el método declarado por cada empresa. Sin RLS, una vería
   // con qué criterio valúa otra.
   'company_stock_valuation',
+  // Órdenes de pago (0082): a quién le va a pagar cada empresa y cuánto.
+  'payment_orders', 'payment_order_lines',
 ];
 
 /**
@@ -463,6 +479,8 @@ const VISTAS_INVOKER = [
   'cogs_por_mes',
   // 0081 · La venta contra su costo, con las dos puntas comparadas.
   'analytics_margen_por_producto',
+  // 0082 · La orden de pago con su total derivado y la prueba del pago.
+  'payment_order_status', 'payment_order_lines_status', 'work_queue_pagos',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

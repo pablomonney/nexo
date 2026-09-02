@@ -139,6 +139,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="iva">IVA</button>
   <button data-vista="bancos">Bancos</button>
   <button data-vista="cheques">Cheques</button>
+  <button data-vista="pagos">Pagos</button>
   <button data-vista="caja">Caja</button>
   <button data-vista="integraciones">Integraciones</button>
   <button data-vista="analitica">Analítica</button>
@@ -1680,6 +1681,68 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 </section>
 
 <!-- ══ Caja ═══════════════════════════════════════════════════════════════ -->
+<!-- ══ Órdenes de pago ════════════════════════════════════════════════════ -->
+<section id="v-pagos" hidden>
+  <h2>Órdenes de pago</h2>
+  <p class="ayuda">Es el documento que va entre la factura del proveedor y el pago: qué se
+    paga, por cuánto y quién lo aprobó. <strong>No mueve el Mayor.</strong> La plata sale con
+    un asiento imputado, por el camino de siempre, y la orden lo cita. Tampoco se suma a la
+    proyección de fondos: los comprobantes que nombra ya están ahí por su pendiente, y
+    contarlos otra vez sería contarlos dos veces.</p>
+  <p class="ayuda">Marcar una orden como pagada exige el asiento <strong>y</strong> que ese
+    asiento esté imputado a cada uno de sus comprobantes. Sin la imputación, la orden diría
+    pagada y la cuenta del proveedor seguiría entera.</p>
+
+  <div class="fila">
+    <div><label>Estado</label><select id="op-f-estado">
+      <option value="">todos</option><option>BORRADOR</option><option>APROBADA</option>
+      <option>PAGADA</option><option>ANULADA</option></select></div>
+    <div><label>&nbsp;</label><button id="b-op" class="sec">Actualizar</button></div>
+  </div>
+  <div id="op-msg"></div>
+  <div class="tabla"><table id="t-op"><thead><tr>
+    <th>N°</th><th>Fecha</th><th>Proveedor</th><th>Renglones</th><th>Total</th>
+    <th>Estado</th><th>Situación</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="op-detalle" hidden class="grupo">
+    <h3 id="op-det-titulo">Orden</h3>
+    <div class="tabla"><table id="t-op-ren"><thead><tr>
+      <th>Comprobante</th><th>Fecha</th><th>Total</th><th>Pendiente</th>
+      <th>A pagar</th><th>En otras órdenes</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="op-acciones" hidden>
+      <div class="fila">
+        <div><label>Asiento del pago</label><input id="op-asiento" placeholder="uuid del asiento aprobado"></div>
+        <div style="flex:1"><label>Motivo de la anulación</label><input id="op-motivo" maxlength="500"></div>
+      </div>
+      <button id="b-op-aprobar">Aprobar</button>
+      <button id="b-op-pagar" class="sec">Registrar el pago</button>
+      <button id="b-op-anular" class="sec">Anular</button>
+      <div id="op-acc-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="op-alta" hidden><summary>Armar una orden</summary><div>
+    <p class="ayuda">Elegí el proveedor y la consola trae lo que le queda por cobrarte: el
+      <em>pendiente</em>, no el total del comprobante. Si otra orden viva ya comprometió esa
+      misma factura, se avisa — puede ser un pago en dos partes o un duplicado, y el sistema
+      no elige por vos.</p>
+    <div class="fila">
+      <div><label>Proveedor</label><select id="op-n-proveedor"></select></div>
+      <div><label>Fecha</label><input id="op-n-fecha" type="date"></div>
+      <div><label>&nbsp;</label><button id="b-op-pagables" class="sec">Ver qué se le debe</button></div>
+    </div>
+    <div class="tabla"><table id="t-op-pagables"><thead><tr>
+      <th></th><th>Comprobante</th><th>Fecha</th><th>Vence</th><th>Total</th>
+      <th>Pendiente</th><th>En otras órdenes</th><th>A pagar</th>
+    </tr></thead><tbody></tbody></table></div>
+    <button id="b-op-alta">Armar el borrador</button>
+    <div id="op-alta-msg"></div>
+  </div></details>
+</section>
+
 <section id="v-caja" hidden>
   <h2>Caja y arqueo</h2>
   <p class="ayuda">El saldo teórico <strong>no se carga</strong>: se declara cuánto había al
@@ -2258,7 +2321,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
-                'iva','bancos','cheques','caja','integraciones','analitica','analisis',
+                'iva','bancos','cheques','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
 
 function ir(vista, migas) {
@@ -2300,6 +2363,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'iva') cargarIva();
     if (v === 'bancos') listarBancos();
     if (v === 'cheques') listarCheques();
+    if (v === 'pagos') listarOrdenesDePago();
     if (v === 'caja') listarCaja();
     if (v === 'integraciones') listarIntegraciones();
     if (v === 'analitica') cargarAnalitica();
@@ -2410,6 +2474,7 @@ function aplicarPermisosANav() {
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
+    pagos: 'payment_order:read',
     caja: 'cash:read',
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
     asientos: 'journal_entry:read', libros: 'report:read',
@@ -5311,6 +5376,142 @@ E('b-chq-mover').onclick = async () => {
   const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
+};
+
+// ══ 4c6b · Órdenes de pago ════════════════════════════════════════════════
+async function listarOrdenesDePago() {
+  E('op-alta').hidden = !puede('payment_order:write');
+  if (puede('payment_order:write')) await cargarProveedoresParaOrden();
+
+  const q = new URLSearchParams();
+  if (E('op-f-estado').value) q.set('estado', E('op-f-estado').value);
+
+  const r = await api('GET', '/payment-orders?' + q.toString());
+  if (!r.ok) return decir('op-msg', r);
+  E('op-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-op').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const o of r.datos.ordenes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(o.numero) + '</td>' +
+      '<td class="mono">' + escapar(o.fecha) + '</td>' +
+      '<td>' + escapar(o.proveedor) + '</td>' +
+      '<td class="mono">' + escapar(o.renglones) + '</td>' +
+      '<td class="mono">' + escapar(o.total) + '</td>' +
+      '<td><span class="p p-' + (o.estado === 'PAGADA' ? 'ok'
+        : o.estado === 'ANULADA' ? 'neu' : 'ojo') + '">' + escapar(o.estado) + '</span></td>' +
+      '<td>' + escapar(o.situacion) + '</td>' +
+      '<td><span class="clic">ver</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirOrdenDePago(o.id, 'Orden N° ' + o.numero);
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function cargarProveedoresParaOrden() {
+  if (!puede('party:read')) return;
+  const r = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('op-n-proveedor');
+  sel.innerHTML = '';
+  for (const t of (r.datos.terceros || [])) {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.razonSocial + (t.numeroDocumento ? ' · ' + t.numeroDocumento : '');
+    sel.appendChild(o);
+  }
+}
+
+async function abrirOrdenDePago(id, titulo) {
+  const r = await api('GET', '/payment-orders/' + id);
+  if (!r.ok) return decir('op-msg', r);
+  estado.ordenDePago = id;
+  E('op-detalle').hidden = false;
+  E('op-det-titulo').textContent = titulo + ' · ' + r.datos.orden.situacion;
+  // Las acciones solo si la orden todavía puede moverse: un botón que va a
+  // terminar en 422 le enseña a la persona que el sistema falla al azar.
+  E('op-acciones').hidden =
+    !puede('payment_order:approve') ||
+    r.datos.orden.estado === 'PAGADA' || r.datos.orden.estado === 'ANULADA';
+
+  const cuerpo = E('t-op-ren').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const l of r.datos.renglones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.cbteTipo + '-' + l.puntoVenta + '-' + l.cbteNumero) + '</td>' +
+      '<td class="mono">' + escapar(l.cbteFecha) + '</td>' +
+      '<td class="mono">' + escapar(l.totalComprobante) + '</td>' +
+      '<td class="mono">' + escapar(l.pendiente) + '</td>' +
+      '<td class="mono">' + escapar(l.importe) + '</td>' +
+      '<td class="mono">' + (l.sobrecompromiso
+        ? '<span class="p p-ojo">' + escapar(l.comprometidoEnOtras) + '</span>'
+        : escapar(l.comprometidoEnOtras)) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-op').onclick = () => listarOrdenesDePago();
+E('op-f-estado').onchange = () => listarOrdenesDePago();
+
+E('b-op-pagables').onclick = async () => {
+  const r = await api('GET', '/payment-orders/pagables?proveedorId=' + E('op-n-proveedor').value);
+  if (!r.ok) return decir('op-alta-msg', r);
+  E('op-alta-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-op-pagables').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.comprobantes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="checkbox" class="op-sel" data-id="' + escapar(c.id) + '"></td>' +
+      '<td class="mono">' + escapar(c.cbteTipo + '-' + c.puntoVenta + '-' + c.cbteNumero) + '</td>' +
+      '<td class="mono">' + escapar(c.cbteFecha) + '</td>' +
+      '<td class="mono">' + (c.vencimientoDeclarado ? escapar(c.vencimiento) : '—') + '</td>' +
+      '<td class="mono">' + escapar(c.total) + '</td>' +
+      '<td class="mono">' + escapar(c.pendiente) + '</td>' +
+      '<td class="mono">' + escapar(c.comprometido) + '</td>' +
+      '<td><input class="op-imp mono" data-id="' + escapar(c.id) + '" value="' +
+        escapar(c.pendiente) + '" inputmode="decimal"></td>';
+    cuerpo.appendChild(tr);
+  }
+};
+
+E('b-op-alta').onclick = async () => {
+  const renglones = [];
+  for (const chk of document.querySelectorAll('.op-sel')) {
+    if (!chk.checked) continue;
+    const imp = document.querySelector('.op-imp[data-id="' + chk.dataset.id + '"]');
+    renglones.push({ comprobanteId: chk.dataset.id, importe: imp.value });
+  }
+  const r = await api('POST', '/payment-orders', {
+    proveedorId: E('op-n-proveedor').value,
+    fecha: E('op-n-fecha').value,
+    renglones,
+  });
+  decir('op-alta-msg', r, 'Borrador armado. No compromete nada hasta que se apruebe.');
+  if (r.ok) listarOrdenesDePago();
+};
+
+E('b-op-aprobar').onclick = async () => {
+  const r = await api('POST', '/payment-orders/' + estado.ordenDePago + '/aprobar');
+  decir('op-acc-msg', r, 'Aprobada. La plata todavía no salió: falta el asiento.');
+  if (r.ok) { await listarOrdenesDePago(); await abrirOrdenDePago(estado.ordenDePago, 'Orden'); }
+};
+
+E('b-op-pagar').onclick = async () => {
+  const r = await api('POST', '/payment-orders/' + estado.ordenDePago + '/pagar',
+    { asientoId: E('op-asiento').value });
+  decir('op-acc-msg', r, 'Pago registrado contra el asiento.');
+  if (r.ok) { await listarOrdenesDePago(); await abrirOrdenDePago(estado.ordenDePago, 'Orden'); }
+};
+
+E('b-op-anular').onclick = async () => {
+  const r = await api('POST', '/payment-orders/' + estado.ordenDePago + '/anular',
+    { motivo: E('op-motivo').value });
+  decir('op-acc-msg', r, 'Anulada, con el motivo escrito.');
+  if (r.ok) { await listarOrdenesDePago(); await abrirOrdenDePago(estado.ordenDePago, 'Orden'); }
 };
 
 // ══ 4c7 · Sucursales ══════════════════════════════════════════════════════

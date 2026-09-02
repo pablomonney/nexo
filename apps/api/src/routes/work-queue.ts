@@ -123,6 +123,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Puesta en marcha (0075). Lo que impide trabajar cuelga de la empresa, y lo
   // ve quien puede mirar su configuración.
   companies: 'company:read',
+  // Órdenes de pago (0082). Qué se le va a pagar a quién es sensible: sigue a
+  // su propio permiso y no al de comprobantes.
+  payment_orders: 'payment_order:read',
 };
 
 const CATEGORIAS = [
