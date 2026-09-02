@@ -87,6 +87,10 @@ const CHECKS = [
   // 0073 · Suspender o cancelar un plan sin decir por qué deja al cliente sin
   // explicación de un corte que le afecta el servicio.
   ['company_subscriptions', 'cs_baja_con_motivo', '0073: suspender o cancelar exige decir por qué'],
+  // 0077 · El costo de una salida es el promedio del momento: dejar que alguien
+  // lo escriba crearía una segunda verdad capaz de contradecirlo.
+  ['stock_movements', 'sm_costo_solo_en_entradas', '0077: solo las entradas declaran costo'],
+  ['company_stock_valuation', 'csv_vigencia_coherente', '0077: un método no deja de regir antes de regir'],
   ['company_subscriptions', 'cs_vigencia_coherente', '0073: un plan no deja de regir antes de regir'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
@@ -195,6 +199,8 @@ const TRIGGERS = [
   // 0074 · Una cuenta del tipo equivocado descuadra el balance en silencio, y
   // el error aparece un ejercicio después.
   ['company_account_map', 'cam_cuenta_del_rol', '0074: la cuenta declarada sirve para el rol y es imputable'],
+  // 0077 · Con dos métodos vigentes el mismo producto tendría dos costos.
+  ['company_stock_valuation', 'csv_uno_por_fecha', '0077: un método de valuación vigente por vez'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -388,6 +394,9 @@ const RLS_FORZADO = [
   // Mapeo contable (0074): a qué cuenta va cada cosa. Sin RLS, una empresa
   // armaría sus asientos con el plan de otra.
   'company_account_map',
+  // Valuación (0077): el método declarado por cada empresa. Sin RLS, una vería
+  // con qué criterio valúa otra.
+  'company_stock_valuation',
 ];
 
 /**
@@ -445,6 +454,10 @@ const VISTAS_INVOKER = [
   // Puesta en marcha (0075). Cuenta filas de doce tablas con RLS: sin
   // security_invoker le contaría a una empresa lo que tiene otra.
   'company_readiness', 'work_queue_arranque',
+  // Valuación (0077). El promedio se recorre movimiento por movimiento sobre
+  // tablas con RLS: sin security_invoker valuaría con el stock de otra empresa.
+  'stock_movements_ordenados', 'stock_ppp', 'stock_valuation',
+  'analytics_costo_de_ventas', 'work_queue_valuacion',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

@@ -244,6 +244,14 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
               // Texto libre: una lista cerrada de motivos obligaría a elegir el
               // menos malo, y se pierde el detalle que sirve para el reclamo.
               observaciones: z.string().max(500).nullish(),
+              // Costo unitario declarado al recibir (0078). Opcional: la
+              // mercadería entra igual, y negarse a registrarla porque falta un
+              // dato contable dejaría el stock mintiendo. Lo que pasa sin él es
+              // que ese producto no se puede valuar, y la bandeja lo dice.
+              costoUnitario: z
+                .string()
+                .regex(/^\d+(\.\d{1,4})?$/, 'Costo con hasta cuatro decimales')
+                .nullish(),
             }),
           )
           .max(500),
@@ -271,11 +279,12 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
             await tx.query(
               `INSERT INTO goods_receipt_lines
                  (company_id, receipt_id, line_no, product_id, descripcion,
-                  cantidad, unidad, observaciones)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+                  cantidad, unidad, observaciones, costo_unitario)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
               [
                 tenant.companyId, receiptId, linea, r.productoId ?? null,
                 r.descripcion, r.cantidad, r.unidad, r.observaciones ?? null,
+                r.costoUnitario ?? null,
               ],
             );
           }

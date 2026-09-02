@@ -95,7 +95,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Salida por comprobante con depósito declarado | HECHO |
 | **Lotes y vencimientos** | HECHO |
 | **Inventario físico (recuento)** | HECHO |
-| **Valuación de existencias** | DECISIÓN — PPP, FIFO o costo de reposición es una decisión contable con norma detrás. Sin ella no hay costo de mercadería vendida ni margen. |
+| **Valuación de existencias** | HECHO para promedio ponderado móvil — el método lo **declara la empresa** y el catálogo dice de cada uno si se calcula. FIFO y costo de reposición siguen PLANIFICADOS, con el motivo escrito (ADR-020). |
 
 ## 7 · Tesorería
 
@@ -127,7 +127,7 @@ la RT que lo admite y sobre el impuesto.
 
 | Módulo | Estado | Qué falta exactamente |
 |---|---|---|
-| **Producción** | DECISIÓN | BOM, órdenes, consumos y mermas se pueden modelar; **el costo del producto terminado no**, porque depende de la valuación de existencias, que está sin decidir. |
+| **Producción** | DECISIÓN | BOM, órdenes, consumos y mermas se pueden modelar. El costo del producto terminado ya tiene de dónde salir —la valuación existe desde la 0077— pero exige decidir cómo se absorben los costos indirectos, que es otra política contable. |
 | **RRHH** | BLOQUEADO | ADR-012 §8 deja tres preguntas abiertas y ninguna es técnica: qué convenios se soportan, si se emite el recibo (Ley 27.555) y quién firma la liquidación. Inventar una escala violaría §30. |
 | **Suscripciones del propio NEXO** | PARCIAL | La arquitectura está: catálogo de planes, topes declarados, plan por empresa con vigencia y uso contado en el momento. **Precios: DECISIÓN** —no está tomada, y escribir un número la tomaría—. **Cobro: BLOQUEADO** por credenciales del proveedor de pagos. |
 

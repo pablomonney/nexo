@@ -834,6 +834,47 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     </div>
   </div></details>
 
+  <details class="grupo" id="stk-valuacion" hidden><summary>Valuación de existencias</summary><div>
+    <p class="ayuda">Qué método usa la empresa es una <strong>decisión contable con norma
+      detrás</strong>, y el sistema no la toma: mientras no se declare, el costo no se afirma.
+      Solo se ofrecen los métodos que se calculan de verdad — ofrecer uno que no se calcula
+      dejaría a la empresa sin valuación sin entender por qué. Un producto con
+      <strong>entradas sin costo</strong> tampoco se valúa: un promedio que las ignora no es un
+      promedio, es un número más chico.</p>
+    <div id="val-msg"></div>
+    <dl class="kv" id="val-resumen"></dl>
+    <div class="tabla"><table id="t-val"><thead><tr>
+      <th>Producto</th><th>Cantidad</th><th>Costo unitario</th><th>Costo total</th><th>Por qué</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Métodos</h4>
+    <div class="tabla"><table id="t-val-metodos"><thead><tr>
+      <th>Método</th><th>Cómo funciona</th><th>Estado</th><th>Por qué</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="val-declarar" hidden>
+      <h4>Declarar el método</h4>
+      <div class="fila">
+        <div><label>Método</label><select id="val-metodo"></select></div>
+        <div><label>Desde</label><input id="val-desde" type="date"></div>
+        <div style="flex:1"><label>Motivo</label><input id="val-motivo" maxlength="500"></div>
+        <div><label>&nbsp;</label><button id="b-val" class="sec">Declarar</button></div>
+      </div>
+      <p class="ayuda">El motivo es obligatorio: cambiar de método es un cambio de política
+        contable y la norma exige exponerlo. Los movimientos anteriores
+        <strong>no se revalúan</strong>.</p>
+      <div id="val-declarar-msg"></div>
+    </div>
+
+    <h4>Costo de mercadería vendida</h4>
+    <p class="ayuda">El costo de cada salida es el promedio vigente <strong>en el momento de
+      salir</strong>, no el de hoy. Este número <strong>no genera ningún asiento</strong>: el
+      asiento de costo lo firma una persona.</p>
+    <div class="tabla"><table id="t-val-cmv"><thead><tr>
+      <th>Mes</th><th>Producto</th><th>Unidades</th><th>Costo</th><th>Sin costear</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
+
   <details class="grupo" id="stk-depositos" hidden><summary>Depósitos</summary><div>
     <div class="tabla"><table id="t-stk-dep"><thead><tr>
       <th>Código</th><th>Nombre</th><th>Dirección</th><th>Estado</th>
@@ -3914,8 +3955,99 @@ E('b-afec').onclick = async () => {
 // Ni un número de esta pantalla se calcula acá. La existencia la deriva la base
 // del libro de movimientos, y `bajoMinimo` también: la consola solo elige el
 // color con el que se muestra lo que ya vino resuelto.
+async function cargarValuacion() {
+  E('val-declarar').hidden = !puede('account:write');
+
+  const metodos = await api('GET', '/stock-valuation/methods');
+  if (metodos.ok) {
+    const cuerpo = E('t-val-metodos').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    const sel = E('val-metodo');
+    sel.innerHTML = '';
+    for (const m of metodos.datos.metodos || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapar(m.nombre) + '</td>' +
+        '<td>' + escapar(m.descripcion) + '</td>' +
+        '<td>' + (m.estado === 'DISPONIBLE'
+          ? '<span class="p p-bien">DISPONIBLE</span>'
+          : '<span class="p p-neu">PLANIFICADO</span>') + '</td>' +
+        '<td>' + escapar(m.porQue) + '</td>';
+      cuerpo.appendChild(tr);
+
+      // Un método planificado no entra al selector: ofrecerlo sería ofrecer un
+      // pedido que la API rechaza, y con razón.
+      if (m.estado === 'DISPONIBLE') {
+        const o = document.createElement('option');
+        o.value = m.codigo; o.textContent = m.nombre;
+        sel.appendChild(o);
+      }
+    }
+  }
+
+  const r = await api('GET', '/stock-valuation');
+  if (!r.ok) return decir('val-msg', r);
+  E('val-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  E('val-resumen').innerHTML =
+    fila('Método vigente', r.datos.metodoVigente === null
+      ? 'sin declarar' : r.datos.metodoVigente.nombre) +
+    fila('Total valuado', r.datos.totalValuado) +
+    fila('Productos sin valuar', r.datos.productosSinValuar);
+
+  const cuerpo = E('t-val').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of r.datos.productos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(p.codigo + ' — ' + p.nombre) + '</td>' +
+      '<td class="mono">' + escapar(p.cantidad) + '</td>' +
+      // `null` no es cero: es «no se puede afirmar», y el porqué está al lado.
+      '<td class="mono">' + (p.costoUnitario === null
+        ? '<span class="p p-neu">no se afirma</span>' : escapar(p.costoUnitario)) + '</td>' +
+      '<td class="mono">' + (p.costoTotal === null ? '—' : escapar(p.costoTotal)) + '</td>' +
+      '<td>' + escapar(p.metodologia) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  const cmv = await api('GET', '/analysis/costo-de-ventas');
+  if (cmv.ok) {
+    const c = E('t-val-cmv').querySelector('tbody');
+    c.innerHTML = '';
+    for (const m of cmv.datos.porMes || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(m.mes) + '</td>' +
+        '<td>' + escapar(m.codigo) + '</td>' +
+        '<td class="mono">' + escapar(m.unidades) + '</td>' +
+        '<td class="mono">' + (m.costo === null ? '—' : escapar(m.costo)) + '</td>' +
+        '<td class="mono">' + (m.salidasSinCosto > 0
+          ? '<span class="p p-ojo">' + escapar(String(m.salidasSinCosto)) + '</span>'
+          : '0') + '</td>';
+      c.appendChild(tr);
+    }
+    if ((cmv.datos.porMes || []).length === 0) {
+      c.innerHTML = '<tr><td colspan="5">Todavía no salió mercadería por venta.</td></tr>';
+    }
+  }
+}
+
+E('b-val').onclick = async () => {
+  const r = await api('PUT', '/stock-valuation', {
+    metodo: E('val-metodo').value,
+    vigenciaDesde: E('val-desde').value,
+    motivo: E('val-motivo').value,
+  });
+  decir('val-declarar-msg', r,
+    'Método declarado. Los movimientos anteriores no se revalúan: el histórico queda como ' +
+    'se valuó cuando se registró.');
+  if (r.ok) cargarValuacion();
+};
+
 async function listarStock() {
   E('stk-depositos').hidden = !puede('stock:read');
+  E('stk-valuacion').hidden = !puede('stock:read');
+  await cargarValuacion();
   E('stk-mover').hidden = !puede('stock:write') && !puede('stock:adjust');
 
   const depositos = await api('GET', '/warehouses');

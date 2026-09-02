@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 98 archivos de test, 1711 tests,
-360 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 99 archivos de test, 1722 tests,
+369 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -73,7 +73,8 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Suscripciones del propio NEXO** | **TERMINADO** | **`suscripciones` (9 tests)** |
 | **Detección de anomalías del Diario** | **TERMINADO** | **`anomalias` (6 tests)** |
 | **Mapeo contable y propuesta de asiento** | **TERMINADO** | **`mapeo-contable` (8 tests)** |
-| **Puesta en marcha de una empresa** | **TERMINADO** | **`puesta-en-marcha` (6 tests)** |
+| **Puesta en marcha de una empresa** | **TERMINADO** | **`puesta-en-marcha` (10 tests)** |
+| **Valuación de existencias y CMV** | **TERMINADO** | **`valuacion` (11 tests)** |
 
 ## 3. En curso
 
@@ -111,6 +112,8 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0074 | El mapeo contable declarado: el sistema propone el asiento y deja de escribirse a mano (ADR-019) |
 | 0075 | Puesta en marcha: qué le falta a una empresa para trabajar, contado y no tildado |
 | 0076 | La puesta en marcha completa: catorce pasos, cinco estados, y un «no aplica» que se deriva |
+| 0077 | Valuación de existencias: el método se declara y solo se ofrece el que se calcula (ADR-020) |
+| 0078 | El costo entra por el renglón de la recepción, que es donde alguien lo tiene a mano |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -156,9 +159,12 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
   remite al micrositio de ARCA, que no está archivado— y ambos endpoints
   contestan `501` con su fundamento. Inventar un layout produciría un archivo
   rechazado, o peor, uno aceptado con los campos corridos (§30, §47).
-- **Valuación de existencias.** Hoy el stock son cantidades. Cuánto valen —PPP,
-  FIFO o costo de reposición— es una decisión contable con norma detrás, y sin
-  ella no hay costo de mercadería vendida automático.
+- **Valuación de existencias.** Resuelta para el promedio ponderado móvil desde
+  la 0077: el método lo declara la empresa —es una decisión contable con norma
+  detrás— y el sistema calcula el que declaró. FIFO y costo de reposición siguen
+  planificados, cada uno con el motivo escrito (ADR-020). Lo que sigue faltando
+  es el **asiento** de costo de mercadería vendida: se calcula y se informa, y
+  llevarlo al Mayor exige decidir contra qué cuenta y en qué momento.
 - **Métodos de amortización.** Solo `LINEAL`. Cada método adicional tiene
   consecuencias sobre la RT que lo admite y sobre el impuesto.
 
