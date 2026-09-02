@@ -405,11 +405,13 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
         <div><label>Descripción</label><input id="com-r-desc"></div>
         <div><label>Cantidad</label><input id="com-r-cant" inputmode="decimal" value="1"></div>
         <div><label>Precio unitario</label><input id="com-r-precio" inputmode="decimal"></div>
+        <div><label>&nbsp;</label><button id="b-com-r-precio" class="sec">Traer el precio</button></div>
         <div><label>Frente al impuesto</label><select id="com-r-trato">
           <option>GRAVADO</option><option>EXENTO</option><option>NO_GRAVADO</option></select></div>
         <div><label>Neto</label><input id="com-r-neto" inputmode="decimal"></div>
         <div><label>IVA</label><input id="com-r-iva" inputmode="decimal" value="0"></div>
       </div>
+      <div id="com-r-precio-msg"></div>
       <button id="b-com-r-add" class="sec">Agregar renglón</button>
       <button id="b-com-r-guardar">Guardar el detalle</button>
       <div id="com-r-msg"></div>
@@ -1373,6 +1375,7 @@ const estado = {
   recepcion: null, recepcionBorrador: [],
   depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
   lista: null, listaBorrador: [], depositoPorDefecto: null,
+  comercialFecha: null, comercialTercero: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -2227,6 +2230,10 @@ async function abrirComercial(id) {
 
   estado.comercial = id;
   estado.comercialBorrador = [];
+  // La fecha y el tercero del documento, para poder cotizar sus renglones con la
+  // lista que regía **ese día** y no con la de hoy.
+  estado.comercialFecha = r.datos.documento.fecha;
+  estado.comercialTercero = r.datos.documento.terceroId;
   E('com-detalle').hidden = false;
 
   const d = r.datos.documento;
@@ -2372,6 +2379,57 @@ async function cargarProductosParaComercial() {
 
 E('b-com').onclick = () => listarComerciales();
 E('b-com-mas').onclick = () => listarComerciales(estado.cursores.com);
+
+/**
+ * Trae el precio de la lista al renglón que se está cargando.
+ *
+ * Se pregunta por **la fecha del documento** y no por hoy: es un presupuesto
+ * con fecha propia, y cotizarlo con la lista de esta semana produciría un papel
+ * que dice algo que nunca se ofreció (§6). Y por la cantidad, porque el tramo
+ * depende de ella.
+ *
+ * Rellena el campo y no lo bloquea. La lista sugiere: el renglón guarda el
+ * precio que quede escrito, porque imponerlo haría imposible la excepción — que
+ * en una venta es la mitad del trabajo.
+ */
+E('b-com-r-precio').onclick = async () => {
+  const producto = E('com-r-producto').value;
+  if (!producto) {
+    E('com-r-precio-msg').innerHTML =
+      '<div class="aviso">Elegí un producto del maestro: sin producto no hay lista que consultar.</div>';
+    return;
+  }
+
+  const q = new URLSearchParams({
+    productoId: producto,
+    fecha: estado.comercialFecha,
+    cantidad: E('com-r-cant').value.trim() || '1',
+  });
+  if (estado.comercialTercero) q.set('terceroId', estado.comercialTercero);
+
+  const r = await api('GET', '/pricing/resolve?' + q.toString());
+  if (!r.ok) return decir('com-r-precio-msg', r);
+
+  if (r.datos.precio === null) {
+    // `SIN_PRECIO` no se escribe como cero: un cero se leería como gratis.
+    E('com-r-precio-msg').innerHTML =
+      '<div class="aviso ojo">No hay precio para este producto a esa fecha, ni en lista ni ' +
+      'como precio base. Escribilo a mano.</div>';
+    return;
+  }
+
+  E('com-r-precio').value = r.datos.precio;
+
+  // De dónde salió, siempre. Un precio traído sin decir de dónde viene es peor
+  // que uno tipeado: parece verificado.
+  E('com-r-precio-msg').innerHTML =
+    '<div class="aviso">' + escapar(r.datos.precio) + ' — ' +
+    (r.datos.origen === 'LISTA_DEL_TERCERO'
+      ? 'lista ' + escapar(r.datos.listaCodigo) + ', tramo desde ' + escapar(r.datos.tramoDesde)
+      : 'precio base del producto: este tercero no tiene lista vigente al ' +
+        escapar(estado.comercialFecha)) +
+    '. Es una sugerencia: el renglón guarda lo que quede escrito.</div>';
+};
 
 E('b-com-r-add').onclick = () => {
   const renglon = {
