@@ -332,6 +332,58 @@ suite('Señales, proyección y simulación', () => {
   });
 
   // -------------------------------------------------------------------------
+  it('con poca historia no propone un umbral de caída: dice que falta', async () => {
+    // Un umbral calculado sobre dos meses es ruido disfrazado de análisis. El
+    // sistema prefiere decir que no puede antes que dar un número que parecería
+    // fundado.
+    const r = await pedir('GET', '/analysis/thresholds/sugeridos');
+    expect(r.statusCode, r.body).toBe(200);
+    const cuerpo = r.json<{
+      periodosMirados: number;
+      minimoRequerido: number;
+      sugerencias: Record<string, { valor: string | null; como: string }>;
+    }>();
+
+    expect(cuerpo.minimoRequerido).toBeGreaterThan(1);
+    if (cuerpo.periodosMirados < cuerpo.minimoRequerido) {
+      expect(cuerpo.sugerencias['caidaVentasPct']!.valor).toBeNull();
+      expect(cuerpo.sugerencias['caidaVentasPct']!.como).toContain('SIN_HISTORIA_SUFICIENTE');
+    }
+  });
+
+  it('cada umbral propuesto explica de dónde salió', async () => {
+    const cuerpo = (await pedir('GET', '/analysis/thresholds/sugeridos')).json<{
+      sugerencias: Record<string, { como: string }>;
+      alcance: string;
+    }>();
+
+    for (const clave of [
+      'caidaVentasPct',
+      'concentracionClientePct',
+      'diasClienteInactivo',
+      'moraPct',
+    ]) {
+      expect(cuerpo.sugerencias[clave]!.como.length, `${clave} sin explicación`)
+        .toBeGreaterThan(30);
+    }
+    // Lo que separa una propuesta de una imposición.
+    expect(cuerpo.alcance).toContain('decisión del negocio');
+  });
+
+  it('proponer un umbral no lo declara', async () => {
+    const antes = await db.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM analysis_thresholds WHERE company_id = $1',
+      [empresa],
+    );
+    await pedir('GET', '/analysis/thresholds/sugeridos');
+    const despues = await db.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM analysis_thresholds WHERE company_id = $1',
+      [empresa],
+    );
+
+    expect(despues.rows[0]!.n).toBe(antes.rows[0]!.n);
+  });
+
   it('la proyección de cobranzas dice qué parte de la cartera no cubre', async () => {
     const r = await pedir('GET', '/analysis/proyeccion-de-cobranzas');
     expect(r.statusCode, r.body).toBe(200);

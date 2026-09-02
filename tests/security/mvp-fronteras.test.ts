@@ -692,5 +692,15 @@ suite('Fronteras del MVP', () => {
       const html = (await app.inject({ method: 'GET', url: '/consola' })).body;
       expect(html).not.toMatch(/postgres:|pg\.Client|SELECT .* FROM /i);
     });
+
+    it('la raíz redirige a la consola y no sirve nada por su cuenta', async () => {
+      // La raíz está exenta del barrido de autenticación (`SIN_DATOS`), así que
+      // acá se comprueba que la exención sea cierta: que redirija y no tenga
+      // cuerpo propio. Una exención que no se verifica es un permiso.
+      const r = await app.inject({ method: 'GET', url: '/' });
+      expect(r.statusCode).toBe(302);
+      expect(r.headers['location']).toBe('/consola');
+      expect(r.body).toBe('');
+    });
   });
 });

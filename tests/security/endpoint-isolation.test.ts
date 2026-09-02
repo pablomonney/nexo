@@ -55,16 +55,20 @@ const STUDIO_SCOPED = new Set([
 /**
  * Rutas que sirven contenido sin ningún dato y por eso no se autentican.
  *
- * Hoy hay una sola: la consola operativa, que es un archivo estático. Excluirla
- * del barrido es una excepción declarada, no un olvido — y no se sostiene con
- * esta línea sino con `mvp-fronteras.test.ts`, que comprueba que el HTML no
- * lleve credenciales, ni identificadores de empresa, ni una consulta a la base,
- * y que su CSP no admita recursos externos.
+ * Son dos: la consola operativa, que es un archivo estático, y la raíz, que
+ * solo redirige a ella. Excluirlas del barrido es una excepción declarada, no
+ * un olvido — y no se sostiene con esta línea sino con `mvp-fronteras.test.ts`,
+ * que comprueba que el HTML no lleve credenciales, ni identificadores de
+ * empresa, ni una consulta a la base, y que su CSP no admita recursos externos.
  *
  * Autenticar la página de login sería circular. Lo que importa es que no
  * contenga nada, y eso se prueba aparte.
+ *
+ * La raíz entró acá al agregarse, y el que la encontró fue este mismo barrido:
+ * un `302` no es un `2xx`, pero tampoco es un `>= 400`, y la aserción está
+ * escrita —bien— como «todo lo que no se declaró tiene que rechazar».
  */
-const SIN_DATOS = new Set(['GET /consola']);
+const SIN_DATOS = new Set(['GET /consola', 'GET /']);
 
 suite('S-1 HTTP — aislamiento sobre todos los endpoints', () => {
   let app: FastifyInstance;

@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 85 archivos de test, 1568 tests,
+**Estado del árbol:** `verify` en verde — 85 archivos de test, 1572 tests,
 229 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -60,6 +60,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Imputaciones sugeridas** | **TERMINADO** | **`sugerir-imputaciones` (13 tests)** |
 | **Listas de precios** | **TERMINADO** | **`listas-de-precios` (12 tests)** |
 | **Salida de stock por comprobante** | **TERMINADO** | **`stock` (21 tests)** |
+| **Umbrales sugeridos** | **TERMINADO** | **`senales-y-simulacion` (15 tests)** |
 
 ## 3. En curso
 
@@ -131,9 +132,10 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
 - **Descuentos y promociones por lista.** Una lista tiene precios, no reglas:
   «10% a partir de la quinta unidad» o «2x1 hasta fin de mes» no se pueden
   expresar. Cada uno es una decisión de producto y ninguna está tomada.
-- **Umbral sugerido.** Hoy el umbral se declara o no se afirma nada. Se podría
-  *proponer* uno mirando la propia serie y que una persona lo confirme — la
-  forma que ADR-001 admite. No está hecho.
+- **Umbrales con historia corta.** La propuesta exige seis períodos y con menos
+  contesta `SIN_HISTORIA_SUFICIENTE`. Un método que dijera algo con dos meses
+  —una estacionalidad declarada, un comparativo del rubro— exige una fuente que
+  no está archivada.
 - **Pronóstico con método.** La proyección de cobranzas extrapola plazos ya
   declarados; no predice demanda. Un pronóstico real exige elegir un método con
   nombre, y eso es una decisión de producto pendiente (ADR-017 §6).

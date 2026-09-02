@@ -1167,7 +1167,9 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <div><label>Mora de cartera (%)</label><input id="sen-u-mora" inputmode="decimal"></div>
     </div>
     <button id="b-sen-umbrales">Declarar</button>
+    <button id="b-sen-sugerir" class="sec">Proponer a partir de esta empresa</button>
     <div id="sen-u-msg"></div>
+    <div id="sen-u-sugerencias"></div>
   </div></details>
 
   <h3>Proyección de cobranzas</h3>
@@ -3994,6 +3996,42 @@ E('b-sen-umbrales').onclick = async () => {
   });
   decir('sen-u-msg', r, 'Umbrales declarados');
   if (r.ok) listarSenales();
+};
+
+/**
+ * Propone umbrales a partir de la serie de la empresa.
+ *
+ * Los escribe en los campos y **no los guarda**: quedan ahí para revisarse y
+ * declararse con el botón de al lado. Que el paso de confirmar exista es lo que
+ * separa una propuesta de una imposición — y el que confirma se hace cargo.
+ */
+E('b-sen-sugerir').onclick = async () => {
+  const r = await api('GET', '/analysis/thresholds/sugeridos');
+  if (!r.ok) return decir('sen-u-msg', r);
+
+  const s = r.datos.sugerencias || {};
+  const campos = [
+    ['sen-u-caida', 'caidaVentasPct', 'Caída de ventas'],
+    ['sen-u-conc', 'concentracionClientePct', 'Concentración de un cliente'],
+    ['sen-u-dias', 'diasClienteInactivo', 'Días para considerar inactivo'],
+    ['sen-u-mora', 'moraPct', 'Mora de cartera'],
+  ];
+
+  let detalle = '';
+  for (const [campo, clave, etiqueta] of campos) {
+    const sug = s[clave] || {};
+    // Un `null` no se escribe como vacío y ya: se dice por qué no hay número.
+    if (sug.valor !== null && sug.valor !== undefined) E(campo).value = sug.valor;
+    detalle += '<li><strong>' + escapar(etiqueta) + ':</strong> ' +
+      (sug.valor === null || sug.valor === undefined
+        ? '<em>no se propone</em>' : escapar(sug.valor)) +
+      '<br><span class="ayuda">' + escapar(sug.como || '') + '</span></li>';
+  }
+
+  E('sen-u-sugerencias').innerHTML =
+    '<div class="aviso ojo"><strong>Propuestas sobre ' +
+    escapar(r.datos.periodosMirados) + ' período(s) de esta empresa — todavía no declaradas' +
+    '</strong><ul>' + detalle + '</ul>' + escapar(r.datos.alcance) + '</div>';
 };
 
 E('b-sen-cobranzas').onclick = async () => {

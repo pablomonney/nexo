@@ -173,6 +173,152 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
    * el acuerdo. La respuesta dice qué porción del pendiente queda afuera, para
    * que la proyección no se lea como si fuera toda la cartera.
    */
+  /**
+   * Umbrales **propuestos** a partir de la propia serie de la empresa.
+   *
+   * Hoy el umbral se declara o el sistema no llama desvío a nada, y eso está
+   * bien: escribir que una caída del 20 % es una alerta sería inventar una
+   * regla que ninguna empresa acordó. Pero deja a quien empieza frente a cuatro
+   * campos vacíos sin ninguna referencia, y esa fricción es la razón por la que
+   * en la práctica quedan vacíos para siempre.
+   *
+   * Esto no inventa un criterio: **mide lo que esta empresa hizo** y lo ofrece
+   * como punto de partida. Es la forma que ADR-001 admite —propone, una persona
+   * confirma— y la misma que las imputaciones sugeridas.
+   *
+   * ## Sin historia suficiente no se propone
+   *
+   * Un umbral calculado sobre dos meses es ruido disfrazado de análisis. Cada
+   * propuesta declara cuántos períodos miró, y cuando no alcanzan devuelve
+   * `SIN_HISTORIA_SUFICIENTE` en vez de un número que parecería fundado.
+   *
+   * ## Cada propuesta dice qué encendería hoy
+   *
+   * Un umbral no se evalúa en abstracto: se evalúa por lo que marcaría. Por eso
+   * cada uno viene con el valor que la empresa tiene **ahora** en esa medida, y
+   * quien decide puede ver si adoptarlo llenaría la bandeja o no diría nada.
+   */
+  app.get('/analysis/thresholds/sugeridos', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+
+    /** Cuántos meses de historia hacen falta para que una serie diga algo. */
+    const MINIMO_MESES = 6;
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        // La caída mes contra mes que esta empresa tuvo de verdad. Se propone la
+        // mediana de las caídas: la máxima convertiría en normal al peor mes de
+        // la historia, y el promedio lo arrastra un solo outlier.
+        const ventas = await tx.query<{
+          meses: string;
+          caida_mediana: string | null;
+          caida_maxima: string | null;
+        }>(
+          `WITH serie AS (
+             SELECT mes, neto,
+                    lag(neto) OVER (ORDER BY mes) AS anterior
+               FROM analytics_operaciones_mensuales
+              WHERE company_id = $1 AND direccion = 'VENTAS'
+           ), caidas AS (
+             SELECT round((anterior - neto) * 100 / anterior, 2) AS pct
+               FROM serie
+              WHERE anterior IS NOT NULL AND anterior > 0 AND neto < anterior
+           )
+           SELECT (SELECT count(*)::text FROM serie) AS meses,
+                  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY pct)::numeric(5,2)::text
+                     FROM caidas) AS caida_mediana,
+                  (SELECT max(pct)::text FROM caidas) AS caida_maxima`,
+          [tenant.companyId],
+        );
+
+        const concentracion = await tx.query<{ actual: string | null; terceros: string }>(
+          `SELECT max(participacion)::numeric(5,2)::text AS actual,
+                  count(*)::text AS terceros
+             FROM (
+               SELECT round(sum(neto) * 100 / nullif(sum(sum(neto)) OVER (), 0), 2) AS participacion
+                 FROM analytics_por_tercero
+                WHERE company_id = $1 AND direccion = 'VENTAS'
+                GROUP BY party_id
+             ) p`,
+          [tenant.companyId],
+        );
+
+        const inactividad = await tx.query<{ p90: string | null; terceros: string }>(
+          `SELECT percentile_cont(0.9) WITHIN GROUP (ORDER BY dias_sin_operar)::int::text AS p90,
+                  count(*)::text AS terceros
+             FROM analytics_por_tercero
+            WHERE company_id = $1 AND direccion = 'VENTAS'`,
+          [tenant.companyId],
+        );
+
+        const mora = await tx.query<{ actual: string | null }>(
+          `SELECT round(
+                    sum(pendiente) FILTER (WHERE vencimiento_declarado AND dias_de_mora > 0)
+                    * 100 / nullif(sum(pendiente), 0), 2)::text AS actual
+             FROM invoice_settlement
+            WHERE company_id = $1 AND direction = 'VENTAS' AND pendiente > 0`,
+          [tenant.companyId],
+        );
+
+        const meses = Number(ventas.rows[0]!.meses);
+        const hayHistoria = meses >= MINIMO_MESES;
+
+        return {
+          periodosMirados: meses,
+          minimoRequerido: MINIMO_MESES,
+          sugerencias: {
+            caidaVentasPct: hayHistoria
+              ? {
+                  valor: ventas.rows[0]!.caida_mediana,
+                  actual: null,
+                  como:
+                    'Mediana de las caídas mes contra mes que esta empresa tuvo de verdad. Se ' +
+                    'usa la mediana y no el máximo, que volvería normal al peor mes de la ' +
+                    'historia, ni el promedio, que lo arrastra un solo mes atípico. La caída ' +
+                    `más grande observada fue ${ventas.rows[0]!.caida_maxima ?? 'ninguna'}%.`,
+                }
+              : {
+                  valor: null,
+                  actual: null,
+                  como: `SIN_HISTORIA_SUFICIENTE: ${String(meses)} período(s) de ${String(MINIMO_MESES)}. Un umbral calculado sobre dos meses es ruido disfrazado de análisis.`,
+                },
+            concentracionClientePct: {
+              valor: concentracion.rows[0]!.actual,
+              actual: concentracion.rows[0]!.actual,
+              como:
+                `Participación del cliente más grande sobre ${concentracion.rows[0]!.terceros} ` +
+                'tercero(s) con operaciones. Proponerlo igual al valor actual es deliberado: ' +
+                'declararlo así no enciende nada hoy y avisa si la concentración empeora.',
+            },
+            diasClienteInactivo: {
+              valor: inactividad.rows[0]!.p90,
+              actual: null,
+              como:
+                'Percentil 90 de los días sin operar de la cartera: el 10 % que hace más que ' +
+                'no compra. Es una foto de esta cartera, no un estándar de la industria.',
+            },
+            moraPct: {
+              valor: mora.rows[0]!.actual,
+              actual: mora.rows[0]!.actual,
+              como:
+                'Mora actual de la cartera, contando solo los comprobantes con vencimiento ' +
+                'declarado. Los que no lo tienen no cuentan como vencidos y no entran acá.',
+            },
+          },
+          alcance:
+            'Son **propuestas**, no umbrales. Nada de esto quedó guardado: se declaran con PUT ' +
+            '/analysis/thresholds y esa declaración es la que queda firmada. El sistema mide lo ' +
+            'que esta empresa hizo y no afirma que sea lo que deba pasar: qué es un desvío es ' +
+            'una decisión del negocio y no de un cálculo.',
+        };
+      },
+    );
+  });
+
   app.get('/analysis/proyeccion-de-cobranzas', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'analysis:read');
