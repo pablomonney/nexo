@@ -222,6 +222,7 @@ const TRIGGERS = [
   ['purchase_requests', 'pr_transicion', '0085: convertir exige citar una orden de compra de verdad'],
   ['purchase_requests', 'pr_baja', '0085: una solicitud enviada se anula, no se borra'],
   ['purchase_request_lines', 'prl_reglas', '0085: los renglones se tocan mientras es borrador'],
+  ['stock_movements', 'sm_proyecta_ppp', '0086: el promedio se calcula al escribir el movimiento'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
   ['stock_movements', 'stock_movements_producto_valido', 'Un servicio no mueve existencias'],
@@ -325,6 +326,8 @@ const FK_CON_EMPRESA = [
   ['purchase_requests', 'pr_centro_fk', 'Una solicitud no imputa al centro de costo de otra empresa'],
   ['purchase_request_lines', 'prl_solicitud_fk', 'Un renglón no cuelga de la solicitud de otra empresa'],
   ['purchase_request_lines', 'prl_producto_fk', 'Un renglón no pide el producto de otra empresa'],
+  ['stock_movement_ppp', 'smp_movimiento_fk', 'El promedio calculado no cuelga del movimiento de otra empresa'],
+  ['stock_movement_ppp', 'smp_producto_fk', 'El promedio calculado no cita el producto de otra empresa'],
   ['check_movements', 'cm_cheque_fk', 'Un movimiento no cuelga del cheque de otra empresa'],
   ['cash_boxes', 'cb_cuenta_fk', 'Una caja no apunta a la cuenta contable de otra empresa'],
   ['cash_sessions', 'cs_caja_fk', 'No se abre la caja de otra empresa'],
@@ -434,6 +437,8 @@ const RLS_FORZADO = [
   'tax_transaction_corrections',
   // Solicitudes de compra (0085): qué necesita comprar cada empresa.
   'purchase_requests', 'purchase_request_lines',
+  // La caché del promedio (0086): el costo de las existencias de cada empresa.
+  'stock_movement_ppp',
 ];
 
 /**
@@ -509,6 +514,8 @@ const VISTAS_INVOKER = [
   'analysis_signals_con_cheques',
   // 0085 · La solicitud y lo que espera.
   'purchase_request_status', 'work_queue_solicitudes',
+  // 0086 · La derivación que se conserva para comprobar la caché.
+  'stock_ppp_derivado',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

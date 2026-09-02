@@ -757,6 +757,76 @@ suite('Valuación de existencias', () => {
     expect(senal!.superaUmbral, 'el margen afirmable está muy por debajo de 30 %').toBe(true);
   });
 
+  /**
+   * La caché contra la derivación.
+   *
+   * Desde la 0086 el promedio se calcula al escribir y `stock_ppp` lee lo
+   * calculado. Un valor guardado solo vale si se puede rehacer, así que la
+   * derivación quedó viva —`stock_ppp_derivado`— y estas dos pruebas la usan
+   * para lo único que sirve: comprobar que las dos digan lo mismo.
+   */
+  const diferenciasContraLaDerivacion = async (): Promise<number> => {
+    const r = await db.query<{ d: number }>(
+      `SELECT count(*)::int AS d FROM (
+         SELECT movement_id, n, cantidad, costo_total, costo_de_salida, falta_costo
+           FROM stock_ppp WHERE company_id = $1
+         EXCEPT
+         SELECT movement_id, n, cantidad, costo_total, costo_de_salida, falta_costo
+           FROM stock_ppp_derivado WHERE company_id = $1
+       ) x`,
+      [empresa],
+    );
+    return r.rows[0]!.d;
+  };
+
+  it('lo calculado al escribir coincide con rehacer la cuenta', async () => {
+    // El barrido tiene que estar mirando algo: si la empresa no tuviera
+    // movimientos, cero diferencias no probaría nada.
+    const filas = await db.query<{ c: number }>(
+      'SELECT count(*)::int AS c FROM stock_ppp WHERE company_id = $1',
+      [empresa],
+    );
+    expect(filas.rows[0]!.c).toBeGreaterThan(5);
+
+    expect(await diferenciasContraLaDerivacion()).toBe(0);
+  });
+
+  it('un movimiento con fecha vieja rehace la cadena, no la deja mal', async () => {
+    // Es el caso incómodo de la 0086: el orden del libro es (fecha, alta, id),
+    // así que una recepción del lunes cargada el martes se mete en el medio y
+    // cambia el promedio de todo lo que vino después.
+    const antes = await db.query<{ costo: string | null }>(
+      `SELECT costo_total::text AS costo FROM stock_valuation
+        WHERE company_id = $1 AND producto_codigo = $2`,
+      [empresa, `CC-${stamp}`],
+    );
+
+    const anterior = new Date(Date.now() - 86_400_000 * 30).toISOString().slice(0, 10);
+    await recibir(productoConCosto, '100', '5.00', anterior);
+
+    // La cadena entera se rehizo: si el trigger solo hubiera agregado un paso
+    // al final, la derivación y la caché diferirían en todos los movimientos
+    // posteriores a esa fecha.
+    expect(await diferenciasContraLaDerivacion()).toBe(0);
+
+    const despues = await db.query<{ costo: string | null }>(
+      `SELECT costo_total::text AS costo FROM stock_valuation
+        WHERE company_id = $1 AND producto_codigo = $2`,
+      [empresa, `CC-${stamp}`],
+    );
+    expect(despues.rows[0]!.costo).not.toBe(antes.rows[0]!.costo);
+  });
+
+  it('la aplicación no puede escribir el costo calculado', async () => {
+    // La caché la escribe la base. Que `aai_app` pudiera tocarla sería
+    // exactamente la segunda verdad que la 0077 evita.
+    const permisos = await db.query<{ privilege_type: string }>(
+      `SELECT privilege_type FROM information_schema.role_table_grants
+        WHERE grantee = 'aai_app' AND table_name = 'stock_movement_ppp'`,
+    );
+    expect(permisos.rows.map((p) => p.privilege_type).sort()).toEqual(['SELECT']);
+  });
+
   it('las vistas de valuación conservan security_invoker', async () => {
     const r = await db.query<{ relname: string; reloptions: string[] | null }>(
       `SELECT relname, reloptions FROM pg_class

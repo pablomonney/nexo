@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 108 archivos de test, 1795 tests,
-411 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 108 archivos de test, 1798 tests,
+416 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -126,6 +126,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0083 | La nota de crédito dice qué factura corrige: aplicarla traslada saldo de un comprobante al otro, y la cuota baja con él |
 | 0084 | El margen llega a la capa de decisión: vender bajo costo se señala sin umbral —es un hecho— y el margen mínimo se declara |
 | 0085 | La solicitud de compra: pedir no es comprar. Sin precios, y «convertida» exige citar una orden de compra de verdad (ADR-021) |
+| 0086 | El promedio se calcula al escribir: la valuación pasa de 25 s a 44 ms con 50.000 movimientos, y se sigue comprobando contra la derivación |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -234,6 +235,20 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
 | Base de desarrollo vacía | `aai` no tiene usuarios ni empresas; el primer admin se crea con `POST /auth/register-first-admin`, y ese camino ahora lo recorre `npm run verify:arranque` en cada `verify` | MENOR |
 
 ## 7. Riesgos vivos
+
+- **El rendimiento con datos de verdad está medido en un solo lugar.** La 0086
+  salió de una medición, no de una sospecha: 50.000 movimientos de stock de una
+  empresa —200 artículos × 250 movimientos, dos años de un comercio chico—
+  hacían que `stock_valuation` tardara **25 segundos**, con el rol `aai_app` y
+  la empresa en contexto, que es como consulta la API. Con el promedio
+  calculado al escribir, **44 ms**.
+
+  Lo que eso deja abierto: las demás vistas derivadas —la bandeja, que es la
+  unión de veintitrés vistas; el flujo de fondos; la antigüedad de saldos— no
+  se midieron con volumen. No hay motivo para suponer que estén mal, y tampoco
+  para afirmar que estén bien: hasta que se midan, es una pregunta sin
+  contestar. El molde para contestarla es el de la 0086 — cargar volumen en
+  `aai_test`, medir con el rol de la aplicación, y guardar el número.
 
 - **Restauración probada, y lo que la prueba encontró.** `npm run db:backup` y
   `npm run db:restaurar` cierran el ciclo: la copia se restaura en una base
