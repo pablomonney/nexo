@@ -62,6 +62,9 @@ const CHECKS = [
   ['party_allocations', 'pa_anulada_con_motivo', 'Anular una imputación exige decir por qué'],
   ['tax_transaction_installments', 'tax_transaction_installments_importe_check', 'Una cuota vale más que cero'],
   ['price_lists', 'pl_vigencia_coherente', 'Una lista no termina antes de empezar'],
+  ['checks', 'ck_propio_con_cuenta', 'Un cheque propio sale de una cuenta de la empresa'],
+  ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
+  ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
   ['stock_movements', 'sm_tipo_coherente', 'El tipo de movimiento y su origen no se contradicen'],
   ['stock_movements', 'sm_origen_citado', 'Lo que viene de un hecho registrado dice de cuál'],
@@ -122,6 +125,11 @@ const TRIGGERS = [
   // 0061 · Un tercero con dos listas el mismo día deja al sistema sin criterio,
   // y elegir por orden de carga sería azar disfrazado.
   ['party_price_lists', 'ppl_una_por_fecha', '0061: una sola lista por tercero y por fecha'],
+  // 0064 · La máquina de estados del cheque vive en la base: depositar uno ya
+  // acreditado tiene que ser imposible por cualquier camino, no solo por la API.
+  ['check_movements', 'cm_transicion', '0064: solo las transiciones que existen'],
+  ['check_movements', 'cm_no_update', 'El libro de cheques no se edita'],
+  ['check_movements', 'cm_no_delete', 'El libro de cheques no se borra'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -203,6 +211,9 @@ const FK_CON_EMPRESA = [
   ['price_list_items', 'pli_lista_fk', 'Un precio no cuelga de la lista de otra empresa'],
   ['price_list_items', 'pli_producto_fk', 'Un precio no cita el producto de otra empresa'],
   ['party_price_lists', 'ppl_lista_fk', 'No se asigna la lista de otra empresa'],
+  ['checks', 'ck_cuenta_fk', 'Un cheque no sale de la cuenta bancaria de otra empresa'],
+  ['checks', 'ck_asiento_fk', 'Un cheque no cita el asiento de otra empresa'],
+  ['check_movements', 'cm_cheque_fk', 'Un movimiento no cuelga del cheque de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -255,6 +266,8 @@ const RLS_FORZADO = [
   // Listas de precios (0061): sin RLS, la lista mayorista de una empresa se
   // vería desde otra.
   'price_lists', 'price_list_items', 'party_price_lists',
+  // Cheques (0064): la cartera es plata, y sin RLS sería plata compartida.
+  'checks', 'check_movements',
 ];
 
 /**
@@ -277,6 +290,10 @@ const VISTAS_INVOKER = [
   'work_queue', 'work_queue_nucleo', 'work_queue_comercial', 'work_queue_compras',
   'work_queue_cobranzas', 'work_queue_stock', 'work_queue_activos',
   'work_queue_integraciones', 'work_queue_senales', 'work_queue_precios',
+  'work_queue_cheques',
+  // El estado del cheque se deriva del último movimiento: sin security_invoker,
+  // la cartera de una empresa se vería desde otra.
+  'check_status', 'checks_en_cartera',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

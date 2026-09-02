@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 87 archivos de test, 1589 tests,
-230 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 88 archivos de test, 1605 tests,
+244 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (23 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (24 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -61,6 +61,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Listas de precios** | **TERMINADO** | **`listas-de-precios` (16 tests)** |
 | **Salida de stock por comprobante** | **TERMINADO** | **`stock` (21 tests)** |
 | **Umbrales sugeridos** | **TERMINADO** | **`senales-y-simulacion` (15 tests)** |
+| **Cheques propios y de terceros** | **TERMINADO** | **`cheques` (16 tests)** |
 
 ## 3. En curso
 
@@ -85,11 +86,16 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0061 | Listas de precios con vigencia, por cliente y por cantidad (§6) |
 | 0062 | Depósito por defecto declarado: la salida deja de ser un trámite |
 | 0063 | La bandeja avisa cuando una lista de precios dejó de regir |
+| 0064 | Cheques: cartera, ciclo derivado del libro y flujo por fecha de pago |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
 aceptado y sin facturar aparece en la bandeja, y desaparece de ella cuando se
 factura — no cuando alguien lo marca, porque no hay forma de marcarlo.
+
+La cobertura del producto contra la matriz ERP y contra el mercado está en
+[`docs/roadmap/COBERTURA_ERP.md`](docs/roadmap/COBERTURA_ERP.md), con cada hueco
+clasificado en LIBRE, DECISIÓN o BLOQUEADO.
 
 ## 4. Lo que sigue, por dependencias
 

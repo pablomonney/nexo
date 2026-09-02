@@ -134,6 +134,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="activos">Bienes de uso</button>
   <button data-vista="iva">IVA</button>
   <button data-vista="bancos">Bancos</button>
+  <button data-vista="cheques">Cheques</button>
   <button data-vista="integraciones">Integraciones</button>
   <button data-vista="analitica">Analítica</button>
   <button data-vista="analisis">Señales</button>
@@ -1036,6 +1037,83 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </tr></thead><tbody></tbody></table></div>
 </section>
 
+<!-- ══ Cheques ════════════════════════════════════════════════════════════ -->
+<section id="v-cheques" hidden>
+  <h2>Cheques</h2>
+  <p class="ayuda">El estado <strong>no se elige</strong>: se registra lo que pasó —se depositó,
+    lo rechazaron, se endosó— y el estado sale del último movimiento. El libro es
+    append-only: un error se corrige con otro movimiento, igual que un asiento se anula por
+    contraasiento. Cargar un cheque <strong>no toca el Mayor</strong>: el asiento lo firma una
+    persona, y la bandeja avisa mientras el cheque no cite ninguno.</p>
+
+  <h3>La cartera</h3>
+  <p class="ayuda">Cheques de terceros recibidos y no depositados, por su <em>fecha de pago</em>
+    declarada — no por la del comprobante que los originó. <strong>No se suma a la proyección
+    de cobranzas</strong>: una factura cancelada con un cheque ya no figura como pendiente, y
+    sumar las dos cosas contaría la misma plata dos veces.</p>
+  <button id="b-chq" class="sec">Actualizar</button>
+  <dl class="kv" id="chq-cartera"></dl>
+  <div id="chq-msg"></div>
+
+  <div class="fila">
+    <div><label>Tipo</label><select id="chq-tipo">
+      <option value="">ambos</option><option>RECIBIDO</option><option>EMITIDO</option></select></div>
+    <div><label>&nbsp;</label>
+      <label class="chk"><input type="checkbox" id="chq-cartera-solo"> Solo los que están en cartera</label></div>
+  </div>
+  <div class="tabla"><table id="t-chq"><thead><tr>
+    <th>Tipo</th><th>Banco</th><th>Número</th><th>Importe</th><th>Emisión</th>
+    <th>Fecha de pago</th><th>De / a</th><th>Estado</th><th>Asiento</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="chq-detalle" hidden class="grupo">
+    <h3 id="chq-det-titulo">Cheque</h3>
+    <div class="tabla"><table id="t-chq-mov"><thead><tr>
+      <th>Fecha</th><th>Qué pasó</th><th>Destino</th><th>Motivo</th><th>Registró</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="chq-mover" hidden>
+      <div class="fila">
+        <div><label>Qué pasó</label><select id="chq-m-tipo">
+          <option>RECIBIDO</option><option>ENTREGADO</option><option>DEPOSITADO</option>
+          <option>ACREDITADO</option><option>ENDOSADO</option><option>RECHAZADO</option>
+          <option>ANULADO</option></select></div>
+        <div><label>Fecha</label><input id="chq-m-fecha" type="date"></div>
+        <div id="chq-m-cuenta-caja" hidden><label>Cuenta bancaria</label><input id="chq-m-cuenta" maxlength="60" placeholder="id"></div>
+        <div id="chq-m-tercero-caja" hidden><label>A quién se endosa</label><select id="chq-m-tercero"></select></div>
+        <div style="flex:1"><label>Motivo<span id="chq-m-lbl-motivo"></span></label><input id="chq-m-motivo" maxlength="500"></div>
+      </div>
+      <button id="b-chq-mover">Registrar el movimiento</button>
+      <div id="chq-m-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="chq-alta" hidden><summary>Cargar un cheque</summary><div>
+    <p class="ayuda">Cargarlo no lo pone en circulación: eso es el primer movimiento. Son dos
+      hechos distintos, y la diferencia importa al reclamar — un cheque cargado por error nunca
+      se recibió, y uno anulado sí existió.</p>
+    <div class="fila">
+      <div><label>Tipo</label><select id="chq-n-tipo">
+        <option>RECIBIDO</option><option>EMITIDO</option></select></div>
+      <div><label>Banco</label><input id="chq-n-banco" maxlength="120"></div>
+      <div><label>Número</label><input id="chq-n-numero" maxlength="40"></div>
+      <div><label>Importe</label><input id="chq-n-importe" inputmode="decimal"></div>
+      <div><label>CUIT del librador</label><input id="chq-n-cuit" maxlength="11" placeholder="opcional"></div>
+    </div>
+    <div class="fila">
+      <div><label>Emisión</label><input id="chq-n-emision" type="date"></div>
+      <div><label>Fecha de pago</label><input id="chq-n-pago" type="date"></div>
+      <div style="flex:1"><label>De quién / a quién</label><select id="chq-n-tercero"></select></div>
+      <div id="chq-n-cuenta-caja" hidden><label>Cuenta bancaria propia</label><input id="chq-n-cuenta" maxlength="60" placeholder="id"></div>
+    </div>
+    <p class="ayuda">La fecha de pago se declara siempre, incluso cuando coincide con la de
+      emisión: derivarla exigiría el plazo legal, que no está archivado en el registro
+      normativo, y afirmar una fecha sin fuente sería inventarla.</p>
+    <button id="b-chq-alta">Cargar</button>
+    <div id="chq-alta-msg"></div>
+  </div></details>
+</section>
+
 <!-- ══ Integraciones ══════════════════════════════════════════════════════ -->
 <section id="v-integraciones" hidden>
   <h2>Integraciones</h2>
@@ -1375,7 +1453,7 @@ const estado = {
   recepcion: null, recepcionBorrador: [],
   depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
   lista: null, listaBorrador: [], depositoPorDefecto: null,
-  comercialFecha: null, comercialTercero: null,
+  comercialFecha: null, comercialTercero: null, cheque: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1427,7 +1505,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
                 'terceros','productos','precios','comercial','recepciones','stock','activos',
-                'iva','bancos','integraciones','analitica','analisis',
+                'iva','bancos','cheques','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
 function ir(vista, migas) {
@@ -1464,6 +1542,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'activos') listarActivos();
     if (v === 'iva') cargarIva();
     if (v === 'bancos') listarBancos();
+    if (v === 'cheques') listarCheques();
     if (v === 'integraciones') listarIntegraciones();
     if (v === 'analitica') cargarAnalitica();
     if (v === 'analisis') listarSenales();
@@ -1570,7 +1649,7 @@ function aplicarPermisosANav() {
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
-    iva: 'vat_book:read', bancos: 'bank:read',
+    iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
@@ -3809,6 +3888,143 @@ E('b-ban-proponer').onclick = async () => {
     };
     cuerpo.appendChild(tr);
   }
+};
+
+// ══ 4c2 · Cheques ═════════════════════════════════════════════════════════
+async function listarCheques() {
+  E('chq-alta').hidden = !puede('check:write');
+
+  const q = new URLSearchParams();
+  if (E('chq-tipo').value) q.set('tipo', E('chq-tipo').value);
+  if (E('chq-cartera-solo').checked) q.set('soloEnCartera', 'si');
+
+  const r = await api('GET', '/checks?' + q.toString());
+  if (!r.ok) return decir('chq-msg', r);
+  E('chq-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const c = r.datos.cartera;
+  // `null` es «no hay cheques en cartera», no «cero». Mostrar ceros haría
+  // indistinguible una cartera vacía de una consulta que no trajo nada.
+  E('chq-cartera').innerHTML = c === null
+    ? fila('Cartera', 'sin cheques de terceros en cartera')
+    : fila('Cantidad', c.cantidad) + fila('Total', c.total) +
+      fila('Cobrables hoy', c.alDiaDeHoy || '0') +
+      fila('Próximos 30 días', c.proximos30 || '0') +
+      fila('De 31 a 60', c.de31a60 || '0') +
+      fila('Más de 60', c.masDe60 || '0') +
+      fila('Próxima fecha de pago', c.proximaFecha || '—');
+
+  const cuerpo = E('t-chq').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const ch of r.datos.cheques || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(ch.tipo) + '</td>' +
+      '<td>' + escapar(ch.banco) + '</td>' +
+      '<td class="mono">' + escapar(ch.numero) + '</td>' +
+      '<td class="mono">' + escapar(ch.importe) + '</td>' +
+      '<td class="mono">' + escapar(ch.fechaEmision) + '</td>' +
+      // Cobrable ya y todavía en cartera: es plata en un cajón.
+      '<td class="mono">' + (ch.enCartera && ch.diasDesdeFechaDePago > 0
+        ? '<span class="p p-ojo">' + escapar(ch.fechaPago) + '</span>'
+        : escapar(ch.fechaPago)) + '</td>' +
+      '<td>' + escapar(ch.razonSocial || '—') + '</td>' +
+      '<td>' + (ch.estado === 'RECHAZADO'
+        ? '<span class="p p-mal">RECHAZADO</span>' : pastilla(ch.estado)) + '</td>' +
+      '<td>' + (ch.asientoId
+        ? '<span class="p p-bien">sí</span>' : '<span class="p p-ojo">falta</span>') + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirCheque(ch.id, ch.banco + ' ' + ch.numero);
+    cuerpo.appendChild(tr);
+  }
+
+  const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (terceros.ok) {
+    for (const id of ['chq-n-tercero', 'chq-m-tercero']) {
+      const s = E(id);
+      const previo = s.value;
+      s.innerHTML = '';
+      for (const t of terceros.datos.terceros || []) {
+        const o = document.createElement('option');
+        o.value = t.id; o.textContent = t.razonSocial;
+        s.appendChild(o);
+      }
+      s.value = previo;
+    }
+  }
+}
+
+async function abrirCheque(id, titulo) {
+  const r = await api('GET', '/checks/' + id);
+  if (!r.ok) return decir('chq-msg', r);
+
+  estado.cheque = id;
+  E('chq-detalle').hidden = false;
+  E('chq-det-titulo').textContent = 'Cheque ' + titulo + ' — ' + r.datos.cheque.estado;
+  E('chq-mover').hidden = !puede('check:write');
+  limpiar('chq-m-msg');
+
+  const cuerpo = E('t-chq-mov').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const m of r.datos.movimientos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(m.fecha) + '</td>' +
+      '<td>' + escapar(m.tipo) + '</td>' +
+      '<td>' + escapar(m.razonSocial || m.cuentaBancariaId || '—') + '</td>' +
+      '<td>' + escapar(m.motivo || '—') + '</td>' +
+      '<td class="mono">' + escapar(m.registradoPor) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+// El formulario cambia según el hecho: depositar exige cuenta, endosar exige
+// destinatario, y rechazar o anular exigen motivo. La API rechaza cada caso
+// igual — esto evita ofrecer un pedido que va a volver con 422.
+E('chq-m-tipo').onchange = () => {
+  const t = E('chq-m-tipo').value;
+  E('chq-m-cuenta-caja').hidden = t !== 'DEPOSITADO';
+  E('chq-m-tercero-caja').hidden = t !== 'ENDOSADO';
+  E('chq-m-lbl-motivo').textContent =
+    t === 'RECHAZADO' || t === 'ANULADO' ? ' (obligatorio)' : ' (opcional)';
+};
+
+E('chq-n-tipo').onchange = () => {
+  E('chq-n-cuenta-caja').hidden = E('chq-n-tipo').value !== 'EMITIDO';
+};
+
+E('b-chq').onclick = () => listarCheques();
+
+E('b-chq-alta').onclick = async () => {
+  const cuerpo = {
+    tipo: E('chq-n-tipo').value,
+    banco: E('chq-n-banco').value,
+    numero: E('chq-n-numero').value,
+    importe: E('chq-n-importe').value,
+    fechaEmision: E('chq-n-emision').value,
+    fechaPago: E('chq-n-pago').value,
+    terceroId: E('chq-n-tercero').value || undefined,
+  };
+  if (E('chq-n-cuit').value.trim()) cuerpo.cuitLibrador = E('chq-n-cuit').value.trim();
+  if (E('chq-n-tipo').value === 'EMITIDO' && E('chq-n-cuenta').value) {
+    cuerpo.cuentaBancariaId = E('chq-n-cuenta').value;
+  }
+
+  const r = await api('POST', '/checks', cuerpo);
+  decir('chq-alta-msg', r, 'Cheque cargado. Todavía no circuló: registrá su primer movimiento.');
+  if (r.ok) listarCheques();
+};
+
+E('b-chq-mover').onclick = async () => {
+  const t = E('chq-m-tipo').value;
+  const cuerpo = { tipo: t, fecha: E('chq-m-fecha').value };
+  if (t === 'DEPOSITADO') cuerpo.cuentaBancariaId = E('chq-m-cuenta').value;
+  if (t === 'ENDOSADO') cuerpo.terceroId = E('chq-m-tercero').value;
+  if (E('chq-m-motivo').value.trim()) cuerpo.motivo = E('chq-m-motivo').value.trim();
+
+  const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
+  decir('chq-m-msg', r, 'Movimiento registrado');
+  if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
 };
 
 // ══ 4d · Integraciones ════════════════════════════════════════════════════

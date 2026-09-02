@@ -91,6 +91,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Faltaba, y el mapa hizo lo que promete: como es lista blanca y no filtro,
   // los desvíos sobre terceros simplemente no se listaban. Lo encontró un test.
   parties: 'party:read',
+  // Cheques (0064). La cartera es plata: quien no puede verla no recibe avisos
+  // sobre un cheque que se puede cobrar.
+  checks: 'check:read',
   // Precios (0063). Cuelgan de la lista, y quien no puede leer el maestro de
   // productos no recibe avisos sobre precios que no puede consultar.
   price_lists: 'product:read',
