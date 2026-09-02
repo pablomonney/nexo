@@ -190,6 +190,18 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <p class="ayuda">Tres cuentas de hechos, no indicadores compuestos: qué requiere
     atención, en qué período estás parado, y qué vence.</p>
   <div id="inicio-resumen"></div>
+
+  <div id="inicio-arranque" hidden>
+    <h3>Puesta en marcha</h3>
+    <p class="ayuda">Ningún paso se tilda: se cuenta lo que hay, así que la lista no puede
+      decir «listo» sobre algo que no está. Solo tres <strong>bloquean</strong> —cuentas,
+      ejercicio y período abierto—; los demás habilitan un módulo y no le hacen falta a toda
+      empresa.</p>
+    <div class="tabla"><table id="t-arranque"><thead><tr>
+      <th>Paso</th><th>Qué habilita</th><th>Hay</th><th>Estado</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
+
   <h3>Períodos del ejercicio</h3>
   <div class="tabla"><table id="t-inicio-periodos"><thead><tr>
     <th>Período</th><th>Desde</th><th>Hasta</th><th>Estado</th>
@@ -2316,6 +2328,31 @@ async function cargarInicio() {
     : '<div class="aviso"><strong>' + total + ' pendientes</strong><br>' +
       Object.keys(resumen).sort().map((k) =>
         '<span class="p p-ojo">' + escapar(k) + ' ' + resumen[k] + '</span>').join(' ') + '</div>';
+
+  // La puesta en marcha se muestra mientras falte algo. Una empresa que ya
+  // opera con todo lo bloqueante resuelto no la ve: sería tratarla como nueva
+  // cada vez que entra.
+  const arr = await api('GET', '/onboarding');
+  if (arr.ok) {
+    const pendientes = (arr.datos.pasos || []).filter((p) => !p.listo);
+    E('inicio-arranque').hidden = pendientes.length === 0;
+
+    const cuerpo = E('t-arranque').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const p of arr.datos.pasos || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + escapar(p.titulo) + '</td>' +
+        '<td>' + escapar(p.habilita) + '</td>' +
+        '<td class="mono">' + escapar(String(p.hechos)) + '</td>' +
+        '<td>' + (p.listo
+          ? '<span class="p p-bien">listo</span>'
+          : (p.bloquea
+              ? '<span class="p p-mal">impide trabajar</span>'
+              : '<span class="p p-neu">todavía no</span>')) + '</td>';
+      cuerpo.appendChild(tr);
+    }
+  }
 
   if (!puede('period:read')) { limpiar('t-inicio-periodos'); return; }
   const per = await api('GET', '/periods');

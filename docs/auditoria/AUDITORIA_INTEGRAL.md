@@ -351,5 +351,30 @@ de la bitácora, y el trabajo asíncrono que hoy no existe.
    como estaba —es el estado que la auditoría encontró— y lo que cambió se
    registra acá.
 
-**Estado del árbol al cerrar:** `verify` en verde — 97 archivos de test, 1.701
-tests, 358 objetos estructurales, 0 discrepancias entre el Mayor y el Diario.
+4. **El P0 #2 también: migración 0075.** `GET /onboarding` contesta qué le falta
+   a una empresa para trabajar, contando filas en vez de tildando pasos —un
+   tilde puede decir «listo» sobre una empresa sin período abierto—. Tres pasos
+   bloquean y van a la bandeja; los otros siete habilitan un módulo y no le
+   hacen falta a toda empresa: reclamarle depósitos a un estudio contable
+   enseña a ignorar la lista.
+
+5. **Un hallazgo que salió de construirla: los dominios de estado mezclan
+   idiomas.** `accounts` y `company_arca_credentials` usan `ACTIVE`; `parties` y
+   `products` usan `ACTIVO`; `cash_boxes` y `branches` usan `ACTIVA`;
+   `journal_entries` usa `APROBADO`. Comparar contra el valor equivocado **no
+   falla**: cuenta cero y nadie se entera. Dos de mis propios errores en esta
+   auditoría salieron de ahí. Unificarlos exigiría migrar datos y romper
+   contratos de la API, así que queda anotado como **P3** con su evidencia;
+   mientras tanto, el test de la puesta en marcha comprueba que cada contador se
+   mueva cuando se crea la cosa que cuenta, que es lo que atrapa el error sin
+   cambiar el esquema.
+
+6. **Y una nota de método.** Estas dos últimas entradas se escribieron primero
+   con un script de shell y el intérprete se comió cada acento grave: el
+   documento quedó con frases como «los dominios de estado mezclan idiomas: y
+   usan , y usan». Se reescribieron con el editor. Es el mismo cuidado que el
+   resto del informe pide para los instrumentos de medición, aplicado a la
+   herramienta con la que se escribe.
+
+**Estado del árbol al cerrar:** `verify` en verde — 98 archivos de test, 1.707
+tests, 360 objetos estructurales, 0 discrepancias entre el Mayor y el Diario.

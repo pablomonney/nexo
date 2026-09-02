@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 97 archivos de test, 1701 tests,
-358 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 98 archivos de test, 1707 tests,
+360 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -73,6 +73,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Suscripciones del propio NEXO** | **TERMINADO** | **`suscripciones` (9 tests)** |
 | **Detección de anomalías del Diario** | **TERMINADO** | **`anomalias` (6 tests)** |
 | **Mapeo contable y propuesta de asiento** | **TERMINADO** | **`mapeo-contable` (8 tests)** |
+| **Puesta en marcha de una empresa** | **TERMINADO** | **`puesta-en-marcha` (6 tests)** |
 
 ## 3. En curso
 
@@ -108,6 +109,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0072 | Sucursales: el punto de venta las ata, la vigencia protege el histórico, y las dos atribuciones se muestran |
 | 0073 | Suscripciones: planes sin precios, topes declarados, y un límite que avisa sin bloquear |
 | 0074 | El mapeo contable declarado: el sistema propone el asiento y deja de escribirse a mano (ADR-019) |
+| 0075 | Puesta en marcha: qué le falta a una empresa para trabajar, contado y no tildado |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

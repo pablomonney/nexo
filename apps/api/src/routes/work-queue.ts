@@ -120,6 +120,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Mapeo contable (0074). Es una decisión sobre el plan de cuentas: la ve
   // quien puede leer el plan.
   company_account_map: 'account:read',
+  // Puesta en marcha (0075). Lo que impide trabajar cuelga de la empresa, y lo
+  // ve quien puede mirar su configuración.
+  companies: 'company:read',
 };
 
 const CATEGORIAS = [

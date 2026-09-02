@@ -442,6 +442,9 @@ const VISTAS_INVOKER = [
   // Mapeo contable (0074). Qué falta declarar se deriva: no hay columna
   // «completo» que pueda quedar desactualizada.
   'accounting_map_status', 'work_queue_mapeo',
+  // Puesta en marcha (0075). Cuenta filas de doce tablas con RLS: sin
+  // security_invoker le contaría a una empresa lo que tiene otra.
+  'company_readiness', 'work_queue_arranque',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
