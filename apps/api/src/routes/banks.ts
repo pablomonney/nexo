@@ -346,6 +346,173 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
    * repetirlas daría la impresión de que son opcionales: que no queden matches
    * sin revisar, y que el acta cierre.
    */
+  /**
+   * Abrir la conciliación de un período.
+   *
+   * ## Por qué esta ruta no existía, y qué significaba
+   *
+   * `bank_reconciliations` no tenía **ni un solo INSERT** en toda la
+   * aplicación: ni ruta, ni trigger. Se podían proponer coincidencias y
+   * confirmarlas, pero no había forma de crear la conciliación que las
+   * sostiene, así que ninguno de esos dos endpoints se podía usar. El test de
+   * la fase la insertaba por SQL directo y la consola pedía el identificador
+   * con un `prompt` que nadie podía contestar.
+   *
+   * Lo encontró la auditoría de selectores: un campo que pide un uuid sin
+   * decir de dónde sacarlo casi siempre está tapando que no hay de dónde.
+   *
+   * ## El saldo del libro no se declara
+   *
+   * Sale del Mayor, sumando los movimientos de la cuenta hasta la fecha de
+   * corte. Pedirlo dejaría dos respuestas para la misma pregunta, y el acta se
+   * cerraría contra un número que alguien tipeó.
+   *
+   * El del extracto **sí** se declara: lo dice el banco, y este sistema no lo
+   * puede derivar de nada.
+   */
+  app.post<{ Params: { bankAccountId: string } }>(
+    '/banks/accounts/:bankAccountId/reconciliations',
+    async (request, reply) => {
+      const tenant = await requireCompany(request);
+      requirePermission(tenant, 'bank:reconcile');
+      const auth = requireAuth(request);
+      const params = z.object({ bankAccountId: z.string().uuid() }).parse(request.params);
+      const body = z
+        .object({
+          desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          saldoExtracto: z.string().regex(/^-?\d+(\.\d{1,2})?$/),
+          // Las partidas conciliatorias, netas. Cero mientras no se releven:
+          // el acta no cierra hasta que extracto + ajustes = libro, y eso lo
+          // comprueba la base al confirmar.
+          ajusteNeto: z.string().regex(/^-?\d+(\.\d{1,2})?$/).default('0'),
+        })
+        .parse(request.body);
+
+      const actorId = `user:${auth.user.userId}`;
+
+      return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+        const cuenta = await tx.query<{ account_id: string }>(
+          'SELECT account_id FROM bank_accounts WHERE id = $1 AND company_id = $2',
+          [params.bankAccountId, tenant.companyId],
+        );
+        if (cuenta.rowCount === 0) throw notFound('Cuenta bancaria no encontrada');
+
+        // El período que contiene la fecha de corte. Sin él no hay dónde
+        // colgar la conciliación, y la unicidad por cuenta y período es la que
+        // impide dos actas del mismo mes.
+        const periodo = await tx.query<{ id: string }>(
+          `SELECT id FROM periods
+            WHERE company_id = $1 AND $2::date BETWEEN start_date AND end_date`,
+          [tenant.companyId, body.hasta],
+        );
+        if (periodo.rowCount === 0) {
+          throw conflict(
+            `No hay ningún período que contenga el ${body.hasta}. La conciliación vive en ` +
+              'un período: sin él no se puede abrir.',
+          );
+        }
+
+        // El saldo del libro, derivado. `debit - credit` es el saldo de una
+        // cuenta de activo, que es lo que una cuenta bancaria es.
+        const libro = await tx.query<{ saldo: string }>(
+          `SELECT coalesce(sum(lm.debit - lm.credit), 0)::text AS saldo
+             FROM ledger_movements lm
+            WHERE lm.company_id = $1 AND lm.account_id = $2 AND lm.movement_date <= $3::date`,
+          [tenant.companyId, cuenta.rows[0]!.account_id, body.hasta],
+        );
+
+        try {
+          const r = await tx.query<{ id: string }>(
+            `INSERT INTO bank_reconciliations
+               (company_id, bank_account_id, period_id, desde, hasta,
+                saldo_extracto, saldo_libro, ajuste_neto, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+            [
+              tenant.companyId, params.bankAccountId, periodo.rows[0]!.id,
+              body.desde, body.hasta, body.saldoExtracto, libro.rows[0]!.saldo,
+              body.ajusteNeto, actorId,
+            ],
+          );
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId,
+            action: 'bank_reconciliation.open',
+            objectType: 'bank_reconciliations',
+            objectId: r.rows[0]!.id,
+            newValue: {
+              desde: body.desde,
+              hasta: body.hasta,
+              saldoExtracto: body.saldoExtracto,
+              saldoLibro: libro.rows[0]!.saldo,
+            },
+            motivo: 'Apertura de la conciliación del período',
+            ip: clientIp(request),
+          });
+
+          reply.code(201);
+          return {
+            reconciliationId: r.rows[0]!.id,
+            saldoLibro: libro.rows[0]!.saldo,
+            alcance:
+              'El saldo del libro sale del Mayor y no se declara: pedirlo dejaría dos ' +
+              'respuestas para la misma pregunta. El acta cierra cuando ' +
+              '`saldoExtracto + ajusteNeto = saldoLibro`, y eso lo comprueba la base al ' +
+              'confirmar.',
+          };
+        } catch (error) {
+          if ((error as { code?: string }).code === '23505') {
+            throw conflict(
+              'Esa cuenta ya tiene una conciliación de ese período. Dos actas confirmadas ' +
+                'del mismo mes son dos verdades distintas sobre el mismo saldo.',
+            );
+          }
+          throw error;
+        }
+      });
+    },
+  );
+
+  /** Las conciliaciones de la empresa, para poder elegir una. */
+  app.get('/banks/reconciliations', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'bank:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({ status: z.enum(['BORRADOR', 'CONFIRMADA', 'ANULADA']).optional() })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const r = await tx.query(
+          `SELECT r.id, r.status, r.desde::text, r.hasta::text,
+                  r.saldo_extracto::text AS "saldoExtracto",
+                  r.saldo_libro::text AS "saldoLibro",
+                  r.ajuste_neto::text AS "ajusteNeto",
+                  (r.saldo_extracto + r.ajuste_neto - r.saldo_libro)::text AS "diferencia",
+                  b.bank_name AS banco, b.id AS "cuentaId",
+                  (SELECT count(*)::int FROM bank_reconciliation_matches m
+                    WHERE m.reconciliation_id = r.id) AS coincidencias
+             FROM bank_reconciliations r
+             JOIN bank_accounts b ON b.id = r.bank_account_id AND b.company_id = r.company_id
+            WHERE r.company_id = $1 AND ($2::text IS NULL OR r.status = $2)
+            ORDER BY r.hasta DESC
+            LIMIT 100`,
+          [tenant.companyId, query.status ?? null],
+        );
+
+        return {
+          conciliaciones: r.rows,
+          alcance:
+            '`diferencia` es lo que todavía no cierra: extracto más ajustes menos libro. ' +
+            'Mientras no sea cero la base no deja confirmar, y eso es el acta.',
+        };
+      },
+    );
+  });
+
   app.post<{ Params: { reconciliationId: string } }>(
     '/banks/reconciliations/:reconciliationId/confirm',
     async (request, reply) => {

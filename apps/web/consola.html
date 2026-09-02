@@ -1149,7 +1149,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 
   <details class="grupo" id="com-atribuir" hidden><summary>Atribuir una venta</summary><div>
     <div class="fila">
-      <div style="flex:1"><label>Comprobante</label><input id="com-a-comprobante" maxlength="60" placeholder="id de la operación fiscal"></div>
+      <div style="flex:1"><label>Comprobante</label><select id="com-a-comprobante"></select></div>
       <div style="flex:1"><label>Vendedor</label><select id="com-a-vendedor"></select></div>
       <div><label>&nbsp;</label><button id="b-com-atribuir" class="sec">Atribuir</button></div>
     </div>
@@ -1344,7 +1344,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 
       <div class="fila">
         <div style="flex:1"><label>Presupuesto que salió de acá</label>
-          <input id="crm-p-id" maxlength="60" placeholder="id del documento comercial"></div>
+          <select id="crm-p-id"></select></div>
         <div><label>&nbsp;</label><button id="b-crm-presupuesto" class="sec">Vincular</button></div>
       </div>
       <p class="ayuda">CRM <strong>no crea documentos comerciales</strong>: el presupuesto nace
@@ -1541,9 +1541,33 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button id="b-ban-proponer" class="sec">Proponer</button>
   <div id="ban-prop-msg"></div>
   <dl class="kv" id="ban-acta"></dl>
+  <div class="fila">
+    <div style="flex:1"><label>Imputar las confirmaciones a</label>
+      <select id="ban-rec"></select></div>
+  </div>
   <div class="tabla"><table id="t-ban-prop"><thead><tr>
     <th>Tipo</th><th>Confianza</th><th>Movimientos</th><th>Líneas de asiento</th><th></th>
   </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="ban-abrir" hidden><summary>Abrir la conciliación de un período</summary><div>
+    <p class="ayuda">El <strong>saldo del libro no se declara</strong>: sale del Mayor hasta la
+      fecha de corte. El del extracto sí, porque lo dice el banco y el sistema no lo puede
+      derivar de nada. El acta cierra cuando <em>extracto + ajustes = libro</em>, y eso lo
+      comprueba la base al confirmar.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Cuenta</label><select id="ban-r-cuenta"></select></div>
+      <div><label>Desde</label><input id="ban-r-desde" type="date"></div>
+      <div><label>Hasta</label><input id="ban-r-hasta" type="date"></div>
+      <div><label>Saldo del extracto</label><input id="ban-r-saldo" inputmode="decimal"></div>
+      <div><label>Partidas conciliatorias</label><input id="ban-r-ajuste" inputmode="decimal" placeholder="0"></div>
+      <div><label>&nbsp;</label><button id="b-ban-abrir" class="sec">Abrir</button></div>
+    </div>
+    <div id="ban-abrir-msg"></div>
+    <div class="tabla"><table id="t-ban-rec"><thead><tr>
+      <th>Cuenta</th><th>Desde</th><th>Hasta</th><th>Extracto</th><th>Libro</th>
+      <th>Diferencia</th><th>Coincidencias</th><th>Estado</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
 </section>
 
 <!-- ══ Cheques ════════════════════════════════════════════════════════════ -->
@@ -1588,7 +1612,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
           <option>ACREDITADO</option><option>ENDOSADO</option><option>RECHAZADO</option>
           <option>ANULADO</option></select></div>
         <div><label>Fecha</label><input id="chq-m-fecha" type="date"></div>
-        <div id="chq-m-cuenta-caja" hidden><label>Cuenta bancaria</label><input id="chq-m-cuenta" maxlength="60" placeholder="id"></div>
+        <div id="chq-m-cuenta-caja" hidden><label>Cuenta bancaria</label><select id="chq-m-cuenta"></select></div>
         <div id="chq-m-tercero-caja" hidden><label>A quién se endosa</label><select id="chq-m-tercero"></select></div>
         <div style="flex:1"><label>Motivo<span id="chq-m-lbl-motivo"></span></label><input id="chq-m-motivo" maxlength="500"></div>
       </div>
@@ -1613,7 +1637,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <div><label>Emisión</label><input id="chq-n-emision" type="date"></div>
       <div><label>Fecha de pago</label><input id="chq-n-pago" type="date"></div>
       <div style="flex:1"><label>De quién / a quién</label><select id="chq-n-tercero"></select></div>
-      <div id="chq-n-cuenta-caja" hidden><label>Cuenta bancaria propia</label><input id="chq-n-cuenta" maxlength="60" placeholder="id"></div>
+      <div id="chq-n-cuenta-caja" hidden><label>Cuenta bancaria propia</label><select id="chq-n-cuenta"></select></div>
     </div>
     <p class="ayuda">La fecha de pago se declara siempre, incluso cuando coincide con la de
       emisión: derivarla exigiría el plazo legal, que no está archivado en el registro
@@ -4829,6 +4853,7 @@ async function listarBancos() {
   const sel = E('ban-cuenta');
   const previo = sel.value;
   sel.innerHTML = '';
+  E('ban-r-cuenta').innerHTML = '';
   for (const c of r.datos.cuentas || []) {
     const tr = document.createElement('tr');
     tr.innerHTML =
@@ -4839,11 +4864,15 @@ async function listarBancos() {
       '<td class="mono">' + escapar(c.cuentaCodigo) + ' — ' + escapar(c.cuentaNombre) + '</td>' +
       '<td>' + pastilla(c.estado) + '</td>';
     cuerpo.appendChild(tr);
-    const o = document.createElement('option');
-    o.value = c.id; o.textContent = c.banco + ' — ' + (c.alias || c.numero || c.cbu || '');
-    sel.appendChild(o);
+    for (const destino of [sel, E('ban-r-cuenta')]) {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.banco + ' — ' + (c.alias || c.numero || c.cbu || '');
+      destino.appendChild(o);
+    }
   }
   sel.value = previo;
+
+  await listarConciliaciones();
 }
 
 E('b-ban').onclick = () => listarBancos();
@@ -4858,6 +4887,70 @@ E('b-ban-importar').onclick = async () => {
     contenido: E('ban-csv').value,
   });
   decir('ban-imp-msg', r, 'Extracto importado');
+};
+
+/** Las conciliaciones abiertas, para elegir a cuál imputar. */
+async function listarConciliaciones() {
+  E('ban-abrir').hidden = !puede('bank:reconcile');
+
+  const r = await api('GET', '/banks/reconciliations');
+  if (!r.ok) return;
+
+  const sel = E('ban-rec');
+  const previo = sel.value;
+  sel.innerHTML = '<option value="">— ninguna abierta —</option>';
+
+  const cuerpo = E('t-ban-rec').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.conciliaciones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(c.banco) + '</td>' +
+      '<td class="mono">' + escapar(c.desde) + '</td>' +
+      '<td class="mono">' + escapar(c.hasta) + '</td>' +
+      '<td class="mono">' + escapar(c.saldoExtracto) + '</td>' +
+      '<td class="mono">' + escapar(c.saldoLibro) + '</td>' +
+      // Mientras la diferencia no sea cero, la base no deja confirmar. Eso es
+      // el acta, y por eso se muestra en vez de esconderse.
+      '<td class="mono">' + (Number(c.diferencia) === 0
+        ? '<span class="p p-bien">0</span>'
+        : '<span class="p p-ojo">' + escapar(c.diferencia) + '</span>') + '</td>' +
+      '<td class="mono">' + escapar(String(c.coincidencias)) + '</td>' +
+      '<td>' + pastilla(c.status) + '</td>' +
+      '<td>' + (c.status === 'BORRADOR' && puede('bank:confirm')
+        ? '<span class="clic">confirmar</span>' : '') + '</td>';
+
+    const boton = tr.querySelector('.clic');
+    if (boton) boton.onclick = async () => {
+      const conf = await api('POST', '/banks/reconciliations/' + c.id + '/confirm');
+      decir('ban-abrir-msg', conf, 'Conciliación confirmada');
+      if (conf.ok) listarConciliaciones();
+    };
+    cuerpo.appendChild(tr);
+
+    if (c.status === 'BORRADOR') {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.banco + ' · ' + c.desde + ' a ' + c.hasta;
+      sel.appendChild(o);
+    }
+  }
+  sel.value = previo;
+}
+
+E('b-ban-abrir').onclick = async () => {
+  const cuerpo = {
+    desde: E('ban-r-desde').value,
+    hasta: E('ban-r-hasta').value,
+    saldoExtracto: E('ban-r-saldo').value,
+  };
+  if (E('ban-r-ajuste').value.trim()) cuerpo.ajusteNeto = E('ban-r-ajuste').value.trim();
+
+  const r = await api(
+    'POST', '/banks/accounts/' + E('ban-r-cuenta').value + '/reconciliations', cuerpo);
+  decir('ban-abrir-msg', r,
+    'Conciliación abierta. El saldo del libro salió del Mayor, no se declaró.');
+  if (r.ok) listarConciliaciones();
 };
 
 E('b-ban-proponer').onclick = async () => {
@@ -4897,10 +4990,19 @@ E('b-ban-proponer').onclick = async () => {
       '<td>' + (puede('bank:reconcile') ? '<span class="clic">confirmar esta</span>' : '') + '</td>';
     const boton = tr.querySelector('.clic');
     if (boton) boton.onclick = async () => {
-      // Una por una y con el id de la conciliación a mano. No hay «confirmar
-      // todas» a propósito: ver R-25.
-      const rec = prompt('Id de la conciliación guardada para imputar esta propuesta:');
-      if (!rec) return;
+      // Una por una a propósito: no hay «confirmar todas» — ver R-25.
+      //
+      // El identificador salía de un `prompt` que nadie podía contestar: hasta
+      // esta versión **no existía ninguna ruta que creara una conciliación**,
+      // así que no había de dónde sacarlo. Ahora se elige de la lista, y si no
+      // hay ninguna abierta se dice en vez de pedir un dato imposible.
+      const rec = E('ban-rec').value;
+      if (!rec) {
+        E('ban-prop-msg').innerHTML =
+          '<div class="aviso">No hay ninguna conciliación abierta para imputarle esta ' +
+          'coincidencia. Abrila abajo, en «Abrir la conciliación de un período».</div>';
+        return;
+      }
       const c = await api('POST', '/banks/reconciliations/' + rec + '/matches', {
         bankTransactionId: (p.movimientoIds || [])[0],
         entryLineId: (p.entryLineIds || [])[0],
@@ -4959,6 +5061,26 @@ async function listarCheques() {
       '<td><span class="clic">abrir</span></td>';
     tr.querySelector('.clic').onclick = () => abrirCheque(ch.id, ch.banco + ' ' + ch.numero);
     cuerpo.appendChild(tr);
+  }
+
+  // Las cuentas bancarias por nombre, no por uuid. Un identificador que hay que
+  // copiar de otra pantalla es un error de tipeo esperando pasar, y además
+  // esconde cuando no hay ninguna cuenta cargada.
+  const cuentas = await api('GET', '/banks/accounts');
+  if (cuentas.ok) {
+    for (const id of ['chq-n-cuenta', 'chq-m-cuenta']) {
+      const s = E(id);
+      const previo = s.value;
+      s.innerHTML = '';
+      for (const c of cuentas.datos.cuentas || []) {
+        const o = document.createElement('option');
+        o.value = c.id;
+        o.textContent = c.banco + (c.numero ? ' · ' + c.numero : '') +
+          (c.cuentaCodigo ? ' (' + c.cuentaCodigo + ')' : '');
+        s.appendChild(o);
+      }
+      s.value = previo;
+    }
   }
 
   const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
@@ -5228,6 +5350,24 @@ async function listarComisiones() {
     }
   }
 
+  // Las ventas por su número y su cliente. El uuid de la operación fiscal no
+  // está a la vista en ninguna pantalla: pedirlo era pedir algo que no se podía
+  // conseguir sin abrir la base.
+  const ventas = await api('GET', '/tax-transactions?direccion=VENTAS&limite=200');
+  if (ventas.ok) {
+    const s = E('com-a-comprobante');
+    const previo = s.value;
+    s.innerHTML = '';
+    for (const o of ventas.datos.operaciones || []) {
+      const op = document.createElement('option');
+      op.value = o.id;
+      op.textContent = o.puntoVenta + '-' + o.numero + ' · ' + o.fecha +
+        ' · ' + (o.razonSocial || o.cuitContraparte || '') + ' · ' + o.total;
+      s.appendChild(op);
+    }
+    s.value = previo;
+  }
+
   const an = await api('GET', '/analysis/comisiones');
   if (an.ok) {
     E('com-resumen').innerHTML =
@@ -5322,7 +5462,7 @@ E('b-com-esquema').onclick = async () => {
 E('b-com-atribuir').onclick = async () => {
   const r = await api(
     'POST',
-    '/tax-transactions/' + E('com-a-comprobante').value.trim() + '/salesperson',
+    '/tax-transactions/' + E('com-a-comprobante').value + '/salesperson',
     { vendedorId: E('com-a-vendedor').value },
   );
   decir('com-a-msg', r, 'Venta atribuida');
@@ -5619,6 +5759,24 @@ async function listarCrm() {
     cuerpo.appendChild(tr);
   }
 
+  // Los presupuestos por su número y su cliente. Pedir el uuid del documento
+  // obligaba a copiarlo de la pantalla comercial, y no había forma de saber si
+  // el que se pegó era el correcto hasta que la API lo rechazaba.
+  const presupuestos = await api('GET', '/commercial-documents?limite=200');
+  if (presupuestos.ok) {
+    const s = E('crm-p-id');
+    const previo = s.value;
+    s.innerHTML = '';
+    for (const d of presupuestos.datos.documentos || []) {
+      const o = document.createElement('option');
+      o.value = d.id;
+      o.textContent = d.tipo + ' ' + d.numero + ' — ' + (d.razonSocial || '') +
+        ' (' + d.fecha + ')';
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+
   const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
   if (terceros.ok) {
     const s = E('crm-n-tercero');
@@ -5741,7 +5899,7 @@ E('b-crm-actividad').onclick = async () => {
 
 E('b-crm-presupuesto').onclick = async () => {
   const r = await api('PUT', '/crm/opportunities/' + estado.oportunidad + '/presupuesto', {
-    presupuestoId: E('crm-p-id').value.trim(),
+    presupuestoId: E('crm-p-id').value,
   });
   decir('crm-p-msg', r, 'Presupuesto vinculado');
   if (r.ok) listarCrm();
