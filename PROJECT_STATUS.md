@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 107 archivos de test, 1785 tests,
-397 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 108 archivos de test, 1795 tests,
+411 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -125,6 +125,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0082 | La orden de pago: el documento entre la factura y el pago. «Pagada» exige el asiento imputado a cada comprobante |
 | 0083 | La nota de crédito dice qué factura corrige: aplicarla traslada saldo de un comprobante al otro, y la cuota baja con él |
 | 0084 | El margen llega a la capa de decisión: vender bajo costo se señala sin umbral —es un hecho— y el margen mínimo se declara |
+| 0085 | La solicitud de compra: pedir no es comprar. Sin precios, y «convertida» exige citar una orden de compra de verdad |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

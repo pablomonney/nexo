@@ -124,6 +124,9 @@ const CHECKS = [
   ['payment_orders', 'po_aprobada_con_firma', '0082: una orden aprobada dice quién y cuándo'],
   ['tax_transaction_corrections', 'ttc_no_es_la_misma', '0083: un comprobante no se corrige a sí mismo'],
   ['tax_transaction_corrections', 'ttc_anulada_con_motivo', '0083: anular una corrección exige decir por qué'],
+  ['purchase_requests', 'pr_rechazada_con_motivo', '0085: rechazar una solicitud exige decir por qué'],
+  ['purchase_requests', 'pr_convertida_con_orden', '0085: convertida si y solo si hay orden de compra'],
+  ['purchase_requests', 'pr_resuelta_firmada', '0085: quien resolvió una solicitud queda escrito'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -216,6 +219,9 @@ const TRIGGERS = [
   ['payment_order_lines', 'pol_reglas', '0082: no se ordena pagar más de lo que se debe'],
   ['tax_transaction_corrections', 'ttc_reglas', '0083: una nota corrige una factura del mismo tercero, por lo que le queda'],
   ['tax_transaction_corrections', 'ttc_no_delete', '0083: una corrección se anula, no se borra'],
+  ['purchase_requests', 'pr_transicion', '0085: convertir exige citar una orden de compra de verdad'],
+  ['purchase_requests', 'pr_baja', '0085: una solicitud enviada se anula, no se borra'],
+  ['purchase_request_lines', 'prl_reglas', '0085: los renglones se tocan mientras es borrador'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
   ['stock_movements', 'stock_movements_producto_valido', 'Un servicio no mueve existencias'],
@@ -315,6 +321,10 @@ const FK_CON_EMPRESA = [
   ['tax_transaction_corrections', 'ttc_correctora_fk', 'Una nota no corrige comprobantes de otra empresa'],
   ['tax_transaction_corrections', 'ttc_corregida_fk', 'La factura corregida es de la misma empresa'],
   ['tax_transaction_corrections', 'ttc_cuota_fk', 'La cuota corregida es de la misma empresa'],
+  ['purchase_requests', 'pr_orden_fk', 'Una solicitud no cita la orden de compra de otra empresa'],
+  ['purchase_requests', 'pr_centro_fk', 'Una solicitud no imputa al centro de costo de otra empresa'],
+  ['purchase_request_lines', 'prl_solicitud_fk', 'Un renglón no cuelga de la solicitud de otra empresa'],
+  ['purchase_request_lines', 'prl_producto_fk', 'Un renglón no pide el producto de otra empresa'],
   ['check_movements', 'cm_cheque_fk', 'Un movimiento no cuelga del cheque de otra empresa'],
   ['cash_boxes', 'cb_cuenta_fk', 'Una caja no apunta a la cuenta contable de otra empresa'],
   ['cash_sessions', 'cs_caja_fk', 'No se abre la caja de otra empresa'],
@@ -422,6 +432,8 @@ const RLS_FORZADO = [
   'payment_orders', 'payment_order_lines',
   // Correcciones (0083): qué nota corrige qué factura de cada empresa.
   'tax_transaction_corrections',
+  // Solicitudes de compra (0085): qué necesita comprar cada empresa.
+  'purchase_requests', 'purchase_request_lines',
 ];
 
 /**
@@ -495,6 +507,8 @@ const VISTAS_INVOKER = [
   // 0084 · El margen en la capa de decisión. La envoltura de la 0065 se repite:
   // sin security_invoker en cualquier eslabón, las señales se mezclarían.
   'analysis_signals_con_cheques',
+  // 0085 · La solicitud y lo que espera.
+  'purchase_request_status', 'work_queue_solicitudes',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

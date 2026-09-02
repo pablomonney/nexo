@@ -139,6 +139,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="iva">IVA</button>
   <button data-vista="bancos">Bancos</button>
   <button data-vista="cheques">Cheques</button>
+  <button data-vista="solicitudes">Solicitudes</button>
   <button data-vista="pagos">Pagos</button>
   <button data-vista="caja">Caja</button>
   <button data-vista="integraciones">Integraciones</button>
@@ -1703,6 +1704,78 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 </section>
 
 <!-- ══ Caja ═══════════════════════════════════════════════════════════════ -->
+<!-- ══ Solicitudes de compra ══════════════════════════════════════════════ -->
+<section id="v-solicitudes" hidden>
+  <h2>Solicitudes de compra</h2>
+  <p class="ayuda">Pedir no es comprar. Una solicitud dice <strong>qué</strong> se necesita y
+    <strong>cuánto</strong>, y no dice a quién comprarlo ni a cuánto: eso lo dice el proveedor
+    después. Por eso no hay precios en esta pantalla — si el que pide escribe el precio, ese
+    número viaja hasta la orden de compra sin que nadie lo haya cotizado.</p>
+  <p class="ayuda">Aprobada la solicitud, la orden de compra se arma por el camino de siempre
+    —con su proveedor y sus precios— y después la solicitud la <strong>cita</strong>. El sistema
+    verifica que lo citado sea una orden de compras: «convertida» no es una palabra suelta.</p>
+
+  <div class="fila">
+    <div><label>Estado</label><select id="sol-f-estado">
+      <option value="">todos</option><option>BORRADOR</option><option>ENVIADA</option>
+      <option>APROBADA</option><option>RECHAZADA</option><option>CONVERTIDA</option>
+      <option>ANULADA</option></select></div>
+    <div><label>&nbsp;</label><button id="b-sol" class="sec">Actualizar</button></div>
+  </div>
+  <div id="sol-msg"></div>
+  <div class="tabla"><table id="t-sol"><thead><tr>
+    <th>N°</th><th>Fecha</th><th>Para qué</th><th>Renglones</th><th>Estado</th>
+    <th>Esperando</th><th>Situación</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="sol-detalle" hidden class="grupo">
+    <h3 id="sol-det-titulo">Solicitud</h3>
+    <div class="tabla"><table id="t-sol-ren"><thead><tr>
+      <th>#</th><th>Producto</th><th>Descripción</th><th>Cantidad</th><th>Unidad</th>
+      <th>Observaciones</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="sol-acciones" hidden>
+      <div class="fila">
+        <div><label>Orden de compra que salió de esta solicitud</label>
+          <select id="sol-orden"></select></div>
+        <div style="flex:1"><label>Motivo del rechazo o de la anulación</label>
+          <input id="sol-motivo" maxlength="500"></div>
+      </div>
+      <button id="b-sol-enviar">Enviar a aprobar</button>
+      <button id="b-sol-aprobar">Aprobar</button>
+      <button id="b-sol-convertir" class="sec">Citar la orden de compra</button>
+      <button id="b-sol-rechazar" class="sec">Rechazar</button>
+      <button id="b-sol-anular" class="sec">Anular</button>
+      <div id="sol-acc-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="sol-alta" hidden><summary>Pedir una compra</summary><div>
+    <p class="ayuda">La justificación no es un trámite: quien tiene que aprobar decide con eso.
+      El producto del maestro es opcional — se puede pedir algo que todavía no existe ahí—, la
+      descripción no.</p>
+    <div class="fila">
+      <div><label>Fecha</label><input id="sol-n-fecha" type="date"></div>
+      <div><label>Necesaria para</label><input id="sol-n-necesaria" type="date"></div>
+      <div style="flex:1"><label>Para qué se pide</label>
+        <input id="sol-n-justificacion" maxlength="500"></div>
+    </div>
+    <div class="fila">
+      <div><label>Producto del maestro</label><select id="sol-r-producto"></select></div>
+      <div style="flex:1"><label>Descripción</label><input id="sol-r-descripcion" maxlength="200"></div>
+      <div><label>Cantidad</label><input id="sol-r-cantidad" inputmode="decimal"></div>
+      <div><label>Unidad</label><input id="sol-r-unidad" value="UNIDAD" maxlength="20"></div>
+      <div><label>&nbsp;</label><button id="b-sol-agregar" class="sec">Agregar</button></div>
+    </div>
+    <div class="tabla"><table id="t-sol-borrador"><thead><tr>
+      <th>Descripción</th><th>Cantidad</th><th>Unidad</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+    <button id="b-sol-alta">Crear la solicitud</button>
+    <div id="sol-alta-msg"></div>
+  </div></details>
+</section>
+
 <!-- ══ Órdenes de pago ════════════════════════════════════════════════════ -->
 <section id="v-pagos" hidden>
   <h2>Órdenes de pago</h2>
@@ -2347,7 +2420,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
-                'iva','bancos','cheques','pagos','caja','integraciones','analitica','analisis',
+                'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
 
 function ir(vista, migas) {
@@ -2389,6 +2462,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'iva') cargarIva();
     if (v === 'bancos') listarBancos();
     if (v === 'cheques') listarCheques();
+    if (v === 'solicitudes') listarSolicitudes();
     if (v === 'pagos') listarOrdenesDePago();
     if (v === 'caja') listarCaja();
     if (v === 'integraciones') listarIntegraciones();
@@ -2500,6 +2574,7 @@ function aplicarPermisosANav() {
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
+    solicitudes: 'purchase_request:read',
     pagos: 'payment_order:read',
     caja: 'cash:read',
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
@@ -5494,6 +5569,189 @@ E('b-chq-mover').onclick = async () => {
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
 };
+
+// ══ 4c6c · Solicitudes de compra ══════════════════════════════════════════
+//
+// El borrador de renglones vive en memoria hasta que se crea la solicitud: son
+// varios renglones y una sola alta, y mandar cada uno por separado dejaría
+// solicitudes a medio cargar si algo falla en el medio.
+const borradorDeSolicitud = [];
+
+async function listarSolicitudes() {
+  E('sol-alta').hidden = !puede('purchase_request:write');
+  if (puede('purchase_request:write')) await cargarProductosParaSolicitud();
+
+  const q = new URLSearchParams();
+  if (E('sol-f-estado').value) q.set('estado', E('sol-f-estado').value);
+
+  const r = await api('GET', '/purchase-requests?' + q.toString());
+  if (!r.ok) return decir('sol-msg', r);
+  E('sol-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-sol').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const s of r.datos.solicitudes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(s.numero) + '</td>' +
+      '<td class="mono">' + escapar(s.fecha) + '</td>' +
+      '<td>' + escapar(s.justificacion) + '</td>' +
+      '<td class="mono">' + escapar(s.renglones) + '</td>' +
+      '<td><span class="p p-' + (s.estado === 'CONVERTIDA' ? 'ok'
+        : s.estado === 'RECHAZADA' || s.estado === 'ANULADA' ? 'neu' : 'ojo') + '">' +
+        escapar(s.estado) + '</span></td>' +
+      // Los días se cuentan; no se llaman atraso: nadie declaró un plazo para
+      // responder una solicitud.
+      '<td class="mono">' + (s.diasEsperando === null
+        ? '—' : escapar(s.diasEsperando) + ' d') + '</td>' +
+      '<td>' + escapar(s.situacion) + '</td>' +
+      '<td><span class="clic">ver</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirSolicitud(s.id, 'Solicitud N° ' + s.numero);
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function cargarProductosParaSolicitud() {
+  if (!puede('product:read')) return;
+  const r = await api('GET', '/products?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('sol-r-producto');
+  sel.innerHTML = '<option value="">— no está en el maestro —</option>';
+  for (const p of (r.datos.productos || [])) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.codigo + ' · ' + p.nombre;
+    sel.appendChild(o);
+  }
+}
+
+async function abrirSolicitud(id, titulo) {
+  const r = await api('GET', '/purchase-requests/' + id);
+  if (!r.ok) return decir('sol-msg', r);
+  estado.solicitud = id;
+  E('sol-detalle').hidden = false;
+  E('sol-det-titulo').textContent = titulo + ' · ' + r.datos.solicitud.situacion;
+
+  const s = r.datos.solicitud;
+  // Cada botón se ofrece solo donde el estado lo admite: uno que va a terminar
+  // en 422 le enseña a la persona que el sistema falla al azar.
+  E('sol-acciones').hidden = s.estado === 'CONVERTIDA' || s.estado === 'RECHAZADA' ||
+    s.estado === 'ANULADA';
+  E('b-sol-enviar').hidden = s.estado !== 'BORRADOR' || !puede('purchase_request:write');
+  E('b-sol-aprobar').hidden = s.estado !== 'ENVIADA' || !puede('purchase_request:approve');
+  E('b-sol-rechazar').hidden = s.estado !== 'ENVIADA' || !puede('purchase_request:approve');
+  E('b-sol-convertir').hidden = s.estado !== 'APROBADA' || !puede('purchase_request:approve');
+  E('b-sol-anular').hidden = !puede('purchase_request:write');
+
+  if (s.estado === 'APROBADA') await cargarOrdenesParaSolicitud();
+
+  const cuerpo = E('t-sol-ren').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const l of r.datos.renglones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.orden) + '</td>' +
+      '<td class="mono">' + escapar(l.productoCodigo || '—') + '</td>' +
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(l.unidad) + '</td>' +
+      '<td>' + escapar(l.observaciones || '') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function cargarOrdenesParaSolicitud() {
+  if (!puede('commercial:read')) return;
+  const r = await api('GET', '/commercial-documents?direccion=COMPRAS&tipo=PEDIDO');
+  if (!r.ok) return;
+  const sel = E('sol-orden');
+  sel.innerHTML = '';
+  for (const d of (r.datos.documentos || [])) {
+    const o = document.createElement('option');
+    o.value = d.id;
+    o.textContent = 'N° ' + d.numero + ' · ' + (d.razonSocial || '') + ' · ' + d.estado;
+    sel.appendChild(o);
+  }
+}
+
+E('b-sol').onclick = () => listarSolicitudes();
+E('sol-f-estado').onchange = () => listarSolicitudes();
+
+E('b-sol-agregar').onclick = () => {
+  borradorDeSolicitud.push({
+    productoId: E('sol-r-producto').value || undefined,
+    descripcion: E('sol-r-descripcion').value,
+    cantidad: E('sol-r-cantidad').value,
+    unidad: E('sol-r-unidad').value || 'UNIDAD',
+  });
+  E('sol-r-descripcion').value = '';
+  E('sol-r-cantidad').value = '';
+  dibujarBorradorDeSolicitud();
+};
+
+function dibujarBorradorDeSolicitud() {
+  const cuerpo = E('t-sol-borrador').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  borradorDeSolicitud.forEach((l, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(l.unidad) + '</td>' +
+      '<td><span class="clic">quitar</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      borradorDeSolicitud.splice(i, 1);
+      dibujarBorradorDeSolicitud();
+    };
+    cuerpo.appendChild(tr);
+  });
+}
+
+E('b-sol-alta').onclick = async () => {
+  const cuerpo = {
+    fecha: E('sol-n-fecha').value,
+    justificacion: E('sol-n-justificacion').value,
+    renglones: borradorDeSolicitud.slice(),
+  };
+  if (E('sol-n-necesaria').value) cuerpo.necesariaPara = E('sol-n-necesaria').value;
+
+  const r = await api('POST', '/purchase-requests', cuerpo);
+  decir('sol-alta-msg', r, 'Solicitud creada en borrador. No la ve quien aprueba hasta enviarla.');
+  if (r.ok) {
+    borradorDeSolicitud.length = 0;
+    dibujarBorradorDeSolicitud();
+    listarSolicitudes();
+  }
+};
+
+// La URL entera se arma en cada botón, con el verbo escrito. Concatenar el
+// verbo desde una variable dejaría a S-12 sin poder comprobar que la ruta
+// existe: vería un segmento cualquiera donde hay cinco caminos distintos.
+async function actoSobreSolicitud(url, cuerpo, exito) {
+  const r = await api('POST', url, cuerpo);
+  decir('sol-acc-msg', r, exito);
+  if (r.ok) {
+    await listarSolicitudes();
+    await abrirSolicitud(estado.solicitud, 'Solicitud');
+  }
+}
+
+E('b-sol-enviar').onclick = () =>
+  actoSobreSolicitud('/purchase-requests/' + estado.solicitud + '/enviar', undefined,
+    'Enviada. Queda a la espera de una respuesta.');
+E('b-sol-aprobar').onclick = () =>
+  actoSobreSolicitud('/purchase-requests/' + estado.solicitud + '/aprobar', undefined,
+    'Aprobada. Falta armar la orden de compra: el proveedor y los precios no salen de acá.');
+E('b-sol-rechazar').onclick = () =>
+  actoSobreSolicitud('/purchase-requests/' + estado.solicitud + '/rechazar',
+    { motivo: E('sol-motivo').value }, 'Rechazada, con el motivo.');
+E('b-sol-anular').onclick = () =>
+  actoSobreSolicitud('/purchase-requests/' + estado.solicitud + '/anular',
+    { motivo: E('sol-motivo').value }, 'Anulada, con el motivo.');
+E('b-sol-convertir').onclick = () =>
+  actoSobreSolicitud('/purchase-requests/' + estado.solicitud + '/convertir',
+    { ordenDeCompraId: E('sol-orden').value },
+    'La solicitud cita la orden de compra que salió de ella.');
 
 // ══ 4c6b · Órdenes de pago ════════════════════════════════════════════════
 async function listarOrdenesDePago() {

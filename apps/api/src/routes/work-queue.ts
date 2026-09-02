@@ -126,6 +126,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Órdenes de pago (0082). Qué se le va a pagar a quién es sensible: sigue a
   // su propio permiso y no al de comprobantes.
   payment_orders: 'payment_order:read',
+  // Solicitudes de compra (0085). Quien no puede verlas no recibe avisos sobre
+  // pedidos que no puede abrir.
+  purchase_requests: 'purchase_request:read',
 };
 
 const CATEGORIAS = [

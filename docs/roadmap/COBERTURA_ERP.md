@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02 (revisada al cerrar los ocho bloques LIBRE del orden de ejecución)
+**Fecha:** 2026-09-02 (revisada al cerrar el último bloque LIBRE: la solicitud de compra)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -68,7 +68,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Proveedores, recepciones, conciliación de tres puntas | HECHO |
 | Cuenta corriente y antigüedad de deuda | HECHO |
 | **Órdenes de compra** | HECHO |
-| **Solicitudes de compra** | LIBRE |
+| **Solicitudes de compra** | HECHO — pedir no es comprar: la solicitud dice qué y cuánto, sin precios, y quien aprueba decide con la justificación escrita. «Convertida» exige citar una orden de compra real —de compras y pedido—, que la base verifica. Con esto la cadena queda entera: solicitud → orden de compra → recepción → factura → orden de pago → pago. |
 | **Pagos y órdenes de pago** | HECHO — la orden se arma sobre el pendiente real, se aprueba y cita el asiento del pago. Marcarla pagada exige que ese asiento esté imputado a cada uno de sus comprobantes: sin eso, la orden diría pagada y la cuenta del proveedor seguiría entera. |
 
 > **Corrección.** La primera versión de esta tabla decía que las órdenes de
@@ -193,10 +193,12 @@ Por dependencia y por valor, entre lo LIBRE:
 
 ~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
 ~~4. Caja y arqueo~~ · ~~5. CRM~~ · ~~6. Proyectos~~ ·
-~~7. Vendedores y comisiones~~ · ~~8. Sucursales~~ · ~~9. Suscripciones~~ — hechos.
+~~7. Vendedores y comisiones~~ · ~~8. Sucursales~~ · ~~9. Suscripciones~~ ·
+~~10. Órdenes de pago~~ · ~~11. Solicitudes de compra~~ — hechos.
 
-**No queda ningún módulo LIBRE en esta lista.** Lo que sigue exige una decisión
-de producto o una fuente externa: retenciones, remitos, valuación de existencias,
+**No queda ningún módulo LIBRE en ninguna de las tablas de arriba** —la
+solicitud de compra era el último—. Lo que sigue exige una decisión de producto
+o una fuente externa: retenciones, remitos, los otros métodos de valuación,
 métodos de amortización, producción, RRHH, el layout del Libro IVA Digital y las
 credenciales de los conectores. Cada uno está clasificado arriba con el motivo.
 
