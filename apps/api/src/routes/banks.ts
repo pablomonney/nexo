@@ -34,6 +34,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, notFound } from '../http/errors.js';
+import { separarCsv } from '../csv.js';
 
 const MONEDA: Currency = 'ARS';
 
@@ -407,64 +408,6 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
       },
     );
   });
-}
-
-// ---------------------------------------------------------------------------
-// Lectura del CSV — lo único de dominio que pasa por acá
-// ---------------------------------------------------------------------------
-
-/**
- * Separa un CSV en filas y columnas, respetando el entrecomillado.
- *
- * Es lo único que esta capa hace sobre el contenido: **no interpreta ninguna
- * celda**. Todas las decisiones —qué es una fecha, qué es un importe, de qué lado
- * está el movimiento— viven en el motor, con su mapeo declarado.
- *
- * Se aceptan CRLF y LF porque un extracto bajado de un homebanking viene de
- * cualquiera de los dos, y eso no es interpretar: es leer líneas.
- */
-export function separarCsv(contenido: string, separador: string): string[][] {
-  const filas: string[][] = [];
-  let celda = '';
-  let fila: string[] = [];
-  let entreComillas = false;
-
-  for (let i = 0; i < contenido.length; i += 1) {
-    const caracter = contenido[i];
-    if (entreComillas) {
-      if (caracter === '"') {
-        if (contenido[i + 1] === '"') {
-          celda += '"';
-          i += 1;
-        } else {
-          entreComillas = false;
-        }
-      } else {
-        celda += caracter;
-      }
-      continue;
-    }
-
-    if (caracter === '"') entreComillas = true;
-    else if (caracter === separador) {
-      fila.push(celda);
-      celda = '';
-    } else if (caracter === '\n') {
-      fila.push(celda);
-      filas.push(fila);
-      fila = [];
-      celda = '';
-    } else if (caracter !== '\r') {
-      celda += caracter;
-    }
-  }
-
-  if (celda !== '' || fila.length > 0) {
-    fila.push(celda);
-    filas.push(fila);
-  }
-
-  return filas;
 }
 
 // ---------------------------------------------------------------------------

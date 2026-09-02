@@ -1068,6 +1068,30 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div id="int-con-msg"></div>
   </div></details>
 
+  <details class="grupo" id="int-importar" hidden><summary>Importar un archivo del proveedor</summary><div>
+    <p class="ayuda">Lo que se baja del panel de la tienda o de la pasarela de pagos. Es el
+      único camino disponible hoy: los conectores por API necesitan la credencial de cada
+      plataforma. <strong>Qué columna es cada cosa se declara</strong>, no se adivina por el
+      nombre del encabezado — adivinar anda con el archivo de prueba y falla el día que el
+      proveedor traduzca la exportación.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Integración</label><select id="int-i-integracion"></select></div>
+      <div><label>Qué son estas filas</label><select id="int-i-kind">
+        <option>PAGO</option><option>ORDEN</option><option>CLIENTE</option>
+        <option>PROVEEDOR</option><option>PRODUCTO</option>
+        <option>MOVIMIENTO_BANCARIO</option><option>CAMPANIA</option></select></div>
+      <div><label>Separador</label><input id="int-i-sep" maxlength="1" value=","></div>
+    </div>
+    <div class="fila">
+      <div><label>Columna del identificador</label><input id="int-i-col-id" maxlength="200" placeholder="id"></div>
+      <div><label>Columna de la fecha (opcional)</label><input id="int-i-col-fecha" maxlength="200" placeholder="fecha"></div>
+    </div>
+    <div><label>Contenido del archivo</label><textarea id="int-i-csv" rows="8"
+      placeholder="id,fecha,importe&#10;12345,2026-05-10,1500.00"></textarea></div>
+    <button id="b-int-importar">Importar</button>
+    <div id="int-i-msg"></div>
+  </div></details>
+
   <h3>Registros que esperan resolución</h3>
   <div class="fila">
     <div><label>Estado</label><select id="int-r-status">
@@ -3768,6 +3792,22 @@ async function listarIntegraciones() {
 
   const cuerpo = E('t-int').querySelector('tbody');
   cuerpo.innerHTML = '';
+  const selIntegracion = E('int-i-integracion');
+  const previa = selIntegracion.value;
+  selIntegracion.innerHTML = '';
+
+  for (const i of r.datos.integraciones || []) {
+    // Solo las conectadas admiten datos nuevos: la API rechaza el resto con
+    // INTEGRACION_DESCONECTADA, y ofrecerla acá sería ofrecer un 409.
+    if (i.status === 'CONECTADA') {
+      const o = document.createElement('option');
+      o.value = i.id; o.textContent = i.alias + ' — ' + i.proveedorNombre;
+      selIntegracion.appendChild(o);
+    }
+  }
+  selIntegracion.value = previa;
+  E('int-importar').hidden = !puede('integration:ingest') || selIntegracion.options.length === 0;
+
   for (const i of r.datos.integraciones || []) {
     const tr = document.createElement('tr');
     tr.innerHTML =
@@ -3846,6 +3886,34 @@ function abrirRegistroExterno(e) {
 E('b-int').onclick = () => listarIntegraciones();
 E('b-int-reg').onclick = () => listarRegistrosExternos();
 E('b-int-reg-mas').onclick = () => listarRegistrosExternos(estado.cursores.ext);
+
+E('b-int-importar').onclick = async () => {
+  const mapeo = { externalId: E('int-i-col-id').value };
+  if (E('int-i-col-fecha').value.trim() !== '') mapeo.ocurridoEn = E('int-i-col-fecha').value;
+
+  const r = await api('POST', '/integrations/' + E('int-i-integracion').value + '/records/csv', {
+    kind: E('int-i-kind').value,
+    separador: E('int-i-sep').value || ',',
+    contenido: E('int-i-csv').value,
+    mapeo,
+  });
+
+  if (!r.ok) return decir('int-i-msg', r);
+
+  // Los tres contadores por separado, y las líneas descartadas con su número:
+  // «importé 40 de 42» sin decir cuáles obliga a comparar el archivo a ojo.
+  const d = r.datos;
+  E('int-i-msg').innerHTML =
+    '<div class="aviso ok"><strong>' + escapar(d.nuevos) + ' nuevo(s), ' +
+    escapar(d.duplicados) + ' ya estaban, sobre ' + escapar(d.recibidos) + ' fila(s)</strong>' +
+    ((d.sinIdentificador || []).length > 0
+      ? '<br>Sin identificador y no importadas, línea(s): ' +
+        escapar((d.sinIdentificador || []).join(', '))
+      : '') +
+    '<br><span class="ayuda">' + escapar(d.alcance) + '</span></div>';
+
+  listarIntegraciones();
+};
 
 E('b-int-conectar').onclick = async () => {
   const r = await api('POST', '/integrations', {

@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 85 archivos de test, 1572 tests,
+**Estado del árbol:** `verify` en verde — 85 archivos de test, 1579 tests,
 229 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -50,7 +50,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Imputación y antigüedad de saldos** | **TERMINADO** | **`imputacion-de-cobros` (16 tests)** |
 | **Stock: depósitos y existencias** | **TERMINADO** | **`stock` (13 tests)** |
 | **Bienes de uso y amortizaciones** | **TERMINADO** | **`bienes-de-uso` (15 tests)** |
-| **Integration Hub** | **TERMINADO** | **`integration-hub` (18 tests)** |
+| **Integration Hub + ingesta por archivo** | **TERMINADO** | **`integration-hub` (25 tests)** |
 | **Analítica con trazabilidad** | **TERMINADO** | **`analitica` (13 tests)** |
 | **Señales, proyección y simulación** | **TERMINADO** | **`senales-y-simulacion` (12 tests)** |
 | **Arranque del servidor (`npm start`)** | **TERMINADO** | **`arranque` (8 tests)** |
@@ -97,10 +97,17 @@ El orden no es preferencia: cada línea necesita la anterior.
 Con la 0055 quedan cerrados **todos los módulos contables de fondo**. Lo que
 sigue ya no es contabilidad:
 
-1. **Conectores por API.** El hub está y probado (ADR-016); falta el adaptador
-   de cada plataforma —Tiendanube, Mercado Pago, Meta y Google Ads, bancos— y
-   sus credenciales. Cada uno es un módulo que llama a
-   `POST /integrations/:id/records` y nada más.
+1. **Conectores por API.** Falta el adaptador de cada plataforma —Tiendanube,
+   Mercado Pago, Meta y Google Ads, bancos— y su credencial, que es un bloqueo
+   externo. Cada uno es un módulo que llama a `POST /integrations/:id/records`
+   y nada más.
+
+   **Mientras tanto el hub ya se usa.** Su única entrada era ese endpoint JSON,
+   que llama un conector que todavía no existe: toda la zona de aterrizaje de
+   ADR-016 estaba escrita, probada y sin recibir un solo registro. La ingesta
+   por archivo (`POST /integrations/:id/records/csv`) toma lo que cualquiera
+   baja del panel de su proveedor, con el mapeo de columnas declarado. No
+   reemplaza a los conectores: hace que el módulo sirva antes de que existan.
 2. **Producción y RRHH.** RRHH tiene ADR-012 escrito y sin implementar.
 3. **Suscripciones y control interno del propio NEXO** (§31–§35).
 

@@ -35,6 +35,7 @@ import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, conflictoTipado, notFound, unprocessable } from '../http/errors.js';
 import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
+import { separarCsv } from '../csv.js';
 
 const TIPOS = [
   'CLIENTE', 'PROVEEDOR', 'PRODUCTO', 'ORDEN', 'PAGO', 'MOVIMIENTO_BANCARIO', 'CAMPANIA',
@@ -223,6 +224,208 @@ export async function integracionRoutes(app: FastifyInstance): Promise<void> {
    * sincronización inicial, por webhook y por reintento es una sola fila, y la
    * respuesta dice cuántos eran repetidos.
    */
+  /**
+   * Ingesta por archivo: lo que se baja del panel del proveedor.
+   *
+   * ## Por qué existe
+   *
+   * El hub estaba **inutilizable**. Su única entrada era el endpoint de abajo,
+   * que espera JSON y lo llama un conector — y ningún conector existe todavía
+   * porque cada uno necesita la credencial de su plataforma, que es un bloqueo
+   * externo. Mientras tanto, toda la zona de aterrizaje de ADR-016 no recibía
+   * un solo registro.
+   *
+   * Pero el CSV **sí está disponible hoy**: cualquiera entra al panel de su
+   * tienda o su pasarela de pagos y lo baja. Esto no reemplaza a los
+   * conectores; hace que el módulo sirva antes de que existan.
+   *
+   * ## El mapeo se declara, no se adivina
+   *
+   * Nadie acá mira los encabezados para decidir cuál es el identificador. El
+   * pedido dice qué columna es cada cosa, igual que el layout de un extracto
+   * bancario. Adivinar por el nombre del encabezado anda con el archivo de
+   * prueba y falla el día que el proveedor traduzca la exportación.
+   *
+   * ## El payload es la fila entera
+   *
+   * No solo las columnas mapeadas: la fila completa, con sus encabezados. El
+   * registro externo es **prueba de lo que dijo el proveedor**, y recortarlo a
+   * lo que hoy sabemos leer destruiría la evidencia del resto.
+   */
+  app.post('/integrations/:integrationId/records/csv', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'integration:ingest');
+    const auth = requireAuth(request);
+    const { integrationId } = z.object({ integrationId: z.string().uuid() }).parse(request.params);
+
+    const body = z
+      .object({
+        kind: z.enum(TIPOS),
+        separador: z.string().length(1).default(','),
+        /** Contenido del archivo, tal cual. La separación se hace acá. */
+        contenido: z.string().min(1).max(20_000_000),
+        mapeo: z.object({
+          /** Cuál es el identificador del registro en el sistema de origen. */
+          externalId: z.string().min(1).max(200),
+          /** Cuándo ocurrió allá. Opcional: no todo archivo lo trae. */
+          ocurridoEn: z.string().max(200).nullish(),
+        }),
+      })
+      .parse(request.body);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const integracion = await tx.query<{ status: string }>(
+          'SELECT status FROM company_integrations WHERE id = $1 AND company_id = $2',
+          [integrationId, tenant.companyId],
+        );
+        if (integracion.rowCount === 0) throw notFound('Integración no encontrada');
+        if (integracion.rows[0]!.status === 'DESCONECTADA') {
+          throw conflictoTipado(
+            'INTEGRACION_DESCONECTADA',
+            'La integración está desconectada: no recibe datos nuevos.',
+          );
+        }
+
+        const filas = separarCsv(body.contenido, body.separador);
+        const encabezados = filas[0];
+        if (encabezados === undefined || filas.length < 2) {
+          throw unprocessable(
+            'ARCHIVO_SIN_FILAS',
+            'El archivo no tiene encabezados y al menos una fila de datos.',
+          );
+        }
+
+        const columna = (nombre: string): number => {
+          const i = encabezados.findIndex((h) => h.trim() === nombre.trim());
+          if (i === -1) {
+            throw unprocessable(
+              'COLUMNA_NO_ENCONTRADA',
+              `El archivo no tiene una columna «${nombre}». Trae: ${encabezados.join(', ')}.`,
+            );
+          }
+          return i;
+        };
+
+        const iId = columna(body.mapeo.externalId);
+        const iFecha =
+          body.mapeo.ocurridoEn === null || body.mapeo.ocurridoEn === undefined
+            ? null
+            : columna(body.mapeo.ocurridoEn);
+
+        const corrida = await tx.query<{ id: string }>(
+          `INSERT INTO integration_sync_runs
+             (company_id, integration_id, kind, created_by)
+           VALUES ($1,$2,'INICIAL',$3) RETURNING id`,
+          [tenant.companyId, integrationId, `user:${auth.user.userId}`],
+        );
+        const runId = corrida.rows[0]!.id;
+
+        let nuevos = 0;
+        let recibidos = 0;
+        const sinIdentificador: number[] = [];
+
+        for (const [n, fila] of filas.slice(1).entries()) {
+          // Una línea en blanco al final del archivo no es un registro vacío:
+          // es cómo terminan casi todos los CSV.
+          if (fila.every((c) => c.trim() === '')) continue;
+
+          const externalId = (fila[iId] ?? '').trim();
+          if (externalId === '') {
+            // Sin identificador no hay idempotencia posible: reimportar el mismo
+            // archivo duplicaría la fila. Se informa el número de línea y se
+            // sigue, en vez de abortar todo por una fila mala.
+            sinIdentificador.push(n + 2);
+            continue;
+          }
+          recibidos += 1;
+
+          // La fila entera, con sus encabezados. Es la prueba de lo que dijo el
+          // proveedor: recortarla a lo que hoy sabemos leer perdería el resto.
+          const payload: Record<string, string> = {};
+          encabezados.forEach((h, i) => {
+            payload[h.trim() === '' ? `columna_${String(i + 1)}` : h.trim()] = fila[i] ?? '';
+          });
+
+          const ocurrido =
+            iFecha === null ? null : ((fila[iFecha] ?? '').trim() === '' ? null : fila[iFecha]);
+
+          const ins = await tx.query(
+            `INSERT INTO external_records
+               (company_id, integration_id, sync_run_id, kind, external_id,
+                occurred_at, payload)
+             VALUES ($1,$2,$3,$4,$5,
+                     -- La fecha se convierte en la base o el registro entra sin
+                     -- ella: interpretar acá formatos de fecha de cada país es
+                     -- exactamente el error que este módulo evita.
+                     CASE WHEN $6::text IS NULL THEN NULL
+                          ELSE (SELECT CASE WHEN $6 ~ '^\\d{4}-\\d{2}-\\d{2}'
+                                            THEN $6::timestamptz END) END,
+                     $7)
+             ON CONFLICT (company_id, integration_id, kind, external_id) DO NOTHING`,
+            [
+              tenant.companyId, integrationId, runId, body.kind, externalId,
+              ocurrido, JSON.stringify(payload),
+            ],
+          );
+          if (Number(ins.rowCount) > 0) nuevos += 1;
+        }
+
+        const duplicados = recibidos - nuevos;
+
+        await tx.query(
+          `UPDATE integration_sync_runs
+              SET status = 'COMPLETADA', finished_at = now(),
+                  records_received = $3, records_new = $4, records_duplicados = $5
+            WHERE id = $1 AND company_id = $2`,
+          [runId, tenant.companyId, recibidos, nuevos, duplicados],
+        );
+
+        await tx.query(
+          `UPDATE company_integrations SET last_sync_at = now()
+            WHERE id = $1 AND company_id = $2`,
+          [integrationId, tenant.companyId],
+        );
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId: `user:${auth.user.userId}`,
+          action: 'INGESTAR_ARCHIVO_EXTERNO',
+          objectType: 'company_integrations',
+          objectId: integrationId,
+          newValue: {
+            corrida: runId,
+            kind: body.kind,
+            recibidos,
+            nuevos,
+            duplicados,
+            sinIdentificador: sinIdentificador.length,
+          },
+          motivo:
+            'Se cargan registros externos desde un archivo exportado del proveedor. Nada ' +
+            'entra al motor contable: quedan sin resolver hasta que una persona los vincule.',
+          ip: clientIp(request),
+          userAgent: request.headers['user-agent'] ?? null,
+        });
+
+        return {
+          corrida: runId,
+          recibidos,
+          nuevos,
+          duplicados,
+          // Las filas descartadas se informan por número de línea. Un contador
+          // sin las líneas obliga a comparar el archivo a ojo.
+          sinIdentificador,
+          alcance:
+            'Los registros quedan SIN_RESOLVER. Nada de esto tocó el motor contable: ' +
+            'vincular cada uno con un tercero, un producto o un comprobante es una afirmación ' +
+            'de una persona y queda firmada (ADR-016).',
+        };
+      },
+    );
+  });
+
   app.post('/integrations/:integrationId/records', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'integration:ingest');

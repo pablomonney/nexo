@@ -402,6 +402,124 @@ suite('Integration Hub', () => {
     expect(fila.tokenVencido).toBe(false);
   });
 
+  // -------------------------------------------------------------------------
+  // Ingesta por archivo: lo único que se puede usar hoy sin credenciales
+  // -------------------------------------------------------------------------
+  it('importa un CSV y guarda la fila entera como evidencia', async () => {
+    const r = await pedir('POST', `/integrations/${integracion}/records/csv`, {
+      kind: 'PAGO',
+      contenido:
+        'id,fecha,importe,medio\n' +
+        `pago-${stamp}-1,2026-05-10,1500.00,tarjeta\n` +
+        `pago-${stamp}-2,2026-05-11,2300.50,transferencia\n`,
+      mapeo: { externalId: 'id', ocurridoEn: 'fecha' },
+    });
+
+    expect(r.statusCode, r.body).toBe(200);
+    const cuerpo = r.json<{ recibidos: number; nuevos: number; duplicados: number }>();
+    expect(cuerpo.recibidos).toBe(2);
+    expect(cuerpo.nuevos).toBe(2);
+    expect(cuerpo.duplicados).toBe(0);
+
+    // La fila entera, no solo lo mapeado: el registro es prueba de lo que dijo
+    // el proveedor, y recortarlo a lo que hoy sabemos leer perdería el resto.
+    const fila = await db.query<{ payload: Record<string, string> }>(
+      'SELECT payload FROM external_records WHERE external_id = $1',
+      [`pago-${stamp}-1`],
+    );
+    expect(fila.rows[0]!.payload).toEqual({
+      id: `pago-${stamp}-1`,
+      fecha: '2026-05-10',
+      importe: '1500.00',
+      medio: 'tarjeta',
+    });
+  });
+
+  it('reimportar el mismo archivo no duplica: cuenta los repetidos', async () => {
+    const cuerpo = {
+      kind: 'PAGO' as const,
+      contenido: `id,fecha,importe,medio\npago-${stamp}-1,2026-05-10,1500.00,tarjeta\n`,
+      mapeo: { externalId: 'id', ocurridoEn: 'fecha' },
+    };
+    const r = await pedir('POST', `/integrations/${integracion}/records/csv`, cuerpo);
+
+    expect(r.statusCode, r.body).toBe(200);
+    const datos = r.json<{ recibidos: number; nuevos: number; duplicados: number }>();
+    expect(datos.nuevos, 'ya estaba').toBe(0);
+    expect(datos.duplicados).toBe(1);
+    // Es el CHECK `isr_cuentas_cierran` de la 0056: recibidos = nuevos + duplicados.
+    expect(datos.recibidos).toBe(datos.nuevos + datos.duplicados);
+  });
+
+  it('una fila sin identificador no entra, y se dice en qué línea', async () => {
+    // Sin identificador no hay idempotencia: reimportar duplicaría esa fila.
+    // Se informa el número de línea en vez de abortar el archivo entero.
+    const r = await pedir('POST', `/integrations/${integracion}/records/csv`, {
+      kind: 'PAGO',
+      contenido:
+        'id,fecha,importe\n' +
+        `pago-${stamp}-3,2026-05-12,10.00\n` +
+        ',2026-05-13,20.00\n',
+      mapeo: { externalId: 'id' },
+    });
+
+    expect(r.statusCode, r.body).toBe(200);
+    const datos = r.json<{ nuevos: number; sinIdentificador: number[] }>();
+    expect(datos.nuevos).toBe(1);
+    expect(datos.sinIdentificador, 'la tercera línea del archivo').toEqual([3]);
+  });
+
+  it('una columna mapeada que no está en el archivo se rechaza nombrando las que hay', async () => {
+    const r = await pedir('POST', `/integrations/${integracion}/records/csv`, {
+      kind: 'PAGO',
+      contenido: 'codigo,fecha\nabc,2026-05-10\n',
+      mapeo: { externalId: 'id' },
+    });
+
+    expect(r.statusCode, r.body).toBe(422);
+    expect(r.json<{ error: string }>().error).toBe('COLUMNA_NO_ENCONTRADA');
+    // Un «no encontré la columna» sin decir cuáles hay obliga a abrir el archivo.
+    expect(r.json<{ message: string }>().message).toContain('codigo');
+  });
+
+  it('un archivo sin filas de datos se rechaza', async () => {
+    const r = await pedir('POST', `/integrations/${integracion}/records/csv`, {
+      kind: 'PAGO',
+      contenido: 'id,fecha\n',
+      mapeo: { externalId: 'id' },
+    });
+
+    expect(r.statusCode, r.body).toBe(422);
+    expect(r.json<{ error: string }>().error).toBe('ARCHIVO_SIN_FILAS');
+  });
+
+  it('lo importado queda SIN_RESOLVER y no toca el motor contable', async () => {
+    const estados = await db.query<{ status: string }>(
+      `SELECT DISTINCT status FROM external_records
+        WHERE company_id = $1 AND external_id LIKE $2`,
+      [empresa, `pago-${stamp}-%`],
+    );
+    expect(estados.rows.map((f) => f.status)).toEqual(['SIN_RESOLVER']);
+
+    const asientos = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM journal_entries WHERE company_id = $1`,
+      [empresa],
+    );
+    expect(asientos.rows[0]!.n, 'nada de afuera escribió un asiento').toBe('0');
+  });
+
+  it('la importación queda en la bitácora con sus contadores', async () => {
+    const r = await db.query<{ new_value: { recibidos: number; nuevos: number } }>(
+      `SELECT new_value FROM audit_logs
+        WHERE company_id = $1 AND action = 'INGESTAR_ARCHIVO_EXTERNO'
+        ORDER BY seq LIMIT 1`,
+      [empresa],
+    );
+    expect(r.rowCount).toBe(1);
+    expect(r.rows[0]!.new_value.recibidos).toBe(2);
+    expect(r.rows[0]!.new_value.nuevos).toBe(2);
+  });
+
   it('la respuesta de integraciones nunca trae tokens', async () => {
     const r = await pedir('GET', '/integrations');
     const crudo = JSON.stringify(r.json());
