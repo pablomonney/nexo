@@ -90,6 +90,7 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
                   concentracion_cliente_pct::text AS "concentracionClientePct",
                   dias_cliente_inactivo AS "diasClienteInactivo",
                   mora_pct::text AS "moraPct",
+                  rechazo_cheques_pct::text AS "rechazoChequesPct",
                   updated_at AS "actualizadoEn", updated_by AS "actualizadoPor"
              FROM analysis_thresholds WHERE company_id = $1`,
           [tenant.companyId],
@@ -119,6 +120,9 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         concentracionClientePct: z.number().gt(0).max(100).nullable(),
         diasClienteInactivo: z.number().int().gt(0).nullable(),
         moraPct: z.number().min(0).max(100).nullable(),
+        // Agregado por la 0065. Como todos: opcional, y sin él el sistema informa
+        // la proporción de rechazos y no la llama desvío.
+        rechazoChequesPct: z.number().gt(0).max(100).nullable().default(null),
       })
       .parse(request.body);
 
@@ -133,17 +137,19 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         await tx.query(
           `INSERT INTO analysis_thresholds
              (company_id, caida_ventas_pct, concentracion_cliente_pct,
-              dias_cliente_inactivo, mora_pct, updated_by)
-           VALUES ($1,$2,$3,$4,$5,$6)
+              dias_cliente_inactivo, mora_pct, rechazo_cheques_pct, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
            ON CONFLICT (company_id) DO UPDATE SET
              caida_ventas_pct = EXCLUDED.caida_ventas_pct,
              concentracion_cliente_pct = EXCLUDED.concentracion_cliente_pct,
              dias_cliente_inactivo = EXCLUDED.dias_cliente_inactivo,
              mora_pct = EXCLUDED.mora_pct,
+             rechazo_cheques_pct = EXCLUDED.rechazo_cheques_pct,
              updated_by = EXCLUDED.updated_by`,
           [
             tenant.companyId, body.caidaVentasPct, body.concentracionClientePct,
-            body.diasClienteInactivo, body.moraPct, `user:${auth.user.userId}`,
+            body.diasClienteInactivo, body.moraPct, body.rechazoChequesPct,
+            `user:${auth.user.userId}`,
           ],
         );
 
@@ -314,6 +320,82 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
             '/analysis/thresholds y esa declaración es la que queda firmada. El sistema mide lo ' +
             'que esta empresa hizo y no afirma que sea lo que deba pasar: qué es un desvío es ' +
             'una decisión del negocio y no de un cálculo.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Cuánta plata entra y cuándo, de todas las fuentes que hoy la tienen.
+   *
+   * Es la pregunta que una persona hace de verdad —«¿llego a fin de mes?»— y que
+   * hasta ahora había que armar sumando a mano dos endpoints.
+   *
+   * ## Por qué se puede sumar sin contar dos veces
+   *
+   * El riesgo era real: un cheque recibido en cancelación de una factura y esa
+   * misma factura pendiente son la misma plata. Pero **el doble conteo tiene una
+   * condición precisa y derivable**: ocurre cuando el cobro no llegó al Mayor.
+   * Si el cheque cita un asiento, el crédito ya bajó y sumar es correcto; si no
+   * lo cita, el crédito sigue entero y sumarlo lo duplicaría.
+   *
+   * Lo que no suma se informa aparte con su motivo, en vez de omitirse: una
+   * cifra que falta y una que se decidió no sumar se ven igual si nadie las
+   * separa.
+   */
+  app.get('/analysis/flujo-de-fondos', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'allocation:read');
+    const auth = requireAuth(request);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const r = await tx.query<{ fuente: string; no_sumable: string }>(
+          `SELECT fuente, partidas,
+                  coalesce(total, 0)::text        AS total,
+                  coalesce(vencido, 0)::text      AS vencido,
+                  coalesce(proximos_30, 0)::text  AS "proximos30",
+                  coalesce(de_31_a_60, 0)::text   AS "de31a60",
+                  coalesce(mas_de_60, 0)::text    AS "masDe60",
+                  no_sumable::text                AS "noSumable",
+                  sin_fecha::text                 AS "sinFecha",
+                  motivo_no_sumable               AS "motivoNoSumable"
+             FROM analytics_flujo_de_fondos
+            WHERE company_id = $1
+            ORDER BY fuente`,
+          [tenant.companyId],
+        );
+
+        // El total consolidado se suma en `numeric`, del lado de la base: plata
+        // que sale como decimal exacto y vuelve por IEEE 754 ya no es la misma.
+        const consolidado = await tx.query(
+          `SELECT coalesce(sum(total), 0)::text        AS total,
+                  coalesce(sum(vencido), 0)::text      AS vencido,
+                  coalesce(sum(proximos_30), 0)::text  AS "proximos30",
+                  coalesce(sum(de_31_a_60), 0)::text   AS "de31a60",
+                  coalesce(sum(mas_de_60), 0)::text    AS "masDe60",
+                  coalesce(sum(no_sumable), 0)::text   AS "noSumable"
+             FROM analytics_flujo_de_fondos WHERE company_id = $1`,
+          [tenant.companyId],
+        );
+
+        return {
+          porFuente: r.rows,
+          consolidado: consolidado.rows[0],
+          metodologia:
+            'Cobranzas: el pendiente de cada comprobante —o de cada cuota, si hay plan— ' +
+            'ubicado en el tramo de su vencimiento. Cheques: los que están en cartera, por su ' +
+            'fecha de pago declarada. Se suman porque el doble conteo tiene una condición ' +
+            'derivable y no se cumple: un cheque que cita un asiento ya redujo el crédito que ' +
+            'lo originó.',
+          alcance:
+            '`noSumable` es lo que quedó afuera del total y por qué: un cheque sin asiento no ' +
+            'está en el Mayor, así que el crédito que lo originó sigue figurando pendiente y ' +
+            'sumarlo contaría la misma plata dos veces. `sinFecha` es lo que no se puede ubicar ' +
+            'en ningún tramo porque nadie declaró su vencimiento. Es una proyección de lo ' +
+            'que **debería** entrar, no un pronóstico de lo que va a entrar.',
         };
       },
     );

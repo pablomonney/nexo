@@ -1269,12 +1269,26 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <div><label>Concentración de un cliente (%)</label><input id="sen-u-conc" inputmode="decimal"></div>
       <div><label>Días para considerar inactivo</label><input id="sen-u-dias" inputmode="numeric"></div>
       <div><label>Mora de cartera (%)</label><input id="sen-u-mora" inputmode="decimal"></div>
+      <div><label>Rechazo de cheques (%)</label><input id="sen-u-rechazo" inputmode="decimal"></div>
     </div>
     <button id="b-sen-umbrales">Declarar</button>
     <button id="b-sen-sugerir" class="sec">Proponer a partir de esta empresa</button>
     <div id="sen-u-msg"></div>
     <div id="sen-u-sugerencias"></div>
   </div></details>
+
+  <h3>Flujo de fondos</h3>
+  <p class="ayuda">Cuánta plata entra y cuándo, de todas las fuentes que hoy la tienen:
+    comprobantes pendientes y cheques en cartera. <strong>Se pueden sumar</strong> porque el
+    doble conteo tiene una condición precisa —que el cobro no haya llegado al Mayor— y lo que
+    la cumple queda afuera del total, con su motivo a la vista.</p>
+  <button id="b-sen-flujo" class="sec">Calcular</button>
+  <div class="tabla"><table id="t-sen-flujo"><thead><tr>
+    <th>Fuente</th><th>Partidas</th><th>Vencido</th><th>Próximos 30</th>
+    <th>31 a 60</th><th>Más de 60</th><th>Total</th><th>No sumable</th>
+  </tr></thead><tbody></tbody></table></div>
+  <dl class="kv" id="sen-flujo-total"></dl>
+  <div id="sen-flujo-msg"></div>
 
   <h3>Proyección de cobranzas</h3>
   <p class="ayuda">Solo proyecta comprobantes de terceros con condición de pago declarada:
@@ -4321,6 +4335,7 @@ async function listarSenales() {
     E('sen-u-conc').value = u.datos.umbrales.concentracionClientePct || '';
     E('sen-u-dias').value = u.datos.umbrales.diasClienteInactivo || '';
     E('sen-u-mora').value = u.datos.umbrales.moraPct || '';
+    E('sen-u-rechazo').value = u.datos.umbrales.rechazoChequesPct || '';
   }
 }
 
@@ -4335,6 +4350,7 @@ E('b-sen-umbrales').onclick = async () => {
     concentracionClientePct: numero('sen-u-conc'),
     diasClienteInactivo: numero('sen-u-dias') === null ? null : Number(numero('sen-u-dias')),
     moraPct: numero('sen-u-mora'),
+    rechazoChequesPct: numero('sen-u-rechazo') === null ? null : Number(numero('sen-u-rechazo')),
   });
   decir('sen-u-msg', r, 'Umbrales declarados');
   if (r.ok) listarSenales();
@@ -4374,6 +4390,49 @@ E('b-sen-sugerir').onclick = async () => {
     '<div class="aviso ojo"><strong>Propuestas sobre ' +
     escapar(r.datos.periodosMirados) + ' período(s) de esta empresa — todavía no declaradas' +
     '</strong><ul>' + detalle + '</ul>' + escapar(r.datos.alcance) + '</div>';
+};
+
+E('b-sen-flujo').onclick = async () => {
+  const r = await api('GET', '/analysis/flujo-de-fondos');
+  if (!r.ok) return decir('sen-flujo-msg', r);
+
+  const cuerpo = E('t-sen-flujo').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  let motivos = '';
+
+  for (const f of r.datos.porFuente || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(f.fuente) + '</td>' +
+      '<td class="mono">' + escapar(f.partidas) + '</td>' +
+      '<td class="mono">' + escapar(f.vencido) + '</td>' +
+      '<td class="mono">' + escapar(f.proximos30) + '</td>' +
+      '<td class="mono">' + escapar(f.de31a60) + '</td>' +
+      '<td class="mono">' + escapar(f.masDe60) + '</td>' +
+      '<td class="mono"><strong>' + escapar(f.total) + '</strong></td>' +
+      // Lo que no suma se marca, no se esconde: una cifra que falta y una que se
+      // decidió no sumar se ven igual si nadie las separa.
+      '<td class="mono">' + (Number(f.noSumable) > 0
+        ? '<span class="p p-ojo">' + escapar(f.noSumable) + '</span>'
+        : escapar(f.noSumable)) + '</td>';
+    cuerpo.appendChild(tr);
+    if (f.motivoNoSumable) motivos += '<li>' + escapar(f.motivoNoSumable) + '</li>';
+  }
+
+  const c = r.datos.consolidado || {};
+  E('sen-flujo-total').innerHTML =
+    fila('Vencido', c.vencido) + fila('Próximos 30 días', c.proximos30) +
+    fila('De 31 a 60', c.de31a60) + fila('Más de 60', c.masDe60) +
+    fila('Total consolidado', c.total) +
+    fila('Fuera del total', c.noSumable);
+
+  E('sen-flujo-msg').innerHTML =
+    '<div class="aviso">' + escapar(r.datos.metodologia) + '</div>' +
+    (motivos !== ''
+      ? '<div class="aviso ojo"><strong>Qué quedó fuera del total y por qué</strong><ul>' +
+        motivos + '</ul></div>'
+      : '') +
+    '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
 };
 
 E('b-sen-cobranzas').onclick = async () => {

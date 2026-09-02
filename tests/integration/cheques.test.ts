@@ -37,7 +37,7 @@ suite('Cheques', () => {
   let cuentaBancaria: string;
   let numero = 40000;
 
-  const pedir = (method: 'GET' | 'POST', url: string, payload?: unknown) =>
+  const pedir = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown) =>
     app.inject({
       method,
       url,
@@ -153,6 +153,18 @@ suite('Cheques', () => {
         roles: ['PROVEEDOR'],
       })
     ).json<{ id: string }>().id;
+
+    // El ejercicio hace falta por dos motivos distintos: sin período no se
+    // puede asentar, y la señal de rechazos se ancla en el ejercicio —como la
+    // mora— porque es de toda la empresa y no de un cheque.
+    const anio = new Date().getUTCFullYear();
+    expect(
+      (await pedir('POST', '/fiscal-years', {
+        code: `EJ${anio}-${stamp}`,
+        startDate: `${anio}-01-01`,
+        endDate: `${anio}-12-31`,
+      })).statusCode,
+    ).toBe(201);
 
     // La cuenta contable por la API, que resuelve el plan; la cuenta bancaria
     // directo, porque su alta por HTTP no existe todavía y este archivo prueba
@@ -494,6 +506,130 @@ suite('Cheques', () => {
 
     expect(aviso).toBeDefined();
     expect(aviso!.evidenciaFaltante).toContain('ASIENTO');
+  });
+
+  // -------------------------------------------------------------------------
+  // La capa de decisión (ADR-018)
+  // -------------------------------------------------------------------------
+  it('un cheque sin asiento no suma al flujo de fondos, y se dice por qué', async () => {
+    // Es la condición precisa del doble conteo: sin asiento, el crédito que lo
+    // originó sigue figurando pendiente, así que sumarlo contaría lo mismo dos
+    // veces. No se decide por opción: sale de un hecho de la base.
+    const antes = (await pedir('GET', '/analysis/flujo-de-fondos'))
+      .json<{ consolidado: Record<string, string> }>().consolidado;
+
+    await chequeRecibido('777.00', enDias(10));
+
+    const r = await pedir('GET', '/analysis/flujo-de-fondos');
+    expect(r.statusCode, r.body).toBe(200);
+    const cuerpo = r.json<{
+      consolidado: Record<string, string>;
+      porFuente: { fuente: string; noSumable: string; motivoNoSumable: string | null }[];
+      alcance: string;
+    }>();
+
+    expect(
+      Number(cuerpo.consolidado['total']) - Number(antes['total']),
+      'sin asiento no entra al total',
+    ).toBe(0);
+    expect(
+      Number(cuerpo.consolidado['noSumable']) - Number(antes['noSumable']),
+      'pero se informa aparte, no se omite',
+    ).toBe(777);
+
+    const cheques = cuerpo.porFuente.find((f) => f.fuente === 'CHEQUES')!;
+    expect(cheques.motivoNoSumable, 'con su motivo al lado').toContain('dos veces');
+    expect(cuerpo.alcance).toContain('no un pronóstico');
+  });
+
+  it('con asiento citado, el mismo cheque sí suma', async () => {
+    const antes = (await pedir('GET', '/analysis/flujo-de-fondos'))
+      .json<{ consolidado: Record<string, string> }>().consolidado;
+
+    // Un asiento cualquiera aprobado: lo que importa es que el cheque lo cite,
+    // porque eso significa que el cobro llegó al Mayor.
+    const asiento = await pedir('POST', '/journal-entries', {
+      journalCode: 'GENERAL',
+      entryDate: enDias(0),
+      description: 'Valores a depositar',
+      currency: 'ARS',
+      lines: [
+        { accountCode: '1.1.03', debit: '888.00', credit: '0' },
+        { accountCode: '1.1.03', debit: '0', credit: '888.00' },
+      ],
+      source: { type: 'MANUAL', id: null },
+      manualJustification: 'Registro del cheque recibido',
+    });
+    expect(asiento.statusCode, asiento.body).toBe(201);
+    const asientoId = asiento.json<{ id: string }>().id;
+    expect((await pedir('POST', `/journal-entries/${asientoId}/approve`)).statusCode).toBe(200);
+
+    numero += 1;
+    const id = (
+      await pedir('POST', '/checks', {
+        tipo: 'RECIBIDO',
+        numero: String(numero),
+        banco: 'Banco Ciudad',
+        importe: '888.00',
+        fechaEmision: enDias(-1),
+        fechaPago: enDias(12),
+        terceroId: clienteId,
+        asientoId,
+      })
+    ).json<{ id: string }>().id;
+    expect(
+      (await pedir('POST', `/checks/${id}/movimientos`, { tipo: 'RECIBIDO', fecha: enDias(-1) }))
+        .statusCode,
+    ).toBe(201);
+
+    const despues = (await pedir('GET', '/analysis/flujo-de-fondos'))
+      .json<{ consolidado: Record<string, string> }>().consolidado;
+
+    expect(Number(despues['total']) - Number(antes['total'])).toBe(888);
+    expect(Number(despues['proximos30']) - Number(antes['proximos30'])).toBe(888);
+  });
+
+  it('la señal de rechazos informa la proporción y no la juzga sin umbral', async () => {
+    const r = await pedir('GET', '/analysis/signals');
+    const senal = r.json<{
+      senales: { tipo: string; valor: string; superaUmbral: boolean | null; metodologia: string }[];
+    }>().senales.find((s) => s.tipo === 'RECHAZO_DE_CHEQUES');
+
+    expect(senal, 'hay cheques recibidos: la señal existe').toBeDefined();
+    expect(senal!.superaUmbral, 'sin umbral declarado no se afirma un desvío').toBeNull();
+    expect(senal!.metodologia).toContain('riesgo de la cartera');
+    expect(Number(senal!.valor), 'hubo al menos un rechazo en esta suite').toBeGreaterThan(0);
+  });
+
+  it('declarar el umbral enciende el desvío y lo manda a la bandeja', async () => {
+    expect(
+      (await pedir('PUT', '/analysis/thresholds', {
+        caidaVentasPct: null,
+        concentracionClientePct: null,
+        diasClienteInactivo: null,
+        moraPct: null,
+        rechazoChequesPct: 1,
+      })).statusCode,
+      // Estricto: un `>= 200` deja pasar un 404, y este mismo test lo dejó pasar
+      // cuando el método estaba mal. Un control laxo es un control apagado.
+    ).toBe(200);
+
+    const senal = (await pedir('GET', '/analysis/signals'))
+      .json<{ senales: { tipo: string; superaUmbral: boolean | null }[] }>()
+      .senales.find((s) => s.tipo === 'RECHAZO_DE_CHEQUES');
+    expect(senal!.superaUmbral, 'ahora sí hay contra qué comparar').toBe(true);
+
+    // Y la señal tiene que llegar a la bandeja. Es el paso que el renombre de
+    // `analysis_signals` podía romper en silencio: la vista de la bandeja
+    // resuelve por OID, no por nombre.
+    const items = (await pedir('GET', '/work-queue?limite=200'))
+      .json<{ items: { rama: string; estado: string; trazaRef: string }[] }>().items;
+    const aviso = items.find(
+      (i) => i.rama === 'DESVIO_DECLARADO' && i.estado === 'RECHAZO_DE_CHEQUES',
+    );
+
+    expect(aviso, 'el desvío declarado llega a la bandeja').toBeDefined();
+    expect(aviso!.trazaRef, 'y lleva a la cartera, no al tablero general').toBe('/checks');
   });
 
   it('las vistas de cheques conservan security_invoker', async () => {

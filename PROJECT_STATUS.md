@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 88 archivos de test, 1605 tests,
-244 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 88 archivos de test, 1609 tests,
+247 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -61,7 +61,8 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Listas de precios** | **TERMINADO** | **`listas-de-precios` (16 tests)** |
 | **Salida de stock por comprobante** | **TERMINADO** | **`stock` (21 tests)** |
 | **Umbrales sugeridos** | **TERMINADO** | **`senales-y-simulacion` (15 tests)** |
-| **Cheques propios y de terceros** | **TERMINADO** | **`cheques` (16 tests)** |
+| **Cheques propios y de terceros** | **TERMINADO** | **`cheques` (20 tests)** |
+| **Flujo de fondos consolidado** | **TERMINADO** | **`cheques` (ADR-018)** |
 
 ## 3. En curso
 
@@ -87,6 +88,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0062 | Depósito por defecto declarado: la salida deja de ser un trámite |
 | 0063 | La bandeja avisa cuando una lista de precios dejó de regir |
 | 0064 | Cheques: cartera, ciclo derivado del libro y flujo por fecha de pago |
+| 0065 | Los cheques entran a la capa de decisión: flujo consolidado y señal (ADR-018) |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -232,6 +234,7 @@ siguen reportando por separado.
 | **015** | **El vencimiento no se deduce y la imputación no se adivina: se declaran** |
 | **016** | **Un conector no escribe en el motor contable: deposita y una persona resuelve** |
 | **017** | **Detectar, proyectar y simular son aritmética determinista: no llevan modelo** |
+| **018** | **Un módulo que registra y no alimenta la decisión está sin terminar** |
 
 ## 10. El primer arranque
 

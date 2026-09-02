@@ -77,6 +77,7 @@ const CHECKS = [
   ['integration_sync_runs', 'isr_cuentas_cierran', 'Recibidos = nuevos + duplicados'],
   ['company_integrations', 'ci_token_con_sobre', 'Un secreto cifrado dice con qué se lo envolvió'],
   ['analysis_thresholds', 'analysis_thresholds_caida_ventas_pct_check', 'Un umbral de caída es un porcentaje válido'],
+  ['analysis_thresholds', 'analysis_thresholds_rechazo_cheques_pct_check', 'El umbral de rechazos es un porcentaje válido'],
   ['commercial_document_lines', 'cdl_iva_solo_si_grava', 'Un renglón no gravado no lleva IVA'],
   ['notes', 'notes_no_se_aprueba_sin_evidencia', 'Una nota sin evidencia no se firma'],
   ['notes', 'notes_version_con_motivo', 'Una versión nueva dice qué cambió'],
@@ -294,6 +295,9 @@ const VISTAS_INVOKER = [
   // El estado del cheque se deriva del último movimiento: sin security_invoker,
   // la cartera de una empresa se vería desde otra.
   'check_status', 'checks_en_cartera',
+  // 0065 · La capa de decisión (ADR-018): el flujo consolidado y la base de
+  // señales, que quedó detrás de la vista envolvente al agregar los cheques.
+  'analytics_flujo_de_fondos', 'analysis_signals_base',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
