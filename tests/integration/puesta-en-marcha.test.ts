@@ -27,15 +27,20 @@ const PASSWORD = 'una-contrasena-suficientemente-larga';
 
 interface Paso {
   readonly paso: string;
+  readonly estado: string;
   readonly bloquea: boolean;
   readonly hechos: number;
   readonly listo: boolean;
+  readonly afecta: string[];
+  readonly motivoNoAplica: string | null;
 }
 
 interface Arranque {
   readonly pasos: Paso[];
   readonly puedeOperar: boolean;
   readonly bloqueantesPendientes: string[];
+  readonly pendientes: string[];
+  readonly afectado: string[];
   readonly yaOpera: boolean;
 }
 
@@ -244,6 +249,101 @@ suite('Puesta en marcha', () => {
     expect(paso(a, 'TERCEROS').listo).toBe(true);
     // Sigue pudiendo operar: ninguno de estos era condición.
     expect(a.puedeOperar).toBe(true);
+  });
+
+  it('«no declarado» no es «pendiente»: son declaraciones, no altas', async () => {
+    const a = await arranque();
+
+    // Cargar una cuenta es un alta; declarar cuál es la de deudores por ventas
+    // es otra cosa. Confundirlas haría que «todavía no lo cargué» y «nadie
+    // decidió esto» se vieran igual.
+    expect(paso(a, 'MAPEO_CONTABLE').estado).toBe('NO_DECLARADO');
+    expect(paso(a, 'MARCO_DE_REPORTE').estado).toBe('NO_DECLARADO');
+    expect(paso(a, 'CENTROS_DE_COSTO').estado).toBe('PENDIENTE');
+
+    // Y lo que queda afectado se dice, sin repetir.
+    expect(a.afectado).toContain('Estados contables');
+    expect(a.afectado).toContain('Propuesta de asiento a partir de un comprobante');
+  });
+
+  it('«no aplica» se deriva de lo declarado, y deja de aplicar cuando cambia', async () => {
+    // Sin sucursales, declarar puntos de venta por sucursal no aplica: no hay a
+    // qué atribuirlos. No es una suposición: es que no existe la otra punta.
+    const sinSucursales = await arranque();
+    expect(paso(sinSucursales, 'PUNTOS_DE_VENTA').estado).toBe('NO_APLICA');
+    expect(paso(sinSucursales, 'PUNTOS_DE_VENTA').motivoNoAplica).toContain('ninguna sucursal');
+    // Y no cuenta como pendiente ni ensucia la lista de lo afectado.
+    expect(sinSucursales.pendientes).not.toContain('PUNTOS_DE_VENTA');
+    expect(sinSucursales.afectado).not.toContain('Ventas por sucursal');
+
+    expect(
+      (await pedir('POST', '/branches', { codigo: `SUC-${stamp}`, nombre: 'Casa central' }))
+        .statusCode,
+    ).toBe(201);
+
+    // Creada la sucursal, el paso vuelve a pedirse solo.
+    const conSucursal = await arranque();
+    expect(paso(conSucursal, 'SUCURSALES').estado).toBe('COMPLETO');
+    expect(paso(conSucursal, 'PUNTOS_DE_VENTA').estado).toBe('NO_DECLARADO');
+    expect(conSucursal.afectado).toContain('Ventas por sucursal');
+  });
+
+  it('un depósito no aplica si todos los productos son servicios', async () => {
+    const servicio = await pedir('POST', '/products', {
+      codigo: `SERV-${stamp}`,
+      nombre: 'Honorarios profesionales',
+      tipo: 'SERVICIO',
+      llevaStock: false,
+      // Un producto gravado dice qué impuesto le aplica; la alícuota la
+      // resuelve el sistema por la fecha de cada operación.
+      impuesto: 'IVA',
+    });
+    expect(servicio.statusCode, servicio.body).toBe(201);
+
+    const soloServicios = await arranque();
+    expect(paso(soloServicios, 'PRODUCTOS').estado).toBe('COMPLETO');
+    // La evidencia es la declaración de los propios productos.
+    expect(paso(soloServicios, 'DEPOSITO').estado).toBe('NO_APLICA');
+    expect(paso(soloServicios, 'DEPOSITO').motivoNoAplica).toContain('servicios');
+
+    expect(
+      (await pedir('POST', '/products', {
+        codigo: `PROD-${stamp}`,
+        nombre: 'Mercadería',
+        tipo: 'PRODUCTO',
+        llevaStock: true,
+        impuesto: 'IVA',
+      })).statusCode,
+    ).toBe(201);
+
+    // Con un producto que lleva existencias, el depósito vuelve a hacer falta.
+    const conStock = await arranque();
+    expect(paso(conStock, 'DEPOSITO').estado).toBe('PENDIENTE');
+    expect(paso(conStock, 'DEPOSITO').motivoNoAplica).toBeNull();
+    expect(conStock.afectado).toContain('Existencias');
+  });
+
+  it('consultar el estado no escribe nada', async () => {
+    // Un asistente que registra algo por el solo hecho de mirar convertiría una
+    // consulta en un hecho, y la bitácora dejaría de decir qué pasó de verdad.
+    const antes = await db.query<{ bitacora: string; asientos: string; movs: string }>(
+      `SELECT (SELECT count(*) FROM audit_logs WHERE company_id = $1)::text        AS bitacora,
+              (SELECT count(*) FROM journal_entries WHERE company_id = $1)::text   AS asientos,
+              (SELECT count(*) FROM ledger_movements WHERE company_id = $1)::text  AS movs`,
+      [empresa],
+    );
+
+    await arranque();
+    await arranque();
+
+    const despues = await db.query<{ bitacora: string; asientos: string; movs: string }>(
+      `SELECT (SELECT count(*) FROM audit_logs WHERE company_id = $1)::text        AS bitacora,
+              (SELECT count(*) FROM journal_entries WHERE company_id = $1)::text   AS asientos,
+              (SELECT count(*) FROM ledger_movements WHERE company_id = $1)::text  AS movs`,
+      [empresa],
+    );
+
+    expect(despues.rows[0]).toEqual(antes.rows[0]);
   });
 
   it('no hay ningún tilde guardado: la lista se cuenta', async () => {

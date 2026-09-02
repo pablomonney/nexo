@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 98 archivos de test, 1707 tests,
+**Estado del árbol:** `verify` en verde — 98 archivos de test, 1711 tests,
 360 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -110,6 +110,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0073 | Suscripciones: planes sin precios, topes declarados, y un límite que avisa sin bloquear |
 | 0074 | El mapeo contable declarado: el sistema propone el asiento y deja de escribirse a mano (ADR-019) |
 | 0075 | Puesta en marcha: qué le falta a una empresa para trabajar, contado y no tildado |
+| 0076 | La puesta en marcha completa: catorce pasos, cinco estados, y un «no aplica» que se deriva |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

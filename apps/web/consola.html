@@ -193,12 +193,16 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 
   <div id="inicio-arranque" hidden>
     <h3>Puesta en marcha</h3>
+    <div id="arranque-veredicto"></div>
     <p class="ayuda">Ningún paso se tilda: se cuenta lo que hay, así que la lista no puede
-      decir «listo» sobre algo que no está. Solo tres <strong>bloquean</strong> —cuentas,
-      ejercicio y período abierto—; los demás habilitan un módulo y no le hacen falta a toda
-      empresa.</p>
+      decir «listo» sobre algo que no está. <strong>Cinco estados y no dos</strong>:
+      <em>pendiente</em> es «todavía no lo cargaste», <em>no declarado</em> es «esto no se
+      carga, se declara, y nadie lo declaró», y <em>no aplica</em> es «no te hace falta, y acá
+      está por qué». Solo tres pasos <strong>bloquean</strong>: cuentas, ejercicio y período
+      abierto.</p>
     <div class="tabla"><table id="t-arranque"><thead><tr>
-      <th>Paso</th><th>Qué habilita</th><th>Hay</th><th>Estado</th>
+      <th>Área</th><th>Paso</th><th>Qué habilita</th><th>Qué queda afectado</th>
+      <th>Hay</th><th>Estado</th>
     </tr></thead><tbody></tbody></table></div>
   </div>
 
@@ -2334,22 +2338,44 @@ async function cargarInicio() {
   // cada vez que entra.
   const arr = await api('GET', '/onboarding');
   if (arr.ok) {
-    const pendientes = (arr.datos.pasos || []).filter((p) => !p.listo);
-    E('inicio-arranque').hidden = pendientes.length === 0;
+    // Se muestra mientras quede algo que hacer. Lo que no aplica no cuenta:
+    // una empresa de servicios no tiene la lista abierta para siempre por un
+    // depósito que no le corresponde.
+    const faltan = (arr.datos.pasos || []).filter(
+      (p) => p.estado !== 'COMPLETO' && p.estado !== 'NO_APLICA');
+    E('inicio-arranque').hidden = faltan.length === 0;
+
+    E('arranque-veredicto').innerHTML = arr.datos.puedeOperar
+      ? '<div class="aviso ok"><strong>NEXO está listo para operar.</strong>' +
+        (arr.datos.afectado.length === 0 ? ''
+          : ' Todavía hay funcionalidades sin habilitar: ' +
+            escapar(arr.datos.afectado.join(', ')) + '.') + '</div>'
+      : '<div class="aviso"><strong>Todavía falta completar ' +
+        escapar(arr.datos.bloqueantesPendientes.join(', ')) +
+        '.</strong> Hasta entonces no se puede registrar nada.</div>';
 
     const cuerpo = E('t-arranque').querySelector('tbody');
     cuerpo.innerHTML = '';
     for (const p of arr.datos.pasos || []) {
+      // Cinco estados, cinco lecturas distintas. Fundir «no declarado» con
+      // «pendiente» haría creer que alcanza con cargar algo.
+      const pastillas = {
+        COMPLETO: '<span class="p p-bien">listo</span>',
+        BLOQUEANTE: '<span class="p p-mal">impide trabajar</span>',
+        PENDIENTE: '<span class="p p-ojo">todavía no</span>',
+        NO_DECLARADO: '<span class="p p-ojo">sin declarar</span>',
+        NO_APLICA: '<span class="p p-neu">no aplica</span>',
+      };
       const tr = document.createElement('tr');
       tr.innerHTML =
-        '<td>' + escapar(p.titulo) + '</td>' +
+        '<td>' + escapar(p.grupo) + '</td>' +
+        '<td>' + escapar(p.titulo) +
+          (p.motivoNoAplica === null ? ''
+            : '<br><span class="ayuda">' + escapar(p.motivoNoAplica) + '</span>') + '</td>' +
         '<td>' + escapar(p.habilita) + '</td>' +
+        '<td>' + escapar(p.afecta.join(', ') || '—') + '</td>' +
         '<td class="mono">' + escapar(String(p.hechos)) + '</td>' +
-        '<td>' + (p.listo
-          ? '<span class="p p-bien">listo</span>'
-          : (p.bloquea
-              ? '<span class="p p-mal">impide trabajar</span>'
-              : '<span class="p p-neu">todavía no</span>')) + '</td>';
+        '<td>' + (pastillas[p.estado] || escapar(p.estado)) + '</td>';
       cuerpo.appendChild(tr);
     }
   }
