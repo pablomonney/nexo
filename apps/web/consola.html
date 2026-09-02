@@ -828,32 +828,32 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       Y son <strong>cantidades</strong>: cuánto vale lo que falta depende de la valuación de
       existencias, que es una decisión contable sin tomar.</p>
     <div class="fila">
-      <div><label>Depósito</label><select id="rec-n-dep"></select></div>
-      <div><label>Fecha</label><input id="rec-n-fecha" type="date"></div>
-      <div><label>&nbsp;</label><button id="b-rec-abrir" class="sec">Abrir recuento</button></div>
+      <div><label>Depósito</label><select id="rcu-n-dep"></select></div>
+      <div><label>Fecha</label><input id="rcu-n-fecha" type="date"></div>
+      <div><label>&nbsp;</label><button id="b-rcu-abrir" class="sec">Abrir recuento</button></div>
     </div>
-    <div id="rec-msg"></div>
-    <div class="tabla"><table id="t-rec"><thead><tr>
+    <div id="rcu-msg"></div>
+    <div class="tabla"><table id="t-rcu"><thead><tr>
       <th>Fecha</th><th>Depósito</th><th>Renglones</th><th>Estado</th><th>Cerró</th><th></th>
     </tr></thead><tbody></tbody></table></div>
 
-    <div id="rec-detalle" hidden>
-      <h4 id="rec-det-titulo">Recuento</h4>
+    <div id="rcu-detalle" hidden>
+      <h4 id="rcu-det-titulo">Recuento</h4>
       <div class="fila">
-        <div style="flex:1"><label>Producto</label><select id="rec-l-prod"></select></div>
-        <div><label>Lote</label><input id="rec-l-lote" maxlength="80" placeholder="si lleva"></div>
-        <div><label>Contado</label><input id="rec-l-cant" inputmode="decimal"></div>
-        <div><label>&nbsp;</label><button id="b-rec-agregar" class="sec">Agregar al borrador</button></div>
+        <div style="flex:1"><label>Producto</label><select id="rcu-l-prod"></select></div>
+        <div><label>Lote</label><input id="rcu-l-lote" maxlength="80" placeholder="si lleva"></div>
+        <div><label>Contado</label><input id="rcu-l-cant" inputmode="decimal"></div>
+        <div><label>&nbsp;</label><button id="b-rcu-agregar" class="sec">Agregar al borrador</button></div>
       </div>
       <p class="ayuda">Contar <strong>cero</strong> dice «fui, miré, no hay ninguno» y ajusta por
         todo lo que el libro decía. Un producto que no aparece en el recuento no se toca: nadie
         lo miró, y eso no es lo mismo que no haber encontrado nada.</p>
-      <div class="tabla"><table id="t-rec-lin"><thead><tr>
+      <div class="tabla"><table id="t-rcu-lin"><thead><tr>
         <th>Producto</th><th>Lote</th><th>Contado</th><th>Según el libro</th><th>Diferencia</th><th></th>
       </tr></thead><tbody></tbody></table></div>
-      <button id="b-rec-guardar" class="sec">Guardar el recuento</button>
-      <button id="b-rec-cerrar">Cerrar y ajustar</button>
-      <div id="rec-det-msg"></div>
+      <button id="b-rcu-guardar" class="sec">Guardar el recuento</button>
+      <button id="b-rcu-cerrar">Cerrar y ajustar</button>
+      <div id="rcu-det-msg"></div>
     </div>
   </div></details>
 
@@ -1144,73 +1144,73 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     porque valga cero. La comisión es <strong>devengada, no pagada</strong>: pagarla es un
     asiento que firma una persona, por el camino de siempre.</p>
 
-  <button id="b-com" class="sec">Actualizar</button>
-  <dl class="kv" id="com-resumen"></dl>
-  <div id="com-msg"></div>
-  <div class="tabla"><table id="t-com"><thead><tr>
+  <button id="b-cms" class="sec">Actualizar</button>
+  <dl class="kv" id="cms-resumen"></dl>
+  <div id="cms-msg"></div>
+  <div class="tabla"><table id="t-cms"><thead><tr>
     <th>Código</th><th>Vendedor</th><th>Comprobantes</th><th>Facturado</th><th>Cobrado</th>
     <th>Comisión devengada</th><th>Sin esquema</th><th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
 
-  <div id="com-detalle" hidden class="grupo">
-    <h3 id="com-det-titulo">Vendedor</h3>
-    <div id="com-det-metodo" class="ayuda"></div>
+  <div id="cms-detalle" hidden class="grupo">
+    <h3 id="cms-det-titulo">Vendedor</h3>
+    <div id="cms-det-metodo" class="ayuda"></div>
 
     <h4>Esquemas declarados</h4>
-    <div class="tabla"><table id="t-com-esq"><thead><tr>
+    <div class="tabla"><table id="t-cms-esq"><thead><tr>
       <th>Desde</th><th>Hasta</th><th>Porcentaje</th><th>Base</th>
     </tr></thead><tbody></tbody></table></div>
 
     <h4>Devengado por comprobante</h4>
-    <div class="tabla"><table id="t-com-dev"><thead><tr>
+    <div class="tabla"><table id="t-cms-dev"><thead><tr>
       <th>Fecha</th><th>Comprobante</th><th>Cliente</th><th>Neto</th><th>Total</th>
       <th>Cobrado</th><th>Base</th><th>Sobre</th><th>%</th><th>Comisión</th>
     </tr></thead><tbody></tbody></table></div>
 
-    <div id="com-operar" hidden>
+    <div id="cms-operar" hidden>
       <h4>Declarar esquema</h4>
       <div class="fila">
-        <div><label>Porcentaje</label><input id="com-e-pct" inputmode="decimal"></div>
-        <div><label>Base</label><select id="com-e-base">
+        <div><label>Porcentaje</label><input id="cms-e-pct" inputmode="decimal"></div>
+        <div><label>Base</label><select id="cms-e-base">
           <option value="NETO_FACTURADO">Sobre el neto</option>
           <option value="TOTAL_FACTURADO">Sobre el total (IVA incluido)</option>
           <option value="TOTAL_COBRADO">Sobre lo cobrado</option>
         </select></div>
-        <div><label>Desde</label><input id="com-e-desde" type="date"></div>
-        <div><label>Hasta</label><input id="com-e-hasta" type="date"></div>
-        <div><label>&nbsp;</label><button id="b-com-esquema" class="sec">Declarar</button></div>
+        <div><label>Desde</label><input id="cms-e-desde" type="date"></div>
+        <div><label>Hasta</label><input id="cms-e-hasta" type="date"></div>
+        <div><label>&nbsp;</label><button id="b-cms-esquema" class="sec">Declarar</button></div>
       </div>
       <p class="ayuda"><strong>Sobre el total</strong> paga comisión sobre el IVA, que la
         empresa cobra para ARCA y no es suyo. <strong>Sobre lo cobrado</strong> devenga a
         medida que entra la plata. Cuál corresponde lo dice el acuerdo, no el sistema.</p>
-      <div id="com-e-msg"></div>
+      <div id="cms-e-msg"></div>
     </div>
   </div>
 
-  <details class="grupo" id="com-alta" hidden><summary>Dar de alta un vendedor</summary><div>
+  <details class="grupo" id="cms-alta" hidden><summary>Dar de alta un vendedor</summary><div>
     <div class="fila">
-      <div><label>Código</label><input id="com-n-codigo" maxlength="40"></div>
-      <div style="flex:1"><label>Nombre</label><input id="com-n-nombre" maxlength="200"></div>
-      <div style="flex:1"><label>Si factura sus comisiones</label><select id="com-n-tercero">
+      <div><label>Código</label><input id="cms-n-codigo" maxlength="40"></div>
+      <div style="flex:1"><label>Nombre</label><input id="cms-n-nombre" maxlength="200"></div>
+      <div style="flex:1"><label>Si factura sus comisiones</label><select id="cms-n-tercero">
         <option value="">— es del equipo —</option>
       </select></div>
-      <div><label>&nbsp;</label><button id="b-com-alta" class="sec">Crear</button></div>
+      <div><label>&nbsp;</label><button id="b-cms-alta" class="sec">Crear</button></div>
     </div>
     <p class="ayuda">El tercero se elige solo cuando el vendedor es externo y factura: crear uno
       para un empleado ensuciaría el maestro con alguien a quien no se le compra ni se le
       vende.</p>
-    <div id="com-alta-msg"></div>
+    <div id="cms-alta-msg"></div>
   </div></details>
 
-  <details class="grupo" id="com-atribuir" hidden><summary>Atribuir una venta</summary><div>
+  <details class="grupo" id="cms-atribuir" hidden><summary>Atribuir una venta</summary><div>
     <div class="fila">
-      <div style="flex:1"><label>Comprobante</label><select id="com-a-comprobante"></select></div>
-      <div style="flex:1"><label>Vendedor</label><select id="com-a-vendedor"></select></div>
-      <div><label>&nbsp;</label><button id="b-com-atribuir" class="sec">Atribuir</button></div>
+      <div style="flex:1"><label>Comprobante</label><select id="cms-a-comprobante"></select></div>
+      <div style="flex:1"><label>Vendedor</label><select id="cms-a-vendedor"></select></div>
+      <div><label>&nbsp;</label><button id="b-cms-atribuir" class="sec">Atribuir</button></div>
     </div>
     <p class="ayuda">Es un atributo del comprobante y no una tabla puente: con dos vendedores
       por venta —o dos con el mismo derecho— la comisión pasa a ser una opinión.</p>
-    <div id="com-a-msg"></div>
+    <div id="cms-a-msg"></div>
   </div></details>
 </section>
 
@@ -4486,10 +4486,10 @@ async function listarRecuentos() {
   if (!puede('stock:count')) return;
 
   const r = await api('GET', '/stock-counts');
-  if (!r.ok) return decir('rec-msg', r);
-  limpiar('rec-msg');
+  if (!r.ok) return decir('rcu-msg', r);
+  limpiar('rcu-msg');
 
-  const cuerpo = E('t-rec').querySelector('tbody');
+  const cuerpo = E('t-rcu').querySelector('tbody');
   cuerpo.innerHTML = '';
   for (const c of r.datos.recuentos || []) {
     const tr = document.createElement('tr');
@@ -4505,7 +4505,7 @@ async function listarRecuentos() {
   }
 
   // Los depósitos y los productos del selector salen de lo que ya se cargó.
-  const dep = E('rec-n-dep');
+  const dep = E('rcu-n-dep');
   const previoDep = dep.value;
   dep.innerHTML = '';
   for (const d of estado.depositos) {
@@ -4517,7 +4517,7 @@ async function listarRecuentos() {
 
   const productos = await api('GET', '/products?status=ACTIVO&tipo=PRODUCTO&limite=200');
   if (productos.ok) {
-    const s = E('rec-l-prod');
+    const s = E('rcu-l-prod');
     const previo = s.value;
     s.innerHTML = '';
     for (const p of (productos.datos.productos || []).filter((p) => p.llevaStock)) {
@@ -4535,18 +4535,18 @@ async function listarRecuentos() {
 async function abrirRecuento(id, titulo) {
   estado.recuento = id;
   estado.recuentoBorrador = [];
-  E('rec-detalle').hidden = false;
-  E('rec-det-titulo').textContent = 'Recuento ' + titulo;
-  limpiar('rec-det-msg');
+  E('rcu-detalle').hidden = false;
+  E('rcu-det-titulo').textContent = 'Recuento ' + titulo;
+  limpiar('rcu-det-msg');
 
   const r = await api('GET', '/stock-counts/' + id);
-  if (!r.ok) return decir('rec-det-msg', r);
+  if (!r.ok) return decir('rcu-det-msg', r);
 
   const cerrado = r.datos.recuento.status !== 'BORRADOR';
-  E('b-rec-guardar').hidden = cerrado;
-  E('b-rec-cerrar').hidden = cerrado;
+  E('b-rcu-guardar').hidden = cerrado;
+  E('b-rcu-cerrar').hidden = cerrado;
 
-  const cuerpo = E('t-rec-lin').querySelector('tbody');
+  const cuerpo = E('t-rcu-lin').querySelector('tbody');
   cuerpo.innerHTML = '';
   for (const d of r.datos.diferencias || []) {
     const tr = document.createElement('tr');
@@ -4571,43 +4571,43 @@ async function abrirRecuento(id, titulo) {
   }
 }
 
-E('b-rec-abrir').onclick = async () => {
+E('b-rcu-abrir').onclick = async () => {
   const r = await api('POST', '/stock-counts', {
-    depositoId: E('rec-n-dep').value,
-    fecha: E('rec-n-fecha').value,
+    depositoId: E('rcu-n-dep').value,
+    fecha: E('rcu-n-fecha').value,
   });
-  decir('rec-msg', r, 'Recuento abierto. Todavía no ajusta nada.');
+  decir('rcu-msg', r, 'Recuento abierto. Todavía no ajusta nada.');
   if (r.ok) listarRecuentos();
 };
 
-E('b-rec-agregar').onclick = () => {
-  const sel = E('rec-l-prod');
+E('b-rcu-agregar').onclick = () => {
+  const sel = E('rcu-l-prod');
   estado.recuentoBorrador.push({
     productoId: sel.value,
-    lote: E('rec-l-lote').value.trim() || null,
-    cantidad: E('rec-l-cant').value.trim(),
+    lote: E('rcu-l-lote').value.trim() || null,
+    cantidad: E('rcu-l-cant').value.trim(),
   });
 
   const tr = document.createElement('tr');
   tr.innerHTML =
     '<td>' + escapar(sel.options[sel.selectedIndex].textContent) + '</td>' +
-    '<td class="mono">' + escapar(E('rec-l-lote').value || '—') + '</td>' +
-    '<td class="mono">' + escapar(E('rec-l-cant').value) + '</td>' +
+    '<td class="mono">' + escapar(E('rcu-l-lote').value || '—') + '</td>' +
+    '<td class="mono">' + escapar(E('rcu-l-cant').value) + '</td>' +
     '<td class="mono">—</td><td class="mono">se calcula al guardar</td><td></td>';
-  E('t-rec-lin').querySelector('tbody').appendChild(tr);
+  E('t-rcu-lin').querySelector('tbody').appendChild(tr);
 };
 
-E('b-rec-guardar').onclick = async () => {
+E('b-rcu-guardar').onclick = async () => {
   const r = await api('PUT', '/stock-counts/' + estado.recuento + '/lines', {
     renglones: estado.recuentoBorrador,
   });
-  decir('rec-det-msg', r, 'Recuento guardado');
-  if (r.ok) abrirRecuento(estado.recuento, E('rec-det-titulo').textContent);
+  decir('rcu-det-msg', r, 'Recuento guardado');
+  if (r.ok) abrirRecuento(estado.recuento, E('rcu-det-titulo').textContent);
 };
 
-E('b-rec-cerrar').onclick = async () => {
+E('b-rcu-cerrar').onclick = async () => {
   const r = await api('POST', '/stock-counts/' + estado.recuento + '/close', {});
-  decir('rec-det-msg', r, 'Recuento cerrado: las diferencias se ajustaron');
+  decir('rcu-det-msg', r, 'Recuento cerrado: las diferencias se ajustaron');
   if (r.ok) { await listarStock(); await listarRecuentos(); }
 };
 
@@ -5769,16 +5769,16 @@ E('b-suc-cerrar').onclick = async () => {
 
 // ══ 4c6 · Vendedores y comisiones ═════════════════════════════════════════
 async function listarComisiones() {
-  E('com-alta').hidden = !puede('commission:write');
-  E('com-atribuir').hidden = !puede('commission:write');
+  E('cms-alta').hidden = !puede('commission:write');
+  E('cms-atribuir').hidden = !puede('commission:write');
 
   const r = await api('GET', '/salespeople');
-  if (!r.ok) return decir('com-msg', r);
-  E('com-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  if (!r.ok) return decir('cms-msg', r);
+  E('cms-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
 
-  const cuerpo = E('t-com').querySelector('tbody');
+  const cuerpo = E('t-cms').querySelector('tbody');
   cuerpo.innerHTML = '';
-  const sel = E('com-a-vendedor');
+  const sel = E('cms-a-vendedor');
   sel.innerHTML = '';
   for (const v of r.datos.vendedores || []) {
     const tr = document.createElement('tr');
@@ -5810,7 +5810,7 @@ async function listarComisiones() {
   // conseguir sin abrir la base.
   const ventas = await api('GET', '/tax-transactions?direccion=VENTAS&limite=200');
   if (ventas.ok) {
-    const s = E('com-a-comprobante');
+    const s = E('cms-a-comprobante');
     const previo = s.value;
     s.innerHTML = '';
     for (const o of ventas.datos.operaciones || []) {
@@ -5825,14 +5825,14 @@ async function listarComisiones() {
 
   const an = await api('GET', '/analysis/comisiones');
   if (an.ok) {
-    E('com-resumen').innerHTML =
+    E('cms-resumen').innerHTML =
       fila('Devengado total', an.datos.totalDevengado) +
       fila('Comprobantes sin esquema declarado', an.datos.comprobantesSinEsquema);
   }
 
   const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
   if (terceros.ok) {
-    const s = E('com-n-tercero');
+    const s = E('cms-n-tercero');
     const previo = s.value;
     s.innerHTML = '<option value="">— es del equipo —</option>';
     for (const t of terceros.datos.terceros || []) {
@@ -5846,17 +5846,17 @@ async function listarComisiones() {
 
 async function abrirVendedor(id, titulo) {
   const r = await api('GET', '/salespeople/' + id);
-  if (!r.ok) return decir('com-msg', r);
+  if (!r.ok) return decir('cms-msg', r);
 
   estado.vendedor = id;
   estado.vendedorTitulo = titulo;
-  E('com-detalle').hidden = false;
-  E('com-det-titulo').textContent = titulo;
-  E('com-det-metodo').textContent = r.datos.vendedor.metodologia;
-  E('com-operar').hidden = !puede('commission:write');
-  limpiar('com-e-msg');
+  E('cms-detalle').hidden = false;
+  E('cms-det-titulo').textContent = titulo;
+  E('cms-det-metodo').textContent = r.datos.vendedor.metodologia;
+  E('cms-operar').hidden = !puede('commission:write');
+  limpiar('cms-e-msg');
 
-  const esq = E('t-com-esq').querySelector('tbody');
+  const esq = E('t-cms-esq').querySelector('tbody');
   esq.innerHTML = '';
   for (const e of r.datos.esquemas || []) {
     const tr = document.createElement('tr');
@@ -5868,7 +5868,7 @@ async function abrirVendedor(id, titulo) {
     esq.appendChild(tr);
   }
 
-  const dev = E('t-com-dev').querySelector('tbody');
+  const dev = E('t-cms-dev').querySelector('tbody');
   dev.innerHTML = '';
   for (const d of r.datos.devengado || []) {
     const tr = document.createElement('tr');
@@ -5890,37 +5890,37 @@ async function abrirVendedor(id, titulo) {
   }
 }
 
-E('b-com').onclick = () => listarComisiones();
+E('b-cms').onclick = () => listarComisiones();
 
-E('b-com-alta').onclick = async () => {
-  const cuerpo = { codigo: E('com-n-codigo').value, nombre: E('com-n-nombre').value };
-  if (E('com-n-tercero').value) cuerpo.terceroId = E('com-n-tercero').value;
+E('b-cms-alta').onclick = async () => {
+  const cuerpo = { codigo: E('cms-n-codigo').value, nombre: E('cms-n-nombre').value };
+  if (E('cms-n-tercero').value) cuerpo.terceroId = E('cms-n-tercero').value;
 
   const r = await api('POST', '/salespeople', cuerpo);
-  decir('com-alta-msg', r, 'Vendedor creado. Falta declararle el esquema de comisión.');
+  decir('cms-alta-msg', r, 'Vendedor creado. Falta declararle el esquema de comisión.');
   if (r.ok) listarComisiones();
 };
 
-E('b-com-esquema').onclick = async () => {
+E('b-cms-esquema').onclick = async () => {
   const cuerpo = {
-    porcentaje: Number(E('com-e-pct').value),
-    base: E('com-e-base').value,
-    vigenciaDesde: E('com-e-desde').value,
+    porcentaje: Number(E('cms-e-pct').value),
+    base: E('cms-e-base').value,
+    vigenciaDesde: E('cms-e-desde').value,
   };
-  if (E('com-e-hasta').value) cuerpo.vigenciaHasta = E('com-e-hasta').value;
+  if (E('cms-e-hasta').value) cuerpo.vigenciaHasta = E('cms-e-hasta').value;
 
   const r = await api('POST', '/salespeople/' + estado.vendedor + '/schemes', cuerpo);
-  decir('com-e-msg', r, 'Esquema declarado. Desde acá las ventas de esas fechas devengan.');
+  decir('cms-e-msg', r, 'Esquema declarado. Desde acá las ventas de esas fechas devengan.');
   if (r.ok) { await listarComisiones(); await abrirVendedor(estado.vendedor, estado.vendedorTitulo); }
 };
 
-E('b-com-atribuir').onclick = async () => {
+E('b-cms-atribuir').onclick = async () => {
   const r = await api(
     'POST',
-    '/tax-transactions/' + E('com-a-comprobante').value + '/salesperson',
-    { vendedorId: E('com-a-vendedor').value },
+    '/tax-transactions/' + E('cms-a-comprobante').value + '/salesperson',
+    { vendedorId: E('cms-a-vendedor').value },
   );
-  decir('com-a-msg', r, 'Venta atribuida');
+  decir('cms-a-msg', r, 'Venta atribuida');
   if (r.ok) listarComisiones();
 };
 
