@@ -54,7 +54,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | Listas de precios con vigencia, por cliente y cantidad | HECHO |
 | Cuenta corriente, cobranzas, imputación | HECHO |
 | Plan de cuotas por comprobante | HECHO |
-| **Notas de crédito y débito** | PARCIAL — el tipo de comprobante existe y entra por el circuito fiscal; no hay flujo propio que las vincule a la factura que corrigen. |
+| **Notas de crédito y débito** | PARCIAL — desde la 0080 **restan y suman correctamente** en la cuenta corriente, con el signo tomado del catálogo de ARCA. Lo que sigue faltando es el flujo que las vincule a la factura puntual que corrigen: hoy afectan el saldo del tercero, no un comprobante en particular. |
 | **Remitos y entregas parciales** | DECISIÓN — hay que decidir si NEXO admite facturación parcial y con qué reglas. |
 | **Devoluciones** | DECISIÓN — depende de la anterior. |
 | **Descuentos y promociones** | DECISIÓN — una lista tiene precios, no reglas. «10 % desde la quinta unidad» no se puede expresar. |

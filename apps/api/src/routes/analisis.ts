@@ -396,6 +396,19 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         // Sin `cash:read` no se devuelve un saldo a medias —bancos sin caja
         // sería un punto de partida falso, no uno incompleto— pero tampoco un
         // 403: la respuesta es más corta y dice por qué.
+        // Las notas de crédito pendientes de aplicar. Desde la 0080 restan en
+        // la cuenta corriente, pero **no entran en COBRANZAS**: esa vista
+        // sostiene que los importes son siempre positivos y que el signo viaja
+        // en `sentido`, y un negativo adentro sería una invitación a sumarlo
+        // sin mirar. Se informan aparte para que la proyección no se lea como
+        // si ya estuvieran descontadas.
+        const creditos = await tx.query<{ total: string; comprobantes: number }>(
+          `SELECT coalesce(-sum(pendiente), 0)::text AS total, count(*)::int AS comprobantes
+             FROM invoice_settlement
+            WHERE company_id = $1 AND direction = 'VENTAS' AND pendiente < 0`,
+          [tenant.companyId],
+        );
+
         const veCaja = tenant.permissions.has('cash:read');
         const proyeccion = veCaja
           ? await tx.query(
@@ -443,6 +456,8 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
           // Por sentido, no un único número: un neto solo —entradas menos
           // salidas— esconde que la plata entra en marzo y sale en enero.
           consolidado: consolidado.rows,
+          // Lo que la proyección **no** tiene descontado, dicho con su importe.
+          creditosPendientes: creditos.rows[0],
           puntoDePartida: partida === null ? null : partida.rows,
           // El saldo tramo a tramo: de acá sale «¿llego a fin de mes?».
           saldoProyectado: proyeccion === null ? null : proyeccion.rows,
@@ -469,6 +484,10 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
             '`saldoProyectado` sí acumula, y arranca del `puntoDePartida` —efectivo en cajas ' +
             'abiertas más saldo contable de bancos—; **deja afuera lo de `sinFecha`**, que ' +
             'suma al total pero no se puede ubicar en ningún tramo. ' +
+            'COBRANZAS **no tiene descontadas** las notas de crédito sin aplicar: esta vista ' +
+            'sostiene que los importes son siempre positivos y que el signo viaja en el ' +
+            'sentido, así que van aparte en `creditosPendientes` en vez de meterse como un ' +
+            'negativo que alguien sumaría sin mirar. ' +
             'Es una proyección de lo que **debería** moverse, no un pronóstico.',
         };
       },
