@@ -1,6 +1,6 @@
 # Cobertura ERP — qué hay, qué falta y por qué
 
-**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, CRM y proyectos)
+**Fecha:** 2026-09-02 (revisada al cerrar caja y arqueo, CRM, proyectos y comisiones)
 **Método:** inventario de las 108 tablas del esquema, las rutas registradas en
 `server.ts` y las pantallas de la consola. No se consultó ningún README para
 armar esta tabla: los documentos ya mintieron una vez y el código es la fuente.
@@ -58,7 +58,7 @@ saldos, conciliación bancaria. Es el núcleo maduro del producto.
 | **Remitos y entregas parciales** | DECISIÓN — hay que decidir si NEXO admite facturación parcial y con qué reglas. |
 | **Devoluciones** | DECISIÓN — depende de la anterior. |
 | **Descuentos y promociones** | DECISIÓN — una lista tiene precios, no reglas. «10 % desde la quinta unidad» no se puede expresar. |
-| **Vendedores y comisiones** | LIBRE |
+| **Vendedores y comisiones** | HECHO — el vendedor es un atributo del comprobante; el porcentaje y la base se declaran con vigencia y se aplican los del día de la venta. Devengado, no pagado. |
 | **CRM: prospectos, oportunidades, embudo** | HECHO — el prospecto no ensucia el maestro de terceros, la etapa sale del libro de transiciones, y el embudo pondera **solo** donde la empresa declaró la probabilidad. NEXO no trae un embudo por defecto. |
 
 ## 5 · Compras
@@ -190,9 +190,9 @@ construirlos con esa misma disciplina es lo que hace que valga la pena elegirlo.
 Por dependencia y por valor, entre lo LIBRE:
 
 ~~1. Cheques~~ · ~~2. Órdenes de compra~~ · ~~3. Lotes y recuento~~ ·
-~~4. Caja y arqueo~~ · ~~5. CRM~~ · ~~6. Proyectos~~ — hechos.
+~~4. Caja y arqueo~~ · ~~5. CRM~~ · ~~6. Proyectos~~ ·
+~~7. Vendedores y comisiones~~ — hechos.
 
-7. **Vendedores y comisiones** — el CRM ya existe; falta el vendedor en la venta.
 8. **Sucursales** — hoy se aproxima con centro de costo, que no es lo mismo.
 9. **Suscripciones** — la arquitectura, sin precios ni pasarela.
 

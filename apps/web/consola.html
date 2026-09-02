@@ -129,6 +129,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="productos">Productos</button>
   <button data-vista="crm">CRM</button>
   <button data-vista="proyectos">Proyectos</button>
+  <button data-vista="comisiones">Comisiones</button>
   <button data-vista="precios">Precios</button>
   <button data-vista="comercial">Comercial</button>
   <button data-vista="recepciones">Recepciones</button>
@@ -917,6 +918,85 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     </div>
     <button id="b-act-alta">Dar de alta</button>
     <div id="act-alta-msg"></div>
+  </div></details>
+</section>
+
+<!-- ══ Comisiones ═════════════════════════════════════════════════════════ -->
+<section id="v-comisiones" hidden>
+  <h2>Vendedores y comisiones</h2>
+  <p class="ayuda">El porcentaje <strong>se declara</strong>: es un acuerdo entre dos personas y
+    no se deriva de las ventas. Sin esquema vigente para la fecha del comprobante, la comisión
+    de esa venta no se suma —y el vendedor aparece en la bandeja— porque falta el acuerdo, no
+    porque valga cero. La comisión es <strong>devengada, no pagada</strong>: pagarla es un
+    asiento que firma una persona, por el camino de siempre.</p>
+
+  <button id="b-com" class="sec">Actualizar</button>
+  <dl class="kv" id="com-resumen"></dl>
+  <div id="com-msg"></div>
+  <div class="tabla"><table id="t-com"><thead><tr>
+    <th>Código</th><th>Vendedor</th><th>Comprobantes</th><th>Facturado</th><th>Cobrado</th>
+    <th>Comisión devengada</th><th>Sin esquema</th><th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="com-detalle" hidden class="grupo">
+    <h3 id="com-det-titulo">Vendedor</h3>
+    <div id="com-det-metodo" class="ayuda"></div>
+
+    <h4>Esquemas declarados</h4>
+    <div class="tabla"><table id="t-com-esq"><thead><tr>
+      <th>Desde</th><th>Hasta</th><th>Porcentaje</th><th>Base</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Devengado por comprobante</h4>
+    <div class="tabla"><table id="t-com-dev"><thead><tr>
+      <th>Fecha</th><th>Comprobante</th><th>Cliente</th><th>Neto</th><th>Total</th>
+      <th>Cobrado</th><th>Base</th><th>Sobre</th><th>%</th><th>Comisión</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="com-operar" hidden>
+      <h4>Declarar esquema</h4>
+      <div class="fila">
+        <div><label>Porcentaje</label><input id="com-e-pct" inputmode="decimal"></div>
+        <div><label>Base</label><select id="com-e-base">
+          <option value="NETO_FACTURADO">Sobre el neto</option>
+          <option value="TOTAL_FACTURADO">Sobre el total (IVA incluido)</option>
+          <option value="TOTAL_COBRADO">Sobre lo cobrado</option>
+        </select></div>
+        <div><label>Desde</label><input id="com-e-desde" type="date"></div>
+        <div><label>Hasta</label><input id="com-e-hasta" type="date"></div>
+        <div><label>&nbsp;</label><button id="b-com-esquema" class="sec">Declarar</button></div>
+      </div>
+      <p class="ayuda"><strong>Sobre el total</strong> paga comisión sobre el IVA, que la
+        empresa cobra para ARCA y no es suyo. <strong>Sobre lo cobrado</strong> devenga a
+        medida que entra la plata. Cuál corresponde lo dice el acuerdo, no el sistema.</p>
+      <div id="com-e-msg"></div>
+    </div>
+  </div>
+
+  <details class="grupo" id="com-alta" hidden><summary>Dar de alta un vendedor</summary><div>
+    <div class="fila">
+      <div><label>Código</label><input id="com-n-codigo" maxlength="40"></div>
+      <div style="flex:1"><label>Nombre</label><input id="com-n-nombre" maxlength="200"></div>
+      <div style="flex:1"><label>Si factura sus comisiones</label><select id="com-n-tercero">
+        <option value="">— es del equipo —</option>
+      </select></div>
+      <div><label>&nbsp;</label><button id="b-com-alta" class="sec">Crear</button></div>
+    </div>
+    <p class="ayuda">El tercero se elige solo cuando el vendedor es externo y factura: crear uno
+      para un empleado ensuciaría el maestro con alguien a quien no se le compra ni se le
+      vende.</p>
+    <div id="com-alta-msg"></div>
+  </div></details>
+
+  <details class="grupo" id="com-atribuir" hidden><summary>Atribuir una venta</summary><div>
+    <div class="fila">
+      <div style="flex:1"><label>Comprobante</label><input id="com-a-comprobante" maxlength="60" placeholder="id de la operación fiscal"></div>
+      <div style="flex:1"><label>Vendedor</label><select id="com-a-vendedor"></select></div>
+      <div><label>&nbsp;</label><button id="b-com-atribuir" class="sec">Atribuir</button></div>
+    </div>
+    <p class="ayuda">Es un atributo del comprobante y no una tabla puente: con dos vendedores
+      por venta —o dos con el mismo derecho— la comisión pasa a ser una opinión.</p>
+    <div id="com-a-msg"></div>
   </div></details>
 </section>
 
@@ -1825,6 +1905,7 @@ const estado = {
   sesionCaja: null, sesionCajaTitulo: '',
   oportunidad: null, oportunidadTitulo: '',
   proyecto: null, proyectoTitulo: '',
+  vendedor: null, vendedorTitulo: '',
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1875,7 +1956,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','crm','proyectos','precios','comercial','recepciones','stock','activos',
+                'terceros','productos','crm','proyectos','comisiones','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
@@ -1908,6 +1989,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'productos') listarProductos();
     if (v === 'crm') listarCrm();
     if (v === 'proyectos') listarProyectos();
+    if (v === 'comisiones') listarComisiones();
     if (v === 'precios') listarPrecios();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
@@ -2021,7 +2103,7 @@ function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
-    crm: 'crm:read', proyectos: 'project:read',
+    crm: 'crm:read', proyectos: 'project:read', comisiones: 'commission:read',
     comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
@@ -4532,6 +4614,145 @@ E('b-chq-mover').onclick = async () => {
   const r = await api('POST', '/checks/' + estado.cheque + '/movimientos', cuerpo);
   decir('chq-m-msg', r, 'Movimiento registrado');
   if (r.ok) { await listarCheques(); await abrirCheque(estado.cheque, E('chq-det-titulo').textContent); }
+};
+
+// ══ 4c6 · Vendedores y comisiones ═════════════════════════════════════════
+async function listarComisiones() {
+  E('com-alta').hidden = !puede('commission:write');
+  E('com-atribuir').hidden = !puede('commission:write');
+
+  const r = await api('GET', '/salespeople');
+  if (!r.ok) return decir('com-msg', r);
+  E('com-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-com').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const sel = E('com-a-vendedor');
+  sel.innerHTML = '';
+  for (const v of r.datos.vendedores || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(v.codigo) + '</td>' +
+      '<td>' + escapar(v.nombre) + '</td>' +
+      '<td class="mono">' + escapar(String(v.comprobantes)) + '</td>' +
+      '<td class="mono">' + escapar(v.facturado) + '</td>' +
+      '<td class="mono">' + escapar(v.cobrado) + '</td>' +
+      '<td class="mono">' + escapar(v.comisionDevengada) + '</td>' +
+      // Lo que quedó afuera del total, y por qué: falta el acuerdo.
+      '<td class="mono">' + (v.comprobantesSinEsquema > 0
+        ? '<span class="p p-ojo">' + escapar(String(v.comprobantesSinEsquema)) + '</span>'
+        : '0') + '</td>' +
+      '<td>' + pastilla(v.status) + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirVendedor(v.id, v.codigo + ' — ' + v.nombre);
+    cuerpo.appendChild(tr);
+
+    if (v.status === 'ACTIVO') {
+      const o = document.createElement('option');
+      o.value = v.id; o.textContent = v.codigo + ' — ' + v.nombre;
+      sel.appendChild(o);
+    }
+  }
+
+  const an = await api('GET', '/analysis/comisiones');
+  if (an.ok) {
+    E('com-resumen').innerHTML =
+      fila('Devengado total', an.datos.totalDevengado) +
+      fila('Comprobantes sin esquema declarado', an.datos.comprobantesSinEsquema);
+  }
+
+  const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (terceros.ok) {
+    const s = E('com-n-tercero');
+    const previo = s.value;
+    s.innerHTML = '<option value="">— es del equipo —</option>';
+    for (const t of terceros.datos.terceros || []) {
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.razonSocial;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+}
+
+async function abrirVendedor(id, titulo) {
+  const r = await api('GET', '/salespeople/' + id);
+  if (!r.ok) return decir('com-msg', r);
+
+  estado.vendedor = id;
+  estado.vendedorTitulo = titulo;
+  E('com-detalle').hidden = false;
+  E('com-det-titulo').textContent = titulo;
+  E('com-det-metodo').textContent = r.datos.vendedor.metodologia;
+  E('com-operar').hidden = !puede('commission:write');
+  limpiar('com-e-msg');
+
+  const esq = E('t-com-esq').querySelector('tbody');
+  esq.innerHTML = '';
+  for (const e of r.datos.esquemas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(e.vigenciaDesde) + '</td>' +
+      '<td class="mono">' + escapar(e.vigenciaHasta || 'sin fin') + '</td>' +
+      '<td class="mono">' + escapar(e.porcentaje) + ' %</td>' +
+      '<td>' + escapar(e.base) + '</td>';
+    esq.appendChild(tr);
+  }
+
+  const dev = E('t-com-dev').querySelector('tbody');
+  dev.innerHTML = '';
+  for (const d of r.datos.devengado || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(d.fecha) + '</td>' +
+      '<td class="mono">' + escapar(d.puntoVenta + '-' + d.numero) + '</td>' +
+      '<td>' + escapar(d.cliente || '—') + '</td>' +
+      '<td class="mono">' + escapar(d.neto) + '</td>' +
+      '<td class="mono">' + escapar(d.total) + '</td>' +
+      '<td class="mono">' + escapar(d.cobrado) + '</td>' +
+      '<td>' + escapar(d.base || '—') + '</td>' +
+      // La cifra sobre la que se aplicó el porcentaje: sin ella nadie puede
+      // rehacer la cuenta a mano.
+      '<td class="mono">' + escapar(d.baseImporte || '—') + '</td>' +
+      '<td class="mono">' + escapar(d.porcentaje ? d.porcentaje + ' %' : '—') + '</td>' +
+      '<td class="mono">' + (d.comision === null
+        ? '<span class="p p-ojo">sin esquema</span>' : escapar(d.comision)) + '</td>';
+    dev.appendChild(tr);
+  }
+}
+
+E('b-com').onclick = () => listarComisiones();
+
+E('b-com-alta').onclick = async () => {
+  const cuerpo = { codigo: E('com-n-codigo').value, nombre: E('com-n-nombre').value };
+  if (E('com-n-tercero').value) cuerpo.terceroId = E('com-n-tercero').value;
+
+  const r = await api('POST', '/salespeople', cuerpo);
+  decir('com-alta-msg', r, 'Vendedor creado. Falta declararle el esquema de comisión.');
+  if (r.ok) listarComisiones();
+};
+
+E('b-com-esquema').onclick = async () => {
+  const cuerpo = {
+    porcentaje: Number(E('com-e-pct').value),
+    base: E('com-e-base').value,
+    vigenciaDesde: E('com-e-desde').value,
+  };
+  if (E('com-e-hasta').value) cuerpo.vigenciaHasta = E('com-e-hasta').value;
+
+  const r = await api('POST', '/salespeople/' + estado.vendedor + '/schemes', cuerpo);
+  decir('com-e-msg', r, 'Esquema declarado. Desde acá las ventas de esas fechas devengan.');
+  if (r.ok) { await listarComisiones(); await abrirVendedor(estado.vendedor, estado.vendedorTitulo); }
+};
+
+E('b-com-atribuir').onclick = async () => {
+  const r = await api(
+    'POST',
+    '/tax-transactions/' + E('com-a-comprobante').value.trim() + '/salesperson',
+    { vendedorId: E('com-a-vendedor').value },
+  );
+  decir('com-a-msg', r, 'Venta atribuida');
+  if (r.ok) listarComisiones();
 };
 
 // ══ 4c5 · Proyectos ═══════════════════════════════════════════════════════

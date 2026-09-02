@@ -108,6 +108,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Proyectos (0070). La rentabilidad por trabajo es información de gestión:
   // quien no puede verla no recibe avisos sobre proyectos que no puede abrir.
   projects: 'project:read',
+  // Comisiones (0071). Cuánto gana cada vendedor es sensible adentro de la
+  // empresa: no sigue a `commercial:read`, se concede aparte.
+  salespeople: 'commission:read',
 };
 
 const CATEGORIAS = [

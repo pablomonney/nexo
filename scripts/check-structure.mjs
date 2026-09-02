@@ -78,6 +78,8 @@ const CHECKS = [
   ['projects', 'pj_cierre_completo', '0070: un proyecto cerrado dice cuándo y por qué'],
   ['projects', 'pj_fin_no_anterior', '0070: no termina antes de empezar'],
   ['project_hour_rates', 'phr_vigencia_coherente', '0070: una tarifa no deja de regir antes de regir'],
+  // 0071 · Un acuerdo de comisión que deja de regir antes de empezar no es un acuerdo.
+  ['commission_schemes', 'cms_vigencia_coherente', '0071: un esquema no deja de regir antes de regir'],
   ['checks', 'ck_fecha_pago_no_anterior', 'No se cobra antes de librarse'],
   ['check_movements', 'cm_motivo_cuando_corresponde', 'Un rechazo o una anulación dicen por qué'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
@@ -171,6 +173,10 @@ const TRIGGERS = [
   ['time_entries', 'te_proyecto_abierto', '0070: no se le cargan horas a un proyecto cerrado'],
   ['projects', 'projects_no_delete', '0070: un proyecto se cierra o se cancela, no se borra'],
   ['project_hour_rates', 'phr_una_por_fecha', '0070: una sola tarifa vigente por proyecto y fecha'],
+  // 0071 · Con dos esquemas vigentes, la comisión se calcularía por orden de
+  // carga: azar disfrazado de regla. Y un vendedor con ventas no se borra.
+  ['commission_schemes', 'cms_uno_por_fecha', '0071: un solo esquema vigente por vendedor y fecha'],
+  ['salespeople', 'salespeople_no_delete', '0071: un vendedor se inactiva; borrarlo deja sus ventas sin dueño'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -233,6 +239,7 @@ const INDICES = [
   ['cst_orden_unico', '0069: dos etapas en la misma posición dejan el embudo sin orden'],
   ['pj_code_unico', '0070: un código, un proyecto, por empresa'],
   ['pjt_code_unico', '0070: un código, una tarea, por proyecto'],
+  ['sp_code_unico', '0071: un código, un vendedor, por empresa'],
   ['fixed_assets_code_unico', 'Un código, un bien de uso, por empresa'],
 ];
 
@@ -278,6 +285,9 @@ const FK_CON_EMPRESA = [
   ['time_entries', 'te_proyecto_fk', 'Las horas no se cargan al proyecto de otra empresa'],
   ['time_entries', 'te_tarea_fk', 'Las horas no citan la tarea de otra empresa'],
   ['project_hour_rates', 'phr_proyecto_fk', 'Una tarifa no rige para el proyecto de otra empresa'],
+  ['salespeople', 'sp_party_fk', 'Un vendedor externo no es el tercero de otra empresa'],
+  ['tax_transactions', 'tt_vendedor_fk', 'Una venta no se le atribuye al vendedor de otra empresa'],
+  ['commission_schemes', 'cms_vendedor_fk', 'Un esquema no rige para el vendedor de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -342,6 +352,9 @@ const RLS_FORZADO = [
   // Proyectos (0070): horas y rentabilidad por trabajo. Sin RLS, el margen de
   // una empresa se leería desde otra.
   'projects', 'project_tasks', 'time_entries', 'project_hour_rates',
+  // Comisiones (0071): cuánto gana cada vendedor. Sin RLS se leería desde la
+  // empresa de al lado.
+  'salespeople', 'commission_schemes',
 ];
 
 /**
@@ -384,6 +397,9 @@ const VISTAS_INVOKER = [
   // segunda lee el Mayor: sin security_invoker mezclaría empresas.
   'project_time_valuation', 'project_status', 'analytics_proyectos',
   'work_queue_proyectos',
+  // Comisiones (0071). Lo devengado es derivado y cruza el comprobante con la
+  // imputación: sin security_invoker mostraría las ventas de otra empresa.
+  'commission_accruals', 'analytics_comisiones', 'work_queue_comisiones',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.
