@@ -1990,6 +1990,10 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button id="b-mayor" class="sec">Mayor</button>
   <button id="b-balance" class="sec">Balance</button>
   <button id="b-emisiones" class="sec">Emisiones</button>
+  <button id="b-exp-balance" class="sec">Bajar el balance (CSV)</button>
+  <button id="b-exp-aging" class="sec">Bajar la antigüedad de saldos (CSV)</button>
+  <button id="b-exp-analytics" class="sec">Bajar operaciones por mes (CSV)</button>
+  <button id="b-exp-stock" class="sec">Bajar existencias valuadas (CSV)</button>
   <div id="lib-acciones"></div>
   <div id="lib-msg"></div>
   <div class="tabla" id="lib-salida"></div>
@@ -2759,6 +2763,27 @@ async function mostrarEvidencia(id, mime, tipo) {
       '</span>: la vista previa no está disponible bajo la política de esta página. ' +
       'Descargalo para verlo.</div>';
   }
+}
+
+/**
+ * Bajar un CSV de la API.
+ *
+ * Pasa por `fetch` y no por un enlace directo porque la descarga necesita la
+ * cabecera de empresa: un `<a href>` la perdería y el servidor contestaría 403
+ * sin que se vea por qué.
+ */
+async function bajarCsv(ruta, nombre, destinoMsg) {
+  const r = await fetch(ruta, {
+    headers: { 'x-company-id': estado.empresa }, credentials: 'same-origin',
+  });
+  if (!r.ok) {
+    return decir(destinoMsg, { ok: false, status: r.status, datos: null });
+  }
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
 }
 
 E('b-doc-bajar').onclick = async () => {
@@ -6638,6 +6663,18 @@ E('b-mayor').onclick = async () => {
      ['Debe','totalDebe'],['Haber','totalHaber'],['Saldo','saldoFinal']]);
   pintarAccionesDeLibro('MAYOR');
 };
+
+// Las exportaciones llevan el rango que está en pantalla: bajar algo distinto
+// de lo que se está mirando es la forma más rápida de que dos personas discutan
+// sobre dos archivos que dicen cosas distintas.
+E('b-exp-balance').onclick = () =>
+  bajarCsv('/exports/trial-balance.csv?' + rango(), 'balance-de-sumas-y-saldos.csv', 'lib-msg');
+E('b-exp-aging').onclick = () =>
+  bajarCsv('/exports/aging.csv?direccion=VENTAS', 'antiguedad-de-saldos.csv', 'lib-msg');
+E('b-exp-analytics').onclick = () =>
+  bajarCsv('/exports/analytics.csv', 'operaciones-por-mes.csv', 'lib-msg');
+E('b-exp-stock').onclick = () =>
+  bajarCsv('/exports/stock.csv', 'existencias-valuadas.csv', 'lib-msg');
 
 E('b-balance').onclick = async () => {
   const r = await api('GET', '/reports/trial-balance?' + rango());

@@ -121,6 +121,20 @@ function llamadasDe(html: string): { metodo: string; url: string }[] {
     if (url.startsWith('/')) salida.push({ metodo: 'GET', url });
   }
 
+  // bajarCsv(<url>, …) — las exportaciones.
+  //
+  // Se agregó cuando el barrido inverso marcó el dominio `exports` como
+  // inalcanzable: las descargas pasan por un ayudante que llama a `fetch`
+  // adentro, así que la url no aparecía al lado de ninguna de las dos formas
+  // que este barrido conocía. El instrumento estaba ciego a una forma de
+  // llamada, no la consola sin puerta — y es exactamente por eso que el
+  // control mira en las dos direcciones.
+  const porDescarga = /bajarCsv\(\s*/g;
+  while ((m = porDescarga.exec(html)) !== null) {
+    const url = reconstruir(leerArgumento(html, porDescarga.lastIndex).expresion);
+    if (url.startsWith('/')) salida.push({ metodo: 'GET', url });
+  }
+
   return salida;
 }
 
