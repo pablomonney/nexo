@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 87 archivos de test, 1585 tests,
-229 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 87 archivos de test, 1589 tests,
+230 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -58,7 +58,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Integridad de la bitácora** | **TERMINADO** | **`npm run audit:cadena`, gate de `verify`** |
 | **Plan de pagos por comprobante** | **TERMINADO** | **`plan-de-pagos` (15 tests)** |
 | **Imputaciones sugeridas** | **TERMINADO** | **`sugerir-imputaciones` (13 tests)** |
-| **Listas de precios** | **TERMINADO** | **`listas-de-precios` (12 tests)** |
+| **Listas de precios** | **TERMINADO** | **`listas-de-precios` (16 tests)** |
 | **Salida de stock por comprobante** | **TERMINADO** | **`stock` (21 tests)** |
 | **Umbrales sugeridos** | **TERMINADO** | **`senales-y-simulacion` (15 tests)** |
 
@@ -84,6 +84,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0060 | Plan de cuotas: la proyección de cobranzas dejó de estar equivocada |
 | 0061 | Listas de precios con vigencia, por cliente y por cantidad (§6) |
 | 0062 | Depósito por defecto declarado: la salida deja de ser un trámite |
+| 0063 | La bandeja avisa cuando una lista de precios dejó de regir |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

@@ -91,6 +91,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Faltaba, y el mapa hizo lo que promete: como es lista blanca y no filtro,
   // los desvíos sobre terceros simplemente no se listaban. Lo encontró un test.
   parties: 'party:read',
+  // Precios (0063). Cuelgan de la lista, y quien no puede leer el maestro de
+  // productos no recibe avisos sobre precios que no puede consultar.
+  price_lists: 'product:read',
 };
 
 const CATEGORIAS = [

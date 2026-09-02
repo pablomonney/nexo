@@ -276,7 +276,7 @@ const VISTAS_INVOKER = [
   // cadena saltearía el RLS y repartiría el trabajo de todas las empresas.
   'work_queue', 'work_queue_nucleo', 'work_queue_comercial', 'work_queue_compras',
   'work_queue_cobranzas', 'work_queue_stock', 'work_queue_activos',
-  'work_queue_integraciones', 'work_queue_senales',
+  'work_queue_integraciones', 'work_queue_senales', 'work_queue_precios',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

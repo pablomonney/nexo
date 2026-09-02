@@ -391,6 +391,112 @@ suite('Listas de precios', () => {
     expect(marzo.tercerosAsignados).toBe(1);
   });
 
+  // -------------------------------------------------------------------------
+  // La bandeja: lo que falla en silencio
+  // -------------------------------------------------------------------------
+  it('una lista vencida con terceros asignados aparece en la bandeja', async () => {
+    // Es el hueco real: el día que vence la lista mayorista, el cliente
+    // mayorista empieza a cotizarse al precio de mostrador y **nada falla**.
+    const vencida = (
+      await pedir('POST', '/price-lists', {
+        codigo: `VIEJA-${stamp}`,
+        nombre: 'Lista del año pasado',
+        vigenteDesde: '2025-01-01',
+        vigenteHasta: '2025-12-31',
+      })
+    ).json<{ id: string }>().id;
+
+    expect(
+      (await pedir('PUT', `/price-lists/${vencida}/items`, {
+        items: [{ productoId, cantidadDesde: '1', precio: '50.00' }],
+      })).statusCode,
+    ).toBe(200);
+
+    // Un tercero propio: los otros dos ya tienen listas asignadas, y el trigger
+    // de solapamiento —bien puesto— rechazaría una segunda en el mismo período.
+    const clienteViejo = (
+      await pedir('POST', '/parties', {
+        tipoDocumento: 'CUIT',
+        numeroDocumento: `34${stamp}${cuitCheckDigit(`34${stamp}`)}`,
+        razonSocial: `Cliente con lista vieja ${stamp}`,
+        condicionIva: 'RESPONSABLE_INSCRIPTO',
+        roles: ['CLIENTE'],
+      })
+    ).json<{ id: string }>().id;
+
+    // La asignación sigue vigente: el tercero cotiza con una lista que ya no rige.
+    expect(
+      (await pedir('POST', `/parties/${clienteViejo}/price-lists`, {
+        priceListId: vencida,
+        desde: '2025-01-01',
+      })).statusCode,
+    ).toBe(201);
+
+    const bandeja = await pedir('GET', '/work-queue?limite=200');
+    const items = bandeja.json<{ items: { rama: string; entityId: string; motivo: string }[] }>()
+      .items;
+    const aviso = items.find(
+      (i) => i.rama === 'LISTA_DE_PRECIOS_VENCIDA' && i.entityId === vencida,
+    );
+
+    expect(aviso, 'la lista venció y sigue asignada').toBeDefined();
+    expect(aviso!.motivo, 'dice qué pasa desde ese día').toContain('precio base');
+  });
+
+  it('una lista vigente y sin precios también avisa: parece configurada y no lo está', async () => {
+    const vacia = (
+      await pedir('POST', '/price-lists', {
+        codigo: `VACIA-${stamp}`,
+        nombre: 'Lista sin cargar',
+        vigenteDesde: '2026-01-01',
+      })
+    ).json<{ id: string }>().id;
+
+    const items = (await pedir('GET', '/work-queue?limite=200')).json<{
+      items: { rama: string; entityId: string; evidenciaFaltante: string[] }[];
+    }>().items;
+    const aviso = items.find((i) => i.rama === 'LISTA_DE_PRECIOS_VACIA' && i.entityId === vacia);
+
+    expect(aviso).toBeDefined();
+    expect(aviso!.evidenciaFaltante).toContain('PRECIOS');
+  });
+
+  it('una lista vencida sin terceros asignados no es un pendiente', async () => {
+    // No cambia ninguna cotización. Un aviso sobre algo que no afecta a nadie es
+    // cómo una bandeja se vuelve ruido y se deja de mirar.
+    const huerfana = (
+      await pedir('POST', '/price-lists', {
+        codigo: `HUERFANA-${stamp}`,
+        nombre: 'Vencida y sin nadie',
+        vigenteDesde: '2025-01-01',
+        vigenteHasta: '2025-06-30',
+      })
+    ).json<{ id: string }>().id;
+
+    expect(
+      (await pedir('PUT', `/price-lists/${huerfana}/items`, {
+        items: [{ productoId, cantidadDesde: '1', precio: '10.00' }],
+      })).statusCode,
+    ).toBe(200);
+
+    const items = (await pedir('GET', '/work-queue?limite=200')).json<{
+      items: { entityId: string }[];
+    }>().items;
+
+    expect(items.some((i) => i.entityId === huerfana)).toBe(false);
+  });
+
+  it('no hay rama de «vence pronto»: sería un umbral que nadie declaró', async () => {
+    const items = (await pedir('GET', '/work-queue?limite=200')).json<{
+      items: { rama: string }[];
+    }>().items;
+
+    const ramas = new Set(items.map((i) => i.rama));
+    for (const inventada of ['LISTA_POR_VENCER', 'LISTA_VENCE_PRONTO']) {
+      expect(ramas.has(inventada), `${inventada} exigiría decidir qué es «pronto»`).toBe(false);
+    }
+  });
+
   it('las listas de una empresa no se ven desde otra', async () => {
     const r = await db.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM price_lists WHERE company_id <> $1`,
