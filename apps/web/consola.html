@@ -127,6 +127,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="operaciones">Operaciones</button>
   <button data-vista="terceros">Terceros</button>
   <button data-vista="productos">Productos</button>
+  <button data-vista="precios">Precios</button>
   <button data-vista="comercial">Comercial</button>
   <button data-vista="recepciones">Recepciones</button>
   <button data-vista="stock">Existencias</button>
@@ -856,6 +857,75 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </div></details>
 </section>
 
+<!-- ══ Precios ════════════════════════════════════════════════════════════ -->
+<section id="v-precios" hidden>
+  <h2>Listas de precios</h2>
+  <p class="ayuda">Una lista <strong>rige entre dos fechas</strong>, y por eso el precio de una
+    operación se busca siempre por <em>la fecha de la operación</em> y nunca por la de hoy:
+    reimprimir un presupuesto de marzo con la lista de septiembre produce un documento que dice
+    algo que nunca se ofreció. La lista <strong>sugiere</strong>, no impone — imponerla haría
+    imposible la excepción, que en una venta es la mitad del trabajo.</p>
+
+  <button id="b-pre" class="sec">Actualizar</button>
+  <div id="pre-msg"></div>
+  <div class="tabla"><table id="t-pre"><thead><tr>
+    <th>Código</th><th>Nombre</th><th>Moneda</th><th>Desde</th><th>Hasta</th>
+    <th>Productos</th><th>Tramos</th><th>Terceros</th><th>¿Rige hoy?</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="pre-alta" hidden><summary>Crear una lista</summary><div>
+    <div class="fila">
+      <div><label>Código</label><input id="pre-codigo" maxlength="40"></div>
+      <div><label>Nombre</label><input id="pre-nombre" maxlength="200"></div>
+      <div><label>Moneda</label><input id="pre-moneda" maxlength="3" value="ARS"></div>
+      <div><label>Vigente desde</label><input id="pre-desde" type="date"></div>
+      <div><label>Vigente hasta</label><input id="pre-hasta" type="date"></div>
+    </div>
+    <button id="b-pre-alta">Crear</button>
+    <div id="pre-alta-msg"></div>
+  </div></details>
+
+  <div id="pre-detalle" hidden class="grupo">
+    <h3 id="pre-det-titulo">Precios de la lista</h3>
+    <p class="ayuda">El tramo de cada precio llega hasta el «desde» del siguiente. No hay
+      columna de tope a propósito: dos columnas que describen el mismo borde pueden
+      contradecirse, y ese conflicto no tendría solución.</p>
+    <div class="tabla"><table id="t-pre-items"><thead><tr>
+      <th>Código</th><th>Producto</th><th>Desde (cantidad)</th><th>Precio</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <div id="pre-editor" hidden>
+      <div class="fila">
+        <div style="flex:1"><label>Producto</label><select id="pre-i-prod"></select></div>
+        <div><label>Desde (cantidad)</label><input id="pre-i-cant" inputmode="decimal" value="1"></div>
+        <div><label>Precio</label><input id="pre-i-precio" inputmode="decimal"></div>
+        <div><label>&nbsp;</label><button id="b-pre-agregar" class="sec">Agregar al borrador</button></div>
+      </div>
+      <p class="ayuda">El borrador <strong>reemplaza</strong> la lista entera al guardar: una
+        lista es un conjunto coherente, y cargarla en dos pasos deja un intervalo donde algunos
+        productos cotizan con precio nuevo y otros con el viejo.</p>
+      <div class="tabla"><table id="t-pre-borrador"><thead><tr>
+        <th>Producto</th><th>Desde</th><th>Precio</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+      <button id="b-pre-guardar">Guardar la lista completa</button>
+      <div id="pre-i-msg"></div>
+    </div>
+  </div>
+
+  <h3>Consultar un precio</h3>
+  <p class="ayuda">La fecha es obligatoria. Un valor por defecto a hoy sería el camino más corto
+    para cotizar un presupuesto viejo con la lista de esta semana.</p>
+  <div class="fila">
+    <div style="flex:1"><label>Producto</label><select id="pre-c-prod"></select></div>
+    <div style="flex:1"><label>Tercero</label><select id="pre-c-ter"><option value="">ninguno</option></select></div>
+    <div><label>Fecha de la operación</label><input id="pre-c-fecha" type="date"></div>
+    <div><label>Cantidad</label><input id="pre-c-cant" inputmode="decimal" value="1"></div>
+  </div>
+  <button id="b-pre-consultar" class="sec">Resolver</button>
+  <dl class="kv" id="pre-c-resultado"></dl>
+  <div id="pre-c-msg"></div>
+</section>
+
 <!-- ══ IVA ════════════════════════════════════════════════════════════════ -->
 <section id="v-iva" hidden>
   <h2>IVA: subdiarios y Libro Digital</h2>
@@ -1255,6 +1325,7 @@ const estado = {
   tercero: null, comercial: null, comercialBorrador: [],
   recepcion: null, recepcionBorrador: [],
   depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
+  lista: null, listaBorrador: [],
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -1305,7 +1376,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
-                'terceros','productos','comercial','recepciones','stock','activos',
+                'terceros','productos','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','config'];
 
@@ -1336,6 +1407,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'operaciones') listarOperaciones();
     if (v === 'terceros') listarTerceros();
     if (v === 'productos') listarProductos();
+    if (v === 'precios') listarPrecios();
     if (v === 'comercial') listarComerciales();
     if (v === 'recepciones') listarRecepciones();
     if (v === 'stock') listarStock();
@@ -1445,7 +1517,8 @@ async function usarEmpresa(id) {
 function aplicarPermisosANav() {
   const requiere = {
     documentos: 'document:read', operaciones: 'journal_entry:read',
-    terceros: 'party:read', productos: 'product:read', comercial: 'commercial:read', recepciones: 'receipt:read',
+    terceros: 'party:read', productos: 'product:read', precios: 'product:read',
+    comercial: 'commercial:read', recepciones: 'receipt:read',
     stock: 'stock:read', activos: 'asset:read',
     iva: 'vat_book:read', bancos: 'bank:read',
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
@@ -3186,6 +3259,179 @@ E('b-act-baja').onclick = async () => {
   });
   decir('act-acc-msg', r, 'Bien dado de baja');
   if (r.ok) { listarActivos(); abrirActivo(estado.activo); }
+};
+
+// ══ 4b1 · Listas de precios ═══════════════════════════════════════════════
+async function listarPrecios() {
+  E('pre-alta').hidden = !puede('product:write');
+  E('pre-editor').hidden = !puede('product:write');
+
+  const r = await api('GET', '/price-lists');
+  if (!r.ok) return decir('pre-msg', r);
+  E('pre-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-pre').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const l of r.datos.listas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.codigo) + '</td><td>' + escapar(l.nombre) + '</td>' +
+      '<td>' + escapar(l.moneda) + '</td>' +
+      '<td class="mono">' + escapar(l.vigenteDesde) + '</td>' +
+      // «Sin fecha de fin» no es «rige para siempre»: es que todavía no se
+      // declaró cuándo termina. Se muestra distinto de una fecha.
+      '<td class="mono">' + escapar(l.vigenteHasta || 'sin declarar') + '</td>' +
+      '<td class="mono">' + escapar(l.productos) + '</td>' +
+      '<td class="mono">' + escapar(l.tramos) + '</td>' +
+      '<td class="mono">' + escapar(l.tercerosAsignados) + '</td>' +
+      '<td>' + (l.vigenteHoy ? '<span class="p p-bien">sí</span>' : '<span class="p p-neu">no</span>') + '</td>' +
+      '<td><span class="clic">abrir</span></td>';
+    tr.querySelector('.clic').onclick = () => abrirLista(l.id, l.codigo + ' — ' + l.nombre);
+    cuerpo.appendChild(tr);
+  }
+
+  await cargarProductosYTerceros();
+}
+
+/** Los selectores de la consulta y del editor comparten los mismos catálogos. */
+async function cargarProductosYTerceros() {
+  const productos = await api('GET', '/products?status=ACTIVO&limite=200');
+  if (productos.ok) {
+    for (const id of ['pre-i-prod', 'pre-c-prod']) {
+      const s = E(id);
+      const previo = s.value;
+      s.innerHTML = '';
+      for (const p of productos.datos.productos || []) {
+        const o = document.createElement('option');
+        o.value = p.id; o.textContent = p.codigo + ' — ' + p.nombre;
+        s.appendChild(o);
+      }
+      s.value = previo;
+    }
+  }
+
+  const terceros = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (terceros.ok) {
+    const s = E('pre-c-ter');
+    const previo = s.value;
+    s.innerHTML = '<option value="">ninguno</option>';
+    for (const t of terceros.datos.terceros || []) {
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.razonSocial;
+      s.appendChild(o);
+    }
+    s.value = previo;
+  }
+}
+
+async function abrirLista(id, titulo) {
+  estado.lista = id;
+  estado.listaBorrador = [];
+  E('pre-detalle').hidden = false;
+  E('pre-det-titulo').textContent = titulo;
+  limpiar('pre-i-msg');
+
+  const r = await api('GET', '/price-lists/' + id + '/items');
+  if (!r.ok) return decir('pre-i-msg', r);
+
+  const cuerpo = E('t-pre-items').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const i of r.datos.items || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(i.codigo) + '</td><td>' + escapar(i.nombre) + '</td>' +
+      '<td class="mono">' + escapar(i.cantidadDesde) + '</td>' +
+      '<td class="mono">' + escapar(i.precio) + '</td>';
+    cuerpo.appendChild(tr);
+    // El borrador arranca con lo que ya hay: guardar reemplaza la lista entera,
+    // así que empezar vacío borraría todo al primer guardado.
+    estado.listaBorrador.push({
+      productoId: i.productoId,
+      etiqueta: i.codigo + ' — ' + i.nombre,
+      cantidadDesde: i.cantidadDesde,
+      precio: i.precio,
+    });
+  }
+  pintarBorradorDePrecios();
+}
+
+function pintarBorradorDePrecios() {
+  const cuerpo = E('t-pre-borrador').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  estado.listaBorrador.forEach((b, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(b.etiqueta) + '</td>' +
+      '<td class="mono">' + escapar(b.cantidadDesde) + '</td>' +
+      '<td class="mono">' + escapar(b.precio) + '</td>' +
+      '<td><span class="clic">quitar</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      estado.listaBorrador.splice(i, 1);
+      pintarBorradorDePrecios();
+    };
+    cuerpo.appendChild(tr);
+  });
+}
+
+E('b-pre').onclick = () => listarPrecios();
+
+E('b-pre-alta').onclick = async () => {
+  const r = await api('POST', '/price-lists', {
+    codigo: E('pre-codigo').value,
+    nombre: E('pre-nombre').value,
+    moneda: E('pre-moneda').value || 'ARS',
+    vigenteDesde: E('pre-desde').value,
+    vigenteHasta: E('pre-hasta').value || undefined,
+  });
+  decir('pre-alta-msg', r, 'Lista creada');
+  if (r.ok) listarPrecios();
+};
+
+E('b-pre-agregar').onclick = () => {
+  const sel = E('pre-i-prod');
+  estado.listaBorrador.push({
+    productoId: sel.value,
+    etiqueta: sel.options[sel.selectedIndex].textContent,
+    cantidadDesde: E('pre-i-cant').value,
+    precio: E('pre-i-precio').value,
+  });
+  pintarBorradorDePrecios();
+};
+
+E('b-pre-guardar').onclick = async () => {
+  const r = await api('PUT', '/price-lists/' + estado.lista + '/items', {
+    items: estado.listaBorrador.map((b) => ({
+      productoId: b.productoId,
+      cantidadDesde: b.cantidadDesde,
+      precio: b.precio,
+    })),
+  });
+  decir('pre-i-msg', r, 'Precios guardados');
+  if (r.ok) { listarPrecios(); abrirLista(estado.lista, E('pre-det-titulo').textContent); }
+};
+
+E('b-pre-consultar').onclick = async () => {
+  const q = new URLSearchParams({
+    productoId: E('pre-c-prod').value,
+    fecha: E('pre-c-fecha').value,
+    cantidad: E('pre-c-cant').value,
+  });
+  if (E('pre-c-ter').value) q.set('terceroId', E('pre-c-ter').value);
+
+  const r = await api('GET', '/pricing/resolve?' + q.toString());
+  if (!r.ok) { E('pre-c-resultado').innerHTML = ''; return decir('pre-c-msg', r); }
+
+  // `SIN_PRECIO` se muestra como lo que es. Un cero acá se leería como gratis.
+  E('pre-c-resultado').innerHTML =
+    fila('Precio', r.datos.precio === null ? 'no hay precio' : r.datos.precio) +
+    fila('De dónde salió', r.datos.origen) +
+    fila('Lista', r.datos.listaCodigo || '—') +
+    fila('Tramo desde', r.datos.tramoDesde || '—') +
+    fila('Fecha consultada', r.datos.fecha) +
+    fila('Cantidad', r.datos.cantidad);
+  E('pre-c-msg').innerHTML =
+    '<div class="aviso">' + escapar(r.datos.metodologia) + '<br><br>' +
+    escapar(r.datos.alcance) + '</div>';
 };
 
 // ══ 4b2 · IVA ═════════════════════════════════════════════════════════════

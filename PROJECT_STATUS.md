@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 84 archivos de test, 1548 tests,
-217 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 85 archivos de test, 1560 tests,
+223 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (22 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (23 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -58,6 +58,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Integridad de la bitácora** | **TERMINADO** | **`npm run audit:cadena`, gate de `verify`** |
 | **Plan de pagos por comprobante** | **TERMINADO** | **`plan-de-pagos` (15 tests)** |
 | **Imputaciones sugeridas** | **TERMINADO** | **`sugerir-imputaciones` (13 tests)** |
+| **Listas de precios** | **TERMINADO** | **`listas-de-precios` (12 tests)** |
 
 ## 3. En curso
 
@@ -79,6 +80,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0058 | Señales contra umbrales declarados, sin modelo de por medio (ADR-017) |
 | 0059 | El detector de adulteraciones de la bitácora podía encontrar y no reportar |
 | 0060 | Plan de cuotas: la proyección de cobranzas dejó de estar equivocada |
+| 0061 | Listas de precios con vigencia, por cliente y por cantidad (§6) |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -124,8 +126,9 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
 - **Remitos y entregas parciales.** Un pedido que se factura en dos veces no
   está modelado. No es una limitación técnica: hay que decidir si NEXO admite
   facturación parcial y con qué reglas.
-- **Listas de precios.** `products.list_price` es un precio único. Precios por
-  cliente, por cantidad o por lista todavía no existen.
+- **Descuentos y promociones por lista.** Una lista tiene precios, no reglas:
+  «10% a partir de la quinta unidad» o «2x1 hasta fin de mes» no se pueden
+  expresar. Cada uno es una decisión de producto y ninguna está tomada.
 - **Umbral sugerido.** Hoy el umbral se declara o no se afirma nada. Se podría
   *proponer* uno mirando la propia serie y que una persona lo confirme — la
   forma que ADR-001 admite. No está hecho.

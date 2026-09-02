@@ -61,6 +61,7 @@ const CHECKS = [
   ['goods_receipts', 'gr_anulada_con_motivo', 'Anular una recepción exige decir por qué'],
   ['party_allocations', 'pa_anulada_con_motivo', 'Anular una imputación exige decir por qué'],
   ['tax_transaction_installments', 'tax_transaction_installments_importe_check', 'Una cuota vale más que cero'],
+  ['price_lists', 'pl_vigencia_coherente', 'Una lista no termina antes de empezar'],
   ['stock_movements', 'sm_ajuste_con_motivo', 'Un ajuste de stock sin explicación no se registra'],
   ['stock_movements', 'sm_tipo_coherente', 'El tipo de movimiento y su origen no se contradicen'],
   ['stock_movements', 'sm_origen_citado', 'Lo que viene de un hecho registrado dice de cuál'],
@@ -118,6 +119,9 @@ const TRIGGERS = [
   ['tax_transaction_installments', 'tti_plan_cierra', '0060: las cuotas suman el total (diferido)'],
   ['tax_transactions', 'tt_plan_cierra', '0060: cambiar el total no deja el plan sin cerrar'],
   ['party_allocations', 'pa_nombra_cuota', '0060: con plan, la imputación declara la cuota'],
+  // 0061 · Un tercero con dos listas el mismo día deja al sistema sin criterio,
+  // y elegir por orden de carga sería azar disfrazado.
+  ['party_price_lists', 'ppl_una_por_fecha', '0061: una sola lista por tercero y por fecha'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -243,6 +247,9 @@ const RLS_FORZADO = [
   'analysis_thresholds',
   // Plan de pagos (0060): sin RLS, las cuotas de una empresa se verían en otra.
   'tax_transaction_installments',
+  // Listas de precios (0061): sin RLS, la lista mayorista de una empresa se
+  // vería desde otra.
+  'price_lists', 'price_list_items', 'party_price_lists',
 ];
 
 /**
@@ -284,6 +291,7 @@ const VISTAS_INVOKER = [
   'analysis_signals',
   // El pendiente por cuota se deriva acá y en ningún otro lado (0060).
   'installment_settlement',
+  'price_list_coverage',
   // La cuenta corriente (0047). Suma el Mayor de un tercero: sin
   // `security_invoker` mostraría lo que le debe cada empresa a ese CUIT.
   'party_balances',
