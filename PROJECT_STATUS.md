@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-01
-**Estado del árbol:** `verify` en verde — 85 archivos de test, 1579 tests,
+**Estado del árbol:** `verify` en verde — 86 archivos de test, 1582 tests,
 229 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 

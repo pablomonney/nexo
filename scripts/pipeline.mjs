@@ -63,6 +63,10 @@ export const PASOS = [
   { nombre: 'Migraciones idempotentes', comando: ['npm', 'run', 'db:setup'] },
   { nombre: 'Crear y migrar la base de tests', comando: ['npm', 'run', 'test:db'] },
   { nombre: 'Tests (con umbrales de cobertura)', comando: ['npm', 'run', 'test:coverage'] },
+  {
+    nombre: 'El primer arranque funciona sobre una base vacía',
+    comando: ['npm', 'run', 'verify:arranque'],
+  },
   { nombre: 'Invariantes — estructura (los candados están)', comando: ['npm', 'run', 'audit:estructura'] },
   {
     nombre: 'Invariantes — conducta (base aislada, fixtures y verificación)',
@@ -71,6 +75,10 @@ export const PASOS = [
   {
     nombre: 'El Mayor coincide con el Diario (ACCOUNTING_ENGINE.md §7)',
     comando: ['npm', 'run', 'ledger:verify'],
+  },
+  {
+    nombre: 'La bitácora no fue adulterada, y el detector detecta',
+    comando: ['npm', 'run', 'audit:cadena'],
   },
 ];
 

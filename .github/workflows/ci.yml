@@ -92,6 +92,12 @@ jobs:
         run: npm run test:coverage
 
       # ── El gate de invariantes ────────────────────────────────────────────
+      # El primer arranque, sobre una base vacía que el script crea y destruye.
+      # Es el único camino que no se puede probar en la base de tests: el
+      # bootstrap del primer administrador se niega si ya existe un usuario.
+      - name: El primer arranque funciona sobre una base vacía
+        run: npm run verify:arranque
+
       # Van en dos pasos porque son dos preguntas distintas. La estructural no
       # necesita datos —pregunta si los candados están— y por eso puede correr
       # sobre la base recién migrada. La conductual se crea su propia base,
@@ -107,6 +113,12 @@ jobs:
       # fixtures, y falla si no hubo movimientos que comparar.
       - name: El Mayor coincide con el Diario (ACCOUNTING_ENGINE.md §7)
         run: npm run ledger:verify
+
+      # La cadena de hashes de la bitácora, y —antes que eso— que el verificador
+      # de la cadena sepa detectar: adultera una entrada a propósito en la base
+      # de verificación y falla si no la señala.
+      - name: La bitácora no fue adulterada, y el detector detecta
+        run: npm run audit:cadena
 
   # El archivo normativo se verifica también de forma independiente, para que un
   # cambio en el código no pueda enmascarar una alteración de los originales.
