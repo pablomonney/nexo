@@ -2003,7 +2003,11 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <div><label>Días para considerar inactivo</label><input id="sen-u-dias" inputmode="numeric"></div>
       <div><label>Mora de cartera (%)</label><input id="sen-u-mora" inputmode="decimal"></div>
       <div><label>Rechazo de cheques (%)</label><input id="sen-u-rechazo" inputmode="decimal"></div>
+      <div><label>Margen mínimo (%)</label><input id="sen-u-margen" inputmode="decimal"></div>
     </div>
+    <p class="ayuda">El margen mínimo admite negativos: una empresa puede declarar que tolera
+      vender a pérdida hasta cierto punto, y esa es una decisión suya. Vender <em>por debajo del
+      costo</em> se avisa igual y sin umbral — el signo del margen no es una opinión.</p>
     <button id="b-sen-umbrales">Declarar</button>
     <button id="b-sen-sugerir" class="sec">Proponer a partir de esta empresa</button>
     <div id="sen-u-msg"></div>
@@ -6802,6 +6806,9 @@ async function listarSenales() {
     E('sen-u-dias').value = u.datos.umbrales.diasClienteInactivo || '';
     E('sen-u-mora').value = u.datos.umbrales.moraPct || '';
     E('sen-u-rechazo').value = u.datos.umbrales.rechazoChequesPct || '';
+    // `|| ''` no sirve acá: un margen mínimo declarado en 0 es una declaración
+    // —«avisame apenas pierda plata»— y `0 || ''` la borraría de la pantalla.
+    E('sen-u-margen').value = u.datos.umbrales.margenMinimoPct ?? '';
   }
 }
 
@@ -6810,13 +6817,20 @@ E('b-sen').onclick = () => listarSenales();
 E('b-sen-umbrales').onclick = async () => {
   // Un campo vacío se manda como null y no se omite: es la diferencia entre
   // «borrar el umbral» y «dejarlo como estaba», y son dos cosas distintas.
-  const numero = (id) => (E(id).value.trim() === '' ? null : E(id).value.trim());
+  //
+  // Y va convertido a número. Tres de estos campos se mandaban como texto —el
+  // `.value` de un input siempre lo es— contra un esquema que pide número: la
+  // pantalla contestaba 400 cada vez que alguien declaraba una caída de ventas,
+  // una concentración o una mora. Los otros dos ya venían convertidos, así que
+  // el formulario andaba a medias y nada lo avisaba.
+  const numero = (id) => (E(id).value.trim() === '' ? null : Number(E(id).value.trim()));
   const r = await api('PUT', '/analysis/thresholds', {
     caidaVentasPct: numero('sen-u-caida'),
     concentracionClientePct: numero('sen-u-conc'),
-    diasClienteInactivo: numero('sen-u-dias') === null ? null : Number(numero('sen-u-dias')),
+    diasClienteInactivo: numero('sen-u-dias'),
     moraPct: numero('sen-u-mora'),
-    rechazoChequesPct: numero('sen-u-rechazo') === null ? null : Number(numero('sen-u-rechazo')),
+    rechazoChequesPct: numero('sen-u-rechazo'),
+    margenMinimoPct: numero('sen-u-margen'),
   });
   decir('sen-u-msg', r, 'Umbrales declarados');
   if (r.ok) listarSenales();

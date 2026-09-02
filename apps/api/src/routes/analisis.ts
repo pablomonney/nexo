@@ -92,6 +92,7 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
                   mora_pct::text AS "moraPct",
                   rechazo_cheques_pct::text AS "rechazoChequesPct",
                   crm_dias_sin_actividad AS "crmDiasSinActividad",
+                  margen_minimo_pct::text AS "margenMinimoPct",
                   updated_at AS "actualizadoEn", updated_by AS "actualizadoPor"
              FROM analysis_thresholds WHERE company_id = $1`,
           [tenant.companyId],
@@ -128,6 +129,12 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         // se toca una oportunidad y **no lo llama abandono**: vender un galpón
         // y vender café no tienen el mismo ritmo.
         crmDiasSinActividad: z.number().int().gt(0).nullable().default(null),
+        // Agregado por la 0084. Admite negativos: una empresa puede declarar
+        // que tolera vender a pérdida hasta cierto punto, y esa es una decisión
+        // suya. Sin declararlo, el sistema informa el margen y no lo llama
+        // desvío — un mayorista de 4 % y una consultora de 60 % no tienen el
+        // mismo piso.
+        margenMinimoPct: z.number().gt(-100).max(100).nullable().default(null),
       })
       .parse(request.body);
 
@@ -143,8 +150,8 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
           `INSERT INTO analysis_thresholds
              (company_id, caida_ventas_pct, concentracion_cliente_pct,
               dias_cliente_inactivo, mora_pct, rechazo_cheques_pct,
-              crm_dias_sin_actividad, updated_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+              crm_dias_sin_actividad, margen_minimo_pct, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
            ON CONFLICT (company_id) DO UPDATE SET
              caida_ventas_pct = EXCLUDED.caida_ventas_pct,
              concentracion_cliente_pct = EXCLUDED.concentracion_cliente_pct,
@@ -152,11 +159,12 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
              mora_pct = EXCLUDED.mora_pct,
              rechazo_cheques_pct = EXCLUDED.rechazo_cheques_pct,
              crm_dias_sin_actividad = EXCLUDED.crm_dias_sin_actividad,
+             margen_minimo_pct = EXCLUDED.margen_minimo_pct,
              updated_by = EXCLUDED.updated_by`,
           [
             tenant.companyId, body.caidaVentasPct, body.concentracionClientePct,
             body.diasClienteInactivo, body.moraPct, body.rechazoChequesPct,
-            body.crmDiasSinActividad,
+            body.crmDiasSinActividad, body.margenMinimoPct,
             `user:${auth.user.userId}`,
           ],
         );

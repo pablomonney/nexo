@@ -492,6 +492,9 @@ const VISTAS_INVOKER = [
   'payment_order_status', 'payment_order_lines_status', 'work_queue_pagos',
   // 0083 · La nota aplicada a su factura, y la que todavía no lo está.
   'notas_sin_aplicar', 'work_queue_correcciones',
+  // 0084 · El margen en la capa de decisión. La envoltura de la 0065 se repite:
+  // sin security_invoker en cualquier eslabón, las señales se mezclarían.
+  'analysis_signals_con_cheques',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

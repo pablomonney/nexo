@@ -94,6 +94,40 @@ describe('S-13 — la consola escribe en el elemento que cree', () => {
     ).toEqual([]);
   });
 
+  /**
+   * La otra mitad del mismo problema: una pantalla que existe y a la que no se
+   * llega, o un botón que apunta a una pantalla que no existe.
+   *
+   * `ir()` recorre `VISTAS` para esconder todas menos una. Una sección que no
+   * esté en esa lista **nunca se esconde**: queda visible debajo de las demás.
+   * Y un botón sin sección deja la pantalla en blanco.
+   */
+  it('cada botón del menú tiene su pantalla, y cada pantalla su lugar en VISTAS', () => {
+    const botones = [...html.matchAll(/data-vista="([a-z]+)"/g)].map((m) => m[1]!);
+    const secciones = idsDelHtml(html)
+      .filter((id) => id.startsWith('v-'))
+      .map((id) => id.slice(2));
+    const vistas = listaDeVistas(html);
+
+    const sinPantalla = botones.filter((v) => !secciones.includes(v));
+    expect(sinPantalla, 'Botones del menú que no tienen sección').toEqual([]);
+
+    // `login` es la única sin botón: se entra por el flujo de sesión, no por el
+    // menú —que ni siquiera está visible sin sesión—.
+    const sinBoton = secciones.filter((v) => !botones.includes(v) && v !== 'login');
+    expect(sinBoton, 'Pantallas a las que no se llega desde el menú').toEqual([]);
+
+    const fueraDeVistas = secciones.filter((v) => !vistas.includes(v));
+    expect(
+      fueraDeVistas,
+      'Estas pantallas no están en VISTAS: ir() no las esconde, así que quedan visibles ' +
+        'debajo de la que el usuario abrió:\n  ' + fueraDeVistas.join('\n  '),
+    ).toEqual([]);
+
+    const vistasFantasma = vistas.filter((v) => !secciones.includes(v));
+    expect(vistasFantasma, 'VISTAS nombra pantallas que ya no existen').toEqual([]);
+  });
+
   it('la lista de excepciones no acumula id que ya existen', () => {
     // Una excepción que sobrevive a su motivo convierte la lista en decoración.
     const existentes = new Set(idsDelHtml(html));
@@ -105,6 +139,14 @@ describe('S-13 — la consola escribe en el elemento que cree', () => {
 /** Los `id` declarados en el marcado, en orden de aparición. */
 function idsDelHtml(html: string): string[] {
   return [...html.matchAll(/\sid="([A-Za-z0-9_-]+)"/g)].map((m) => m[1]!);
+}
+
+/** Los nombres del arreglo `VISTAS`, que es lo que `ir()` esconde y muestra. */
+function listaDeVistas(html: string): string[] {
+  const desde = html.indexOf('const VISTAS = [');
+  const hasta = html.indexOf('];', desde);
+  if (desde === -1 || hasta === -1) return [];
+  return [...html.slice(desde, hasta).matchAll(/'([a-z]+)'/g)].map((m) => m[1]!);
 }
 
 /** Los `id` que el código pide, por `E('...')` o por `getElementById('...')`. */

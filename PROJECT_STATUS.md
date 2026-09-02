@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 107 archivos de test, 1780 tests,
-396 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 107 archivos de test, 1785 tests,
+397 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -124,6 +124,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0081 | Margen real por producto: la venta contra su costo, y no se afirma si lo facturado no coincide con lo que salió |
 | 0082 | La orden de pago: el documento entre la factura y el pago. «Pagada» exige el asiento imputado a cada comprobante |
 | 0083 | La nota de crédito dice qué factura corrige: aplicarla traslada saldo de un comprobante al otro, y la cuota baja con él |
+| 0084 | El margen llega a la capa de decisión: vender bajo costo se señala sin umbral —es un hecho— y el margen mínimo se declara |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -173,8 +174,10 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
   la 0077: el método lo declara la empresa —es una decisión contable con norma
   detrás— y el sistema calcula el que declaró. FIFO y costo de reposición siguen
   planificados, cada uno con el motivo escrito (ADR-020). Lo que sigue faltando
-  es el **asiento** de costo de mercadería vendida: se calcula y se informa, y
-  llevarlo al Mayor exige decidir contra qué cuenta y en qué momento.
+  es **asentarlo solo**: desde la 0079 el sistema propone el asiento contra las
+  cuentas que la empresa declaró para MERCADERIA y COSTO_DE_VENTAS, y una
+  persona lo firma por el camino de siempre. Automatizar el momento sigue siendo
+  una política contable sin declarar.
 - **Métodos de amortización.** Solo `LINEAL`. Cada método adicional tiene
   consecuencias sobre la RT que lo admite y sobre el impuesto.
 
@@ -205,8 +208,10 @@ lugar legítimo del modelo —leer, interpretar y **proponer**— ya existía en
   sugerencia y evita tipear el mismo dato cien veces; registrar la salida sigue
   siendo un acto de una persona, porque la mercadería pudo salir de otro lado y
   solo quien despachó lo sabe. La bandeja avisa hasta que la salida exista.
-- **Valuación de existencias.** Cantidades sí, valores no. Elegir PPP o FIFO es
-  una decisión contable con norma detrás, no un detalle de implementación.
+- **Los otros métodos de valuación.** El promedio ponderado móvil está resuelto
+  desde la 0077 y es el que la empresa declara. FIFO y costo de reposición
+  siguen planificados: elegirlos es una decisión contable con norma detrás, no un
+  detalle de implementación (ADR-020).
 
 ## 5. Bloqueado por decisión de producto
 

@@ -622,6 +622,141 @@ suite('Valuación de existencias', () => {
     expect(p.metodologia).toContain('sin costo');
   });
 
+  /**
+   * Un producto con las dos puntas completas y vendido a pérdida.
+   *
+   * Se arma entero acá —entrada con costo, comprobante con renglón, salida
+   * citando la venta— porque es la única forma de que el margen sea afirmable,
+   * y la señal solo mira lo afirmable.
+   */
+  const venderAPerdida = async (): Promise<string> => {
+    const codigo = `BC-${stamp}`;
+    const id = (
+      await pedir('POST', '/products', {
+        codigo, nombre: 'Vendido bajo costo', tipo: 'PRODUCTO',
+        llevaStock: true, impuesto: 'IVA',
+      })
+    ).json<{ id: string }>().id;
+
+    // Entra a 100 y sale a 50: la pérdida es un hecho, no una opinión.
+    await recibir(id, '10', '100.00', hoy);
+
+    const forma =
+      `--X\r\nContent-Disposition: form-data; name="file"; filename="bc-${stamp}.xml"\r\n` +
+      `Content-Type: application/xml\r\n\r\n<c><n>3</n></c>\r\n--X--\r\n`;
+    const subida = await app.inject({
+      method: 'POST',
+      url: '/documents',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-company-id': empresa,
+        'content-type': 'multipart/form-data; boundary=X',
+      },
+      payload: forma,
+    });
+    expect(subida.statusCode, subida.body).toBe(201);
+
+    const op = await pedir(
+      'POST', `/documents/${subida.json<{ id: string }>().id}/tax-transaction`,
+      {
+        direction: 'VENTAS', cbteTipo: 1, puntoVenta: 1, numero: 9003, fecha: hoy,
+        cuitContraparte: `30${stamp}${cuitCheckDigit(`30${stamp}`)}`,
+        razonSocial: `Cliente val ${stamp}`, condicionIva: 'RESPONSABLE_INSCRIPTO',
+        neto: '500.00', iva: '105.00', noGravado: '0', exento: '0', percepciones: '0',
+        total: '605.00',
+      },
+    );
+    expect(op.statusCode, op.body).toBe(201);
+    const comprobante = op.json<{ taxTransactionId: string }>().taxTransactionId;
+
+    expect(
+      (await pedir('PUT', `/tax-transactions/${comprobante}/lines`, {
+        renglones: [{
+          productoId: id, descripcion: 'Vendido bajo costo', cantidad: '10',
+          precioUnitario: '50.00', tratamiento: 'GRAVADO',
+          neto: '500.00', iva: '105.00',
+        }],
+      })).statusCode,
+    ).toBe(200);
+
+    expect(
+      (await pedir('POST', '/stock-movements/salida', {
+        productoId: id, depositoId: deposito, cantidad: '10', fecha: hoy,
+        taxTransactionId: comprobante,
+      })).statusCode,
+    ).toBe(201);
+
+    return codigo;
+  };
+
+  it('vender por debajo del costo se señala sin que nadie declare un umbral', async () => {
+    const codigo = await venderAPerdida();
+
+    const r = await pedir('GET', '/analysis/signals');
+    expect(r.statusCode, r.body).toBe(200);
+    const senal = r
+      .json<{
+        senales: {
+          tipo: string; sujeto: string; valor: string; umbral: string | null;
+          superaUmbral: boolean | null; metodologia: string;
+        }[];
+      }>()
+      .senales.find((s) => s.tipo === 'VENTA_BAJO_COSTO' && s.sujeto.includes(codigo));
+
+    expect(senal, 'un producto vendido a pérdida tiene que aparecer').toBeDefined();
+    // 500 de venta contra 1.000 de costo: −100 %.
+    expect(senal!.valor).toBe('-100.00');
+    // Sin umbral: el signo del margen no es un juicio de nadie.
+    expect(senal!.umbral).toBeNull();
+    expect(senal!.superaUmbral).toBe(true);
+    expect(senal!.metodologia).toContain('último mes con margen afirmable');
+  });
+
+  it('la señal sin umbral llega a la bandeja con motivo, no en blanco', async () => {
+    // El motivo se armaba concatenando el umbral, y con una señal sin umbral la
+    // concatenación entera daba NULL: un renglón de bandeja sin texto, por una
+    // regla de SQL.
+    const items = (await pedir('GET', '/work-queue?entidad=products&limite=200'))
+      .json<{ items: { estado: string; motivo: string | null; bloquea: boolean }[] }>().items;
+
+    const item = items.find((i) => i.estado === 'VENTA_BAJO_COSTO');
+    expect(item, 'la venta bajo costo tiene que llegar a la bandeja').toBeDefined();
+    expect(item!.motivo, 'el motivo no puede venir vacío').toBeTruthy();
+    expect(item!.motivo).toContain('es un hecho, no un umbral declarado');
+    expect(item!.bloquea, 'informar no es bloquear').toBe(false);
+  });
+
+  it('el margen general no se llama insuficiente mientras nadie declare el piso', async () => {
+    const senal = (await pedir('GET', '/analysis/signals'))
+      .json<{ senales: { tipo: string; superaUmbral: boolean | null; umbral: string | null }[] }>()
+      .senales.find((s) => s.tipo === 'MARGEN_INSUFICIENTE');
+
+    expect(senal, 'la señal existe: informa el margen').toBeDefined();
+    expect(senal!.umbral).toBeNull();
+    // NULL y no false: false sería afirmar que el margen está bien.
+    expect(senal!.superaUmbral).toBeNull();
+  });
+
+  it('declarado el piso, el margen que no llega se enciende', async () => {
+    const declarar = await pedir('PUT', '/analysis/thresholds', {
+      caidaVentasPct: null,
+      concentracionClientePct: null,
+      diasClienteInactivo: null,
+      moraPct: null,
+      rechazoChequesPct: null,
+      crmDiasSinActividad: null,
+      margenMinimoPct: 30,
+    });
+    expect(declarar.statusCode, declarar.body).toBe(200);
+
+    const senal = (await pedir('GET', '/analysis/signals'))
+      .json<{ senales: { tipo: string; superaUmbral: boolean | null; umbral: string | null }[] }>()
+      .senales.find((s) => s.tipo === 'MARGEN_INSUFICIENTE');
+
+    expect(senal!.umbral).toBe('30.00');
+    expect(senal!.superaUmbral, 'el margen afirmable está muy por debajo de 30 %').toBe(true);
+  });
+
   it('las vistas de valuación conservan security_invoker', async () => {
     const r = await db.query<{ relname: string; reloptions: string[] | null }>(
       `SELECT relname, reloptions FROM pg_class

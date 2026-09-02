@@ -11,8 +11,10 @@
  * puede pedir y la compara contra el inventario real de rutas de Fastify. Una
  * llamada nueva a una ruta inexistente falla acá, no en producción.
  *
- * No comprueba que la respuesta tenga la forma esperada: eso lo hacen los tests
- * de navegación, ejercitando las pantallas contra datos reales.
+ * No comprueba que la respuesta tenga la forma esperada ni dónde se dibuja: lo
+ * segundo lo mira S-13 (consola-elementos), que comprueba que cada id exista y
+ * sea único. **No hay tests de navegación**: nadie ejercita las pantallas contra
+ * un DOM, y por eso un error de dibujo solo se ve abriendo la consola.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -237,8 +239,8 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
    *
    * Comparar el primer segmento contesta la pregunta que importa —«¿este
    * dominio tiene puerta?»— y es exactamente la que estaba sin contestar. Que
-   * cada acción dentro del dominio tenga su botón lo defienden los tests de
-   * navegación, ejercitando las pantallas contra datos reales.
+   * cada acción dentro del dominio tenga su botón hoy **no lo defiende nadie**:
+   * haría falta ejercitar las pantallas contra un DOM, y no hay quién.
    */
   it('cada dominio de la API tiene puerta de entrada en la consola', () => {
     const inalcanzables: string[] = [];
