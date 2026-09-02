@@ -41,7 +41,8 @@
     "@aai/tax-engine": "0.1.0",
     "@aai/bank-engine": "0.1.0",
     "@aai/financial-statements": "0.1.0",
-    "@aai/arca": "0.1.0"
+    "@aai/arca": "0.1.0",
+    "@aai/audit-engine": "0.1.0"
   },
   "scripts": {
     "build": "tsc --build",

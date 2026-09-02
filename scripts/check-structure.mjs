@@ -192,6 +192,9 @@ const TRIGGERS = [
   // 0073 · Con dos planes vigentes, el tope aplicable saldría por orden de
   // carga: azar disfrazado de regla.
   ['company_subscriptions', 'csu_una_por_fecha', '0073: un plan vigente por empresa y por fecha'],
+  // 0074 · Una cuenta del tipo equivocado descuadra el balance en silencio, y
+  // el error aparece un ejercicio después.
+  ['company_account_map', 'cam_cuenta_del_rol', '0074: la cuenta declarada sirve para el rol y es imputable'],
   ['party_allocations', 'party_allocations_no_delete', 'Una imputación se anula, no se borra'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
   ['stock_movements', 'stock_movements_no_delete', 'Un movimiento de stock no se borra'],
@@ -308,6 +311,7 @@ const FK_CON_EMPRESA = [
   ['branches', 'br_deposito_fk', 'Una sucursal no usa el depósito de otra empresa'],
   ['branches', 'br_centro_fk', 'Una sucursal no imputa al centro de costo de otra empresa'],
   ['branch_points_of_sale', 'bpv_sucursal_fk', 'Un punto de venta no cuelga de la sucursal de otra empresa'],
+  ['company_account_map', 'cam_cuenta_fk', 'El mapeo no declara la cuenta de otra empresa'],
   ['tax_transaction_installments', 'tti_comprobante_fk', 'Una cuota no cuelga del comprobante de otra empresa'],
   ['party_allocations', 'pa_cuota_fk', 'Una imputación no nombra la cuota de otra empresa'],
   ['goods_receipts', 'gr_orden_fk', 'La orden que origina la recepción es de la misma empresa'],
@@ -381,6 +385,9 @@ const RLS_FORZADO = [
   // Suscripciones (0073): qué plan tiene cada empresa. Sin RLS, una vería el
   // plan y el uso de otra.
   'company_subscriptions',
+  // Mapeo contable (0074): a qué cuenta va cada cosa. Sin RLS, una empresa
+  // armaría sus asientos con el plan de otra.
+  'company_account_map',
 ];
 
 /**
@@ -432,6 +439,9 @@ const VISTAS_INVOKER = [
   // Suscripciones (0073). El uso se cuenta en el momento sobre tablas con RLS:
   // sin security_invoker contaría los comprobantes de todas las empresas.
   'subscription_usage', 'subscription_status', 'work_queue_suscripcion',
+  // Mapeo contable (0074). Qué falta declarar se deriva: no hay columna
+  // «completo» que pueda quedar desactualizada.
+  'accounting_map_status', 'work_queue_mapeo',
   // La conciliación de tres puntas (0052): cantidades y proveedores de la empresa.
   'purchase_match',
   // Composición y antigüedad de saldos (0053): la cartera de la empresa.

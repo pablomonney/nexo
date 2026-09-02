@@ -40,6 +40,9 @@
     },
     {
       "path": "../../packages/arca"
+    },
+    {
+      "path": "../../packages/audit-engine"
     }
   ]
 }

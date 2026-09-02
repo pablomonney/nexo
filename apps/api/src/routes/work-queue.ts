@@ -117,6 +117,9 @@ const PERMISO_POR_ENTIDAD: Readonly<Record<string, string>> = {
   // Suscripción (0073). Es del propio NEXO, no del negocio del cliente: quien
   // no administra el plan no recibe avisos sobre él.
   company_subscriptions: 'subscription:read',
+  // Mapeo contable (0074). Es una decisión sobre el plan de cuentas: la ve
+  // quien puede leer el plan.
+  company_account_map: 'account:read',
 };
 
 const CATEGORIAS = [

@@ -43,6 +43,7 @@ import { proyectoRoutes } from './routes/proyectos.js';
 import { comisionRoutes } from './routes/comisiones.js';
 import { sucursalRoutes } from './routes/sucursales.js';
 import { suscripcionRoutes } from './routes/suscripciones.js';
+import { mapeoContableRoutes } from './routes/mapeo-contable.js';
 
 export interface RouteEntry {
   readonly method: string;
@@ -146,6 +147,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(comisionRoutes);
   await app.register(sucursalRoutes);
   await app.register(suscripcionRoutes);
+  await app.register(mapeoContableRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);

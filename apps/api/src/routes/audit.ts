@@ -45,7 +45,9 @@
  * escribirse. Hay un test que lo comprueba sobre el alta de usuario.
  */
 
+import { auditar } from '@aai/audit-engine';
 import { withCompany } from '@aai/db';
+import { moneyFromDecimalString, parseCalendarDate } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireCompany, requirePermission } from '../http/context.js';
@@ -56,7 +58,131 @@ interface FilaBitacora {
   readonly ocurridoEn: Date;
 }
 
+/** Una línea del Diario, como la mira el detector. */
+interface FilaParaAuditar {
+  readonly entry_id: string;
+  readonly fecha: string;
+  readonly cargado_el: string;
+  readonly importe: string;
+  readonly cuenta_codigo: string;
+  readonly contraparte_id: string | null;
+}
+
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * Los cuatro detectores del Diario, corridos sobre asientos aprobados.
+   *
+   * ## Por qué esta ruta existe
+   *
+   * `@aai/audit-engine` estaba escrito, probado con 28 tests y **no lo importaba
+   * nadie**: ni la API, ni un script, ni otro paquete. Cuatro detectores
+   * determinísticos que nunca corrieron sobre un dato real. Lo encontró el
+   * barrido de la auditoría integral, y es la misma clase de hueco que ya
+   * apareció con la bitácora y con el Integration Hub: la pieza construida y el
+   * camino hasta ella sin recorrer.
+   *
+   * ## Ninguna anomalía es una acusación
+   *
+   * Cada hallazgo dice qué se observó y qué habría que mirar, nunca qué
+   * significa. Un asiento cargado un domingo a las tres de la mañana es un
+   * hecho; que sea un fraude, un ajuste de cierre o un contador con insomnio no
+   * lo decide el software. Y no hay orden por «riesgo»: ponerle un número a
+   * cada hallazgo sería fundar una prioridad que el sistema no puede fundar.
+   *
+   * ## El cuarto detector no corre, y se dice
+   *
+   * `JUSTO_BAJO_UMBRAL` compara contra umbrales que salen de normas que este
+   * repositorio no tiene archivadas. Sin ellos no corre, y el `comentario` lo
+   * informa en vez de dejar creer que miró y no encontró nada.
+   */
+  app.get('/audit/anomalias', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'audit:read');
+    requirePermission(tenant, 'journal_entry:read');
+    const auth = requireAuth(request);
+
+    const query = z
+      .object({
+        desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        // Solo asientos **aprobados**: un borrador todavía se está escribiendo,
+        // y marcarlo por atípico sería observar a alguien mientras piensa.
+        const lineas = await tx.query<FilaParaAuditar>(
+          `SELECT e.id                                  AS entry_id,
+                  e.entry_date::text                    AS fecha,
+                  e.created_at::text                    AS cargado_el,
+                  greatest(l.debit, l.credit)::text     AS importe,
+                  a.code                                AS cuenta_codigo,
+                  l.party_id                            AS contraparte_id
+             FROM journal_entry_lines l
+             JOIN journal_entries e ON e.id = l.entry_id AND e.company_id = l.company_id
+             JOIN accounts a ON a.id = l.account_id AND a.company_id = l.company_id
+            WHERE e.company_id = $1
+              AND e.status = 'APROBADO'
+              AND ($2::date IS NULL OR e.entry_date >= $2)
+              AND ($3::date IS NULL OR e.entry_date <= $3)
+            ORDER BY e.entry_date, e.id, l.line_no`,
+          [tenant.companyId, query.desde ?? null, query.hasta ?? null],
+        );
+
+        // El historial de cada contraparte se arma sobre **todo** lo aprobado,
+        // no sobre el período consultado: comparar marzo contra marzo diría que
+        // todo es normal en un mes con tres asientos.
+        const historial = await tx.query<{ party_id: string; importes: string[] }>(
+          `SELECT l.party_id,
+                  array_agg(greatest(l.debit, l.credit)::text) AS importes
+             FROM journal_entry_lines l
+             JOIN journal_entries e ON e.id = l.entry_id AND e.company_id = l.company_id
+            WHERE e.company_id = $1 AND e.status = 'APROBADO' AND l.party_id IS NOT NULL
+            GROUP BY l.party_id`,
+          [tenant.companyId],
+        );
+
+        const historicos = new Map<string, readonly bigint[]>(
+          historial.rows.map((f) => [
+            f.party_id,
+            f.importes.map((i) => moneyFromDecimalString(i, 'ARS').amount),
+          ]),
+        );
+
+        const asientos = lineas.rows.map((f) => ({
+          entryId: f.entry_id,
+          fecha: parseCalendarDate(f.fecha.slice(0, 10)),
+          cargadoEl: f.cargado_el,
+          importe: moneyFromDecimalString(f.importe, 'ARS'),
+          cuentaCodigo: f.cuenta_codigo,
+          contraparteId: f.contraparte_id,
+        }));
+
+        // Sin umbrales archivados el tercer detector no corre. No se le pasa una
+        // lista de ejemplo: un umbral inventado convierte un control en ruido
+        // con forma de control.
+        const resultado = auditar({ asientos, historicosPorContraparte: historicos });
+
+        return {
+          anomalias: resultado.anomalias,
+          asientosRevisados: resultado.asientosRevisados,
+          asientosConHallazgo: resultado.asientosConHallazgo,
+          comentario: resultado.comentario,
+          alcance:
+            'Cuatro detectores determinísticos sobre los asientos **aprobados**: importe ' +
+            'atípico contra el historial de la misma contraparte (mediana y MAD, no media ' +
+            'y desvío), importe redondo, importe justo bajo un umbral declarado, y asiento ' +
+            'cargado mucho después de su fecha. ' +
+            'Ninguna anomalía es una acusación: cada una dice qué se observó y qué habría ' +
+            'que mirar, y no vienen ordenadas por riesgo porque ordenarlas exigiría un ' +
+            'número que el software no puede fundar.',
+        };
+      },
+    );
+  });
+
   app.get('/audit', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'audit:read');

@@ -254,6 +254,19 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
           reglas: resultadosDeRegla,
           revisionesPrevias,
         },
+        // El armador de renglones va vacío **acá a propósito**, y desde la
+        // 0074 con un motivo distinto del que tenía antes.
+        //
+        // Antes salía vacío porque no existía dónde estuviera declarado a qué
+        // cuenta va cada cosa. Ahora existe (`company_account_map`), y los
+        // renglones se arman en `GET /tax-transactions/:id/asiento-propuesto`,
+        // que los recalcula cuando alguien los pide.
+        //
+        // No se arman en esta transacción por una razón: acá se **registra una
+        // decisión**, que es un hecho con firma, y una propuesta no lo es. Si
+        // se guardara junto a la decisión quedaría congelada contra un mapeo
+        // que puede cambiar mañana, y habría dos respuestas distintas a «qué
+        // asiento propone este comprobante».
         () => [],
         actorId,
       );

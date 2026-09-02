@@ -718,6 +718,21 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <button id="b-afec">Declarar</button>
       <div id="afec-msg"></div>
     </div></details>
+
+    <details class="grupo"><summary>Asiento propuesto</summary><div>
+      <p class="ayuda">Una propuesta <strong>no es</strong> un asiento: no tiene número, no
+        está en ningún libro y no afecta ningún saldo. Se arma con el mapeo contable que la
+        empresa declaró — si falta un rol, no se propone nada y se dice cuál falta, porque
+        elegir la cuenta por su cuenta sería inventar la contabilidad de esta empresa.
+        Al cargarla entra <strong>en borrador</strong> y la aprueba una persona.</p>
+      <button id="b-prop" class="sec">Ver la propuesta</button>
+      <div id="prop-msg"></div>
+      <div class="tabla"><table id="t-prop"><thead><tr>
+        <th>Cuenta</th><th>Debe</th><th>Haber</th><th>Descripción</th>
+      </tr></thead><tbody></tbody></table></div>
+      <button id="b-prop-cargar" hidden>Cargar como asiento en borrador</button>
+      <div id="prop-cargar-msg"></div>
+    </div></details>
     <div id="op-detalle-msg"></div>
   </div>
 </section>
@@ -1956,6 +1971,20 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button id="b-au" class="sec">Buscar</button>
   <button id="b-au-mas" class="sec" hidden>Ver más</button>
   <div id="au-msg"></div>
+
+  <details class="grupo"><summary>Anomalías del Diario</summary><div>
+    <p class="ayuda">Cuatro detectores determinísticos sobre los asientos <strong>aprobados</strong>.
+      <strong>Ninguna anomalía es una acusación</strong>: cada una dice qué se observó y qué
+      habría que mirar, nunca qué significa. Un asiento cargado un domingo a las tres de la
+      mañana es un hecho; que sea un fraude, un ajuste de cierre o un contador con insomnio no
+      lo decide el software. Y no vienen ordenadas por riesgo: ordenarlas exigiría ponerle un
+      número a cada hallazgo, y ese número el sistema no lo puede fundar.</p>
+    <button id="b-au-anom" class="sec">Analizar el período de arriba</button>
+    <div id="au-anom-msg"></div>
+    <div class="tabla"><table id="t-au-anom"><thead><tr>
+      <th>Qué se observó</th><th>Qué mirar</th><th>Código</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
   <div class="tabla"><table id="t-au"><thead><tr>
     <th>Cuándo</th><th>Quién</th><th>Clase</th><th>Acción</th><th>Objeto</th><th>Motivo</th><th></th>
   </tr></thead><tbody></tbody></table></div>
@@ -2015,6 +2044,27 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button id="b-cfg" class="sec">Actualizar</button>
   <div id="cfg-msg"></div>
   <div id="cfg-salida"></div>
+
+  <h3>Mapeo contable</h3>
+  <p class="ayuda">A qué cuenta va cada cosa. Es lo que permite que el sistema
+    <strong>proponga</strong> el asiento de un comprobante en vez de que se escriba entero a
+    mano. Mientras falte un rol no se propone nada para los comprobantes que lo necesitan:
+    elegir la cuenta por su cuenta sería inventar la contabilidad de esta empresa.
+    Cada rol admite un solo tipo de cuenta y la base lo comprueba — una cuenta del tipo
+    equivocado descuadra el balance en silencio y el error aparece un ejercicio después.</p>
+  <div id="map-msg"></div>
+  <div class="tabla"><table id="t-map"><thead><tr>
+    <th>Rol</th><th>Para qué</th><th>Cuenta</th><th>Declaró</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div class="fila" id="map-declarar" hidden>
+    <div><label>Rol</label><select id="map-rol">
+      <option>CLIENTES</option><option>PROVEEDORES</option><option>IVA_DEBITO</option>
+      <option>IVA_CREDITO</option><option>VENTAS</option><option>COMPRAS</option>
+    </select></div>
+    <div><label>Cuenta</label><input id="map-cuenta" maxlength="40" placeholder="código"></div>
+    <div><label>&nbsp;</label><button id="b-map" class="sec">Declarar</button></div>
+  </div>
+  <div id="map-declarar-msg"></div>
 </section>
 
 </main>
@@ -2039,6 +2089,7 @@ const estado = {
   proyecto: null, proyectoTitulo: '',
   vendedor: null, vendedorTitulo: '',
   sucursal: null, sucursalTitulo: '',
+  propuesta: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -3729,6 +3780,58 @@ E('b-constatar').onclick = async () => {
   });
   decir('arca-msg', r, 'ARCA contestó');
   if (r.ok) listarOperaciones();
+};
+
+// La propuesta se pide, se mira y recién después se carga. Nunca se carga sola:
+// la diferencia entre proponer e imponer es que alguien mire en el medio.
+E('b-prop').onclick = async () => {
+  const r = await api('GET', '/tax-transactions/' + estado.tt + '/asiento-propuesto');
+  if (!r.ok) return decir('prop-msg', r);
+
+  const cuerpo = E('t-prop').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const l of r.datos.renglones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.accountCode) + '</td>' +
+      '<td class="mono">' + escapar(l.debit) + '</td>' +
+      '<td class="mono">' + escapar(l.credit) + '</td>' +
+      '<td>' + escapar(l.descripcion) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  const hay = (r.datos.renglones || []).length > 0;
+  // Con asiento ya cargado no se ofrece cargarlo otra vez: sería invitar a
+  // duplicarlo, y el duplicado pasa todos los controles.
+  const yaTiene = r.datos.asientoExistente !== null;
+  E('b-prop-cargar').hidden = !hay || yaTiene || !puede('journal_entry:write');
+  estado.propuesta = hay ? r.datos : null;
+
+  E('prop-msg').innerHTML = '<div class="aviso">' +
+    (yaTiene
+      ? 'Este comprobante ya tiene un asiento. La propuesta se muestra para comparar, no ' +
+        'para volver a cargarla.'
+      : (hay ? escapar(r.datos.alcance) : escapar(r.datos.motivoSinRenglones))) + '</div>';
+};
+
+E('b-prop-cargar').onclick = async () => {
+  const p = estado.propuesta;
+  if (p === null) return;
+
+  const r = await api('POST', '/journal-entries', {
+    journalCode: 'GENERAL',
+    entryDate: p.fecha,
+    description: p.descripcion,
+    currency: 'ARS',
+    lines: p.renglones,
+    source: { type: 'INVOICE', id: estado.tt },
+    // §24: sin origen demostrable no se postea, y la propuesta sola no lo es.
+    // Lo que funda el asiento es que una persona la haya mirado y la cargue.
+    manualJustification: p.justificacionSugerida,
+  });
+  decir('prop-cargar-msg', r,
+    'Asiento cargado en borrador. Todavía no toca el Mayor: falta que alguien lo apruebe.');
+  if (r.ok) { E('b-prop-cargar').hidden = true; await abrirOperacion(estado.tt); }
 };
 
 E('b-afec').onclick = async () => {
@@ -6535,6 +6638,42 @@ async function listarAuditoria(cursor) {
   E('b-au-mas').hidden = !r.datos.cursor;
 }
 E('b-au').onclick = () => listarAuditoria();
+
+E('b-au-anom').onclick = async () => {
+  const q = new URLSearchParams();
+  if (E('au-desde').value) q.set('desde', E('au-desde').value);
+  if (E('au-hasta').value) q.set('hasta', E('au-hasta').value);
+
+  const r = await api('GET', '/audit/anomalias?' + q.toString());
+  if (!r.ok) return decir('au-anom-msg', r);
+
+  // El comentario del motor va arriba y entero: dice cuántos asientos miró y
+  // —cuando corresponde— qué detector no corrió y por qué.
+  E('au-anom-msg').innerHTML = '<div class="aviso">' +
+    escapar(r.datos.comentario) + ' Revisados: ' + escapar(String(r.datos.asientosRevisados)) +
+    ', con hallazgo: ' + escapar(String(r.datos.asientosConHallazgo)) + '.</div>';
+
+  const cuerpo = E('t-au-anom').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const a of r.datos.anomalias || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(a.observado) + '</td>' +
+      '<td>' + escapar(a.queMirar) + '</td>' +
+      '<td><span class="p p-neu">' + escapar(a.codigo) + '</span></td>' +
+      '<td><span class="clic">ver el asiento</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      // Lleva a la bitácora del asiento, que es donde se contesta «qué pasó».
+      E('au-tipo').value = 'journal_entries';
+      E('au-obj').value = a.entryId;
+      listarAuditoria();
+    };
+    cuerpo.appendChild(tr);
+  }
+  if ((r.datos.anomalias || []).length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="4">Ningún detector observó nada en ese período.</td></tr>';
+  }
+};
 E('b-au-mas').onclick = () => listarAuditoria(estado.cursores.au);
 
 // ══ 10 · Configuración ════════════════════════════════════════════════════
@@ -6630,7 +6769,46 @@ E('b-sub-declarar').onclick = async () => {
   if (r.ok) cargarSuscripcion();
 };
 
+async function cargarMapeoContable() {
+  E('map-declarar').hidden = !puede('account:write');
+
+  const r = await api('GET', '/accounting-map');
+  if (!r.ok) return decir('map-msg', r);
+
+  const cuerpo = E('t-map').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const x of r.datos.roles || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(x.rol) + '</td>' +
+      '<td>' + escapar(x.paraQue) + '</td>' +
+      // Sin declarar se marca: una lista que solo muestra lo declarado esconde
+      // justamente lo que falta.
+      '<td class="mono">' + (x.cuenta === null
+        ? '<span class="p p-ojo">sin declarar</span>'
+        : escapar(x.cuenta + ' — ' + x.nombre)) + '</td>' +
+      '<td class="mono">' + escapar(x.declaradoPor || '—') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  E('map-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) +
+    (r.datos.faltantes.length === 0
+      ? ' <b>Está completo.</b>'
+      : ' <b>Faltan: ' + escapar(r.datos.faltantes.join(', ')) + '.</b>') + '</div>';
+}
+
+E('b-map').onclick = async () => {
+  const r = await api('PUT', '/accounting-map', {
+    asignaciones: [{ rol: E('map-rol').value, cuenta: E('map-cuenta').value.trim() }],
+  });
+  decir('map-declarar-msg', r,
+    'Declarado. Los asientos ya registrados no cambian: el mapeo dice qué se propone de ' +
+    'acá en adelante.');
+  if (r.ok) cargarMapeoContable();
+};
+
 async function cargarConfig() {
+  await cargarMapeoContable();
   const caja = E('cfg-salida');
   caja.innerHTML = '';
   limpiar('cfg-msg');
