@@ -125,8 +125,8 @@ externo) · **REQUIERE_DECISION** (falta una definición contable o de producto)
 |---|---|
 | `packages/ai-engine` · clasificación, validación, confianza, aprendizaje | IMPLEMENTADO y **consumido** por `POST /documents/:id/classify` |
 | Capa determinística de preguntas (`/intelligence/*`) | IMPLEMENTADO — doce preguntas, cada una con su vista y su metodología |
-| `packages/ai-engine` · **respondedor** (`answering.ts`, 281 líneas, con tests) | IMPLEMENTADO; espera el adaptador de un proveedor real para redactar |
-| Tabla `ai_answers` + vista `ai_answer_metrics` (migración 0027) | IMPLEMENTADO y **sin ningún escritor** |
+| `packages/ai-engine` · **respondedor** (`answering.ts` + `answering-agent.ts`) | IMPLEMENTADO y consumido; con el simulado se abstiene, y espera el adaptador de un proveedor real |
+| Tabla `ai_answers` + vista `ai_answer_metrics` (migración 0027) | IMPLEMENTADO y escrita por cada llamada al respondedor |
 | Proveedor de modelo | `none` por defecto; existe `mock`; **no hay adaptador real** |
 
 **Era el mismo patrón que este repositorio ya encontró cuatro veces**: la pieza
@@ -136,10 +136,10 @@ dos.
 La mitad determinística de ese camino ya está cerrada: `/intelligence/preguntas`,
 `/intelligence/preguntar` y `/intelligence/panorama` contestan doce preguntas con
 el motor que ya calcula cada número, y cada respuesta trae su origen, su
-metodología y qué no incluye. Lo que sigue faltando es la redacción en prosa, y
-lo único que la separa es el adaptador de un proveedor real: el control que la
-hace utilizable —cada numeral de la respuesta tiene que estar en el contexto, o
-se rechaza entera— ya está escrito y probado.
+metodología y qué no incluye. La redacción también quedó cableada: cada llamada pasa por el control de cifras
+y queda en `ai_answers` con su contexto exacto, aceptada o rechazada. Lo único
+que falta es el adaptador de un proveedor real, que exige una credencial de un
+tercero.
 
 ## 5. Deuda técnica registrada
 
@@ -166,8 +166,7 @@ se rechaza entera— ya está escrito y probado.
 remitos y facturación parcial, devoluciones, descuentos por regla, producción,
 RRHH, y el momento de asentar el CMV.
 
-**Por entorno** — `git push` bloqueado desde esta sesión. Hay **12 commits
-locales** listos. No es deuda del producto: el código está escrito, probado y
+**Por entorno** — `git push` bloqueado desde esta sesión. No es deuda del producto: el código está escrito, probado y
 commiteado.
 
 ## 7. Prioridades recalculadas

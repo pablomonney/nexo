@@ -202,3 +202,57 @@ export function validarContraSchema(
 function recortar(valor: string): string {
   return valor.length <= 60 ? valor : `${valor.slice(0, 57)}...`;
 }
+
+export interface OpcionesSchemaRespuesta {
+  /** Etiquetas de los datos que se le pasaron. Es lo único que puede decir haber usado. */
+  readonly etiquetas: readonly string[];
+  /** Identificadores de norma citables. Vacío significa: no puede citar ninguna. */
+  readonly citasPermitidas: readonly string[];
+}
+
+/**
+ * Construye el JSON Schema de una respuesta en prosa.
+ *
+ * Mismo criterio que la clasificación: lo que el modelo puede nombrar es un
+ * conjunto cerrado, y el conjunto lo arma quien tiene los datos. Un modelo no
+ * puede decir que usó «margen bruto» si nadie le pasó un dato con esa etiqueta,
+ * porque el enum no se lo permite.
+ *
+ * Y como en la clasificación, **no hay campo donde poner un importe**. La cifra
+ * viaja en el contexto, ya calculada y ya formateada; lo que el modelo produce
+ * es el texto que la rodea. Que no exista el lugar es más fuerte que pedirle que
+ * no lo haga.
+ */
+export function construirSchemaRespuesta(
+  opciones: OpcionesSchemaRespuesta,
+): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['texto', 'datosUsados', 'normasCitadas', 'abstencion'],
+    properties: {
+      texto: {
+        type: 'string',
+        maxLength: 2000,
+        description:
+          'La respuesta en castellano, para que la lea quien maneja la empresa. Las cifras ' +
+          'tienen que ser exactamente las del contexto: no se redondean ni se convierten.',
+      },
+      datosUsados: {
+        type: 'array',
+        items: { type: 'string', enum: [...opciones.etiquetas] },
+        description: 'Etiquetas de los datos del contexto que se usaron.',
+      },
+      normasCitadas: {
+        type: 'array',
+        items: { type: 'string', enum: [...opciones.citasPermitidas] },
+        description: 'Normas citadas, de las archivadas que vinieron en el contexto.',
+      },
+      abstencion: {
+        type: 'boolean',
+        description:
+          'true cuando con los datos del contexto no se puede contestar. No tiene costo.',
+      },
+    },
+  };
+}

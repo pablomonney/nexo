@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ANSWERING_V1,
+  AnsweringAgent,
   CLASSIFICATION_V1,
   ClassificationAgent,
   MockLLMProvider,
@@ -797,5 +799,129 @@ describe('ninguna cifra de la respuesta sale de la memoria del modelo', () => {
     for (const pregunta of PREGUNTAS_QUE_NO_SE_CONTESTAN) {
       expect(pregunta.motivo.length).toBeGreaterThan(40);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// El respondedor con proveedor (FASE de inteligencia)
+// ---------------------------------------------------------------------------
+//
+// `validarRespuesta` ya estaba probado como función. Lo que faltaba probar es el
+// camino entero: armar el pedido, leer la salida del proveedor y pasarla por esa
+// validación. Es el camino que el endpoint usa, y hasta ahora no lo recorría
+// nadie.
+describe('AnsweringAgent', () => {
+  const CONTEXTO = {
+    companyId: '00000000-0000-0000-0000-000000000001',
+    pregunta: '¿Cuánto vendí este mes?',
+    datos: [
+      { etiqueta: 'Ventas del mes', valor: '15.000,00', origen: 'analytics_operaciones_mensuales' },
+      { etiqueta: 'Comprobantes', valor: '2', origen: 'analytics_operaciones_mensuales' },
+    ],
+    normas: [],
+    periodo: '2026-09',
+  } as const;
+
+  it('sin proveedor no hay redacción, y eso no es un error', async () => {
+    const r = await new AnsweringAgent({ provider: new NullLLMProvider() }).responder(CONTEXTO);
+    expect(r.estado).toBe('SIN_PROVEEDOR');
+  });
+
+  it('una redacción que usa solo las cifras del contexto se acepta', async () => {
+    const provider = new MockLLMProvider({
+      respuestas: [
+        {
+          output: {
+            texto: 'Vendiste 15.000,00 este mes, en 2 comprobantes.',
+            datosUsados: ['Ventas del mes', 'Comprobantes'],
+            normasCitadas: [],
+            abstencion: false,
+          },
+        },
+      ],
+    });
+
+    const r = await new AnsweringAgent({ provider }).responder(CONTEXTO);
+    expect(r.estado).toBe('RESPONDIDA');
+    if (r.estado !== 'RESPONDIDA') return;
+    expect(r.respuesta.texto).toContain('15.000,00');
+    // La advertencia del §42 va siempre: quien lee tiene que saber que la
+    // interpretación profesional no es de un modelo.
+    expect(r.advertencia).toContain('contador');
+  });
+
+  it('una cifra que no estaba en el contexto tira la respuesta entera', async () => {
+    const provider = new MockLLMProvider({
+      respuestas: [
+        {
+          output: {
+            // 15.000 sí está; los 47.300 no los calculó nadie.
+            //
+            // La cifra inventada tiene tres dígitos o más a propósito: de una a
+            // dos el control las admite —son ordinales y cantidades que
+            // aparecen naturalmente al redactar— y esa excepción está razonada
+            // en `answering.ts`. Probar con «32%» no probaría el control sino
+            // esa excepción.
+            texto: 'Vendiste 15.000,00 y te deben 47.300,00.',
+            datosUsados: ['Ventas del mes'],
+            normasCitadas: [],
+            abstencion: false,
+          },
+        },
+      ],
+    });
+
+    const r = await new AnsweringAgent({ provider }).responder(CONTEXTO);
+    expect(r.estado).toBe('RECHAZADA');
+    if (r.estado !== 'RECHAZADA') return;
+    expect(r.rechazos.some((x) => x.codigo === 'CIFRA_INVENTADA')).toBe(true);
+    expect(r.rechazos.some((x) => x.esAlucinacion)).toBe(true);
+    // El texto rechazado vuelve para poder guardarlo: es el insumo de la
+    // métrica de alucinación, no algo que se muestre.
+    expect(r.texto).toContain('47.300,00');
+  });
+
+  it('abstenerse es una salida prevista', async () => {
+    const provider = new MockLLMProvider({
+      respuestas: [
+        { output: { texto: '', datosUsados: [], normasCitadas: [], abstencion: true } },
+      ],
+    });
+
+    const r = await new AnsweringAgent({ provider }).responder(CONTEXTO);
+    expect(r.estado).toBe('RESPONDIDA');
+    if (r.estado !== 'RESPONDIDA') return;
+    expect(r.respuesta.abstencion).toBe(true);
+  });
+
+  it('el pedido lleva el schema cerrado: no hay dónde poner una cifra nueva', async () => {
+    const provider = new MockLLMProvider({
+      respuestas: [
+        { output: { texto: '', datosUsados: [], normasCitadas: [], abstencion: true } },
+      ],
+    });
+
+    await new AnsweringAgent({ provider }).responder(CONTEXTO);
+    const pedido = provider.pedidos[0]!;
+    const propiedades = (pedido.schema as { properties: Record<string, unknown> }).properties;
+
+    expect(Object.keys(propiedades).sort()).toEqual([
+      'abstencion', 'datosUsados', 'normasCitadas', 'texto',
+    ]);
+    // Las etiquetas son un conjunto cerrado, igual que el plan de cuentas en la
+    // clasificación.
+    const datosUsados = propiedades.datosUsados as { items: { enum: string[] } };
+    expect(datosUsados.items.enum).toEqual(['Ventas del mes', 'Comprobantes']);
+    // Y sin normas en el contexto, no hay ninguna citable.
+    const normas = propiedades.normasCitadas as { items: { enum: string[] } };
+    expect(normas.items.enum).toEqual([]);
+    expect(pedido.temperature).toBe(0);
+  });
+
+  it('el prompt del respondedor está registrado y se puede recuperar por su hash', () => {
+    // Sin el texto archivado, el hash guardado en `ai_answers` sería la huella
+    // de algo que ya no se puede leer.
+    expect(promptPorHash(ANSWERING_V1.hash)?.name).toBe('answering');
+    expect(ANSWERING_V1.texto).toContain('No calcules nada');
   });
 });

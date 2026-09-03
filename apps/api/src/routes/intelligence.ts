@@ -29,6 +29,13 @@
  * misma pregunta, sin forma de saber cuál está bien — y §41 lo prohíbe.
  */
 
+import {
+  AnsweringAgent,
+  MockLLMProvider,
+  NullLLMProvider,
+  type ContextoDeRespuesta,
+  type LLMProvider,
+} from '@aai/ai-engine';
 import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -163,22 +170,19 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
         async (tx) => pregunta.responder(tx, tenant.companyId, mes),
       );
 
+      const narracion = await narrar(
+        tenant.companyId,
+        `user:${auth.user.userId}`,
+        body.pregunta,
+        respuesta,
+      );
+
       return {
         entendida: true,
         preguntaId: pregunta.id,
         pregunta: pregunta.pregunta,
         respuesta: formatear(respuesta),
-        narracion: {
-          disponible: false,
-          motivo:
-            config.ai.provider === 'none'
-              ? 'SIN_PROVEEDOR'
-              : 'NO_IMPLEMENTADO_PARA_ESTE_PROVEEDOR',
-          explicacion:
-            'La cifra y su evidencia son del motor determinístico. La redacción en prosa ' +
-            'exige un proveedor de modelo configurado, y su salida se verifica cifra por ' +
-            'cifra contra este mismo contexto antes de mostrarse.',
-        },
+        narracion,
       };
     }
   });
@@ -238,6 +242,155 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
         'y la metodología dice por qué.',
     };
   });
+}
+
+/**
+ * Proveedor según configuración.
+ *
+ * Mismo criterio que la clasificación (0018) y que ARCA: el simulado se usa si
+ * y solo si está pedido explícitamente, y **contesta una abstención declarada**
+ * — no un párrafo inventado que se vería igual que uno real.
+ */
+function proveedor(): LLMProvider {
+  if (config.ai.provider !== 'mock') return new NullLLMProvider();
+  return new MockLLMProvider({
+    respuestas: [
+      {
+        output: {
+          texto: '',
+          datosUsados: [],
+          normasCitadas: [],
+          abstencion: true,
+        },
+      },
+    ],
+    alAgotarse: 'REPETIR',
+  });
+}
+
+/**
+ * La redacción, cuando hay con qué.
+ *
+ * El contexto que ve el modelo es **exactamente** la respuesta determinística:
+ * las mismas cifras, ya formateadas, con su origen. No se le pasa la base ni un
+ * resumen aparte, porque entonces la respuesta hablaría de otros números que
+ * los que la pantalla muestra.
+ *
+ * Toda llamada queda en `ai_answers` con ese contexto, aceptada o rechazada.
+ * Guardar solo las aceptadas haría que la métrica de alucinación se vea mejor de
+ * lo que es.
+ */
+async function narrar(
+  companyId: string,
+  actorId: string,
+  preguntaTexto: string,
+  respuesta: RespuestaDeterministica,
+): Promise<Record<string, unknown>> {
+  const contexto: ContextoDeRespuesta = {
+    companyId,
+    pregunta: preguntaTexto,
+    datos: [
+      { etiqueta: respuesta.titulo, valor: respuesta.valor ?? 'no se puede afirmar',
+        origen: respuesta.origen.join(', ') },
+      ...respuesta.datos,
+      ...(respuesta.noIncluye === null
+        ? []
+        : [{ etiqueta: 'Salvedad', valor: respuesta.noIncluye, origen: 'metodología' }]),
+    ],
+    // Ninguna: esta capa no interpreta normativa. Con el enum vacío, el schema
+    // no admite ninguna cita, que es más fuerte que pedirle que no cite.
+    normas: [],
+    periodo: respuesta.periodo,
+  };
+
+  const resultado = await new AnsweringAgent({ provider: proveedor() }).responder(contexto);
+
+  if (resultado.estado === 'SIN_PROVEEDOR') {
+    return {
+      disponible: false,
+      motivo: 'SIN_PROVEEDOR',
+      explicacion:
+        'La cifra y su evidencia son del motor determinístico. La redacción en prosa exige ' +
+        'un proveedor de modelo configurado, y su salida se verifica cifra por cifra contra ' +
+        'este mismo contexto antes de mostrarse.',
+    };
+  }
+
+  const aceptada = resultado.estado === 'RESPONDIDA';
+  const abstencion = aceptada && resultado.respuesta.abstencion;
+  const texto = aceptada ? resultado.respuesta.texto : resultado.texto;
+  const rechazos = aceptada ? [] : resultado.rechazos;
+
+  // El registro es un hecho aparte de la lectura: se escribe en su propia
+  // transacción para que un fallo al guardar no se lleve puesta la respuesta
+  // determinística, que es correcta con o sin narración.
+  let registrada = false;
+  try {
+    await withCompany({ companyId, actorId }, async (tx) => {
+      await tx.query(
+        `INSERT INTO ai_answers
+           (company_id, pregunta, contexto, respuesta, abstencion, aceptada, rechazos,
+            cifras_inventadas, model_provider, model_id, prompt_hash, created_by)
+         VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12)`,
+        [
+          companyId,
+          preguntaTexto,
+          JSON.stringify(contexto),
+          aceptada && !abstencion ? texto : null,
+          abstencion,
+          aceptada,
+          JSON.stringify(rechazos),
+          rechazos.filter((r) => r.esAlucinacion).length,
+          config.ai.provider,
+          resultado.modelId,
+          resultado.promptHash,
+          actorId,
+        ],
+      );
+    });
+    registrada = true;
+  } catch {
+    // El prompt tiene que estar archivado (`npm run prompts:register`): sin él
+    // la FK rechaza la fila. Se informa y no se pierde la respuesta.
+    registrada = false;
+  }
+
+  if (!aceptada) {
+    return {
+      disponible: false,
+      motivo: 'RECHAZADA',
+      registrada,
+      explicacion:
+        'El modelo respondió algo que no pasó el control: cada cifra de la redacción tiene ' +
+        'que estar en el contexto. La respuesta se descarta entera, no se le tacha el número.',
+      rechazos: rechazos.map((r) => ({
+        codigo: r.codigo, detalle: r.detalle, esAlucinacion: r.esAlucinacion,
+      })),
+    };
+  }
+
+  if (abstencion) {
+    return {
+      disponible: false,
+      motivo: 'ABSTENCION',
+      registrada,
+      explicacion:
+        config.ai.provider === 'mock'
+          ? 'El proveedor simulado se abstiene siempre: no proviene de ningún modelo y no ' +
+            'tiene valor. La cifra de arriba sí es real — la calculó el motor.'
+          : 'El modelo se abstuvo: con estos datos no puede redactar la respuesta. La cifra ' +
+            'de arriba no depende de eso.',
+    };
+  }
+
+  return {
+    disponible: true,
+    motivo: 'REDACTADA',
+    registrada,
+    texto,
+    advertencia: resultado.advertencia,
+    datosUsados: resultado.respuesta.datosUsados,
+  };
 }
 
 /** La forma que ve la pantalla. Separa el número de su evidencia. */

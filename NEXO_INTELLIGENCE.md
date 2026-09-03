@@ -95,16 +95,44 @@ secreto profesional, y para muchos clientes mandarlos a un tercero es una
 conversación que no quieren tener. Un sistema que sin IA no contesta nada obliga
 a esa conversación.
 
-## 5. Lo que falta, y qué lo bloquea
+## 5. La narración: el camino está cerrado
 
-**La narración.** El respondedor está escrito y probado en
-`packages/ai-engine/answering.ts`: valida que cada numeral de la redacción esté
-en el contexto y rechaza la respuesta entera si no. La tabla `ai_answers`
-—migración 0027— guarda pregunta, contexto exacto, respuesta, si se aceptó y por
-qué se rechazó, y `ai_answer_metrics` separa alucinación de error.
+`AnsweringAgent` arma el pedido, lo manda al proveedor y pasa la salida por las
+reglas de `answering.ts`. Toda llamada queda en `ai_answers` con el contexto
+exacto que se usó —aceptada o rechazada—, porque guardar solo las aceptadas
+haría que la métrica de alucinación se vea mejor de lo que es.
 
-Lo que falta es el adaptador de un proveedor real. Es un archivo que implementa
-`LLMProvider`, y su ausencia no impide operar.
+Tres candados, no una instrucción en el prompt:
+
+1. **El schema no tiene dónde poner un importe nuevo.** Las cifras vienen en el
+   contexto, calculadas y formateadas.
+2. **Las etiquetas y las normas citables son un `enum`.** El modelo no puede
+   decir que usó un dato que nadie le pasó.
+3. **El control de cifras rechaza la respuesta entera** si aparece un numeral
+   que no estaba. No tacha el número: la frase que lo rodeaba afirmaba algo.
+
+Cualquiera de los tres solo no alcanza. El primero se esquiva escribiendo el
+número en la prosa; el segundo no mira la prosa; el tercero es el que la mira.
+
+**El límite conocido del tercero.** Los numerales de una o dos cifras se admiten
+sin estar en el contexto: son ordinales y cantidades que aparecen naturalmente
+al redactar («las tres cuentas», «el 30 de junio»), y exigirlos haría que el
+control rechace respuestas correctas — un control que rechaza lo correcto se
+apaga en una semana. La consecuencia es que «un margen del 32 %» pasaría el
+control aunque nadie lo haya calculado. Lo que lo contiene es que el prompt
+prohíbe calcular y el schema no tiene dónde poner el resultado; no es lo mismo
+que un candado, y por eso está escrito acá.
+
+### Lo que sigue faltando
+
+**El adaptador de un proveedor real.** Con `AI_PROVIDER=mock` el camino entero
+se recorre y el simulado **se abstiene siempre**: no proviene de ningún modelo y
+no tiene valor, y la pantalla lo dice así. Un mock que redactara un párrafo
+produciría algo indistinguible de una respuesta real.
+
+Conectar un proveedor es implementar `LLMProvider` en un archivo y configurar su
+credencial. No está hecho porque exige una credencial de un tercero, y hasta que
+exista sería declarar una integración que no se puede ejercitar.
 
 **Riesgos por contestar.** El Risk Radar de §29 del prompt de evolución —
 liquidez, concentración, dependencia de proveedores, anomalías— hoy está
