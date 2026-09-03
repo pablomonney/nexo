@@ -122,6 +122,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 
 <nav id="nav" hidden>
   <button data-vista="inicio">Inicio</button>
+  <button data-vista="inteligencia">Preguntar</button>
   <button data-vista="bandeja">Pendientes</button>
   <button data-vista="documentos">Documentos</button>
   <button data-vista="operaciones">Operaciones</button>
@@ -216,6 +217,52 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 </section>
 
 <!-- ══ Bandeja ════════════════════════════════════════════════════════════ -->
+<!-- ══ Preguntar ══════════════════════════════════════════════════════════ -->
+<section id="v-inteligencia" hidden>
+  <h2>Preguntar</h2>
+  <p class="ayuda">La cifra la calcula el mismo motor que la pantalla del módulo, así que los
+    números coinciden. Cada respuesta trae <strong>de dónde salió</strong> y <strong>qué no
+    incluye</strong>: un total sin forma de abrirlo es una afirmación sin origen.</p>
+  <p class="ayuda">El catálogo es cerrado a propósito. Si la pregunta no está, el sistema lo
+    dice y muestra las que sí sabe contestar — una respuesta correcta a una pregunta que nadie
+    hizo se lee igual que la respuesta.</p>
+
+  <div class="fila">
+    <div style="flex:1"><label>Escribí la pregunta</label>
+      <input id="intel-pregunta" maxlength="200" placeholder="¿cuánto vendí este mes?"></div>
+    <div><label>&nbsp;</label><button id="b-intel-preguntar">Preguntar</button></div>
+    <div><label>&nbsp;</label><button id="b-intel-panorama" class="sec">Ver el panorama</button></div>
+  </div>
+  <div id="intel-msg"></div>
+  <div id="intel-narracion"></div>
+
+  <div id="intel-respuesta" hidden class="grupo">
+    <h3 id="intel-titulo">Respuesta</h3>
+    <p><span id="intel-valor" class="mono" style="font-size:1.6em"></span>
+       <span id="intel-unidad" class="p p-neu"></span>
+       <span id="intel-periodo" class="mono"></span></p>
+    <dl class="kv" id="intel-datos"></dl>
+    <p class="ayuda"><strong>Cómo se calcula:</strong> <span id="intel-metodologia"></span></p>
+    <p class="ayuda" id="intel-no-incluye-caja" hidden><strong>Qué no incluye:</strong>
+      <span id="intel-no-incluye"></span></p>
+    <p class="ayuda"><strong>De dónde sale:</strong> <span id="intel-origen" class="mono"></span></p>
+  </div>
+
+  <div id="intel-opciones" hidden class="grupo">
+    <h3 id="intel-opciones-titulo">Puedo contestar esto</h3>
+    <div id="intel-opciones-lista"></div>
+  </div>
+
+  <div id="intel-panorama" hidden class="grupo">
+    <h3>Panorama</h3>
+    <p class="ayuda">Un valor vacío no es cero: es que el sistema no puede afirmarlo, y la
+      metodología dice por qué.</p>
+    <div class="tabla"><table id="t-intel-panorama"><thead><tr>
+      <th>Qué</th><th>Cuánto</th><th>Período</th><th>Cómo se calcula</th><th>Qué no incluye</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
 <section id="v-bandeja" hidden>
   <h2>Pendientes</h2>
   <p class="ayuda">Lo que requiere intervención humana en esta empresa. Es una
@@ -2418,7 +2465,7 @@ const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
-const VISTAS = ['login','empresa','inicio','bandeja','documentos','operaciones',
+const VISTAS = ['login','empresa','inicio','inteligencia','bandeja','documentos','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
@@ -2445,6 +2492,7 @@ for (const b of document.querySelectorAll('nav button')) {
     const v = b.dataset.vista;
     ir(v, [b.textContent]);
     if (v === 'inicio') cargarInicio();
+    if (v === 'inteligencia') cargarInteligencia();
     if (v === 'bandeja') bandeja();
     if (v === 'documentos') listarDocumentos();
     if (v === 'operaciones') listarOperaciones();
@@ -2687,6 +2735,106 @@ function pastillaOrigen(origen) {
     : origen;
   return '<span class="p ' + clase + '">' + escapar(texto) + '</span>';
 }
+
+// ══ 1b · Preguntar ════════════════════════════════════════════════════════
+//
+// La pantalla muestra las tres respuestas posibles del endpoint y las trata
+// distinto a propósito: una respuesta con su evidencia, un «no sé» con la lista
+// de lo que sí sabe, y un empate que pide elegir. Convertir las dos últimas en
+// una respuesta aproximada sería exactamente lo que el catálogo evita.
+async function cargarInteligencia() {
+  const r = await api('GET', '/intelligence/preguntas');
+  if (!r.ok) return decir('intel-msg', r);
+  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const n = r.datos.narracion;
+  E('intel-narracion').innerHTML = n.disponible
+    ? '<div class="aviso">Redacción en prosa disponible con el proveedor ' +
+      escapar(n.proveedor) + '. Cada cifra del párrafo se verifica contra el contexto ' +
+      'antes de mostrarse.</div>'
+    : '<div class="aviso"><strong>Sin proveedor de modelo.</strong> ' + escapar(n.motivo) +
+      '</div>';
+
+  mostrarOpciones('Puedo contestar esto', r.datos.preguntas);
+}
+
+function mostrarOpciones(titulo, preguntas) {
+  E('intel-opciones').hidden = false;
+  E('intel-opciones-titulo').textContent = titulo;
+  const caja = E('intel-opciones-lista');
+  caja.innerHTML = '';
+  for (const p of preguntas || []) {
+    const boton = document.createElement('button');
+    boton.className = 'sec';
+    boton.textContent = p.pregunta;
+    boton.onclick = () => preguntarPorId(p.id);
+    caja.appendChild(boton);
+  }
+}
+
+function mostrarRespuesta(d) {
+  E('intel-respuesta').hidden = false;
+  E('intel-opciones').hidden = true;
+  E('intel-titulo').textContent = d.respuesta.titulo;
+  // Un valor nulo no se dibuja como cero: se dice que no se puede afirmar, y la
+  // metodología explica por qué.
+  E('intel-valor').textContent = d.respuesta.valor === null ? 'no se afirma' : d.respuesta.valor;
+  E('intel-unidad').textContent = d.respuesta.unidad;
+  E('intel-periodo').textContent = d.respuesta.periodo || '';
+  E('intel-datos').innerHTML = (d.respuesta.datos || [])
+    .map((x) => fila(x.etiqueta, x.valor)).join('');
+  E('intel-metodologia').textContent = d.respuesta.metodologia;
+  E('intel-no-incluye-caja').hidden = !d.respuesta.noIncluye;
+  E('intel-no-incluye').textContent = d.respuesta.noIncluye || '';
+  E('intel-origen').textContent = (d.respuesta.origen || []).join(', ');
+}
+
+async function preguntarPorId(preguntaId) {
+  const r = await api('POST', '/intelligence/preguntar', {
+    pregunta: E('intel-pregunta').value || 'elegida de la lista',
+    preguntaId,
+  });
+  if (!r.ok) return decir('intel-msg', r);
+  mostrarRespuesta(r.datos);
+}
+
+E('b-intel-preguntar').onclick = async () => {
+  const r = await api('POST', '/intelligence/preguntar', {
+    pregunta: E('intel-pregunta').value,
+  });
+  if (!r.ok) return decir('intel-msg', r);
+
+  if (r.datos.entendida) return mostrarRespuesta(r.datos);
+
+  E('intel-respuesta').hidden = true;
+  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.explicacion) + '</div>';
+  mostrarOpciones(
+    r.datos.motivo === 'AMBIGUA' ? '¿Cuál de estas?' : 'Puedo contestar esto',
+    r.datos.preguntasPosibles,
+  );
+};
+
+E('b-intel-panorama').onclick = async () => {
+  const r = await api('GET', '/intelligence/panorama');
+  if (!r.ok) return decir('intel-msg', r);
+  E('intel-panorama').hidden = false;
+  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-intel-panorama').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const t of r.datos.tarjetas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(t.titulo) + '</td>' +
+      '<td class="mono">' + (t.valor === null
+        ? '<span class="p p-neu">no se afirma</span>'
+        : '<strong>' + escapar(t.valor) + '</strong> ' + escapar(t.unidad)) + '</td>' +
+      '<td class="mono">' + escapar(t.periodo || '—') + '</td>' +
+      '<td>' + escapar(t.metodologia) + '</td>' +
+      '<td>' + escapar(t.noIncluye || '—') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+};
 
 // ══ 2 · Bandeja ═══════════════════════════════════════════════════════════
 async function bandeja(cursor) {

@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 108 archivos de test, 1798 tests,
+**Estado del árbol:** `verify` en verde — 110 archivos de test, 1818 tests,
 416 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (33 pantallas) | TERMINADO | `consola-contrato` (S-12), `consola-elementos` (S-15) |
+| Consola web (34 pantallas) | TERMINADO | `consola-contrato` (S-12), `consola-elementos` (S-15) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -84,6 +84,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Notas aplicadas a su factura** | **TERMINADO** | **`notas-aplicadas` (10 tests)** |
 | **Solicitudes de compra** | **TERMINADO** | **`solicitudes-de-compra` (10 tests)** |
 | **Margen real por producto** | **TERMINADO** | **`valuacion` (23 tests)** |
+| **NEXO Intelligence: preguntas con evidencia** | **TERMINADO** (capa determinística) | **`intelligence` (10), `catalogo-de-preguntas` (10)** |
 
 ## 3. En curso
 
