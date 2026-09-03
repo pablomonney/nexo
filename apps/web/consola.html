@@ -2558,6 +2558,22 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div><label>&nbsp;</label><button id="b-map" class="sec">Declarar</button></div>
   </div>
   <div id="map-declarar-msg"></div>
+
+  <h3>Centros de costo</h3>
+  <p class="ayuda">La dimensión con la que se etiqueta una línea de asiento y una solicitud de
+    compra. Existían en la API desde el principio y <strong>no había pantalla</strong>: se
+    podían elegir en un asiento y no se podían crear, así que la lista arrancaba vacía y no
+    había forma de llenarla. Una cuenta puede exigirlo — ahí el asiento sin centro no entra.</p>
+  <div class="fila" id="cc-alta" hidden>
+    <div><label>Código</label><input id="cc-codigo" maxlength="40"></div>
+    <div style="flex:1"><label>Nombre</label><input id="cc-nombre" maxlength="200"></div>
+    <div style="flex:1"><label>Depende de</label><select id="cc-padre"></select></div>
+    <div><label>&nbsp;</label><button id="b-cc" class="sec">Crear</button></div>
+  </div>
+  <div id="cc-msg"></div>
+  <div class="tabla"><table id="t-cc"><thead><tr>
+    <th>Código</th><th>Nombre</th><th>Depende de</th><th>Estado</th>
+  </tr></thead><tbody></tbody></table></div>
 </section>
 
 </main>
@@ -8727,8 +8743,56 @@ E('b-map').onclick = async () => {
   if (r.ok) cargarMapeoContable();
 };
 
+/**
+ * Los centros de costo, que se podían elegir y no crear.
+ *
+ * `GET`/`POST /cost-centers` existen desde el principio y el dominio estaba
+ * declarado «sin pantalla». Es la misma forma que ya apareció con los mapeos de
+ * extracto: un campo que ofrece elegir de una lista que nadie puede llenar.
+ */
+async function listarCentrosDeCosto() {
+  E('cc-alta').hidden = !puede('cost_center:write');
+
+  const r = await api('GET', '/cost-centers');
+  if (!r.ok) return decir('cc-msg', r);
+  limpiar('cc-msg');
+
+  const centros = r.datos.costCenters || [];
+  const porId = new Map(centros.map((c) => [c.id, c]));
+
+  const sel = E('cc-padre');
+  sel.innerHTML = '<option value="">— ninguno —</option>';
+
+  const cuerpo = E('t-cc').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of centros) {
+    const padre = c.parentId ? porId.get(c.parentId) : null;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.code) + '</td><td>' + escapar(c.name) + '</td>' +
+      '<td class="mono">' + escapar(padre ? padre.code : '—') + '</td>' +
+      '<td>' + pastilla(c.status) + '</td>';
+    cuerpo.appendChild(tr);
+
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.code + ' — ' + c.name;
+    sel.appendChild(o);
+  }
+}
+
+E('b-cc').onclick = async () => {
+  const cuerpo = { code: E('cc-codigo').value, name: E('cc-nombre').value };
+  if (E('cc-padre').value) cuerpo.parentId = E('cc-padre').value;
+
+  const r = await api('POST', '/cost-centers', cuerpo);
+  decir('cc-msg', r, 'Centro de costo creado');
+  if (r.ok) listarCentrosDeCosto();
+};
+
 async function cargarConfig() {
   await cargarMapeoContable();
+  await listarCentrosDeCosto();
   const caja = E('cfg-salida');
   caja.innerHTML = '';
   limpiar('cfg-msg');

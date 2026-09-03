@@ -77,8 +77,11 @@ const LECTURA_PUEDE = new Map<string, string>([
   ],
   [
     'POST /intelligence/preguntar',
-    'Preguntar es leer. Deja registro de la respuesta —con qué la contestó y con qué ' +
-      'evidencia—, que es la trazabilidad de la propia consulta.',
+    'Preguntar es leer, y el permiso no es uno solo: cada pregunta del catálogo declara los ' +
+      'suyos y el catálogo se filtra por el rol de quien pregunta. Una pregunta que el usuario ' +
+      'no puede ver ni siquiera aparece en su lista, y pedirla por id contesta 403. Por eso el ' +
+      'endpoint no lleva un `requirePermission` de entrada: el permiso depende de la pregunta, ' +
+      'que todavía no se leyó.',
   ],
   [
     'POST /analysis/scenarios',

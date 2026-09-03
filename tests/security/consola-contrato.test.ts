@@ -155,7 +155,6 @@ const SIN_PANTALLA = new Map<string, string>([
   ['health', 'Sondas de infraestructura, no vistas'],
   ['consola', 'Es la consola misma: se sirve, no se consume'],
   ['organizations', 'Administración del estudio, anterior a elegir empresa'],
-  ['cost-centers', 'Se eligen dentro de cada asiento; no tienen ABM propio todavía'],
   // Lo lee un recolector, no una persona, y su token no puede estar en una
   // página que se sirve sin autenticación.
   ['metrics', 'Es para el recolector de métricas: exige un token que la consola no tiene'],
