@@ -167,6 +167,7 @@ suite('Circuito de compras', () => {
     for (const cuenta of [
       { code: '2.1.01', name: 'Proveedores', type: 'PASIVO', requiresThirdParty: true },
       { code: '1.1.01', name: 'Caja', type: 'ACTIVO' },
+      { code: '1.1.05', name: 'IVA crédito fiscal', type: 'ACTIVO' },
     ]) {
       expect((await pedir('POST', '/accounts', cuenta)).statusCode, JSON.stringify(cuenta)).toBe(201);
     }
@@ -194,6 +195,20 @@ suite('Circuito de compras', () => {
     deposito = (
       await pedir('POST', '/warehouses', { codigo: `DEP-${stamp}`, nombre: 'Depósito' })
     ).json<{ id: string }>().id;
+
+    // El mapeo que necesita la propuesta del asiento de compra. Sin él la
+    // propuesta viene vacía **con su motivo**, que es la respuesta correcta:
+    // elegir la cuenta por su cuenta sería inventar la contabilidad de esta
+    // empresa.
+    expect(
+      (await pedir('PUT', '/accounting-map', {
+        asignaciones: [
+          { rol: 'PROVEEDORES', cuenta: '2.1.01' },
+          { rol: 'IVA_CREDITO', cuenta: '1.1.05' },
+          { rol: 'COMPRAS', cuenta: '5.1.01' },
+        ],
+      })).statusCode,
+    ).toBe(200);
   }, 60_000);
 
   afterAll(async () => {
@@ -549,6 +564,50 @@ suite('Circuito de compras', () => {
       return r.rows[0]!.pendiente;
     };
     expect(await deuda(), 'la factura entró como deuda').toBe('1210.00');
+
+    // 4b · La factura llega al Mayor.
+    //
+    // Este tramo faltaba: la cadena pasaba de la operación fiscal al pago sin
+    // asentar la compra, así que la cuenta del proveedor recibía el débito del
+    // pago sin haber recibido nunca su crédito. La deuda vivía en la vista
+    // fiscal y el Mayor no sabía de ella. Lo encontró la auditoría S-19 al
+    // comparar esta cadena con la de ventas.
+    const propuesta = await pedir('GET', `/tax-transactions/${factura}/asiento-propuesto`);
+    expect(propuesta.statusCode, propuesta.body).toBe(200);
+    const p = propuesta.json<{
+      renglones: { accountCode: string; debit: string; credit: string }[];
+      fecha: string;
+      descripcion: string;
+      justificacionSugerida: string;
+      motivoSinRenglones: string | null;
+    }>();
+    expect(p.motivoSinRenglones, 'con el mapeo declarado hay propuesta').toBeNull();
+
+    const porCuenta = new Map(p.renglones.map((l) => [l.accountCode, l]));
+    expect(porCuenta.get('5.1.01')!.debit, 'el neto va a compras').toBe('1000.00');
+    expect(porCuenta.get('1.1.05')!.debit, 'y el IVA a su crédito fiscal').toBe('210.00');
+    expect(porCuenta.get('2.1.01')!.credit, 'el total al proveedor').toBe('1210.00');
+
+    const asientoDeCompra = await pedir('POST', '/journal-entries', {
+      journalCode: 'COMPRAS',
+      entryDate: p.fecha,
+      description: p.descripcion,
+      currency: 'ARS',
+      lines: p.renglones.map((l) =>
+        l.accountCode === '2.1.01' ? { ...l, partyId: proveedorId } : l,
+      ),
+      source: { type: 'INVOICE', id: factura },
+      manualJustification: p.justificacionSugerida,
+    });
+    expect(asientoDeCompra.statusCode, asientoDeCompra.body).toBe(201);
+    expect(
+      (
+        await pedir(
+          'POST',
+          `/journal-entries/${asientoDeCompra.json<{ id: string }>().id}/approve`,
+        )
+      ).statusCode,
+    ).toBe(200);
 
     // 5 · Se decide pagarla. La orden de pago no mueve el Mayor: lo cita.
     const ordenDePago = (

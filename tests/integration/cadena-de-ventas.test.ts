@@ -2,8 +2,9 @@
  * S-19 — la cadena de ventas, de punta a punta, por HTTP.
  *
  * ```
- * CLIENTE → PRESUPUESTO → FACTURA → STOCK → CUENTA CORRIENTE
- *         → ASIENTO → MAYOR → COBRANZA → IMPUTACIÓN → COSTO DE LO VENDIDO
+ * CLIENTE → PRESUPUESTO → FACTURA → STOCK → CUENTA CORRIENTE → ASIENTO
+ *         → MAYOR → COBRANZA → IMPUTACIÓN → COSTO DE LO VENDIDO
+ *         → BANCO → CONCILIACIÓN
  * ```
  *
  * ## Por qué hacía falta
@@ -31,7 +32,9 @@
  *      la factura**, no contra el total.
  *   6. El costo de lo vendido llega al Mayor por su propia propuesta, con el
  *      método de valuación declarado — y no llega si falta declararlo.
- *   7. Del asiento se vuelve al comprobante y del comprobante al presupuesto.
+ *   7. El banco acredita la cobranza y la conciliación cierra: el extracto se
+ *      compara contra el Mayor de esa cuenta, no contra un saldo declarado.
+ *   8. Del asiento se vuelve al comprobante y del comprobante al presupuesto.
  */
 
 import { closePool, initPool } from '@aai/db';
@@ -199,6 +202,7 @@ suite('S-19 — la cadena de ventas completa', () => {
       { code: '4.1.01', name: 'Ventas', type: 'INGRESO' },
       { code: '5.1.01', name: 'Costo de mercadería vendida', type: 'COSTO' },
       { code: '1.1.03', name: 'Mercadería de reventa', type: 'ACTIVO' },
+      { code: '1.1.04', name: 'Banco', type: 'ACTIVO' },
     ]) {
       expect((await pedir('POST', '/accounts', cuenta)).statusCode, cuenta.code).toBe(201);
     }
@@ -429,12 +433,12 @@ suite('S-19 — la cadena de ventas completa', () => {
 
   it('7 · la cobranza cancela la factura, no «el saldo»', async () => {
     const cobro = await pedir('POST', '/journal-entries', {
-      journalCode: 'CAJA',
+      journalCode: 'BANCOS',
       entryDate: hoy,
       description: `Cobranza del cliente ${stamp}`,
       currency: 'ARS',
       lines: [
-        { accountCode: '1.1.01', debit: '1210.00', credit: '0' },
+        { accountCode: '1.1.04', debit: '1210.00', credit: '0' },
         { accountCode: '1.1.02', debit: '0', credit: '1210.00', partyId: clienteId },
       ],
       source: { type: 'RECEIPT', id: null },
@@ -542,7 +546,86 @@ suite('S-19 — la cadena de ventas completa', () => {
     ).toBe(200);
   });
 
-  it('9 · desde el asiento se vuelve al comprobante y al presupuesto', async () => {
+  /**
+   * El último tramo de tesorería: **el banco dice lo mismo que el libro**.
+   *
+   * La cobranza del paso 7 entró a la cuenta bancaria. Acá se importa el
+   * extracto donde el banco la acredita y se concilia: la conciliación compara
+   * el extracto contra el Mayor de esa cuenta, así que cierra sola si —y solo
+   * si— el asiento de la cobranza llegó bien.
+   *
+   * Los dos extremos existían y se probaban por separado. Este paso los junta.
+   */
+  it('10 · el banco acredita la cobranza y la conciliación cierra', async () => {
+    const cuentaBancaria = await pedir('POST', '/banks/accounts', {
+      banco: `Banco de la cadena ${stamp}`,
+      cuentaCodigo: '1.1.04',
+    });
+    expect(cuentaBancaria.statusCode, cuentaBancaria.body).toBe(201);
+    const bancoId = cuentaBancaria.json<{ id: string }>().id;
+
+    const mapeo = await pedir('POST', '/banks/statement-layouts', {
+      bankAccountId: bancoId,
+      nombre: 'Extracto de la cadena',
+      filasEncabezado: 1,
+      columnaFecha: 0,
+      columnaDescripcion: 1,
+      formatoFecha: 'AAAA-MM-DD',
+      formatoImporte: 'ES_AR',
+      signo: { tipo: 'COLUMNAS_SEPARADAS', columnaDebito: 2, columnaCredito: 3 },
+    });
+    expect(mapeo.statusCode, mapeo.body).toBe(201);
+
+    const extracto = await pedir('POST', `/banks/accounts/${bancoId}/statements`, {
+      layoutId: mapeo.json<{ id: string }>().id,
+      desde: `${hoy.slice(0, 4)}-01-01`,
+      hasta: hoy,
+      saldoInicial: '0',
+      saldoFinal: '1210.00',
+      contenido: ['Fecha;Descripcion;Debito;Credito', `${hoy};COBRANZA CLIENTE;;1.210,00`].join(
+        '\n',
+      ),
+    });
+    expect(extracto.statusCode, extracto.body).toBe(201);
+    expect(extracto.json<{ movimientos: number }>().movimientos).toBe(1);
+
+    // El saldo del libro **no se declara**: sale del Mayor de la cuenta.
+    const acta = await pedir('POST', `/banks/accounts/${bancoId}/reconciliations`, {
+      desde: `${hoy.slice(0, 4)}-01-01`,
+      hasta: hoy,
+      saldoExtracto: '1210.00',
+    });
+    expect(acta.statusCode, acta.body).toBe(201);
+    const conciliacion = acta.json<{ reconciliationId: string; saldoLibro: string }>();
+    expect(conciliacion.saldoLibro, 'lo que el Mayor dice de esa cuenta').toBe('1210.00');
+
+    // La propuesta encuentra el par: el movimiento del banco y la línea del
+    // asiento de cobranza son la misma operación.
+    const propuesta = await pedir(
+      'POST',
+      `/banks/accounts/${bancoId}/reconciliations/propose`,
+      { desde: `${hoy.slice(0, 4)}-01-01`, hasta: hoy, saldoSegunExtracto: '1210.00' },
+    );
+    expect(propuesta.statusCode, propuesta.body).toBe(200);
+    const p = propuesta.json<{ cierra: boolean; propuestas: { importe: string }[] }>();
+    expect(p.cierra, 'extracto y libro dicen lo mismo').toBe(true);
+    expect(p.propuestas[0]?.importe, 'el par es la cobranza').toBe('1210.00');
+
+    expect(
+      (await pedir('POST', `/banks/reconciliations/${conciliacion.reconciliationId}/confirm`))
+        .statusCode,
+    ).toBe(200);
+
+    const verificada = await pedir(
+      'GET',
+      `/banks/reconciliations/${conciliacion.reconciliationId}/verificar`,
+    );
+    const v = verificada.json<{ verificable: boolean; coincide: boolean | null; detalle: string }>();
+    expect(v.verificable).toBe(true);
+    expect(v.coincide, v.detalle).toBe(true);
+  });
+
+  it('11 · desde el asiento se vuelve al comprobante y al presupuesto', async () => {
     // El asiento cita la operación fiscal…
     const asiento = await db.query<{ source_type: string; source_id: string }>(
       'SELECT source_type, source_id::text FROM journal_entries WHERE id = $1',
