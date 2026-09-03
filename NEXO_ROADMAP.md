@@ -95,6 +95,55 @@ del §4 no son una tabla en un documento. Una cita a una norma que no está en
 `norm_versions` rechaza la propuesta y la registra en `ai_rejections` con
 `es_alucinacion`, y hay tests que lo ejercitan en las dos direcciones.
 
+## Terminado el 2026-09-03 — S-25: 47 capacidades sin puerta
+
+El defecto de siempre, arriba de todo. S-12 ya preguntaba si cada **dominio**
+tiene pantalla; preguntado **ruta por ruta**, la respuesta fueron **47 de 293**
+escritas, probadas, con permiso y con migración, y sin una sola línea de la
+consola que las nombrara.
+
+S-12 tenía escrito por qué no lo hacía así: comparar ruta por ruta con su lector
+de llamadas daba falsos rojos, porque la consola arma URL en tiempo de ejecución.
+Ese motivo era correcto **para ese método**. S-25 hace la pregunta al revés —toma
+la ruta y busca su forma en el texto— y ahí sí se puede, a cambio de perder el
+método.
+
+**Lo peor de la lista, y no era ninguno de los reportes:** el rol CONTADOR exige
+segundo factor, y la consola **no tenía dónde configurarlo**. Un contador
+—el usuario principal de un sistema contable— entraba, pedía sus empresas,
+recibía `MFA_SETUP_REQUIRED` y no tenía ninguna salida. Tampoco había forma de
+cerrar sesión: la ruta existía, revoca la sesión del lado del servidor, y para
+usarla había que borrar la cookie a mano.
+
+Se cerraron **once** en esta vuelta:
+
+| Qué | Dónde |
+|---|---|
+| Configurar el segundo factor (dos rutas) | La pantalla de ingreso, cuando la API lo pide |
+| Cerrar sesión | La cabecera |
+| Operaciones por mes · Flujo bancario | Analítica |
+| Antigüedad de saldos | Terceros — se podía **bajar** en CSV y no mirar |
+| Cuadro de amortizaciones + vincular su asiento | Bienes de uso |
+| Deriva del motor de IA | Propuestas |
+| Diario y Mayor en CSV | Libros, que bajaba otras cuatro y estas no |
+
+Y una resultó no ser una pantalla que falta: `GET /checks/flujo` devuelve lo
+mismo que el campo `cartera` de `GET /checks`, que la pantalla de cheques ya
+muestra. **Sobra la ruta**, y sacarla es una decisión de API.
+
+Las 36 restantes quedaron declaradas con qué las destraba. Tres son permanentes
+(sondas, la consola misma, el recolector de métricas), siete son el panel del
+estudio —que exige decidir si es una vista más o una aplicación aparte— y el
+resto son pantallas que faltan, cada una nombrada. La más cara: **el plan de
+cuentas es de solo lectura**; hoy entra por la siembra.
+
+**Un test nuevo por un error propio.** Al escribir estas pantallas el selector de
+asientos leía `entryNumber`/`entryDate`, y el listado devuelve `numero`/`fecha`:
+habría dibujado «#undefined · undefined» sin fallar, porque `escapar(undefined)`
+es la cadena vacía. `tests/integration/pantallas-nuevas.test.ts` fija los nombres
+que cada pantalla nueva espera de su respuesta. Es el hueco que ningún barrido
+ve.
+
 ## P0 — Integridad
 
 **Nada abierto.** RLS completo con `FORCE` en 107 tablas, Mayor sin
@@ -234,7 +283,7 @@ no del sistema.
 | 17 estados muertos en los CHECK, clasificados y no removidos | MENOR |
 | `alerts` y `audit_findings` sin escritores | MENOR |
 | Dos series `S-*` que se pisan (documentado en TESTING_STRATEGY §2.7) | MENOR |
-| Base de desarrollo sin datos de negocio: el conteo del restore va SIN EJERCITAR | MENOR |
+| Base de desarrollo sin datos de negocio: el conteo del restore va SIN EJERCITAR, y la consola abierta contra ella muestra un login y nada más — `scripts/servir-contra-pruebas.mjs` la abre contra la de pruebas para poder mirarla | MENOR |
 
 ## Cómo se decide qué sigue
 

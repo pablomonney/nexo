@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
       "port": 3001
+    },
+    {
+      "name": "nexo-pruebas",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/servir-contra-pruebas.mjs"],
+      "port": 3002
     }
   ]
 }

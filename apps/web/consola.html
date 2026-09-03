@@ -100,7 +100,8 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     word-break:break-word;max-height:22rem;overflow:auto}
 .mono{font-family:var(--mono);font-size:.78rem}
 .dos{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-@media (max-width:880px){.dos{grid-template-columns:1fr}}
+.tres{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+@media (max-width:880px){.dos,.tres{grid-template-columns:1fr}}
 .evidencia{background:var(--hund);border:1px solid var(--linea);border-radius:4px;padding:.6rem;
            max-height:26rem;overflow:auto}
 .evidencia img{max-width:100%;height:auto}
@@ -117,7 +118,8 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 <header>
   <h1>NEXO</h1>
   <span class="sub">consola operativa</span>
-  <span class="quien"><span id="quien"></span> · <span class="empresa-activa" id="empresa-activa">sin empresa</span></span>
+  <span class="quien"><span id="quien"></span> · <span class="empresa-activa" id="empresa-activa">sin empresa</span>
+    <button id="b-salir" class="sec" hidden>Salir</button></span>
 </header>
 
 <nav id="nav" hidden>
@@ -172,6 +174,28 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div><label>Código MFA (6 dígitos)</label><input id="mfa" inputmode="numeric" maxlength="6"></div>
   </div>
   <button id="b-login">Ingresar</button>
+
+  <div id="mfa-alta" hidden>
+    <h3>Configurar el segundo factor</h3>
+    <p class="ayuda">Tu rol lo exige, y hasta que esté configurado la API no deja llegar a los
+      datos de ninguna empresa. Se hace una sola vez.</p>
+    <button id="b-mfa-setup" class="sec">Generar el secreto</button>
+    <div id="mfa-secreto" hidden>
+      <p class="ayuda"><strong>Esta es la única vez que estos valores salen del servidor en
+        claro.</strong> Cargá el secreto en tu aplicación de códigos y guardá los de
+        recuperación en otro lado: cada uno sirve una sola vez, y son la forma de entrar si
+        perdés el teléfono.</p>
+      <dl class="kv" id="mfa-kv"></dl>
+      <h4>Códigos de recuperación</h4>
+      <div class="mono" id="mfa-recuperacion"></div>
+      <div class="fila">
+        <div><label>Código de la aplicación (6 dígitos)</label>
+          <input id="mfa-confirmar-codigo" inputmode="numeric" maxlength="6"></div>
+        <div><label>&nbsp;</label><button id="b-mfa-confirmar">Confirmar</button></div>
+      </div>
+    </div>
+    <div id="mfa-alta-msg"></div>
+  </div>
   <div id="login-msg"></div>
 </section>
 
@@ -374,8 +398,35 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <option value="">todas</option><option>ALTA</option><option>MEDIA</option><option>BAJA</option>
     </select></div>
     <div><label>&nbsp;</label><button id="b-iap" class="sec">Ver propuestas</button></div>
+    <div><label>&nbsp;</label><button id="b-iap-metricas" class="sec">Cómo viene el motor</button></div>
   </div>
   <div id="iap-msg"></div>
+
+  <div id="iap-metricas" hidden>
+    <h3>Cómo viene el motor</h3>
+    <p class="ayuda">La métrica que importa <strong>no es la exactitud, es la tasa de error no
+      detectado</strong>. Un motor que acierta el 99 % y falla en silencio el 1 % es peor que
+      uno que acierta el 90 % y marca el 10 % restante. Por eso lo que se mira acá es cuánto
+      rechaza solo, cuánto corrige una persona, y en qué banda cae.</p>
+    <div class="tres">
+      <div>
+        <h4>Rechazos automáticos</h4>
+        <p class="ayuda">Propuestas descartadas antes de mostrarse. Una <em>alucinación</em> es
+          una cita a una norma que no está archivada: no se muestra, se registra.</p>
+        <dl class="kv" id="iap-m-rechazos"></dl>
+      </div>
+      <div>
+        <h4>Revisiones humanas</h4>
+        <p class="ayuda">Si «RECHAZADA» crece, el umbral automático está demasiado bajo.</p>
+        <dl class="kv" id="iap-m-revisiones"></dl>
+      </div>
+      <div>
+        <h4>Distribución por banda</h4>
+        <dl class="kv" id="iap-m-bandas"></dl>
+      </div>
+    </div>
+    <div id="iap-m-msg"></div>
+  </div>
   <div class="tabla"><table id="t-iap"><thead><tr>
     <th>Documento</th><th>Cuenta propuesta</th><th>Confianza</th><th>Banda</th>
     <th>Disparadores duros</th><th>Modelo</th><th>Prompt</th><th></th>
@@ -639,6 +690,23 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div class="tabla"><table id="t-ter"><thead><tr>
     <th>Razón social</th><th>Documento</th><th>Condición IVA</th><th>Roles</th>
     <th>Estado</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Antigüedad de saldos</h3>
+  <p class="ayuda">Cuánto debe cada tercero y desde cuándo. Los tramos se cuentan desde el
+    <strong>vencimiento</strong> del comprobante, y un comprobante sin condición de pago
+    declarada no tiene vencimiento: cae en el primer tramo sin estar vencido. Hasta hoy esto
+    solo se podía <em>bajar</em> en CSV.</p>
+  <div class="fila">
+    <div><label>Dirección</label><select id="ter-ag-dir">
+      <option>VENTAS</option><option>COMPRAS</option>
+    </select></div>
+    <div><label>&nbsp;</label><button id="b-ter-aging" class="sec">Ver la antigüedad</button></div>
+  </div>
+  <div id="ter-ag-msg"></div>
+  <div class="tabla"><table id="t-ter-ag"><thead><tr>
+    <th>Razón social</th><th>Pendiente</th><th>Hasta 30</th><th>31 a 60</th><th>61 a 90</th>
+    <th>Más de 90</th><th>Vencido</th><th>Comprobantes</th><th>Más antiguo</th>
   </tr></thead><tbody></tbody></table></div>
 
   <details class="grupo" id="ter-alta" hidden><summary>Dar de alta un tercero</summary><div>
@@ -1112,6 +1180,32 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <th>Código</th><th>Denominación</th><th>Alta</th><th>Valor origen</th>
     <th>Vida útil</th><th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
+
+  <h3>Cuadro de amortizaciones del ejercicio</h3>
+  <p class="ayuda">Todos los bienes con cuota en un mismo ejercicio, que es como se cierra:
+    de a uno no se puede saber si falta alguno. <strong>NEXO no asienta la amortización</strong>
+    — el asiento lo firma una persona y después se vincula acá, y el vínculo comprueba que el
+    importe coincida <em>exactamente</em> con el calculado. Sin esa comprobación el vínculo
+    sería decorativo y el cargo del ejercicio podría ser cualquiera.</p>
+  <div class="fila">
+    <div><label>Ejercicio</label><select id="act-cua-fy"></select></div>
+    <div><label>&nbsp;</label><button id="b-act-cuadro" class="sec">Ver el cuadro</button></div>
+  </div>
+  <div id="act-cua-msg"></div>
+  <div class="tabla"><table id="t-act-cuadro"><thead><tr>
+    <th>Código</th><th>Bien</th><th>Base</th><th>Meses</th><th>Amortización</th>
+    <th>Asiento</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+  <div id="act-cua-vincular" hidden>
+    <div class="fila">
+      <div><label>Bien</label><input id="act-cua-bien" readonly></div>
+      <div style="flex:1"><label>Asiento que la contabilizó</label>
+        <select id="act-cua-asiento"></select></div>
+      <div><label>&nbsp;</label><button id="b-act-vincular">Vincular</button></div>
+      <div><label>&nbsp;</label><button id="b-act-vinc-cancelar" class="sec">Cancelar</button></div>
+    </div>
+    <div id="act-cua-vmsg"></div>
+  </div>
 
   <div id="act-detalle" hidden class="grupo">
     <h3 id="act-det-titulo">Bien</h3>
@@ -2202,6 +2296,29 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <th>Neto total</th><th>Neto con detalle</th>
   </tr></thead><tbody></tbody></table></div>
 
+  <h3>Operaciones por mes</h3>
+  <p class="ayuda">El mes sale de la <strong>fecha del comprobante</strong>, no de cuándo se
+    cargó: una factura de marzo asentada en abril es de marzo. La última columna dice cuántos
+    de esos comprobantes no están resueltos contra el maestro de terceros.</p>
+  <div class="fila">
+    <div><label>Dirección</label><select id="ana-op-dir">
+      <option>VENTAS</option><option>COMPRAS</option>
+    </select></div>
+  </div>
+  <div class="tabla"><table id="t-ana-op"><thead><tr>
+    <th>Desde</th><th>Hasta</th><th>Comprobantes</th><th>Neto</th><th>IVA</th>
+    <th>Total</th><th>Terceros</th><th>Sin tercero</th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <h3>Flujo bancario por mes</h3>
+  <p class="ayuda">Sale del Mayor de las cuentas bancarias <strong>declaradas</strong>, y solo
+    de asientos aprobados. El efectivo en caja no entra: ninguna tabla dice cuál es la cuenta
+    de caja, y adivinarla por el nombre sería inventar el dato.</p>
+  <div class="tabla"><table id="t-ana-flu"><thead><tr>
+    <th>Mes</th><th>Banco</th><th>Cuenta</th><th>Ingresos</th><th>Egresos</th>
+    <th>Neto</th><th>Movimientos</th>
+  </tr></thead><tbody></tbody></table></div>
+
   <h3>Por producto</h3>
   <div class="tabla"><table id="t-ana-pro"><thead><tr>
     <th>Código</th><th>Producto</th><th>Dirección</th><th>Comprobantes</th>
@@ -2386,6 +2503,8 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button id="b-mayor" class="sec">Mayor</button>
   <button id="b-balance" class="sec">Balance</button>
   <button id="b-emisiones" class="sec">Emisiones</button>
+  <button id="b-exp-diario" class="sec">Bajar el Diario (CSV)</button>
+  <button id="b-exp-mayor" class="sec">Bajar el Mayor (CSV)</button>
   <button id="b-exp-balance" class="sec">Bajar el balance (CSV)</button>
   <button id="b-exp-aging" class="sec">Bajar la antigüedad de saldos (CSV)</button>
   <button id="b-exp-analytics" class="sec">Bajar operaciones por mes (CSV)</button>
@@ -2626,7 +2745,7 @@ const estado = {
   proyecto: null, proyectoTitulo: '',
   vendedor: null, vendedorTitulo: '',
   sucursal: null, sucursalTitulo: '',
-  propuesta: null, propuestaCmv: null,
+  propuesta: null, propuestaCmv: null, bienAAmortizar: null,
   cuentas: [], documentosSinOperacion: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
@@ -2751,11 +2870,63 @@ E('b-login').onclick = async () => {
   E('quien').textContent = (yo.datos.user && yo.datos.user.email) || '';
 
   const empresas = await api('GET', '/companies');
+  // Un rol que exige segundo factor no llega a los datos de ninguna empresa
+  // hasta configurarlo, y hasta 2026-09-03 la consola no tenía dónde hacerlo:
+  // un CONTADOR —el usuario principal de un sistema contable— quedaba afuera
+  // con un 403 y ninguna salida. Lo encontró S-25.
+  if (!empresas.ok && empresas.datos && empresas.datos.error === 'MFA_SETUP_REQUIRED') {
+    E('mfa-alta').hidden = false;
+    E('login-msg').innerHTML = '<div class="aviso">' + escapar(empresas.datos.message) + '</div>';
+    return;
+  }
   if (!empresas.ok) return decir('login-msg', empresas);
   estado.empresas = empresas.datos.companies || [];
   pintarEmpresas();
   E('nav').hidden = false;
+  E('b-salir').hidden = false;
   ir('empresa', ['Empresa']);
+};
+
+/**
+ * Alta del segundo factor.
+ *
+ * El secreto y los códigos de recuperación se muestran **una sola vez** —el
+ * servidor no los vuelve a dar en claro—, así que la pantalla lo dice antes de
+ * mostrarlos y no ofrece «volver a verlos»: ofrecerlo sería mentir.
+ */
+E('b-mfa-setup').onclick = async () => {
+  const r = await api('POST', '/auth/mfa/setup');
+  if (!r.ok) return decir('mfa-alta-msg', r);
+  E('mfa-secreto').hidden = false;
+  limpiar('mfa-alta-msg');
+  E('mfa-kv').innerHTML = fila('Secreto', r.datos.secret) + fila('URI', r.datos.otpauthUri);
+  E('mfa-recuperacion').textContent = (r.datos.recoveryCodes || []).join('  ');
+};
+
+E('b-mfa-confirmar').onclick = async () => {
+  const r = await api('POST', '/auth/mfa/confirm', { code: E('mfa-confirmar-codigo').value.trim() });
+  if (!r.ok) return decir('mfa-alta-msg', r);
+  E('mfa-alta-msg').innerHTML =
+    '<div class="aviso ok">Segundo factor configurado. Volvé a ingresar con el código.</div>';
+  E('mfa-secreto').hidden = true;
+  E('mfa-alta').hidden = true;
+  E('pass').value = '';
+};
+
+/**
+ * Cerrar sesión.
+ *
+ * Hasta 2026-09-03 no había forma de hacerlo desde acá: la ruta existía, revoca
+ * la sesión del lado del servidor y borra la cookie, y para usarla había que
+ * borrar la cookie a mano. Lo encontró S-25.
+ *
+ * Se recarga la página en vez de limpiar el estado a mano: dejar la pantalla
+ * puesta con los datos de la empresa después de salir es exactamente lo que un
+ * botón de salir tiene que evitar.
+ */
+E('b-salir').onclick = async () => {
+  await api('POST', '/auth/logout');
+  location.reload();
 };
 
 function pintarEmpresas() {
@@ -3309,6 +3480,40 @@ async function listarPropuestas() {
 }
 
 E('b-iap').onclick = () => listarPropuestas();
+
+/**
+ * La deriva del motor, en pantalla.
+ *
+ * Estaba medida y solo se veía por HTTP. Es la métrica que decide cuándo bajar
+ * el umbral automático, así que tenerla fuera de la pantalla equivalía a no
+ * tenerla. Lo encontró S-25.
+ */
+E('b-iap-metricas').onclick = async () => {
+  const r = await api('GET', '/predictions/metrics');
+  if (!r.ok) return decir('iap-m-msg', r);
+  E('iap-metricas').hidden = false;
+  E('iap-m-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.nota) + '</div>';
+
+  // Ninguna de las tres listas se rellena con ceros cuando viene vacía: «todavía
+  // no pasó» y «pasó cero veces» no son lo mismo, y acá la diferencia es si el
+  // motor corrió alguna vez.
+  const vacio = (t) => '<dt>—</dt><dd>' + t + '</dd>';
+
+  E('iap-m-rechazos').innerHTML = (r.datos.rechazosAutomaticos || []).length === 0
+    ? vacio('sin rechazos registrados')
+    : r.datos.rechazosAutomaticos.map((x) =>
+        '<dt>' + escapar(x.motivo) +
+        (x.esAlucinacion ? ' <span class="p p-mal">alucinación</span>' : '') + '</dt>' +
+        '<dd class="mono">' + escapar(x.total) + '</dd>').join('');
+
+  E('iap-m-revisiones').innerHTML = (r.datos.revisionesHumanas || []).length === 0
+    ? vacio('sin revisiones todavía')
+    : r.datos.revisionesHumanas.map((x) => fila(x.decision, x.total)).join('');
+
+  E('iap-m-bandas').innerHTML = (r.datos.distribucionPorBanda || []).length === 0
+    ? vacio('sin propuestas todavía')
+    : r.datos.distribucionPorBanda.map((x) => fila(x.banda, x.total)).join('');
+};
 
 E('b-iap-revisar').onclick = async () => {
   const decision = E('iap-decision').value;
@@ -4599,6 +4804,39 @@ E('b-ter-imputar').onclick = async () => {
 };
 
 E('b-ter').onclick = () => listarTerceros();
+
+/**
+ * La antigüedad de saldos, en pantalla.
+ *
+ * Existía desde hacía tiempo del lado de la API y solo se podía bajar en CSV:
+ * el trabajo estaba hecho y para leerlo había que abrir una planilla. Lo
+ * encontró S-25.
+ */
+E('b-ter-aging').onclick = async () => {
+  const r = await api('GET', '/reports/aging?direccion=' + E('ter-ag-dir').value);
+  if (!r.ok) return decir('ter-ag-msg', r);
+  E('ter-ag-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-ter-ag').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const t of r.datos.terceros || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(t.razonSocial) + '</td>' +
+      '<td class="mono">' + escapar(t.pendiente) + '</td>' +
+      '<td class="mono">' + escapar(t.hasta30) + '</td>' +
+      '<td class="mono">' + escapar(t.de31a60) + '</td>' +
+      '<td class="mono">' + escapar(t.de61a90) + '</td>' +
+      '<td class="mono">' + escapar(t.masDe90) + '</td>' +
+      // Lo vencido se marca: es la única columna sobre la que hay que hacer algo.
+      '<td class="mono">' + (Number(t.vencido) > 0
+        ? '<span class="p p-ojo">' + escapar(t.vencido) + '</span>'
+        : escapar(t.vencido)) + '</td>' +
+      '<td class="mono">' + escapar(t.comprobantes) + '</td>' +
+      '<td class="mono">' + escapar(t.masAntiguo || '—') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+};
 E('b-ter-mas').onclick = () => listarTerceros(estado.cursores.ter);
 E('b-ter-cc-mas').onclick = () => abrirTercero(estado.tercero, estado.cursores.terCc);
 
@@ -5497,6 +5735,95 @@ async function abrirActivo(id) {
 }
 
 E('b-act').onclick = () => listarActivos();
+
+/**
+ * El cuadro de amortizaciones del ejercicio, y el vínculo con su asiento.
+ *
+ * El reporte existía en la API y no tenía pantalla; el vínculo existía y no
+ * tenía botón. Los dos los encontró S-25.
+ *
+ * El asiento se elige de una lista, no se pega un identificador a mano: pegar
+ * un UUID es una forma de vincular la amortización de un bien al asiento de
+ * otra cosa sin que nadie lo note. Igual la API comprueba el importe.
+ */
+E('b-act-cuadro').onclick = () => cargarCuadroDeAmortizaciones();
+
+async function cargarCuadroDeAmortizaciones() {
+  const sel = E('act-cua-fy');
+  if (sel.options.length === 0) {
+    const fy = await api('GET', '/fiscal-years');
+    for (const e of ((fy.datos && fy.datos.fiscalYears) || [])) {
+      const o = document.createElement('option');
+      o.value = e.id; o.textContent = e.code + ' (' + e.startDate + ' → ' + e.endDate + ')';
+      sel.appendChild(o);
+    }
+    if (sel.options.length === 0) {
+      E('act-cua-msg').innerHTML = '<div class="aviso">No hay ejercicios cargados todavía.</div>';
+      return;
+    }
+  }
+
+  const r = await api('GET', '/reports/depreciation?ejercicioId=' + sel.value);
+  if (!r.ok) return decir('act-cua-msg', r);
+  E('act-cua-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) +
+    ' <strong>' + escapar(r.datos.pendientes) + '</strong> sin asentar.</div>';
+
+  const cuerpo = E('t-act-cuadro').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const b of r.datos.bienes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(b.codigo) + '</td><td>' + escapar(b.nombre) + '</td>' +
+      '<td class="mono">' + escapar(b.base) + '</td>' +
+      '<td class="mono">' + escapar(b.meses) + '</td>' +
+      '<td class="mono">' + escapar(b.amortizacion) + '</td>' +
+      '<td>' + (b.entryId
+        ? '<span class="p p-bien">contabilizada</span>'
+        : '<span class="p p-ojo">calculada, sin asiento</span>') + '</td>' +
+      '<td>' + (b.entryId || !puede('asset:depreciate')
+        ? ''
+        : '<span class="clic">vincular el asiento</span>') + '</td>';
+    const clic = tr.querySelector('.clic');
+    if (clic) clic.onclick = () => abrirVinculoDeAmortizacion(b);
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function abrirVinculoDeAmortizacion(bien) {
+  estado.bienAAmortizar = bien.bienId;
+  E('act-cua-bien').value = bien.codigo + ' — ' + bien.nombre + ' · ' + bien.amortizacion;
+  E('act-cua-vincular').hidden = false;
+  limpiar('act-cua-vmsg');
+
+  const sel = E('act-cua-asiento');
+  sel.innerHTML = '';
+  const asientos = await api('GET', '/journal-entries?status=APROBADO&limite=50');
+  for (const a of ((asientos.datos && asientos.datos.asientos) || [])) {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = '#' + a.numero + ' · ' + a.fecha + ' · ' + (a.descripcion || '');
+    sel.appendChild(o);
+  }
+  if (sel.options.length === 0) {
+    E('act-cua-vmsg').innerHTML =
+      '<div class="aviso">No hay asientos aprobados para vincular. El asiento va primero.</div>';
+  }
+}
+
+E('b-act-vinc-cancelar').onclick = () => { E('act-cua-vincular').hidden = true; };
+
+E('b-act-vincular').onclick = async () => {
+  const r = await api('POST', '/fixed-assets/' + estado.bienAAmortizar + '/depreciations', {
+    ejercicioId: E('act-cua-fy').value,
+    entryId: E('act-cua-asiento').value,
+  });
+  decir('act-cua-vmsg', r, 'Amortización vinculada. El importe del asiento coincide con el ' +
+    'calculado: es lo que hace que el vínculo signifique algo.');
+  if (r.ok) {
+    E('act-cua-vincular').hidden = true;
+    cargarCuadroDeAmortizaciones();
+  }
+};
 
 E('b-act-alta').onclick = async () => {
   const r = await api('POST', '/fixed-assets', {
@@ -7721,6 +8048,47 @@ async function cargarAnalitica() {
     }
   }
 
+  // Las dos tablas que siguen estaban hechas del lado de la API desde que se
+  // cerró la evolución a ERP, y no había pantalla: se bajaba el CSV o nada.
+  const ops = await api('GET', '/analytics/operaciones?direccion=' + E('ana-op-dir').value);
+  if (ops.ok) {
+    const cuerpo = E('t-ana-op').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const m of ops.datos.meses || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(m.desde) + '</td><td class="mono">' + escapar(m.hasta) + '</td>' +
+        '<td class="mono">' + escapar(m.comprobantes) + '</td>' +
+        '<td class="mono">' + escapar(m.neto) + '</td>' +
+        '<td class="mono">' + escapar(m.iva) + '</td>' +
+        '<td class="mono">' + escapar(m.total) + '</td>' +
+        '<td class="mono">' + escapar(m.terceros) + '</td>' +
+        // Un comprobante sin tercero no es un cero: es una fila que este informe
+        // cuenta en los totales y no puede atribuir a nadie.
+        '<td class="mono">' + (Number(m.sinTercero) > 0
+          ? '<span class="p p-ojo">' + escapar(m.sinTercero) + '</span>'
+          : escapar(m.sinTercero)) + '</td>';
+      cuerpo.appendChild(tr);
+    }
+  }
+
+  const flu = await api('GET', '/analytics/flujo-bancario');
+  if (flu.ok) {
+    const cuerpo = E('t-ana-flu').querySelector('tbody');
+    cuerpo.innerHTML = '';
+    for (const f of flu.datos.flujo || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapar(f.mes) + '</td><td>' + escapar(f.banco) + '</td>' +
+        '<td class="mono">' + escapar(f.cuentaCodigo) + '</td>' +
+        '<td class="mono">' + escapar(f.ingresos) + '</td>' +
+        '<td class="mono">' + escapar(f.egresos) + '</td>' +
+        '<td class="mono">' + escapar(f.neto) + '</td>' +
+        '<td class="mono">' + escapar(f.movimientos) + '</td>';
+      cuerpo.appendChild(tr);
+    }
+  }
+
   const pro = await api('GET', '/analytics/productos?direccion=VENTAS&limite=20');
   if (pro.ok) {
     const cuerpo = E('t-ana-pro').querySelector('tbody');
@@ -7757,6 +8125,7 @@ async function cargarAnalitica() {
 }
 
 E('b-ana').onclick = () => cargarAnalitica();
+E('ana-op-dir').onchange = () => cargarAnalitica();
 
 // ══ 4f · Señales y escenarios ═════════════════════════════════════════════
 async function listarSenales() {
@@ -8269,6 +8638,12 @@ E('b-mayor').onclick = async () => {
 // Las exportaciones llevan el rango que está en pantalla: bajar algo distinto
 // de lo que se está mirando es la forma más rápida de que dos personas discutan
 // sobre dos archivos que dicen cosas distintas.
+// El Diario y el Mayor se podían mirar y no bajar, teniendo las dos rutas hechas
+// desde siempre. Lo encontró S-25.
+E('b-exp-diario').onclick = () =>
+  bajarCsv('/books/diario.csv?' + rango(), 'diario.csv', 'lib-msg');
+E('b-exp-mayor').onclick = () =>
+  bajarCsv('/books/mayor.csv?' + rango(), 'mayor.csv', 'lib-msg');
 E('b-exp-balance').onclick = () =>
   bajarCsv('/exports/trial-balance.csv?' + rango(), 'balance-de-sumas-y-saldos.csv', 'lib-msg');
 E('b-exp-aging').onclick = () =>
