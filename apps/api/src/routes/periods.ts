@@ -24,7 +24,13 @@ export async function periodRoutes(app: FastifyInstance): Promise<void> {
 
     return withCompany({ companyId: tenant.companyId, actorId: `user:${auth.user.userId}` }, async (tx) => {
       const result = await tx.query(
-        `SELECT fy.id, fy.code, fy.start_date AS "startDate", fy.end_date AS "endDate", fy.status,
+        // `::text` y no la columna a secas: sin él el driver arma un `Date` y la
+        // respuesta lleva un instante con huso —`2026-01-01T03:00:00.000Z`—, que
+        // la pantalla mostraba tal cual. Y no es solo feo: leído desde un huso al
+        // este de UTC, el 1 de enero se escribe como 31 de diciembre. El límite
+        // de un ejercicio no puede depender de dónde esté parado quien lo lee.
+        `SELECT fy.id, fy.code,
+                fy.start_date::text AS "startDate", fy.end_date::text AS "endDate", fy.status,
                 (SELECT count(*)::int FROM periods p WHERE p.fiscal_year_id = fy.id) AS "periodCount"
            FROM fiscal_years fy
           WHERE fy.company_id = $1
@@ -125,8 +131,10 @@ export async function periodRoutes(app: FastifyInstance): Promise<void> {
 
     return withCompany({ companyId: tenant.companyId, actorId: `user:${auth.user.userId}` }, async (tx) => {
       const result = await tx.query(
+        // `::text` por lo mismo que arriba: un límite de período es una fecha,
+        // no un instante, y sin esto viaja con huso.
         `SELECT id, fiscal_year_id AS "fiscalYearId", number,
-                start_date AS "startDate", end_date AS "endDate", status,
+                start_date::text AS "startDate", end_date::text AS "endDate", status,
                 closed_at AS "closedAt", closed_by AS "closedBy"
            FROM periods
           WHERE company_id = $1 AND ($2::uuid IS NULL OR fiscal_year_id = $2)

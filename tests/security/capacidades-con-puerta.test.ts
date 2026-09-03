@@ -197,18 +197,7 @@ const SIN_PUERTA = new Map<string, string>([
   // Lo más caro de la lista: la consola deja **pre-cerrar** y ahí se corta. El
   // camino que sigue —cerrar, ver el acta, abrir el siguiente— existe, está
   // probado, y no tiene un solo botón.
-  [
-    'POST /fiscal-years/:fiscalYearId/close',
-    'FALTA BOTÓN. La consola pre-cierra y no cierra. Exige dos firmantes distintos, y esa es ' +
-      'justamente la parte que hay que dibujar bien.',
-  ],
-  ['GET /fiscal-years/:fiscalYearId/closure', 'FALTA PANTALLA. El acta del cierre.'],
-  [
-    'POST /fiscal-years/:fiscalYearId/opening',
-    'FALTA BOTÓN. El asiento de apertura del ejercicio siguiente, que arrastra los saldos del ' +
-      'cierre archivado.',
-  ],
-  [
+        [
     'POST /companies/current/reporting-framework',
     'FALTA BOTÓN. Declarar el marco de información (RT 41 simplificado, RT 17 completo). Se ' +
       'lee y no se puede cambiar.',

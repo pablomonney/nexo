@@ -8900,12 +8900,21 @@ async function listarPeriodos() {
       '<td class="mono">' + escapar(e.startDate) + '</td>' +
       '<td class="mono">' + escapar(e.endDate) + '</td>' +
       '<td>' + pastilla(e.status) + '</td><td></td>';
+    // Hasta 2026-09-03 la consola pre-cerraba y ahí se cortaba: cerrar, ver el
+    // acta y abrir el siguiente estaban hechos, probados, y sin un solo botón.
+    // Lo encontró S-25.
+    const acciones = tr.lastElementChild;
     if (puede('fiscal_year:close') && e.status === 'ABIERTO') {
-      const b = document.createElement('button');
-      b.textContent = 'Ver checklist de pre-cierre';
-      b.className = 'sec';
-      b.onclick = () => preCerrar(e.id);
-      tr.lastElementChild.appendChild(b);
+      acciones.appendChild(botonEjercicio('Ver checklist de pre-cierre', () => preCerrar(e.id)));
+    }
+    if (puede('fiscal_year:close') && e.status === 'EN_CIERRE') {
+      acciones.appendChild(botonEjercicio('Cerrar el ejercicio', () => cerrarEjercicio(e.id)));
+    }
+    if (e.status === 'CERRADO') {
+      acciones.appendChild(botonEjercicio('Ver el acta', () => verActaDeCierre(e.id)));
+      if (puede('fiscal_year:close')) {
+        acciones.appendChild(botonEjercicio('Asiento de apertura', () => abrirSiguiente(e.id)));
+      }
     }
     cuerpoFy.appendChild(tr);
   }
@@ -8962,6 +8971,125 @@ async function preCerrar(fiscalYearId) {
     (r.datos.puedeCerrar
       ? '<div class="aviso ok">El ejercicio se puede cerrar.</div>'
       : '<div class="aviso">Hay controles bloqueantes sin cumplir. Se resuelven en la bandeja.</div>');
+}
+
+function botonEjercicio(texto, accion) {
+  const b = document.createElement('button');
+  b.textContent = texto;
+  b.className = 'sec';
+  b.onclick = accion;
+  return b;
+}
+
+/**
+ * Cerrar el ejercicio.
+ *
+ * Se pregunta antes, y no por cortesía: es la operación menos reversible del
+ * sistema —refunde resultados, asienta el cierre y baja la persiana de todos
+ * los períodos del ejercicio— y deshacerla no es apretar otro botón.
+ *
+ * El checklist se vuelve a correr del lado del servidor: lo que autoriza a
+ * cerrar es lo que se ve hoy, no lo que se vio el día del pre-cierre.
+ */
+async function cerrarEjercicio(fiscalYearId) {
+  const seguro = window.confirm(
+    'Cerrar el ejercicio refunde los resultados, asienta el cierre y cierra todos sus ' +
+      'períodos. No se deshace apretando otro botón. ¿Seguir?',
+  );
+  if (!seguro) return;
+
+  const r = await api('POST', '/fiscal-years/' + fiscalYearId + '/close', {});
+  if (!r.ok) return decir('per-msg', r);
+
+  E('cierre-checklist').innerHTML =
+    '<h3>Ejercicio cerrado</h3>' +
+    '<dl class="kv">' +
+    fila('Ejercicio', r.datos.ejercicio) + fila('Resultado', r.datos.resultado) +
+    fila('Ingresos', r.datos.ingresos) + fila('Gastos', r.datos.gastos) +
+    fila('Cuenta de resultado', r.datos.cuentaResultado) +
+    fila('Asiento de refundición', r.datos.refundicionEntryId) +
+    fila('Asiento de cierre', r.datos.cierreEntryId) +
+    '</dl>';
+  listarPeriodos();
+}
+
+/** El acta: qué se cerró, quién lo hizo, con qué asientos y con qué checklist. */
+async function verActaDeCierre(fiscalYearId) {
+  const r = await api('GET', '/fiscal-years/' + fiscalYearId + '/closure');
+  if (!r.ok) return decir('per-msg', r);
+  const a = r.datos;
+
+  // Las dos firmas van juntas y separadas: el pre-cierre y el cierre son actos
+  // distintos, y quién hizo cada uno es parte de lo que el acta tiene que decir.
+  E('cierre-checklist').innerHTML =
+    '<h3>Acta de cierre — ' + escapar(a.ejercicio) + '</h3>' +
+    '<dl class="kv">' +
+    fila('Estado del expediente', a.status) +
+    fila('Pre-cerrado por', a.preCerradoPor) + fila('Pre-cerrado el', a.preCerradoEl) +
+    fila('Cerrado por', a.cerradoPor) + fila('Cerrado el', a.cerradoEl) +
+    fila('Resultado', a.resultado) + fila('Cuenta de resultado', a.cuentaResultado) +
+    fila('Asiento de refundición', a.refundicionEntryId) +
+    fila('Asiento de cierre', a.cierreEntryId) +
+    // La apertura puede no haberse hecho todavía, y eso no es un cero.
+    (a.aperturaEntryId
+      ? fila('Asiento de apertura', a.aperturaEntryId) +
+        fila('Apertura sobre', a.aperturaEjercicio) +
+        fila('Apertura por', a.aperturaPor) + fila('Apertura el', a.aperturaEl)
+      : '<dt>Apertura</dt><dd><span class="p p-ojo">todavía no se abrió el siguiente</span></dd>') +
+    '</dl>' +
+    '<h4>Saldos finales archivados</h4>' +
+    '<p class="ayuda">Son los que arrastra el asiento de apertura. Están guardados en el ' +
+      'expediente, no se recalculan: el arrastre tiene que decir lo que se cerró ese día.</p>' +
+    '<div class="tabla"><table><thead><tr><th>Código</th><th>Cuenta</th><th>Tipo</th>' +
+    '<th>Saldo</th></tr></thead><tbody>' +
+    ((a.saldosFinales || []).map((s) =>
+      '<tr><td class="mono">' + escapar(s.code) + '</td>' +
+      '<td>' + escapar(s.name) + '</td>' +
+      '<td>' + escapar(s.type) + '</td>' +
+      '<td class="mono">' + escapar(s.saldo) + '</td></tr>').join('') ||
+      '<tr><td colspan="4">Sin saldos archivados.</td></tr>') +
+    '</tbody></table></div>';
+}
+
+/**
+ * El asiento de apertura del ejercicio siguiente.
+ *
+ * Cuál es «el siguiente» lo elige una persona: puede haber más de un ejercicio
+ * abierto, y adivinar por fecha sería arrastrar los saldos a un ejercicio que
+ * nadie eligió.
+ */
+async function abrirSiguiente(fiscalYearId) {
+  const fy = await api('GET', '/fiscal-years');
+  const candidatos = ((fy.datos && fy.datos.fiscalYears) || []).filter(
+    (e) => e.id !== fiscalYearId && e.status === 'ABIERTO',
+  );
+  if (candidatos.length === 0) {
+    E('per-msg').innerHTML =
+      '<div class="aviso">No hay ningún ejercicio ABIERTO al que arrastrar los saldos. ' +
+      'Creá el siguiente antes.</div>';
+    return;
+  }
+
+  const caja = E('cierre-checklist');
+  caja.innerHTML =
+    '<h3>Asiento de apertura</h3>' +
+    '<p class="ayuda">Arrastra los <strong>saldos archivados en el expediente</strong> del ' +
+      'ejercicio cerrado, no un recálculo: la apertura tiene que decir lo que se cerró.</p>' +
+    '<div class="fila"><div><label>Ejercicio siguiente</label><select id="ap-siguiente">' +
+    candidatos.map((e) =>
+      '<option value="' + escapar(e.id) + '">' + escapar(e.code) + ' (' +
+      escapar(e.startDate) + ' → ' + escapar(e.endDate) + ')</option>').join('') +
+    '</select></div><div><label>&nbsp;</label>' +
+    '<button id="b-ap-confirmar">Generar la apertura</button></div></div>' +
+    '<div id="ap-msg"></div>';
+
+  E('b-ap-confirmar').onclick = async () => {
+    const r = await api('POST', '/fiscal-years/' + fiscalYearId + '/opening', {
+      siguienteEjercicioId: E('ap-siguiente').value,
+    });
+    decir('ap-msg', r, 'Asiento de apertura generado.');
+    if (r.ok) listarPeriodos();
+  };
 }
 
 // ══ 9 · Auditoría ═════════════════════════════════════════════════════════

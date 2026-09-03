@@ -115,7 +115,7 @@ recibía `MFA_SETUP_REQUIRED` y no tenía ninguna salida. Tampoco había forma d
 cerrar sesión: la ruta existía, revoca la sesión del lado del servidor, y para
 usarla había que borrar la cookie a mano.
 
-Se cerraron **once** en esta vuelta:
+Se cerraron **catorce** en esta vuelta:
 
 | Qué | Dónde |
 |---|---|
@@ -126,12 +126,21 @@ Se cerraron **once** en esta vuelta:
 | Cuadro de amortizaciones + vincular su asiento | Bienes de uso |
 | Deriva del motor de IA | Propuestas |
 | Diario y Mayor en CSV | Libros, que bajaba otras cuatro y estas no |
+| Cerrar el ejercicio · el acta · el asiento de apertura | Períodos y cierre, que pre-cerraba y ahí se cortaba |
 
 Y una resultó no ser una pantalla que falta: `GET /checks/flujo` devuelve lo
 mismo que el campo `cartera` de `GET /checks`, que la pantalla de cheques ya
 muestra. **Sobra la ruta**, y sacarla es una decisión de API.
 
-Las 36 restantes quedaron declaradas con qué las destraba. Tres son permanentes
+**Y un defecto que apareció al mirar la pantalla, no al leer el código.** El
+listado de ejercicios y el de períodos devolvían `start_date` y `end_date` sin
+`::text`, así que el driver armaba un `Date` y la respuesta llevaba un instante
+con huso: la columna mostraba `2026-01-01T03:00:00.000Z`. Y no es solo feo —
+leído desde un huso al este de UTC, el 1 de enero se escribe como 31 de
+diciembre, y el límite de un ejercicio no puede depender de dónde esté parado
+quien lo lee.
+
+Las 33 restantes quedaron declaradas con qué las destraba. Tres son permanentes
 (sondas, la consola misma, el recolector de métricas), siete son el panel del
 estudio —que exige decidir si es una vista más o una aplicación aparte— y el
 resto son pantallas que faltan, cada una nombrada. La más cara: **el plan de
