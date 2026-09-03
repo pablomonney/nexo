@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 111 archivos de test, 1835 tests,
+**Estado del árbol:** `verify` en verde — 111 archivos de test, 1836 tests,
 420 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -63,7 +63,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Umbrales sugeridos** | **TERMINADO** | **`senales-y-simulacion` (15 tests)** |
 | **Cheques propios y de terceros** | **TERMINADO** | **`cheques` (20 tests)** |
 | **Flujo de fondos: entradas y salidas** | **TERMINADO** | **`cheques`, `ciclo-compras` (ADR-018)** |
-| **Circuito de compras completo** | **TERMINADO** | **`ciclo-compras` (8 tests)** |
+| **Circuito de compras completo** | **TERMINADO** | **`ciclo-compras` (9 tests, incluye la cadena entera de la necesidad al pago)** |
 | **Lotes, vencimientos y recuento físico** | **TERMINADO** | **`stock` (28 tests)** |
 | **Caja y arqueo** | **TERMINADO** | **`caja` (10 tests)** |
 | **CRM: oportunidades y embudo** | **TERMINADO** | **`crm` (13 tests)** |

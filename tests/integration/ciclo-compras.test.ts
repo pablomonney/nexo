@@ -25,6 +25,10 @@
  *      puede ser la factura de una orden de compra, y en ventas la factura no
  *      se vincula porque NEXO la emite.
  *   3. Que lo comprometido y no facturado sea salida de caja futura (ADR-018).
+ *   4. **Que la cadena entera cierre en cero**: solicitud → orden → recepción →
+ *      factura → orden de pago → asiento → imputación. Cada eslabón tenía su
+ *      suite y ninguna los recorría juntos, que es la misma forma que este
+ *      repositorio ya encontró cinco veces.
  */
 
 import { closePool, initPool } from '@aai/db';
@@ -157,6 +161,15 @@ suite('Circuito de compras', () => {
       (await pedir('POST', '/accounts', { code: '5.1.01', name: 'Compras', type: 'COSTO' }))
         .statusCode,
     ).toBe(201);
+
+    // Las dos que necesita el asiento del pago del circuito completo. El plan
+    // de cuentas es por empresa: no hay cuentas por defecto.
+    for (const cuenta of [
+      { code: '2.1.01', name: 'Proveedores', type: 'PASIVO', requiresThirdParty: true },
+      { code: '1.1.01', name: 'Caja', type: 'ACTIVO' },
+    ]) {
+      expect((await pedir('POST', '/accounts', cuenta)).statusCode, JSON.stringify(cuenta)).toBe(201);
+    }
 
     proveedorId = (
       await pedir('POST', '/parties', {
@@ -461,6 +474,145 @@ suite('Circuito de compras', () => {
     );
 
     expect(antesComprometido - despues, 'salió de comprometido al facturarse').toBe(484);
+  });
+
+  /**
+   * La cadena entera, de la necesidad al pago.
+   *
+   * Cada eslabón tiene su suite y **ninguna los recorría juntos**. Es la misma
+   * forma que este repositorio ya encontró cinco veces: piezas correctas, y el
+   * camino entre ellas sin caminar. Acá se camina:
+   *
+   *   solicitud → aprobación → orden de compra → la solicitud la cita →
+   *   recepción → factura → orden de pago → asiento → imputación → pagada
+   *
+   * Lo que este test defiende no es que cada endpoint conteste 200, sino que
+   * **al final la deuda con el proveedor sea cero** y que cada documento pueda
+   * mostrar de qué se colgó. Un circuito que termina con el saldo entero no
+   * está cerrado, por más que cada paso haya contestado bien.
+   */
+  it('de la necesidad al pago: solicitud → orden → recepción → factura → pago', async () => {
+    // 1 · Alguien necesita algo. Sin precio: todavía no hay proveedor.
+    const solicitud = (
+      await pedir('POST', '/purchase-requests', {
+        fecha: hoy,
+        justificacion: 'Se terminó el insumo en el depósito',
+        renglones: [{ descripcion: 'Insumo', cantidad: '10' }],
+      })
+    ).json<{ id: string }>().id;
+
+    expect((await pedir('POST', `/purchase-requests/${solicitud}/enviar`)).statusCode).toBe(200);
+    expect((await pedir('POST', `/purchase-requests/${solicitud}/aprobar`)).statusCode).toBe(200);
+
+    // 2 · Con el sí, se arma la orden: recién ahí aparecen proveedor y precios.
+    const orden = await ordenAceptada('10', '1000.00', '210.00');
+
+    const convertir = await pedir('POST', `/purchase-requests/${solicitud}/convertir`, {
+      ordenDeCompraId: orden,
+    });
+    expect(convertir.statusCode, convertir.body).toBe(200);
+
+    // 3 · Llega la mercadería.
+    const recepcion = (
+      await pedir('POST', '/goods-receipts', {
+        proveedorId, fecha: hoy, depositoId: deposito, ordenId: orden,
+      })
+    ).json<{ id: string }>().id;
+    expect(
+      (await pedir('PUT', `/goods-receipts/${recepcion}/lines`, {
+        renglones: [{ productoId, descripcion: 'Insumo', cantidad: '10' }],
+      })).statusCode,
+    ).toBe(200);
+    expect(
+      (await pedir('POST', `/goods-receipts/${recepcion}/confirm`, { depositoId: deposito }))
+        .statusCode,
+    ).toBe(200);
+
+    // 4 · Llega la factura y se vincula a la orden.
+    const factura = await facturaDeCompra('1000.00', '210.00', '1210.00');
+    expect(
+      (await pedir('POST', `/tax-transactions/${factura}/party`, { partyId: proveedorId }))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await pedir('POST', `/commercial-documents/${orden}/link-invoice`, {
+        taxTransactionId: factura,
+      })).statusCode,
+    ).toBe(200);
+
+    const deuda = async (): Promise<string> => {
+      const r = await db.query<{ pendiente: string }>(
+        `SELECT coalesce(sum(pendiente), 0)::text AS pendiente FROM invoice_settlement
+          WHERE company_id = $1 AND tax_transaction_id = $2`,
+        [empresa, factura],
+      );
+      return r.rows[0]!.pendiente;
+    };
+    expect(await deuda(), 'la factura entró como deuda').toBe('1210.00');
+
+    // 5 · Se decide pagarla. La orden de pago no mueve el Mayor: lo cita.
+    const ordenDePago = (
+      await pedir('POST', '/payment-orders', {
+        proveedorId,
+        fecha: hoy,
+        renglones: [{ comprobanteId: factura, importe: '1210.00' }],
+      })
+    ).json<{ id: string }>().id;
+    expect((await pedir('POST', `/payment-orders/${ordenDePago}/aprobar`)).statusCode).toBe(200);
+
+    // 6 · El pago: un asiento por el camino de siempre, imputado a la factura.
+    const asiento = await pedir('POST', '/journal-entries', {
+      journalCode: 'GENERAL',
+      entryDate: hoy,
+      description: `Pago al proveedor ${stamp}`,
+      currency: 'ARS',
+      lines: [
+        { accountCode: '2.1.01', debit: '1210.00', credit: '0', partyId: proveedorId },
+        { accountCode: '1.1.01', debit: '0', credit: '1210.00' },
+      ],
+      source: { type: 'MANUAL', id: null },
+      manualJustification: 'Pago de la factura del circuito completo',
+    });
+    expect(asiento.statusCode, asiento.body).toBe(201);
+    const asientoId = asiento.json<{ id: string }>().id;
+    expect((await pedir('POST', `/journal-entries/${asientoId}/approve`)).statusCode).toBe(200);
+
+    const linea = await db.query<{ id: string }>(
+      'SELECT id FROM journal_entry_lines WHERE entry_id = $1 AND party_id = $2',
+      [asientoId, proveedorId],
+    );
+    expect(
+      (await pedir('POST', '/party-allocations', {
+        taxTransactionId: factura,
+        journalEntryLineId: linea.rows[0]!.id,
+        importe: '1210.00',
+      })).statusCode,
+    ).toBe(201);
+
+    // 7 · Recién ahora la orden puede decir que está pagada, y lo puede
+    //     demostrar: la base exige la imputación sobre cada comprobante.
+    const pagar = await pedir('POST', `/payment-orders/${ordenDePago}/pagar`, {
+      asientoId,
+    });
+    expect(pagar.statusCode, pagar.body).toBe(200);
+
+    // Lo que importa del final: el proveedor no tiene saldo.
+    expect(await deuda(), 'la cadena cierra en cero').toBe('0.00');
+
+    // Y cada documento muestra de qué se colgó.
+    const sol = await pedir('GET', `/purchase-requests/${solicitud}`);
+    expect(sol.json<{ solicitud: { estado: string; situacion: string } }>().solicitud.estado)
+      .toBe('CONVERTIDA');
+    expect(sol.json<{ solicitud: { situacion: string } }>().solicitud.situacion)
+      .toContain('Convertida en la orden de compra');
+
+    const op = await pedir('GET', `/payment-orders/${ordenDePago}`);
+    const cabecera = op.json<{
+      orden: { estado: string; imputadoPorElAsiento: string; situacion: string };
+    }>().orden;
+    expect(cabecera.estado).toBe('PAGADA');
+    expect(cabecera.imputadoPorElAsiento).toBe('1210.00');
+    expect(cabecera.situacion).toContain('Pagada');
   });
 
   it('solo se vincula la factura de una orden aceptada', async () => {
