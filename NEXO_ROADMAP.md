@@ -69,6 +69,32 @@ las llenaba; ahora las escribe la generación del libro, y el Diario resumido la
 verifica. La pantalla de revisión de propuestas de IA no existía: la bandeja
 mandaba ahí y contestaba que no había pantalla.
 
+## Terminado el 2026-09-03 — S-21: la capa de agentes, medida
+
+El mismo defecto una vez más, y esta vez donde más engaña. `AI_ARCHITECTURE.md`
+§3 lista **ocho agentes** y el `CHECK` de `ai_predictions.agent` acepta los ocho
+nombres. Corre **uno**: `CLASSIFICATION`.
+
+Un `CHECK` se lee como un inventario, y este afirmaba siete capacidades que no
+existen. Peor: los ocho nombres están escritos en la unión `AgentName`, así que
+cualquier barrido ingenuo que buscara el literal habría dado ocho de ocho y
+confirmado la ilusión. `S-21` descarta las líneas que **solo declaran** el
+nombre y pide que quede una ejecución real.
+
+Los siete quedaron declarados con qué los destraba, y agrupan en tres formas
+distintas —que no son intercambiables—:
+
+| Forma | Cuáles | Qué falta de verdad |
+|---|---|---|
+| El trabajo ya está hecho sin modelo | `RECONCILIATION`, `TAX`, `FINANCIAL_ANALYSIS`, `NOTES` | Nada de la capacidad. Falta la propuesta con confianza y cita — y ponerlas a **calcular** sería un retroceso (ADR-017) |
+| Falta el proveedor de modelo | `DOCUMENT`, y la narración de `FINANCIAL_ANALYSIS` | Una credencial de un tercero (§P1.2) |
+| Falta la materia prima | `NORMATIVE_RESEARCH`, `AUDIT` | El corpus normativo (§32) y decidir si un hallazgo es una fila o una derivación |
+
+**Lo que este barrido confirmó, y vale decirlo:** los controles anti-alucinación
+del §4 no son una tabla en un documento. Una cita a una norma que no está en
+`norm_versions` rechaza la propuesta y la registra en `ai_rejections` con
+`es_alucinacion`, y hay tests que lo ejercitan en las dos direcciones.
+
 ## P0 — Integridad
 
 **Nada abierto.** RLS completo con `FORCE` en 107 tablas, Mayor sin

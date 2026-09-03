@@ -128,6 +128,7 @@ métrica tiene umbral de bloqueo de release.
 > | `solo-lectura` | S-18 | Que ninguna ruta de escritura le conteste otra cosa que 403 a un usuario de solo lectura |
 > | `cadena-de-ventas` | S-19 | Que la misma operación cruce todas las capas: comercial → fiscal → stock → cuenta corriente → Mayor → cobranza → costo |
 > | `vocabulario-de-eventos` | S-20 | Que la bitácora sea un vocabulario estable, y que renombrar una acción excepcional no apague su candado en silencio |
+| `agentes-con-ejecucion` | S-21 | Que cada agente que el `CHECK` de `ai_predictions` acepta lo produzca algo, y no exista solo como miembro de una unión de tipos |
 
 #### S-16, y por qué un barrido también se equivoca
 

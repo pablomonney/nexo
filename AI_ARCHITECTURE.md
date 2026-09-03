@@ -53,16 +53,32 @@ Reglas:
 
 ## 3. Los agentes (§29)
 
-| Agente | Entrada | Salida | Nunca |
-|--------|---------|--------|-------|
-| **Document Agent** | Documento + OCR crudo | Campos estructurados con confianza por campo | Completar un campo ilegible con un valor plausible |
-| **Accounting Classification Agent** | Comprobante + plan de cuentas + historial + reglas vigentes | Cuenta, tratamiento, confianza, razón, citas | Proponer una cuenta que no existe en el plan |
-| **Tax Agent** | Comprobante + reglas fiscales vigentes | Tratamiento de IVA/percepciones/retenciones | Inventar una alícuota |
-| **Normative Research Agent** | Consulta + corpus normativo local | Normas candidatas con cita y nivel de verificación | Citar una norma que no está en `norm_documents` |
-| **Reconciliation Agent** | Movimientos bancarios + asientos | Propuestas de matching con score | Confirmar una conciliación |
-| **Financial Analysis Agent** | Estados y mayores | Explicaciones de variaciones, con cifras enlazadas | Afirmar sin cifra respaldada |
-| **Notes Agent** | Estados + mayores + políticas | Borradores de notas con cada cifra referenciada a su linaje | Redactar una cifra sin `lineage_id` |
-| **Audit Agent** | Logs + asientos + alertas | Hallazgos priorizados | Cerrar un hallazgo |
+**De los ocho, corre uno.** El `CHECK` de `ai_predictions.agent` acepta los ocho
+nombres, y un enum se lee como un inventario: quien mire el esquema va a creer
+que hay ocho agentes trabajando. La columna **Estado** dice cuál es cuál, y
+`S-21` (`tests/security/agentes-con-ejecucion.test.ts`) lo comprueba en cada
+verify contra el `CHECK` de la base — con una salvedad que importa: buscar el
+nombre a secas daría ocho de ocho, porque los ocho están escritos en la unión
+`AgentName`. El barrido descarta las líneas que solo declaran el nombre.
+
+| Agente | Estado | Entrada | Salida | Nunca |
+|--------|--------|---------|--------|-------|
+| **Document Agent** | PENDIENTE — extracción determinística hecha; falta el proveedor de modelo | Documento + OCR crudo | Campos estructurados con confianza por campo | Completar un campo ilegible con un valor plausible |
+| **Accounting Classification Agent** | **VERIFICADO** — escribe en `ai_predictions`, se relee, y sus rechazos quedan en `ai_rejections` | Comprobante + plan de cuentas + historial + reglas vigentes | Cuenta, tratamiento, confianza, razón, citas | Proponer una cuenta que no existe en el plan |
+| **Tax Agent** | PENDIENTE — el cálculo lo hace `tax-engine` y ahí se queda; falta el proveedor | Comprobante + reglas fiscales vigentes | Tratamiento de IVA/percepciones/retenciones | Inventar una alícuota |
+| **Normative Research Agent** | BLOQUEADO — sin corpus: `norm_articles` y `norm_candidates` no tienen escritor | Consulta + corpus normativo local | Normas candidatas con cita y nivel de verificación | Citar una norma que no está en `norm_documents` |
+| **Reconciliation Agent** | SIN AGENTE — la conciliación ya propone y puntúa sin modelo (`bank-engine/matching.ts`) | Movimientos bancarios + asientos | Propuestas de matching con score | Confirmar una conciliación |
+| **Financial Analysis Agent** | PENDIENTE — el análisis es determinístico y está; la narración está cerrada contra el proveedor simulado | Estados y mayores | Explicaciones de variaciones, con cifras enlazadas | Afirmar sin cifra respaldada |
+| **Notes Agent** | PENDIENTE — las notas se arman en `financial-statements`, y una cifra de nota se referencia, no se escribe | Estados + mayores + políticas | Borradores de notas con cada cifra referenciada a su linaje | Redactar una cifra sin `lineage_id` |
+| **Audit Agent** | BLOQUEADO — `audit_findings` no tiene escritor: los hallazgos se derivan de vistas | Logs + asientos + alertas | Hallazgos priorizados | Cerrar un hallazgo |
+
+Los cinco `PENDIENTE`/`SIN AGENTE` comparten una propiedad que conviene no
+perder de vista: **su trabajo ya está hecho de forma determinística en otro
+lado, y ahí es donde tiene que quedarse**. Lo que falta en esos casos no es la
+capacidad —conciliar, calcular IVA, descomponer una variación, armar una nota—
+sino la propuesta con confianza y cita que iría a `ai_predictions`. Poner al
+modelo a calcular lo que hoy calcula un motor sería un retroceso, no un avance
+(ADR-017).
 
 Todos escriben en `ai_predictions`. Ninguno escribe en otro lado.
 
