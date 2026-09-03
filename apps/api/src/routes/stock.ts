@@ -292,8 +292,32 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
         fecha,
         sentido: z.enum(['POSITIVO', 'NEGATIVO']),
         motivo: z.string().min(3).max(500),
+        /**
+         * Costo unitario de un ajuste **positivo**.
+         *
+         * La base lo admite desde la 0077 —`sm_costo_solo_en_entradas` lo deja
+         * en `ENTRADA` y en `AJUSTE_POSITIVO`— y este endpoint no lo dejaba
+         * declarar. La consecuencia llegaba lejos: la existencia inicial de una
+         * empresa que empieza a operar entraba sin costo, y desde entonces
+         * ninguna salida de ese producto se podía costear, así que no había CMV
+         * que asentar. Lo encontró la cadena de ventas (S-19) en su último paso.
+         *
+         * Sigue siendo opcional: declarar un costo que no se sabe es peor que
+         * no declararlo, y la valuación dice «falta costo» en vez de inventarlo.
+         */
+        costoUnitario: z
+          .string()
+          .regex(/^\d+(\.\d{1,4})?$/, 'Costo unitario con hasta cuatro decimales')
+          .optional(),
       })
       .parse(request.body);
+
+    if (body.costoUnitario !== undefined && body.sentido === 'NEGATIVO') {
+      throw badRequest(
+        'Un ajuste negativo no lleva costo: el costo de una salida es el promedio al momento ' +
+          'de salir, y dejarlo escribir crearía una segunda verdad capaz de contradecirlo.',
+      );
+    }
 
     const creado = await registrar(request, tenant, auth, {
       tipo: body.sentido === 'POSITIVO' ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO',
@@ -304,6 +328,7 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       cantidad: body.cantidad,
       fecha: body.fecha,
       motivo: body.motivo,
+      ...(body.costoUnitario === undefined ? {} : { costoUnitario: body.costoUnitario }),
     });
     reply.code(201);
     return creado;
@@ -633,6 +658,8 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       cantidad: string;
       fecha: string;
       motivo: string | null;
+      /** Solo en entradas: la base lo exige con `sm_costo_solo_en_entradas`. */
+      costoUnitario?: string | null;
     },
   ): Promise<{ id: string }> {
     try {
@@ -642,13 +669,13 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
           const r = await tx.query<{ id: string }>(
             `INSERT INTO stock_movements
                (company_id, product_id, warehouse_id, tipo, cantidad, fecha,
-                origen_tipo, origen_id, motivo, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                origen_tipo, origen_id, motivo, costo_unitario, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
              RETURNING id`,
             [
               tenant.companyId, datos.productoId, datos.depositoId, datos.tipo,
               datos.cantidad, datos.fecha, datos.origenTipo, datos.origenId,
-              datos.motivo, `user:${auth.user.userId}`,
+              datos.motivo, datos.costoUnitario ?? null, `user:${auth.user.userId}`,
             ],
           );
 

@@ -126,6 +126,7 @@ métrica tiene umbral de bloqueo de release.
 > | `motores-con-consumidor` | S-16 | Que cada función exportada por un paquete la use algo que no sea el propio paquete ni sus tests |
 > | `tablas-con-escritor` | S-17 | Que cada tabla del esquema tenga al menos un `INSERT` fuera de los tests |
 > | `solo-lectura` | S-18 | Que ninguna ruta de escritura le conteste otra cosa que 403 a un usuario de solo lectura |
+> | `cadena-de-ventas` | S-19 | Que la misma operación cruce todas las capas: comercial → fiscal → stock → cuenta corriente → Mayor → cobranza → costo |
 
 #### S-16, y por qué un barrido también se equivoca
 
@@ -179,6 +180,29 @@ control seguía en verde; con **403 obligatorio** falla.
 El 403 obligatorio además ordena los handlers: leer el cuerpo antes de mirar el
 permiso le cuenta a quien no puede entrar qué campos espera el endpoint. Tres
 transiciones de solicitudes de compra lo hacían.
+
+#### S-19: capas, no piezas
+
+S-16 pregunta si una función tiene consumidor y S-17 si una tabla tiene
+escritor. Los dos miran **una pieza por vez**. S-19 mira lo que ninguno de los
+dos puede ver: una capa conectada con la de al lado.
+
+El síntoma era que cada eslabón estaba probado con su propio fixture. El ciclo
+comercial llegaba hasta la operación fiscal y ahí paraba; la imputación de
+cobros arrancaba de una factura creada a mano; la salida de stock se probaba
+contra un comprobante que nadie había facturado. Todo verde, y **nadie recorría
+la cadena entera con la misma operación**.
+
+`cadena-de-ventas` la recorre por HTTP: cliente → presupuesto → factura → salida
+de stock → cuenta corriente → asiento → Mayor → cobranza → imputación → costo de
+lo vendido, y de vuelta al presupuesto por trazabilidad. `ciclo-compras` ya hacía
+lo propio del lado de compras.
+
+Lo que encontró en su primera corrida es exactamente el tipo de hueco que busca:
+la existencia inicial de una empresa entra por ajuste, el endpoint de ajuste no
+dejaba declarar el costo —aunque la base sí— y sin costo de entrada ninguna
+salida se puede costear. El último eslabón de la cadena, el asiento del costo de
+lo vendido, era inalcanzable para toda empresa que no hubiera comprado nunca.
 
 ### 2.8 Tests de regresión
 

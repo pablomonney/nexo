@@ -326,6 +326,40 @@ suite('Stock: depósitos, movimientos y existencias', () => {
     expect(bitacora.rowCount).toBe(1);
   });
 
+  /**
+   * La existencia inicial de una empresa que empieza a operar entra por ajuste,
+   * y hasta ahora entraba **sin costo**: el endpoint no dejaba declararlo aunque
+   * la base lo admite (`sm_costo_solo_en_entradas`, 0077). La consecuencia
+   * llegaba lejos — sin costo de entrada ninguna salida de ese producto se puede
+   * costear, así que no hay costo de mercadería vendida que asentar. Lo encontró
+   * la cadena de ventas al llegar a su último eslabón.
+   */
+  it('un ajuste positivo puede declarar su costo, y uno negativo no', async () => {
+    const conCosto = await pedir('POST', '/stock-movements/ajuste', {
+      productoId: conMinimo, depositoId: central, cantidad: '5',
+      fecha: '2026-03-05', sentido: 'POSITIVO',
+      motivo: 'Existencia inicial declarada al poner en marcha el depósito',
+      costoUnitario: '123.4500',
+    });
+    expect(conCosto.statusCode, conCosto.body).toBe(201);
+
+    const guardado = await db.query<{ costo_unitario: string }>(
+      'SELECT costo_unitario::text FROM stock_movements WHERE id = $1',
+      [conCosto.json<{ id: string }>().id],
+    );
+    expect(guardado.rows[0]!.costo_unitario).toBe('123.4500');
+
+    // El costo de una salida es el promedio al momento de salir. Dejarlo
+    // escribir crearía una segunda verdad capaz de contradecirlo.
+    const negativo = await pedir('POST', '/stock-movements/ajuste', {
+      productoId: conMinimo, depositoId: central, cantidad: '1',
+      fecha: '2026-03-05', sentido: 'NEGATIVO', motivo: 'Rotura',
+      costoUnitario: '10.0000',
+    });
+    expect(negativo.statusCode, negativo.body).toBe(400);
+    expect(negativo.json<{ message: string }>().message).toContain('promedio');
+  });
+
   it('una transferencia son dos movimientos y no cambia el total', async () => {
     const total = await existencia(conMinimo);
     const r = await pedir('POST', '/stock-movements/transferencia', {
