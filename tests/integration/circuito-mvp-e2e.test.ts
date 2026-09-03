@@ -229,10 +229,39 @@ suite('Circuito MVP de punta a punta', () => {
       nroDocReceptor: PROVEEDOR,
     });
     expect(r.statusCode, r.body).toBe(200);
-    const cuerpo = r.json<{ constatacion: string; origen: string; arcaQueryId: string }>();
+    const cuerpo = r.json<{
+      constatacion: string;
+      origen: string;
+      arcaQueryId: string;
+      ambiente: string;
+      sello: {
+        resultado: string;
+        explicacion: string;
+        bloqueaAprobacionAutomatica: boolean;
+        coincideConLoGuardado: boolean;
+      };
+    }>();
 
     expect(cuerpo.origen).toBe('ARCA');
     expect(cuerpo.constatacion).toBe('OK');
+
+    /**
+     * El sello del motor dice lo que la columna no puede decir.
+     *
+     * Esta suite corre contra el ARCA simulado. `aSelloFiscal` —que hasta el
+     * barrido S-16 no la llamaba nadie— clasifica ese resultado como
+     * NO_VERIFICABLE con su motivo, mientras la columna guarda la traducción del
+     * vocabulario de ARCA. Las dos viajan, y la respuesta dice que no coinciden:
+     * un resultado simulado presentado como constatación real es exactamente lo
+     * que el §60 prohíbe.
+     */
+    if (cuerpo.ambiente === 'mock') {
+      expect(cuerpo.sello.resultado).toBe('NO_VERIFICABLE');
+      expect(cuerpo.sello.explicacion).toMatch(/simulación/i);
+      expect(cuerpo.sello.explicacion).toMatch(/no tiene valor probatorio/i);
+      expect(cuerpo.sello.bloqueaAprobacionAutomatica).toBe(true);
+      expect(cuerpo.sello.coincideConLoGuardado).toBe(false);
+    }
 
     // La prueba de que la consulta ocurrió: sin la fila del log, el CHECK
     // `tt_constatacion_arca_con_consulta` no deja escribir el resultado.

@@ -27,7 +27,12 @@
  * que pregunta.
  */
 
-import { createArcaClient, parseEnvironment } from '@aai/arca';
+import {
+  aSelloFiscal,
+  bloqueaAprobacionAutomatica,
+  createArcaClient,
+  parseEnvironment,
+} from '@aai/arca';
 import { DbCapabilityStore, DbCredentialStore } from '../arca/credential-store.js';
 import { recordAudit, withCompany, type Tx } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
@@ -661,11 +666,32 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
           userAgent: request.headers['user-agent'] ?? null,
         });
 
+        // El sello del motor, además del estado guardado. Los dos salen del
+        // mismo resultado y **no siempre coinciden**: en ambiente `mock`
+        // `aSelloFiscal` devuelve NO_VERIFICABLE —«este resultado NO proviene de
+        // ARCA y no tiene valor probatorio»— mientras que la traducción al
+        // vocabulario de la columna guarda OK.
+        //
+        // La diferencia se muestra en vez de taparse. Cuál de las dos debería
+        // quedar en `tax_transactions.constatacion` es una decisión de producto
+        // anotada en NEXO_ROADMAP.md: cambiarla acá volvería irreproducible el
+        // circuito completo en desarrollo, y hacerlo sin decidirlo sería
+        // inventar la decisión.
+        const sello = aSelloFiscal(resultado);
+
         return {
           taxTransactionId,
           constatacion: estadoGuardado,
           origen: 'ARCA' as const,
           ambiente: resultado.ambiente,
+          sello: {
+            resultado: sello.result,
+            explicacion: sello.explicacion,
+            // Un sello FAIL o NO_VERIFICABLE es disparador duro del sistema de
+            // confianza (§13): ninguna aprobación automática pasa por encima.
+            bloqueaAprobacionAutomatica: bloqueaAprobacionAutomatica(sello),
+            coincideConLoGuardado: sello.result === estadoGuardado,
+          },
           estadoArca: resultado.estado,
           motivoNoVerificable: resultado.motivoNoVerificable ?? null,
           observaciones: resultado.observaciones,

@@ -17,10 +17,10 @@
  * lectura nítida de algo ambiguo se presente como un dato firme.
  */
 
-import type { Currency } from '@aai/shared';
+import { add, money, type Currency, type Money } from '@aai/shared';
 import type { CampoExtraido, MetodoExtraccion, ValorInterpretado } from '../types.js';
 import { acotarConfianza } from '../types.js';
-import { parseImporteAr } from '../parsers/importe.js';
+import { desambiguarPorControl, parseImporteAr } from '../parsers/importe.js';
 import { parseFechaAr } from '../parsers/fecha.js';
 import {
   PATRON_ETIQUETADO,
@@ -230,7 +230,65 @@ export function extraerDeTexto(
     ...(opciones.anioReferencia !== undefined ? { anioReferencia: opciones.anioReferencia } : {}),
   };
 
-  return REGLAS.map((regla) => aplicar(regla, paginas, contexto));
+  return resolverTotalPorControl(
+    REGLAS.map((regla) => aplicar(regla, paginas, contexto)),
+    contexto.moneda,
+  );
+}
+
+/**
+ * El total ambiguo que la aritmética del comprobante resuelve.
+ *
+ * `1.234` puede ser mil doscientos treinta y cuatro o uno coma doscientos
+ * treinta y cuatro, y el parser **se abstiene** en vez de elegir. Pero si el
+ * mismo comprobante trae neto 1.019,83 e IVA 214,17, la suma solo cierra con una
+ * de las dos lecturas: ahí la ambigüedad la resuelve el documento, no una
+ * preferencia del parser.
+ *
+ * `desambiguarPorControl` hacía exactamente esto y **no la llamaba nadie**: cada
+ * campo se interpretaba solo, sin mirar a los otros. La encontró el barrido
+ * S-16.
+ *
+ * Solo se toca el total, y solo cuando quedó sin interpretar. La decisión queda
+ * escrita en la nota del campo: un valor que salió de un control cruzado no se
+ * presenta igual que uno leído.
+ */
+function resolverTotalPorControl(
+  campos: readonly CampoExtraido[],
+  moneda: Currency,
+): readonly CampoExtraido[] {
+  const total = campos.find((campo) => campo.fieldPath === 'importes.total');
+  if (total === undefined || total.parsedValue !== null || total.rawValue === null) return campos;
+
+  const neto = importeDe(campos, 'importes.neto');
+  const iva = importeDe(campos, 'importes.iva');
+  if (neto === null || iva === null) return campos;
+
+  const resuelto = desambiguarPorControl(total.rawValue, add(neto, iva), moneda);
+  if (!resuelto.ok) return campos;
+
+  return campos.map((campo) =>
+    campo.fieldPath === 'importes.total'
+      ? {
+          ...campo,
+          parsedValue: {
+            kind: 'MONEY' as const,
+            amount: resuelto.value.money.amount.toString(),
+            currency: moneda,
+          },
+          confidence: acotarConfianza(campo.method, campo.confidence * resuelto.value.confianza),
+          ...(resuelto.value.nota !== undefined ? { nota: resuelto.value.nota } : {}),
+        }
+      : campo,
+  );
+}
+
+/** El importe ya interpretado de un campo, o `null` si no lo hay. */
+function importeDe(campos: readonly CampoExtraido[], fieldPath: string): Money | null {
+  const campo = campos.find((c) => c.fieldPath === fieldPath);
+  const valor = campo?.parsedValue;
+  if (valor === undefined || valor === null || valor.kind !== 'MONEY') return null;
+  return money(BigInt(valor.amount), valor.currency);
 }
 
 function aplicar(

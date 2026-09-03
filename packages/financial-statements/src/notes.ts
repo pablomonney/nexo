@@ -31,7 +31,7 @@
  */
 
 import type { Money } from '@aai/shared';
-import type { EstadoContable, OrigenDelRenglon, RenglonEmitido } from './contracts.js';
+import type { EstadoContable, OrigenDelRenglon } from './contracts.js';
 
 export type OrigenDelTexto = 'PLANTILLA' | 'HUMANO' | 'IA_BORRADOR';
 
@@ -308,14 +308,6 @@ export function remisiones(estado: EstadoContable): Map<number, string[]> {
     else previos.push(renglon.codigo);
   }
   return mapa;
-}
-
-/** El renglón del estado al que una cifra remite, para navegar desde la nota. */
-export function renglonDe(
-  estado: EstadoContable,
-  cifra: CifraDeNota,
-): RenglonEmitido | undefined {
-  return estado.renglones.find((renglon) => renglon.codigo === cifra.renglonCodigo);
 }
 
 // ---------------------------------------------------------------------------

@@ -75,15 +75,6 @@ export function withCheckDigit(firstTen: string): string {
   return `${digits}${cuitCheckDigit(digits)}`;
 }
 
-/** Devuelve el CUIT normalizado o lanza. Usar en bordes de entrada, no en el dominio. */
-export function parseCuit(input: string): Cuit {
-  const digits = normalizeCuit(input);
-  if (!isValidCuit(digits)) {
-    throw new RangeError(`CUIT inválido: ${JSON.stringify(input)}`);
-  }
-  return digits as Cuit;
-}
-
 /** 30-12345678-9 */
 export function formatCuit(input: Cuit | string): string {
   const digits = normalizeCuit(input);

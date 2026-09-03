@@ -268,6 +268,77 @@ suite('Anomalías del Diario', () => {
     expect(abril.asientosRevisados).toBe(0);
   });
 
+  /**
+   * El análisis de variaciones, corrido sobre saldos reales.
+   *
+   * El motor estaba escrito y probado en `@aai/audit-engine` y **no lo llamaba
+   * nadie** — el mismo defecto que este archivo documenta para los detectores de
+   * anomalías, una vez más. Lo encontró un barrido nuevo (S-16), no una persona
+   * leyendo.
+   */
+  it('compara dos períodos y marca lo que se movió, con los dos umbrales', async () => {
+    // El período con movimientos —el que cargaron los tests anteriores— contra
+    // uno sin ninguno. Se buscan por lo que tienen y no por su número: una
+    // cuenta que estaba y deja de estar **desaparece**, y eso es significativo
+    // por sí mismo, sin importar el monto.
+    const conSaldos = await db.query<{ period_id: string }>(
+      'SELECT DISTINCT period_id FROM ledger_movements WHERE company_id = $1 LIMIT 1',
+      [empresa],
+    );
+    expect(conSaldos.rowCount, 'hay un período con saldos').toBe(1);
+    const marzo = conSaldos.rows[0]!.period_id;
+
+    const sinSaldos = await db.query<{ id: string }>(
+      `SELECT id FROM periods
+        WHERE company_id = $1 AND id <> $2
+          AND id NOT IN (SELECT period_id FROM ledger_movements WHERE company_id = $1)
+        LIMIT 1`,
+      [empresa, marzo],
+    );
+    expect(sinSaldos.rowCount, 'hay un período sin saldos').toBe(1);
+    const abril = sinSaldos.rows[0]!.id;
+
+    const r = await pedir(
+      'GET', `/audit/variaciones?periodoActual=${abril}&periodoAnterior=${marzo}`,
+    );
+    expect(r.statusCode, r.body).toBe(200);
+
+    const v = r.json<{
+      umbrales: { porcentaje: number; absoluto: string; deDondeSalen: string };
+      resumen: { total: number; significativas: number };
+      variaciones: {
+        codigo: string; tipo: string; significativa: boolean; porcentaje: number | null;
+        motivo: string;
+      }[];
+      alcance: string;
+    }>();
+
+    expect(v.umbrales.porcentaje).toBe(25);
+    expect(v.umbrales.deDondeSalen).toContain('conservadores');
+    expect(v.variaciones.length, 'hay cuentas que comparar').toBeGreaterThan(0);
+
+    // La cuenta de insumos tenía saldo en marzo y no en abril.
+    const insumos = v.variaciones.find((x) => x.codigo === '5.1.01');
+    expect(insumos, 'la cuenta con movimientos aparece en la comparación').toBeDefined();
+    expect(insumos!.tipo).toBe('DESAPARECE');
+    expect(insumos!.significativa, 'desaparecer es significativo por sí mismo').toBe(true);
+    // Y no se informa como un porcentaje enorme: no hay porcentaje contra cero.
+    expect(insumos!.porcentaje).not.toBe(0);
+
+    expect(v.alcance).toContain('qué significa lo decide quien audita');
+  });
+
+  it('los dos períodos no pueden ser el mismo', async () => {
+    const periodo = await db.query<{ id: string }>(
+      'SELECT id FROM periods WHERE company_id = $1 LIMIT 1',
+      [empresa],
+    );
+    const id = periodo.rows[0]!.id;
+
+    const r = await pedir('GET', `/audit/variaciones?periodoActual=${id}&periodoAnterior=${id}`);
+    expect(r.statusCode, r.body).toBe(400);
+  });
+
   it('exige los dos permisos de lectura que mira', async () => {
     // Sin cabecera de empresa no hay contexto, y la respuesta es la misma que
     // para una empresa ajena: 403 sin distinguir.

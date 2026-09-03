@@ -17,6 +17,8 @@ import {
   interpretarExtracto,
   repetidosEnElLote,
   totalesDelLote,
+  totalesPorTipo,
+  verificarActa,
   verificarCadenaDeSaldos,
   type LineaConciliable,
   type MapeoDeExtracto,
@@ -157,7 +159,9 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
               toDecimalString(movimiento.importe),
               movimiento.sentido,
               movimiento.referencia,
-              movimiento.saldoPosterior === null ? null : toDecimalString(movimiento.saldoPosterior),
+              movimiento.saldoPosterior === null
+                ? null
+                : toDecimalString(movimiento.saldoPosterior),
               movimiento.crudo,
               huellaDeMovimiento(movimiento),
             ],
@@ -171,7 +175,10 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
           objectType: 'bank_statements',
           objectId: statementId,
           ip: clientIp(request),
-          newValue: { movimientos: movimientos.length, errores: todosLosErrores.length },
+          newValue: {
+            movimientos: movimientos.length,
+            errores: todosLosErrores.length,
+          },
         });
 
         const totales = totalesDelLote(movimientos, MONEDA);
@@ -238,7 +245,12 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
             body.desde,
             body.hasta,
           );
-          const saldoLibro = await saldoContable(tx, tenant.companyId, cuenta.accountId, body.hasta);
+          const saldoLibro = await saldoContable(
+            tx,
+            tenant.companyId,
+            cuenta.accountId,
+            body.hasta,
+          );
 
           const acta = conciliar(
             {
@@ -385,7 +397,10 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
           // Las partidas conciliatorias, netas. Cero mientras no se releven:
           // el acta no cierra hasta que extracto + ajustes = libro, y eso lo
           // comprueba la base al confirmar.
-          ajusteNeto: z.string().regex(/^-?\d+(\.\d{1,2})?$/).default('0'),
+          ajusteNeto: z
+            .string()
+            .regex(/^-?\d+(\.\d{1,2})?$/)
+            .default('0'),
         })
         .parse(request.body);
 
@@ -429,9 +444,15 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
                 saldo_extracto, saldo_libro, ajuste_neto, created_by)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
             [
-              tenant.companyId, params.bankAccountId, periodo.rows[0]!.id,
-              body.desde, body.hasta, body.saldoExtracto, libro.rows[0]!.saldo,
-              body.ajusteNeto, actorId,
+              tenant.companyId,
+              params.bankAccountId,
+              periodo.rows[0]!.id,
+              body.desde,
+              body.hasta,
+              body.saldoExtracto,
+              libro.rows[0]!.saldo,
+              body.ajusteNeto,
+              actorId,
             ],
           );
 
@@ -475,12 +496,156 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /** Las conciliaciones de la empresa, para poder elegir una. */
+  /**
+   * Vuelve a hacer la cuenta de una conciliación ya confirmada.
+   *
+   * Una conciliación guardada es un dato derivado, y un dato derivado que nadie
+   * vuelve a verificar se desincroniza en silencio: alcanza con un asiento nuevo
+   * en el período, un extracto reimportado o una línea anulada. Es el mismo
+   * principio que `ledger:verify` sobre el Mayor y que la comprobación del
+   * promedio contra su derivación (ADR-022).
+   *
+   * El motor tenía la verificación escrita —`verificarActa` en
+   * `@aai/bank-engine`— y **no la llamaba nadie**: la encontró el barrido S-16.
+   * Una verificación que no corre no verifica nada.
+   */
+  app.get<{ Params: { reconciliationId: string } }>(
+    '/banks/reconciliations/:reconciliationId/verificar',
+    async (request) => {
+      const tenant = await requireCompany(request);
+      requirePermission(tenant, 'bank:read');
+      const auth = requireAuth(request);
+      const params = z.object({ reconciliationId: z.string().uuid() }).parse(request.params);
+
+      return withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const guardada = await tx.query<{
+            bank_account_id: string;
+            status: string;
+            desde: string;
+            hasta: string;
+            saldo_extracto: string;
+            saldo_libro: string;
+            ajuste_neto: string;
+          }>(
+            `SELECT bank_account_id, status, desde::text, hasta::text,
+                    saldo_extracto::text, saldo_libro::text, ajuste_neto::text
+               FROM bank_reconciliations
+              WHERE id = $1 AND company_id = $2`,
+            [params.reconciliationId, tenant.companyId],
+          );
+          if (guardada.rowCount === 0) throw notFound('No existe esa conciliación en esta empresa');
+          const r = guardada.rows[0]!;
+
+          const cuenta = await cargarCuenta(tx, tenant.companyId, r.bank_account_id);
+          if (cuenta === null) throw notFound('La cuenta bancaria ya no existe');
+
+          const movimientos = await cargarMovimientos(
+            tx,
+            tenant.companyId,
+            r.bank_account_id,
+            r.desde,
+            r.hasta,
+          );
+          const lineas = await cargarLineas(
+            tx,
+            tenant.companyId,
+            cuenta.accountId,
+            r.desde,
+            r.hasta,
+          );
+          const saldoLibro = await saldoContable(tx, tenant.companyId, cuenta.accountId, r.hasta);
+
+          const acta = conciliar({
+            bankAccountId: r.bank_account_id,
+            desde: parseCalendarDate(r.desde),
+            hasta: parseCalendarDate(r.hasta),
+            moneda: MONEDA,
+            saldoSegunExtracto: moneyFromDecimalString(r.saldo_extracto, MONEDA),
+            saldoSegunLibro: saldoLibro,
+            movimientos,
+            lineas,
+          });
+
+          // Rehacer la cuenta sin extracto importado no verifica nada: sin el
+          // lado del banco, **cada** línea del Mayor parece una partida
+          // conciliatoria, y el veredicto diría "algo cambió" sin que haya
+          // cambiado nada. Peor todavía: la comparación quedaría entre dos
+          // números guardados, que por definición siempre dan lo mismo.
+          //
+          // Cuando no hay contra qué rehacerla, la respuesta es "no se puede
+          // afirmar" —no `false`, y mucho menos `true`—.
+          const extractos = await tx.query<{ n: number }>(
+            `SELECT count(*)::int AS n
+               FROM bank_statements
+              WHERE company_id = $1 AND bank_account_id = $2
+                AND desde <= $4::date AND hasta >= $3::date`,
+            [tenant.companyId, r.bank_account_id, r.desde, r.hasta],
+          );
+          const verificable = (extractos.rows[0]?.n ?? 0) > 0;
+
+          // Se compara contra el saldo de libro **guardado**: el acta cierra
+          // cuando el conciliado coincide con él, y si el libro cambió después
+          // de confirmar, eso es exactamente lo que hay que detectar.
+          const veredicto = verificable
+            ? verificarActa(acta, moneyFromDecimalString(r.saldo_libro, MONEDA))
+            : {
+                coincide: null,
+                detalle:
+                  'No se importó ningún extracto que cubra el período de esta conciliación, ' +
+                  'así que no hay contra qué rehacer la cuenta. Esto no dice que la ' +
+                  'conciliación esté mal: dice que no se puede verificar.',
+              };
+          const totales = totalesPorTipo(acta, MONEDA);
+
+          return {
+            estado: r.status,
+            verificable,
+            coincide: veredicto.coincide,
+            detalle: veredicto.detalle,
+            guardado: {
+              saldoExtracto: r.saldo_extracto,
+              saldoLibro: r.saldo_libro,
+              ajusteNeto: r.ajuste_neto,
+            },
+            // Sin extracto no hay recálculo que mostrar: las partidas que
+            // saldrían de ahí son un artefacto de que falta un lado, y una
+            // pantalla que las muestre estaría mostrando datos inventados.
+            recalculado: verificable
+              ? {
+                  saldoConciliado: toDecimalString(acta.saldoConciliado),
+                  saldoSegunLibro: toDecimalString(acta.saldoSegunLibro),
+                  ajusteNeto: toDecimalString(acta.ajusteNeto),
+                  cierra: acta.cierra,
+                }
+              : null,
+            partidasConciliatorias: verificable
+              ? {
+                  enBancoNoEnLibro: toDecimalString(totales.enBancoNoEnLibro),
+                  enLibroNoEnBanco: toDecimalString(totales.enLibroNoEnBanco),
+                }
+              : null,
+            alcance:
+              'Se rehace la conciliación desde los movimientos del extracto y las líneas del ' +
+              'Mayor de hoy, y se compara contra lo que quedó guardado al confirmarla. Que no ' +
+              'coincida no significa que esté mal: significa que algo cambió después, y dice ' +
+              'qué mirar. Si nunca se importó un extracto del período, no se puede verificar y ' +
+              'la respuesta lo dice en vez de suponer.',
+          };
+        },
+      );
+    },
+  );
+
   app.get('/banks/reconciliations', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'bank:read');
     const auth = requireAuth(request);
     const query = z
-      .object({ status: z.enum(['BORRADOR', 'CONFIRMADA', 'ANULADA']).optional() })
+      .object({
+        status: z.enum(['BORRADOR', 'CONFIRMADA', 'ANULADA']).optional(),
+      })
       .parse(request.query);
 
     return withCompany(
@@ -550,7 +715,10 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
         });
 
         reply.code(200);
-        return { reconciliationId: params.reconciliationId, status: 'CONFIRMADA' };
+        return {
+          reconciliationId: params.reconciliationId,
+          status: 'CONFIRMADA',
+        };
       });
     },
   );
@@ -615,10 +783,14 @@ async function cargarLayout(
   // constraint desde el otro lado de la red.
   if (fila.esquema_signo === 'COLUMNAS_SEPARADAS') {
     if (fila.columna_debito === null || fila.columna_credito === null) {
-      throw badRequest(`El mapeo "${fila.nombre}" está incompleto: faltan las columnas de importe.`);
+      throw badRequest(
+        `El mapeo "${fila.nombre}" está incompleto: faltan las columnas de importe.`,
+      );
     }
   } else if (fila.columna_importe === null || fila.negativo_es_salida === null) {
-    throw badRequest(`El mapeo "${fila.nombre}" está incompleto: falta la columna de importe o su óptica.`);
+    throw badRequest(
+      `El mapeo "${fila.nombre}" está incompleto: falta la columna de importe o su óptica.`,
+    );
   }
 
   return {

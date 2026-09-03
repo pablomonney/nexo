@@ -36,7 +36,13 @@ import {
   type Revision,
 } from '@aai/accounting-engine';
 import { moneyFromDecimalString } from '@aai/shared';
-import { HECHO_VINCULACION, proveerVinculacion, type DeclaracionDeAfectacion } from '@aai/tax-engine';
+import {
+  HECHO_VINCULACION,
+  hechosDeAfectacion,
+  proveerVinculacion,
+  type DeclaracionDeAfectacion,
+} from '@aai/tax-engine';
+import { ErrorDeRegla, evaluar } from '@aai/normative-engine';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
@@ -103,9 +109,13 @@ function normalizar(fila: FilaOperacion, companyId: string): ComprobanteNormaliz
 }
 
 /** El sello fiscal, traducido del catálogo de `tax_transactions.constatacion`. */
-function sello(constatacion: string): { estado: 'APROBADO' | 'RECHAZADO' | 'NO_VERIFICABLE'; motivo: string | null } {
+function sello(constatacion: string): {
+  estado: 'APROBADO' | 'RECHAZADO' | 'NO_VERIFICABLE';
+  motivo: string | null;
+} {
   if (constatacion === 'OK') return { estado: 'APROBADO', motivo: null };
-  if (constatacion === 'FAIL') return { estado: 'RECHAZADO', motivo: 'La constatación devolvió FAIL' };
+  if (constatacion === 'FAIL')
+    return { estado: 'RECHAZADO', motivo: 'La constatación devolvió FAIL' };
   return { estado: 'NO_VERIFICABLE', motivo: constatacion };
 }
 
@@ -177,7 +187,11 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
       );
       if (Number(previa.rowCount) > 0) {
         reply.code(200);
-        return { decisionId: previa.rows[0]!.id, yaExistia: true, estado: previa.rows[0]!.estado };
+        return {
+          decisionId: previa.rows[0]!.id,
+          yaExistia: true,
+          estado: previa.rows[0]!.estado,
+        };
       }
 
       const normalizado = normalizar(operacion.rows[0]!, tenant.companyId);
@@ -196,7 +210,10 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
           fuente: `declaración de ${provision.declaracion.declaradaPor} el ${provision.declaracion.declaradaAt}`,
         });
       } else if (provision.estado === 'REQUIERE_REVISION') {
-        revisionesPrevias.push({ motivo: 'REQUIERE_PRORRATEO', detalle: provision.explicacion });
+        revisionesPrevias.push({
+          motivo: 'REQUIERE_PRORRATEO',
+          detalle: provision.explicacion,
+        });
       } else {
         revisionesPrevias.push({
           motivo: 'SIN_HECHO_REQUERIDO',
@@ -226,8 +243,9 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         rule_key: string;
         version: number;
         status: string;
+        conditions: unknown;
       }>(
-        `SELECT r.id, r.rule_key, r.version, r.status
+        `SELECT r.id, r.rule_key, r.version, r.status, r.conditions
            FROM accounting_rules r
           WHERE r.rule_key = ANY($2)
             AND r.status = 'ACTIVE'
@@ -236,13 +254,58 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         [normalizado.fecha, CLAVES_APLICABLES],
       );
 
-      const resultadosDeRegla: ResultadoDeRegla[] = reglas.rows.map((r) => ({
-        ruleKey: r.rule_key,
-        version: r.version,
-        estado: 'APLICADA',
-        motivo: 'Vigente y aplicable a la fecha del comprobante',
-        cita: null,
-      }));
+      // ── Las condiciones de la regla, evaluadas ──────────────────────────
+      //
+      // Antes no se evaluaban. Una regla vigente a la fecha se daba por
+      // `APLICADA` sin mirar su `conditions`, que es el AST declarativo que la
+      // define: la regla del art. 12 se habría aplicado igual sobre una compra
+      // vinculada a operaciones gravadas que sobre una exenta.
+      //
+      // El código que sí lo hacía vivía **dentro de un test**
+      // (`regla-iva-vinculacion.test.ts`), que comprobaba qué haría la regla si
+      // se activara. Como ninguna está ACTIVE todavía, el hueco no se veía —y el
+      // día que alguien activara una, la evaluación seguiría estando solo ahí.
+      //
+      // El intérprete es cerrado (`@aai/normative-engine`): datos, no
+      // JavaScript. Y lo que no se puede evaluar **falla**, nunca vale `false`:
+      // una regla que deja de aplicarse en silencio es peor que una que rompe.
+      const hechosDeLaRegla = hechosDeAfectacion(provision);
+
+      const resultadosDeRegla: ResultadoDeRegla[] = reglas.rows.map((r) => {
+        try {
+          return evaluar(r.conditions, hechosDeLaRegla)
+            ? {
+                ruleKey: r.rule_key,
+                version: r.version,
+                estado: 'APLICADA' as const,
+                motivo:
+                  'Vigente a la fecha, y sus condiciones se cumplen con los hechos declarados',
+                cita: null,
+              }
+            : {
+                ruleKey: r.rule_key,
+                version: r.version,
+                estado: 'NO_APLICA' as const,
+                motivo:
+                  'Vigente a la fecha, pero sus condiciones no se cumplen con los hechos ' +
+                  'declarados. Que no aplique no afirma lo contrario de lo que la regla dice.',
+                cita: null,
+              };
+        } catch (error) {
+          // Falta un hecho que la regla exige, o el AST cambió. En los dos casos
+          // la regla no resuelve, y decirlo es lo único honesto.
+          return {
+            ruleKey: r.rule_key,
+            version: r.version,
+            estado: 'SIN_FUENTE' as const,
+            motivo:
+              error instanceof ErrorDeRegla
+                ? error.message
+                : 'La condición de la regla no se pudo evaluar.',
+            cita: null,
+          };
+        }
+      });
 
       const esManual = body.manual !== undefined;
 
@@ -278,7 +341,11 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
       const origen = esManual ? 'MANUAL' : 'DETERMINISTICA';
       const motivos = esManual ? [] : decision.revisiones;
 
-      if (!esManual && decision.estado === 'PROPUESTA_DE_ASIENTO' && resultadosDeRegla.length === 0) {
+      if (
+        !esManual &&
+        decision.estado === 'PROPUESTA_DE_ASIENTO' &&
+        resultadosDeRegla.length === 0
+      ) {
         // No debería poder pasar —`decidir` exige una regla aplicada— pero si
         // pasara, se corta acá antes de escribir una fila que el trigger va a
         // rechazar con un mensaje menos claro.
@@ -287,7 +354,9 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
 
       const evidencia = [
         { tipo: 'COMPROBANTE', id: taxTransactionId },
-        ...(declaracion === null ? [] : [{ tipo: 'DECLARACION_PROFESIONAL', id: taxTransactionId }]),
+        ...(declaracion === null
+          ? []
+          : [{ tipo: 'DECLARACION_PROFESIONAL', id: taxTransactionId }]),
       ];
 
       const fila = await tx.query<{ id: string }>(
@@ -362,7 +431,12 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         action: 'DECISION_REGISTRADA',
         objectType: 'accounting_decisions',
         objectId: decisionId,
-        newValue: { resultado, origen, ambiente: body.ambiente, reglas: reglas.rowCount },
+        newValue: {
+          resultado,
+          origen,
+          ambiente: body.ambiente,
+          reglas: reglas.rowCount,
+        },
         ...(esManual ? { motivo: body.manual!.justificacion } : {}),
       });
 
@@ -372,7 +446,10 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         resultado,
         origen,
         ambiente: body.ambiente,
-        reglasAplicadas: reglas.rows.map((r) => ({ ruleKey: r.rule_key, version: r.version })),
+        reglasAplicadas: reglas.rows.map((r) => ({
+          ruleKey: r.rule_key,
+          version: r.version,
+        })),
         motivos,
         hechos: decision.hechos,
         // Sin regla no hay clave de regla, y se dice con `null` en vez de omitir
@@ -500,10 +577,9 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
 
         // 1 · Apagar la anterior. El trigger de inmutabilidad admite este cambio
         //     de estado y ningún otro si la decisión ya fundamenta un asiento.
-        await tx.query(
-          `UPDATE accounting_decisions SET estado = 'SUPERSEDIDA' WHERE id = $1`,
-          [body.supersedeId],
-        );
+        await tx.query(`UPDATE accounting_decisions SET estado = 'SUPERSEDIDA' WHERE id = $1`, [
+          body.supersedeId,
+        ]);
 
         // 2 · Emitir la nueva. Es MANUAL por construcción: una corrección la
         //     resuelve una persona. Si el motor volviera a resolver lo mismo,
@@ -617,7 +693,8 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
           );
 
           return {
-            vigente: filas.rows.find((f) => (f as { estado: string }).estado !== 'SUPERSEDIDA') ?? null,
+            vigente:
+              filas.rows.find((f) => (f as { estado: string }).estado !== 'SUPERSEDIDA') ?? null,
             historial: filas.rows,
           };
         },

@@ -20,8 +20,13 @@ import {
   exportarMayorCsv,
   hashDeLibro,
   pieDeLibro,
+  resumenCoincideConDetalle,
+  resumirPorMes,
+  saldosPorNaturaleza,
   verificarProyeccion,
   type AsientoDelLibro,
+  type AsientoResumido,
+  type SubdiarioDeclarado,
   type CuentaParaElMayor,
   type EntryStatus,
   type LibroDiario,
@@ -32,16 +37,20 @@ import {
 } from '@aai/accounting-engine';
 import { recordAudit, withCompany, type Tx } from '@aai/db';
 import {
+  calendarDate,
+  daysInMonth,
   moneyFromDecimalString,
   parseCalendarDate,
   toDecimalString,
   type CalendarDate,
   type Currency,
+  type Money,
 } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, notFound } from '../http/errors.js';
+import { declararSubdiario } from '../tax/subdiario.js';
 
 const rangoSchema = z.object({
   desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -113,7 +122,9 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'report:read');
     const auth = requireAuth(request);
-    const query = rangoSchema.extend({ cuenta: z.string().max(40).optional() }).parse(request.query);
+    const query = rangoSchema
+      .extend({ cuenta: z.string().max(40).optional() })
+      .parse(request.query);
 
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
@@ -129,7 +140,15 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
           throw notFound(`La cuenta ${query.cuenta} no tiene movimientos en el rango`);
         }
 
-        return respuestaMayor({ ...mayor, cuentas });
+        // Las sumas por naturaleza salen del Mayor **completo**, no del
+        // filtrado: son el control cruzado contra el balance de sumas y saldos,
+        // y la suma de tres cuentas elegidas no cruza contra nada. Cuando se
+        // pidió una cuenta sola, el campo dice `null` — que es "no se puede
+        // afirmar", no cero.
+        return respuestaMayor(
+          { ...mayor, cuentas },
+          query.cuenta === undefined ? saldosPorNaturaleza(mayor) : null,
+        );
       },
     );
   });
@@ -154,6 +173,101 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
           )
           .header('x-content-sha256', hashDeLibro(csv))
           .send(csv);
+      },
+    );
+  });
+
+  /**
+   * Diario resumido del mes (CCyC art. 327).
+   *
+   * El artículo permite que el Diario lleve un asiento resumido por mes **si el
+   * resumen surge de anotaciones detalladas practicadas en subdiarios**. Las dos
+   * condiciones se verifican acá, y ninguna se da por cumplida:
+   *
+   *   1. **El subdiario existe y está emitido.** Sale de `vat_books`: si el
+   *      período no se generó, no hay registro detallado del que surja nada.
+   *   2. **Es el mismo subdiario.** El subdiario se vuelve a armar hoy y su
+   *      hash se compara con el que quedó archivado al generar el libro. Si el
+   *      detalle cambió después, el resumen ya no surge de él — y esa es
+   *      exactamente la afirmación que el artículo pide poder verificar
+   *      (ADR-021: un documento cita el hecho; no lo genera).
+   *
+   * Lo que no tiene subdiario no se resume: va al Diario detallado, que siempre
+   * es legal. Resumir sin subdiario, no.
+   */
+  app.get('/books/diario-resumido', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({
+        anio: z.coerce.number().int().min(2000).max(2100),
+        mes: z.coerce.number().int().min(1).max(12),
+        ejercicio: z.string().uuid().optional(),
+      })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const desde = calendarDate(query.anio, query.mes, 1);
+        const hasta = calendarDate(query.anio, query.mes, daysInMonth(query.anio, query.mes));
+
+        const contexto = await resolverContexto(tx, tenant.companyId, {
+          desde,
+          hasta,
+          ...(query.ejercicio === undefined ? {} : { ejercicio: query.ejercicio }),
+        });
+        const asientos = asientosDelDiario(
+          construirLibroDiario(contexto.asientos, contexto.opcionesDiario),
+        );
+
+        const resumibles = asientos.filter((asiento) => esResumible(asiento.journalCode));
+        const detallados = asientos.filter((asiento) => !esResumible(asiento.journalCode));
+
+        const { declarados, observaciones } = await declaracionesDelMes(
+          tx,
+          tenant.companyId,
+          query.anio,
+          query.mes,
+          new Set(resumibles.map((asiento) => asiento.journalCode)),
+        );
+
+        const armado = resumirPorMes(resumibles, declarados, contexto.opcionesMayor.moneda);
+
+        return {
+          periodo: `${String(query.anio)}-${String(query.mes).padStart(2, '0')}`,
+          desde,
+          hasta,
+          moneda: contexto.opcionesMayor.moneda,
+          resumible: armado.ok && observaciones.length === 0,
+          resumidos: armado.ok
+            ? armado.value.map((resumen) => serializarResumen(resumen, asientos))
+            : [],
+          // Los rechazos del motor y los del archivo van juntos: quien cierra el
+          // mes necesita ver de una vez todo lo que le falta, no descubrirlo de
+          // a uno.
+          rechazos: [
+            ...observaciones,
+            ...(armado.ok
+              ? []
+              : armado.error.map((rechazo) => ({
+                  motivo: rechazo.motivo,
+                  journalCode: rechazo.journalCode,
+                  detalle: rechazo.detalle,
+                  fundamento: rechazo.fundamento,
+                }))),
+          ],
+          // Lo que va detallado no es un problema: es el Diario normal.
+          detallados: {
+            asientos: detallados.length,
+            libros: [...new Set(detallados.map((asiento) => asiento.journalCode))].sort(),
+          },
+          alcance:
+            'Un asiento resumido reemplaza en el Diario a los asientos del mes de ese subdiario. ' +
+            'Este endpoint arma el resumen y lo verifica contra el detalle; no lo registra: ' +
+            'registrar el resumen es un acto con firma y va por el único escritor del Mayor.',
+        };
       },
     );
   });
@@ -324,7 +438,11 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
           objectType: 'book_emissions',
           objectId: emision.rows[0]!.id,
           ip: clientIp(request),
-          newValue: { libro: body.libro, sha256, cumpleFormalidades: diario.cumpleFormalidades },
+          newValue: {
+            libro: body.libro,
+            sha256,
+            cumpleFormalidades: diario.cumpleFormalidades,
+          },
         });
 
         reply.code(201);
@@ -371,30 +489,27 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
    * original*. La vista `ledger_trace` de la migración 0019 es ese camino; acá
    * solo se lo expone.
    */
-  app.get<{ Params: { movementId: string } }>(
-    '/books/trace/:movementId',
-    async (request) => {
-      const tenant = await requireCompany(request);
-      requirePermission(tenant, 'report:read');
-      const auth = requireAuth(request);
-      const params = z.object({ movementId: z.string().uuid() }).parse(request.params);
+  app.get<{ Params: { movementId: string } }>('/books/trace/:movementId', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const params = z.object({ movementId: z.string().uuid() }).parse(request.params);
 
-      return withCompany(
-        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
-        async (tx) => {
-          const result = await tx.query(
-            `SELECT * FROM ledger_trace WHERE movement_id = $1 AND company_id = $2`,
-            [params.movementId, tenant.companyId],
-          );
-          const fila = result.rows[0];
-          if (fila === undefined) {
-            throw notFound('No existe ese movimiento en el Mayor de esta empresa');
-          }
-          return fila;
-        },
-      );
-    },
-  );
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const result = await tx.query(
+          `SELECT * FROM ledger_trace WHERE movement_id = $1 AND company_id = $2`,
+          [params.movementId, tenant.companyId],
+        );
+        const fila = result.rows[0];
+        if (fila === undefined) {
+          throw notFound('No existe ese movimiento en el Mayor de esta empresa');
+        }
+        return fila;
+      },
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +540,153 @@ interface ContextoDeLibros {
  * la forma correcta y la incorrecta se escribían igual de fácil, el próximo
  * endpoint iba a volver a elegir mal.
  */
+/**
+ * Los libros que pueden llevar asiento resumido.
+ *
+ * Son los que tienen un subdiario del que el resumen pueda surgir. `GENERAL` no
+ * está y no es un olvido: un asiento manual no tiene registro auxiliar detrás,
+ * así que va al Diario tal como se cargó.
+ */
+const LIBROS_CON_SUBDIARIO = ['COMPRAS', 'VENTAS'] as const;
+
+function esResumible(journalCode: string): boolean {
+  return (LIBROS_CON_SUBDIARIO as readonly string[]).includes(journalCode);
+}
+
+/**
+ * Las declaraciones de subdiario del mes, verificadas contra lo archivado.
+ *
+ * Devuelve solo las que se pudieron verificar. Las que no, salen como
+ * observación con el motivo: un subdiario que no se puede verificar no es un
+ * subdiario declarado, y tratarlo como si lo fuera es exactamente lo que el art.
+ * 327 no permite.
+ */
+async function declaracionesDelMes(
+  tx: Tx,
+  companyId: string,
+  anio: number,
+  mes: number,
+  presentes: ReadonlySet<string>,
+): Promise<{
+  declarados: SubdiarioDeclarado[];
+  observaciones: {
+    motivo: string;
+    journalCode: string;
+    detalle: string;
+    fundamento: string;
+  }[];
+}> {
+  const declarados: SubdiarioDeclarado[] = [];
+  const observaciones: {
+    motivo: string;
+    journalCode: string;
+    detalle: string;
+    fundamento: string;
+  }[] = [];
+
+  const libro = await tx.query<{
+    status: string;
+    compras_sha256: string | null;
+    ventas_sha256: string | null;
+  }>(
+    `SELECT status, compras_sha256, ventas_sha256
+       FROM vat_books WHERE company_id = $1 AND anio = $2 AND mes = $3`,
+    [companyId, anio, mes],
+  );
+  const fila = libro.rows[0];
+
+  for (const direccion of LIBROS_CON_SUBDIARIO) {
+    if (!presentes.has(direccion)) continue;
+
+    if (fila === undefined || fila.status === 'PENDIENTE') {
+      observaciones.push({
+        motivo: 'SUBDIARIO_NO_EMITIDO',
+        journalCode: direccion,
+        detalle:
+          `El Libro de IVA de ${String(anio)}-${String(mes).padStart(2, '0')} no está generado, ` +
+          `así que no hay subdiario de ${direccion} emitido del que el resumen pueda surgir. ` +
+          'Generá el libro del período o registrá el Diario en detalle.',
+        fundamento: FUNDAMENTO_327,
+      });
+      continue;
+    }
+
+    const archivado = direccion === 'COMPRAS' ? fila.compras_sha256 : fila.ventas_sha256;
+    const firmado = await declararSubdiario(tx, companyId, direccion, anio, mes);
+
+    if (archivado === null) {
+      observaciones.push({
+        motivo: 'SUBDIARIO_SIN_HASH_ARCHIVADO',
+        journalCode: direccion,
+        detalle:
+          `El libro del período se generó antes de que el sistema archivara el hash del ` +
+          `subdiario de ${direccion}, así que no hay contra qué verificar que el detalle sea ` +
+          'el mismo. Volvé a generar el libro del período.',
+        fundamento: FUNDAMENTO_327,
+      });
+      continue;
+    }
+
+    if (archivado !== firmado.sha256) {
+      observaciones.push({
+        motivo: 'SUBDIARIO_CAMBIO_DESPUES_DE_EMITIDO',
+        journalCode: direccion,
+        detalle:
+          `El subdiario de ${direccion} rehecho hoy no da el mismo archivo que el que se ` +
+          `archivó al generar el libro (${archivado.slice(0, 12)}… contra ` +
+          `${firmado.sha256.slice(0, 12)}…). Algo cambió después: un comprobante nuevo, uno ` +
+          'anulado o una alícuota reidentificada. El resumen ya no surge de lo que se emitió.',
+        fundamento: FUNDAMENTO_327,
+      });
+      continue;
+    }
+
+    declarados.push(firmado.declarado);
+  }
+
+  return { declarados, observaciones };
+}
+
+const FUNDAMENTO_327 =
+  'CCyC art. 327 — los resúmenes no pueden cubrir más de un mes y deben surgir de anotaciones detalladas practicadas en subdiarios';
+
+function serializarResumen(resumen: AsientoResumido, detalle: readonly AsientoDelLibro[]): unknown {
+  // El control que `resumenCoincideConDetalle` promete. Corre siempre y viaja en
+  // la respuesta: una verificación que no se muestra no la mira nadie.
+  const coincide = resumenCoincideConDetalle(resumen, detalle);
+
+  return {
+    journalCode: resumen.journalCode,
+    fecha: resumen.fecha,
+    descripcion: resumen.descripcion,
+    totalDebe: toDecimalString(resumen.totalDebe),
+    totalHaber: toDecimalString(resumen.totalHaber),
+    operaciones: resumen.asientosResumidos.length,
+    asientosResumidos: resumen.asientosResumidos,
+    subdiario: {
+      nombre: resumen.subdiario.nombre,
+      desde: resumen.subdiario.desde,
+      hasta: resumen.subdiario.hasta,
+      referencia: resumen.subdiario.referencia,
+    },
+    lineas: resumen.lineas.map((linea) => ({
+      cuentaId: linea.accountId,
+      codigo: linea.accountCode,
+      nombre: linea.accountName,
+      debe: toDecimalString(linea.debe),
+      haber: toDecimalString(linea.haber),
+      operaciones: linea.operaciones,
+    })),
+    verificacion: {
+      coincide,
+      detalle: coincide
+        ? 'El resumen suma exactamente lo mismo que los asientos que condensó.'
+        : 'El resumen NO suma lo mismo que el detalle que dice condensar. No lo registres: ' +
+          'es un error del armado, no del mes.',
+    },
+  };
+}
+
 function mayorDelRango(contexto: ContextoDeLibros): LibroMayor {
   const diario = construirLibroDiario(contexto.asientos, contexto.opcionesDiario);
   return construirLibroMayor(asientosDelDiario(diario), contexto.opcionesMayor);
@@ -558,7 +820,10 @@ async function resolverContexto(
 
   const porAsiento = new Map<string, LineaDelLibro[]>();
   const catalogo = new Map<string, CuentaParaElMayor>(
-    plan.rows.map((fila) => [fila.id, { id: fila.id, code: fila.code, name: fila.name, nature: fila.nature }]),
+    plan.rows.map((fila) => [
+      fila.id,
+      { id: fila.id, code: fila.code, name: fila.name, nature: fila.nature },
+    ]),
   );
   for (const fila of lineas.rows) {
     catalogo.set(fila.account_id, {
@@ -624,9 +889,7 @@ async function resolverContexto(
       moneda,
       desde,
       hasta,
-      ...(query.asientosPorFolio === undefined
-        ? {}
-        : { asientosPorFolio: query.asientosPorFolio }),
+      ...(query.asientosPorFolio === undefined ? {} : { asientosPorFolio: query.asientosPorFolio }),
     },
     opcionesMayor: {
       companyId,
@@ -771,7 +1034,10 @@ function respuestaDiario(libro: LibroDiario): unknown {
   };
 }
 
-function respuestaMayor(mayor: LibroMayor): unknown {
+function respuestaMayor(
+  mayor: LibroMayor,
+  naturaleza: { deudores: Money; acreedores: Money } | null,
+): unknown {
   const balance = balanceDesdeMayor(mayor);
   return {
     desde: mayor.desde,
@@ -781,6 +1047,16 @@ function respuestaMayor(mayor: LibroMayor): unknown {
       debe: toDecimalString(mayor.totalDebe),
       haber: toDecimalString(mayor.totalHaber),
     },
+    // Suma de saldos deudores y acreedores del Mayor completo. Es contra esto
+    // que se cruza el balance de sumas y saldos: si no dan lo mismo, uno de los
+    // dos se armó sobre otro universo de asientos.
+    saldosPorNaturaleza:
+      naturaleza === null
+        ? null
+        : {
+            deudores: toDecimalString(naturaleza.deudores),
+            acreedores: toDecimalString(naturaleza.acreedores),
+          },
     // El balance viaja con el Mayor a propósito: son la misma fuente leída de
     // dos maneras, y verlos juntos hace evidente si alguna vez dejan de coincidir.
     balance: {

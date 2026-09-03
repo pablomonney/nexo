@@ -3,11 +3,8 @@ import {
   addDays,
   calendarDate,
   compareDates,
-  endOfMonth,
   isCalendarDate,
-  isWithin,
   parseCalendarDate,
-  startOfMonth,
 } from './calendar-date.js';
 
 describe('CalendarDate', () => {
@@ -30,20 +27,6 @@ describe('CalendarDate', () => {
   it('ordena cronológicamente por comparación de strings', () => {
     expect(compareDates(parseCalendarDate('2024-12-31'), parseCalendarDate('2025-01-01'))).toBe(-1);
     expect(compareDates(parseCalendarDate('2025-01-01'), parseCalendarDate('2025-01-01'))).toBe(0);
-  });
-
-  it('isWithin soporta intervalos abiertos hacia el futuro', () => {
-    const desde = parseCalendarDate('2024-07-01');
-    expect(isWithin(parseCalendarDate('2024-06-30'), desde, null)).toBe(false);
-    expect(isWithin(parseCalendarDate('2024-07-01'), desde, null)).toBe(true);
-    expect(isWithin(parseCalendarDate('2030-01-01'), desde, null)).toBe(true);
-    expect(isWithin(parseCalendarDate('2030-01-01'), desde, parseCalendarDate('2025-06-30'))).toBe(false);
-  });
-
-  it('inicio y fin de mes', () => {
-    expect(startOfMonth(parseCalendarDate('2025-03-17'))).toBe('2025-03-01');
-    expect(endOfMonth(parseCalendarDate('2024-02-10'))).toBe('2024-02-29');
-    expect(endOfMonth(parseCalendarDate('2025-02-10'))).toBe('2025-02-28');
   });
 
   it('addDays cruza fin de mes y fin de año', () => {

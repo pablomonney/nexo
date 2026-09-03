@@ -330,16 +330,58 @@ suite('Credenciales de ARCA', () => {
       expect(wscdc.queHacer).toMatch(/WSASS/);
     });
 
-    it('y cuando está habilitado lo dice', async () => {
+    /**
+     * Habilitado **y relevado**. Son dos cosas.
+     *
+     * Una fila con `enabled = true` y sin `verified_at` dice que alguien la
+     * marcó, no que el servicio haya contestado alguna vez. `leerHabilitacion`
+     * —del motor, que desde el barrido S-16 usa también esta ruta— las
+     * distingue, y por eso el INSERT de este test ahora carga la fecha.
+     */
+    it('y cuando está habilitado y relevado lo dice', async () => {
       await db.query(
-        `INSERT INTO company_arca_capabilities (company_id, environment, service, enabled)
-         VALUES ($1, 'homologacion', 'wscdc', true)`,
+        `INSERT INTO company_arca_capabilities
+           (company_id, environment, service, enabled, verified_at)
+         VALUES ($1, 'homologacion', 'wscdc', true, now())`,
         [empresa],
       );
       const r = await pedir('GET', '/companies/current/arca/capabilities');
-      const wscdc = r.json<{ servicios: { servicio: string; estado: string }[] }>()
+      const wscdc = r
+        .json<{ servicios: { servicio: string; estado: string; verificadoEl: string | null }[] }>()
         .servicios.find((s) => s.servicio === 'wscdc')!;
       expect(wscdc.estado).toBe('HABILITADO');
+      expect(wscdc.verificadoEl).not.toBeNull();
+    });
+
+    it('un relevamiento viejo dice VENCIDO, que no es lo mismo que NO_DELEGADO', async () => {
+      // Las delegaciones se revocan y los certificados vencen. Mostrar un
+      // relevamiento de hace un año como HABILITADO es afirmar algo que el
+      // sistema no sabe — y era lo que esta ruta hacía antes de usar el motor.
+      await db.query(
+        `UPDATE company_arca_capabilities
+            SET verified_at = now() - interval '400 days'
+          WHERE company_id = $1 AND service = 'wscdc'`,
+        [empresa],
+      );
+      const r = await pedir('GET', '/companies/current/arca/capabilities');
+      const wscdc = r
+        .json<{ servicios: { servicio: string; estado: string; queHacer: string | null }[] }>()
+        .servicios.find((s) => s.servicio === 'wscdc')!;
+
+      expect(wscdc.estado).toBe('VENCIDO');
+      expect(wscdc.queHacer).toContain('Volver a relevar');
+    });
+
+    it('los servicios listados son los que el sistema sabe usar', async () => {
+      // La lista salía de una constante de la ruta que nombraba dos servicios
+      // —`ws_sr_padron_a5` y `wsapoc`— que no existen en ningún otro lado del
+      // sistema. Dos catálogos del mismo organismo, y el de la ruta era el que
+      // estaba mal.
+      const servicios = (await pedir('GET', '/companies/current/arca/capabilities'))
+        .json<{ servicios: { servicio: string }[] }>()
+        .servicios.map((s) => s.servicio);
+
+      expect(servicios).toEqual(['wscdc', 'ws_sr_padron_a13', 'ws_sr_padron_a100', 'wsfe']);
     });
   });
 });

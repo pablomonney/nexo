@@ -56,17 +56,3 @@ export function prepararPosteo(
   };
 }
 
-/**
- * La regla de numeración, aislada para poder probarla.
- *
- * Correlativa y sin huecos por `(empresa, libro, ejercicio)`. Un asiento anulado
- * **conserva su número**: el hueco en la secuencia sería peor que el asiento
- * anulado, porque un libro con saltos no se puede defender ante nadie.
- */
-export function siguienteNumero(ultimoNumero: number): number {
-  if (!Number.isInteger(ultimoNumero) || ultimoNumero < 0) {
-    throw new RangeError('El último número de asiento tiene que ser un entero no negativo');
-  }
-  return ultimoNumero + 1;
-}
-

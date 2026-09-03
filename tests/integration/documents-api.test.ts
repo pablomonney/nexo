@@ -192,6 +192,9 @@ suite('ingesta de documentos por HTTP', () => {
         campos: { fieldPath: string; rawValue: string | null; confidence: number; method: string }[];
       };
       hallazgos: { bloquea: boolean }[];
+      puedeAprobarse: boolean;
+      puedeImputarse: boolean;
+      motivoDeBloqueo: string | null;
     }>();
 
     documentId = cuerpo.id;
@@ -208,6 +211,13 @@ suite('ingesta de documentos por HTTP', () => {
 
     // Neto + IVA da el total: nada que frene la imputación.
     expect(cuerpo.hallazgos.filter((h) => h.bloquea)).toHaveLength(0);
+
+    // Y la respuesta **dice la conclusión**, no la deja para que cada pantalla la
+    // vuelva a sacar de la lista. La sacan `bloqueaAprobacion` y
+    // `bloqueaImputacion`, que hasta el barrido S-16 no las llamaba nadie.
+    expect(cuerpo.puedeAprobarse).toBe(true);
+    expect(cuerpo.puedeImputarse).toBe(true);
+    expect(cuerpo.motivoDeBloqueo).toBeNull();
   });
 
   it('el mismo archivo subido de nuevo devuelve el documento existente, no uno nuevo', async () => {

@@ -20,6 +20,8 @@
  * trazabilidad, y un "ya lo tenías, lo ignoré" es exactamente eso.
  */
 
+import type { BloqueaONo } from './coherencia.js';
+
 export type NivelDuplicado = 'ARCHIVO_IDENTICO' | 'COMPROBANTE_REPETIDO' | 'POSIBLE_DUPLICADO';
 
 export interface ClaveLogica {
@@ -140,6 +142,6 @@ function fechasCercanas(a: string | undefined, b: string | undefined, dias: numb
 }
 
 /** ¿Alguno de los hallazgos impide imputar sin que intervenga una persona? */
-export function bloqueaImputacion(coincidencias: readonly Coincidencia[]): boolean {
+export function bloqueaImputacion(coincidencias: readonly BloqueaONo[]): boolean {
   return coincidencias.some((coincidencia) => coincidencia.bloquea);
 }

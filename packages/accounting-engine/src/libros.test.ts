@@ -20,7 +20,6 @@ import {
   pieDeLibro,
   resumenCoincideConDetalle,
   resumirPorMes,
-  saldosDeCierre,
   saldosPorNaturaleza,
   verificarProyeccion,
   type AsientoDelLibro,
@@ -249,21 +248,6 @@ describe('el balance cierra en sus tres igualdades', () => {
     expect(balance.totalSaldosAcreedores.amount).toBe(porNaturaleza.acreedores.amount);
   });
 
-  it('arrastra los saldos de cierre al período siguiente sin perder las cuentas en cero', () => {
-    const mayor = construirLibroMayor(MARZO, OPCIONES_MAYOR);
-    const arrastre = saldosDeCierre(mayor);
-
-    const abril = construirLibroMayor([], { ...OPCIONES_MAYOR, saldosIniciales: arrastre });
-
-    // Sin movimientos, abril tiene las mismas cuentas y los mismos saldos.
-    expect(abril.cuentas).toHaveLength(mayor.cuentas.length);
-    expect(balanceDesdeMayor(abril).cuadra).toBe(true);
-    for (const cuenta of abril.cuentas) {
-      const previa = mayor.cuentas.find((c) => c.accountId === cuenta.accountId);
-      expect(cuenta.saldoInicial.amount).toBe(previa?.saldoFinal.amount);
-      expect(cuenta.saldoFinal.amount).toBe(previa?.saldoFinal.amount);
-    }
-  });
 });
 
 describe('cada movimiento navega hasta el documento original', () => {
@@ -1021,7 +1005,6 @@ describe('el Mayor con el catálogo incompleto o sin movimientos', () => {
 
     expect(vacio.cuentas).toEqual([]);
     expect(vacio.totalDebe.amount).toBe(0n);
-    expect(saldosDeCierre(vacio)).toEqual([]);
     expect(saldosPorNaturaleza(vacio).deudores.amount).toBe(0n);
     expect(balanceDesdeMayor(vacio).cuadra).toBe(true);
   });

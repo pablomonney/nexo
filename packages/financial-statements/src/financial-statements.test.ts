@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { money, parseCalendarDate, type CalendarDate, type Money } from '@aai/shared';
+import { add, money, parseCalendarDate, zero, type CalendarDate, type Money } from '@aai/shared';
 import {
   aplanar,
   cifraDeRenglon,
@@ -25,15 +25,34 @@ import {
   notasNoGenerables,
   proponerNotas,
   remisiones,
-  renglonDe,
   verificarNotas,
   type Nota,
   plantillaAplicable,
-  totalDe,
   validarPlantilla,
   type PlantillaEstado,
   type SaldoDeCuenta,
+  type EstadoContable,
 } from './index.js';
+
+/**
+ * Dos accesorios de aserción que vivían en el motor.
+ *
+ * El barrido S-16 los encontró sin consumidor productivo, y era cierto: la API
+ * navega de una cifra a su renglón por la base (note_figures ->
+ * financial_statement_lines), que es más fuerte que rehacer el estado en
+ * memoria. Como solo los usaban estos tests, se mudaron acá.
+ */
+function totalDe(estado: EstadoContable, codigos: readonly string[]): Money {
+  return codigos.reduce(
+    (acc, codigo) =>
+      add(acc, estado.renglones.find((fila) => fila.codigo === codigo)?.importe ?? zero(estado.moneda)),
+    zero(estado.moneda),
+  );
+}
+
+function renglonDe(estado: EstadoContable, cifra: { renglonCodigo: string }) {
+  return estado.renglones.find((renglon) => renglon.codigo === cifra.renglonCodigo);
+}
 
 const fecha = (iso: string): CalendarDate => parseCalendarDate(iso);
 const pesos = (centavos: bigint): Money => money(centavos, 'ARS');

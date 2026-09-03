@@ -146,14 +146,6 @@ export function isZero(value: Money): boolean {
   return value.amount === 0n;
 }
 
-export function isNegative(value: Money): boolean {
-  return value.amount < 0n;
-}
-
-export function isPositive(value: Money): boolean {
-  return value.amount > 0n;
-}
-
 /**
  * Tasa desde texto decimal: rate('21') → 21/100 ; rate('0.105') → 105/1000.
  * `percent: true` interpreta el valor como porcentaje.
@@ -240,11 +232,6 @@ export function convert(value: Money, to: Currency, factor: Rate, mode: Rounding
   return money(divideRounded(scaled, divisor, mode), to);
 }
 
-/** Multiplica por una cantidad entera. No hay redondeo posible, así que no lo pide. */
-export function multiplyByInteger(value: Money, factor: bigint): Money {
-  return money(value.amount * factor, value.currency);
-}
-
 /**
  * Reparte un importe según pesos enteros, sin crear ni destruir centavos.
  *
@@ -296,11 +283,3 @@ export function allocate(value: Money, weights: readonly bigint[]): Money[] {
   return result.map((amount) => money(negative ? -amount : amount, value.currency));
 }
 
-/** Serialización estable para persistencia y logs. */
-export function toJSON(value: Money): { amount: string; currency: Currency } {
-  return { amount: value.amount.toString(), currency: value.currency };
-}
-
-export function fromJSON(value: { amount: string; currency: Currency }): Money {
-  return money(BigInt(value.amount), value.currency);
-}

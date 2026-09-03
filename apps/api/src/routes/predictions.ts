@@ -36,7 +36,9 @@ import {
   PROMPT_DETERMINISTICO,
   PROMPT_HASH_DETERMINISTICO,
   TRATAMIENTOS_POR_DEFECTO,
+  admiteAprobacionEnLote,
   cambiosPorRevision,
+  promptPorHash,
   promptsRegistrados,
   type ContextoClasificacion,
   type CuentaDelPlan,
@@ -45,11 +47,16 @@ import {
   type PreferenciaAprendida,
   type NormaDisponible,
   type ResultadoSelloFiscal,
+  type Triage,
 } from '@aai/ai-engine';
 import {
+  citaHabilitaAplicacion,
+  normasCitables,
+  renderizarCita,
   resolverVarias,
   type CatalogoNormativo,
   type ContextoNormativo,
+  type DocumentoArchivado,
 } from '@aai/normative-engine';
 import { parseCalendarDate, type CalendarDate } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
@@ -222,7 +229,23 @@ export async function predictionRoutes(app: FastifyInstance): Promise<void> {
           [tenant.companyId, query.banda ?? null, query.limite],
         );
         return {
-          predicciones: result.rows,
+          // Cada propuesta dice **con qué instrucción** se produjo, no solo con
+          // qué modelo. El hash estaba guardado desde siempre y no se resolvía
+          // contra el registro de prompts: quien revisaba veía 64 caracteres.
+          predicciones: result.rows.map((fila) => ({
+            ...fila,
+            prompt: descripcionDelPrompt(fila['promptHash'] as string | null),
+            // Si esta propuesta podría ir a una aprobación en tanda. Lo decide
+            // el motor (`admiteAprobacionEnLote`): banda ALTA y sin disparadores
+            // duros. Sigue haciendo falta que una persona apriete el botón —lo
+            // que cambia es si se puede de a muchas o hay que abrir cada una—.
+            admiteAprobacionEnLote: admiteAprobacionEnLote({
+              triage: {
+                band: fila['banda'] as Triage['band'],
+                hardBlocks: (fila['bloqueos'] ?? []) as Triage['hardBlocks'],
+              },
+            }),
+          })),
           aviso: 'Ninguna de estas propuestas está contabilizada. Requieren aprobación profesional.',
         };
       },
@@ -480,7 +503,12 @@ async function resolverNormativa(
   tx: Tx,
   companyId: string,
   fechaHecho: string | null,
-): Promise<{ estado: HechosDelComprobante['estadoNormativo']; normas: NormaDisponible[] }> {
+): Promise<{
+  estado: HechosDelComprobante['estadoNormativo'];
+  normas: NormaDisponible[];
+  /** Normas que resolvieron pero cuya cita no se puede presentar como aplicada. */
+  noCitables?: { etiqueta: string; motivo: string }[];
+}> {
   if (fechaHecho === null) {
     // Sin fecha del comprobante no hay contexto temporal, y sin eje temporal
     // toda resolución normativa es una suposición.
@@ -535,19 +563,57 @@ async function resolverNormativa(
     return { estado: 'FUENTE_NO_ENCONTRADA', normas: [] };
   }
 
-  let hayConflicto = false;
-  const normas: NormaDisponible[] = [];
+  const hayConflicto = [...resolverVarias(claves, contexto, catalogo).values()].some(
+    (resolucion) => resolucion.estado === 'CONFLICTO',
+  );
 
-  for (const [, resolucion] of resolverVarias(claves, contexto, catalogo)) {
-    if (resolucion.estado === 'CONFLICTO') hayConflicto = true;
-    if (resolucion.estado !== 'RESUELTA') continue;
-    const cita = resolucion.regla.cita;
+  // Qué normas se pueden citar lo decide el motor, en un solo lugar
+  // (`normasCitables`): solo las de reglas que **resolvieron**. Esta ruta tenía
+  // su propia copia de esa regla, escrita a mano.
+  const citas = normasCitables(claves, contexto, catalogo);
+  const documentos = await documentosArchivados(
+    tx,
+    citas.map((cita) => cita.normVersionId),
+  );
+
+  /**
+   * El filtro que faltaba: **una cita que no se puede abrir no es una cita**.
+   *
+   * `NORMATIVE_ENGINE.md` §6 lo dice con todas las letras: si el nivel es V2,
+   * V3 o V4, la UI no muestra la regla como aplicada — muestra FUENTE NO
+   * ENCONTRADA y deriva a revisión profesional. `citaHabilitaAplicacion` existe
+   * para eso y **no la llamaba nadie**: las normas entraban al contexto del
+   * modelo con su nivel al lado, y el nivel no frenaba nada. Un LLM con una
+   * fuente secundaria a mano la cita igual.
+   */
+  const normas: NormaDisponible[] = [];
+  const noCitables: { etiqueta: string; motivo: string }[] = [];
+
+  for (const cita of citas) {
+    const documento = documentos.get(cita.normVersionId) ?? null;
+    const etiqueta = `${cita.organismo} — ${cita.norma}`;
+
+    if (!citaHabilitaAplicacion(cita, documento)) {
+      // El render dice por qué, con el formato fijo que usa quien audita.
+      noCitables.push({
+        etiqueta,
+        motivo: renderizarCita(cita, documento).lineas.join(' · '),
+      });
+      continue;
+    }
+
     normas.push({
       normVersionId: cita.normVersionId,
-      etiqueta: `${cita.organismo} — ${cita.norma}`,
-      resumen: resolucion.regla.rule.ruleKey,
+      etiqueta,
+      resumen: cita.articulo ?? etiqueta,
       verificationLevel: cita.nivelVerificacion,
     });
+  }
+
+  if (normas.length === 0 && noCitables.length > 0) {
+    // Había normas resueltas, pero ninguna presentable. No es lo mismo que no
+    // haber encontrado ninguna, y el motivo se conserva.
+    return { estado: 'FUENTE_NO_ENCONTRADA', normas: [], noCitables };
   }
 
   // Un conflicto es un disparador duro por sí solo, aunque otras reglas hayan
@@ -555,6 +621,75 @@ async function resolverNormativa(
   if (hayConflicto) return { estado: 'CONFLICTO_NORMATIVO', normas };
   if (normas.length === 0) return { estado: 'FUENTE_NO_ENCONTRADA', normas };
   return { estado: 'RESUELTO', normas };
+}
+
+/**
+ * De un hash de prompt a qué prompt es.
+ *
+ * `promptPorHash` estaba en el registro y no la llamaba nadie: la trazabilidad
+ * llegaba hasta el hash y ahí se cortaba. Un hash que no se puede resolver es
+ * una promesa de trazabilidad, no trazabilidad.
+ *
+ * Devuelve `null` cuando el hash no está en el registro —una propuesta vieja
+ * hecha con un prompt que ya no existe en el código— y decirlo es el dato: esa
+ * propuesta no se puede reproducir.
+ */
+function descripcionDelPrompt(
+  hash: string | null,
+): { hash: string; nombre: string; version: string } | null {
+  if (hash === null) return null;
+
+  if (hash === PROMPT_HASH_DETERMINISTICO) {
+    return {
+      hash,
+      nombre: PROMPT_DETERMINISTICO.name,
+      version: PROMPT_DETERMINISTICO.version,
+    };
+  }
+
+  const prompt = promptPorHash(hash);
+  return prompt === null ? null : { hash, nombre: prompt.name, version: prompt.version };
+}
+
+/**
+ * El documento original de cada norma citada, si está archivado.
+ *
+ * Es lo que separa una cita de una referencia: el `sha256` del archivo que se
+ * descargó del organismo. Sin él la cita no se puede abrir, y una cita que no
+ * se puede abrir no funda una regla activa (NORMATIVE_ENGINE.md §6).
+ */
+async function documentosArchivados(
+  tx: Tx,
+  normVersionIds: readonly string[],
+): Promise<Map<string, DocumentoArchivado>> {
+  if (normVersionIds.length === 0) return new Map();
+
+  const r = await tx.query<{
+    norm_version_id: string;
+    url_oficial: string;
+    storage_key: string;
+    sha256: string;
+    fecha_descarga: string;
+  }>(
+    `SELECT DISTINCT ON (norm_version_id)
+            norm_version_id, url_oficial, storage_key, sha256, fecha_descarga::text
+       FROM norm_documents
+      WHERE norm_version_id = ANY($1)
+      ORDER BY norm_version_id, fecha_descarga DESC`,
+    [normVersionIds],
+  );
+
+  return new Map(
+    r.rows.map((fila) => [
+      fila.norm_version_id,
+      {
+        urlOficial: fila.url_oficial,
+        archivo: fila.storage_key,
+        sha256: fila.sha256,
+        fechaDescarga: fila.fecha_descarga,
+      },
+    ]),
+  );
 }
 
 async function cargarCatalogo(tx: Tx): Promise<CatalogoNormativo> {

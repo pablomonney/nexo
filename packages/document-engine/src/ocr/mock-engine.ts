@@ -108,16 +108,3 @@ export const CONFUSIONES: Readonly<Record<string, string>> = {
   '8': 'B',
   B: '8',
 };
-
-/** Degrada un texto aplicando una confusión cada `cada` caracteres elegibles. */
-export function degradar(texto: string, cada = 7): string {
-  let elegibles = 0;
-  return [...texto]
-    .map((caracter) => {
-      const reemplazo = CONFUSIONES[caracter];
-      if (reemplazo === undefined) return caracter;
-      elegibles += 1;
-      return elegibles % cada === 0 ? reemplazo : caracter;
-    })
-    .join('');
-}

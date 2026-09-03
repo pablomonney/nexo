@@ -244,28 +244,39 @@ export function decidir(
     (r) => r.estado === 'DESCARTADA' && /estado (DRAFT|IN_REVIEW|SUPERSEDED)/.test(r.motivo),
   );
 
+  // Una regla que no se pudo evaluar —le falta un hecho que ella misma exige— no
+  // es lo mismo que una que no existe. El intérprete de condiciones falla en vez
+  // de devolver `false` justamente para que esta diferencia llegue hasta acá.
+  const sinFuente = reglas.filter((r) => r.estado === 'SIN_FUENTE');
+
   if (aplicadas.length === 0) {
     revisiones.push(
-      descartadasPorEstado.length > 0
+      sinFuente.length > 0
         ? {
-            motivo: 'REGLA_NO_ACTIVA',
+            motivo: 'SIN_HECHO_REQUERIDO',
             detalle:
-              `Hay ${descartadasPorEstado.length} regla(s) que cubrirían el caso pero no están ` +
-              `activas: ${descartadasPorEstado.map((r) => r.ruleKey).join(', ')}. ` +
-              'Una regla en DRAFT no resuelve: activarla exige la aprobación del §32.',
+              `Hay ${sinFuente.length} regla(s) vigentes que no se pudieron evaluar porque ` +
+              `falta un hecho que exigen: ${sinFuente.map((r) => r.motivo).join(' · ')}. ` +
+              'La regla no dice que no aplique: dice que no se puede saber.',
           }
-        : {
-            motivo: 'SIN_REGLA_APLICABLE',
-            detalle:
-              'El motor normativo no encontró ninguna regla vigente que resuelva este caso. ' +
-              'No es un error: es que la norma que lo funda todavía no está cargada.',
-          },
+        : descartadasPorEstado.length > 0
+          ? {
+              motivo: 'REGLA_NO_ACTIVA',
+              detalle:
+                `Hay ${descartadasPorEstado.length} regla(s) que cubrirían el caso pero no están ` +
+                `activas: ${descartadasPorEstado.map((r) => r.ruleKey).join(', ')}. ` +
+                'Una regla en DRAFT no resuelve: activarla exige la aprobación del §32.',
+            }
+          : {
+              motivo: 'SIN_REGLA_APLICABLE',
+              detalle:
+                'El motor normativo no encontró ninguna regla vigente que resuelva este caso. ' +
+                'No es un error: es que la norma que lo funda todavía no está cargada.',
+            },
     );
   }
 
-  const normativa = reglas
-    .map((r) => r.cita)
-    .filter((c): c is ReferenciaNormativa => c !== null);
+  const normativa = reglas.map((r) => r.cita).filter((c): c is ReferenciaNormativa => c !== null);
 
   if (revisiones.length > 0) {
     return {
@@ -338,13 +349,17 @@ export function explicarDecision(decision: DecisionContable): string {
   lineas.push('REGLAS:');
   if (decision.reglas.length === 0) lineas.push('  (ninguna consultada)');
   for (const r of decision.reglas) {
-    lineas.push(`  ${r.ruleKey}${r.version === null ? '' : ` v${r.version}`}: ${r.estado} — ${r.motivo}`);
+    lineas.push(
+      `  ${r.ruleKey}${r.version === null ? '' : ` v${r.version}`}: ${r.estado} — ${r.motivo}`,
+    );
   }
 
   if (decision.propuesta !== null) {
     lineas.push('', 'PROPUESTA DE ASIENTO (no es un asiento):');
     for (const l of decision.propuesta.lineas) {
-      lineas.push(`  ${l.accountCode}  D ${l.debit.amount}  H ${l.credit.amount}  ${l.descripcion}`);
+      lineas.push(
+        `  ${l.accountCode}  D ${l.debit.amount}  H ${l.credit.amount}  ${l.descripcion}`,
+      );
     }
   }
 

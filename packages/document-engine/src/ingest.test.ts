@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { deflateRawSync } from 'node:zlib';
 import { ingerir, type EntradaIngesta } from './ingest.js';
 import { InMemoryDocumentStore, claveDe, claveEsDeEmpresa } from './storage.js';
-import { MockOcrEngine, degradar, paginaDeTexto } from './ocr/mock-engine.js';
+import { CONFUSIONES, MockOcrEngine, paginaDeTexto } from './ocr/mock-engine.js';
 import { NullOcrEngine } from './ocr/engine.js';
 import { sniff, verificarCoherencia } from './sniff.js';
 import { leerCsv, leerXlsx } from './readers/tabular.js';
@@ -10,8 +10,33 @@ import { leerXml } from './readers/xml.js';
 import { bloqueaAprobacion, controlarCoherencia, importeDe } from './coherencia.js';
 import { bloqueaImputacion, detectarDuplicados, type HuellaDocumento } from './duplicates.js';
 import { calcularMetricas, reporteMarkdown } from './metrics.js';
-import { tipoComprobanteSemilla } from './catalogo.js';
+import { semillaCompleta } from './catalogo.js';
 import type { CampoExtraido } from './types.js';
+
+/**
+ * La semilla, buscada por código.
+ *
+ * Vivía en `catalogo.ts` como `tipoComprobanteSemilla`, junto a un puerto
+ * asíncrono —`CatalogoSemilla`— que nunca tuvo implementación real: la API
+ * resuelve el tipo contra `arca_comprobante_types`, por fecha. Dos catálogos
+ * son dos respuestas posibles a qué era la 991 en 2019, así que el que no se
+ * usaba se fue. La propiedad que defendían sus tests sigue acá.
+ */
+const enLaSemilla = (codigo: number) =>
+  semillaCompleta().find((tipo) => tipo.codigo === codigo) ?? null;
+
+/** Degrada un texto aplicando una confusión de OCR cada `cada` caracteres. */
+function degradar(texto: string, cada = 7): string {
+  let elegibles = 0;
+  return [...texto]
+    .map((caracter) => {
+      const reemplazo = CONFUSIONES[caracter];
+      if (reemplazo === undefined) return caracter;
+      elegibles += 1;
+      return elegibles % cada === 0 ? reemplazo : caracter;
+    })
+    .join('');
+}
 
 const EMPRESA = '018f3a2b-4c5d-7e8f-9a0b-1c2d3e4f5a6b';
 const OTRA_EMPRESA = '018f3a2b-4c5d-7e8f-9a0b-000000000000';
@@ -318,10 +343,22 @@ describe('pipeline de ingesta', () => {
     expect(cuit.parsedValue).toBeNull();
     expect(cuit.nota).toMatch(/dígito de control/);
 
+    /**
+     * El total ambiguo, resuelto por la aritmética del propio comprobante.
+     *
+     * `1.234` puede ser 1234 o 1,234 y el parser se abstiene. Pero el neto
+     * (1.019,83) y el IVA (214,17) de este mismo documento suman 1234,00, y solo
+     * una de las dos lecturas cierra. Hasta que el barrido S-16 encontró
+     * `desambiguarPorControl` sin consumidor, cada campo se interpretaba solo y
+     * el total quedaba sin valor.
+     *
+     * La confianza baja y la nota lo dicen: el valor no se leyó, se dedujo.
+     */
     const total = campo(campos, 'importes.total');
     expect(total.rawValue).toBe('1.234');
-    expect(total.parsedValue).toBeNull();
-    expect(total.nota).toMatch(/no elige por el contador/);
+    expect(total.parsedValue).toEqual({ kind: 'MONEY', amount: '123400', currency: 'ARS' });
+    expect(total.nota).toMatch(/control aritmético/);
+    expect(total.confidence).toBeLessThan(1);
 
     const cae = campo(campos, 'comprobante.codigoAutorizacion');
     expect(cae.rawValue).toBe('7512345678901');
@@ -713,15 +750,15 @@ describe('métricas de extracción', () => {
 
 describe('catálogo de tipos de comprobante', () => {
   it('devuelve lo que está en la fuente archivada', () => {
-    expect(tipoComprobanteSemilla(1)?.descripcion).toBe('Factura A');
-    expect(tipoComprobanteSemilla(213)?.clase).toBe('NOTA_CREDITO');
+    expect(enLaSemilla(1)?.descripcion).toBe('Factura A');
+    expect(enLaSemilla(213)?.clase).toBe('NOTA_CREDITO');
   });
 
   it('NO inventa una descripción para un código que la fuente no describe', () => {
     // El manual menciona el 39 entre los comprobantes asociables, pero nunca dice
     // qué es. Inventarlo sería exactamente lo que el §30 prohíbe.
-    expect(tipoComprobanteSemilla(39)).toBeNull();
-    expect(tipoComprobanteSemilla(991)).toBeNull();
+    expect(enLaSemilla(39)).toBeNull();
+    expect(enLaSemilla(991)).toBeNull();
   });
 });
 

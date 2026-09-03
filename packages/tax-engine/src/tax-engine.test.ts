@@ -13,6 +13,7 @@ import {
   comoSubdiarioDeclarado,
   construirSubdiario,
   evaluarCreditoFiscal,
+  exportarSubdiarioCsv,
   identificarAlicuota,
   ivaSegunAlicuota,
   puedeGenerarArchivoDeImportacion,
@@ -448,6 +449,48 @@ describe('subdiarios de IVA', () => {
     expect(declarado.hasta).toBe('2026-03-31');
     expect(declarado.referencia).toContain('sha256:');
     expect(declarado.nombre).toBe('Subdiario de IVA Compras 2026-03');
+  });
+
+  /**
+   * El archivo que la declaración promete.
+   *
+   * Antes de que existiera, `comoSubdiarioDeclarado` hasheaba un contenido que
+   * no se podía descargar: la referencia del art. 327 apuntaba a la nada.
+   */
+  describe('el subdiario como archivo', () => {
+    it('exporta todos los renglones, y dice cuál quedó fuera de los totales', () => {
+      const desconocido = comprobante({
+        id: 'x-1', numero: 3, tipoComprobante: 991, clase: null, fecha: fecha('2026-03-25'),
+      });
+      const csv = exportarSubdiarioCsv(construirSubdiario([factura, desconocido], opciones));
+      const filas = csv.replace('﻿', '').trim().split('\n');
+
+      expect(filas[0]).toContain('en_totales');
+      expect(filas).toHaveLength(3);
+      // El excluido está, con su hallazgo y marcado. Un comprobante que
+      // desaparece del archivo detallado no lo va a buscar nadie.
+      const excluido = filas.find((fila) => fila.includes('x-1'));
+      expect(excluido).toContain(';NO;');
+      expect(excluido).toContain('TIPO_COMPROBANTE_DESCONOCIDO');
+      expect(filas.find((fila) => fila.includes('f-1'))).toContain(';SI;');
+    });
+
+    it('la nota de crédito sale en negativo, como está en el período', () => {
+      const csv = exportarSubdiarioCsv(construirSubdiario([factura, notaDeCredito], opciones));
+
+      expect(csv).toContain('-500.00');
+    });
+
+    it('el mismo subdiario da el mismo archivo, byte por byte', () => {
+      // Es toda la razón de ser del formato: si el archivo cambiara entre dos
+      // emisiones, el hash archivado no verificaría nada.
+      const uno = exportarSubdiarioCsv(construirSubdiario([factura, notaDeCredito], opciones));
+      const otro = exportarSubdiarioCsv(construirSubdiario([notaDeCredito, factura], opciones));
+
+      expect(otro).toBe(uno);
+      expect(uno.startsWith('﻿')).toBe(true);
+      expect(uno.includes('\r')).toBe(false);
+    });
   });
 });
 

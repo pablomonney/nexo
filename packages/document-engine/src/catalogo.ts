@@ -142,48 +142,7 @@ const SEMILLA: readonly TipoComprobante[] = [
   },
 ];
 
-const POR_CODIGO = new Map(SEMILLA.map((tipo) => [tipo.codigo, tipo]));
-
-/**
- * Busca un tipo en la semilla. Devuelve `null` si no está: un código que no
- * figura en la fuente archivada no se describe de memoria.
- */
-export function tipoComprobanteSemilla(codigo: number): TipoComprobante | null {
-  return POR_CODIGO.get(codigo) ?? null;
-}
-
 export function semillaCompleta(): readonly TipoComprobante[] {
   return SEMILLA;
 }
 
-/**
- * Puerto del catálogo real, resuelto por fecha.
- *
- * La implementación que consulta la base y sincroniza contra el organismo llega
- * con FASE 8. Hasta entonces, `CatalogoSemilla` responde con la semilla y avisa
- * que la vigencia no está verificada — que es distinto de responder como si lo
- * estuviera.
- */
-export interface CatalogoComprobantes {
-  buscar(codigo: number, fecha: string): Promise<ResultadoCatalogo>;
-}
-
-export interface ResultadoCatalogo {
-  readonly tipo: TipoComprobante | null;
-  /** `false` mientras la vigencia por fecha no se resuelva contra el organismo. */
-  readonly vigenciaVerificada: boolean;
-  readonly fuente: string;
-}
-
-export class CatalogoSemilla implements CatalogoComprobantes {
-  async buscar(codigo: number, fecha: string): Promise<ResultadoCatalogo> {
-    // La fecha se recibe y se ignora: la semilla no tiene vigencias. Ignorarla
-    // en silencio sería el error —por eso `vigenciaVerificada` viaja en `false`.
-    void fecha;
-    return {
-      tipo: tipoComprobanteSemilla(codigo),
-      vigenciaVerificada: false,
-      fuente: `Semilla transcripta de ${FUENTE_SEMILLA.documento}. La vigencia por fecha exige sincronizar ${FUENTE_SEMILLA.metodoAutoritativo}.`,
-    };
-  }
-}

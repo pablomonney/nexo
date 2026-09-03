@@ -14,7 +14,6 @@ import {
   evaluarChecklist,
   prepararPosteo,
   puedeCerrar,
-  siguienteNumero,
   transicionar,
   validar,
   type AccountSnapshot,
@@ -513,12 +512,6 @@ describe('numeración', () => {
     });
   });
 
-  it('es correlativa y sin huecos', () => {
-    expect(siguienteNumero(0)).toBe(1);
-    expect(siguienteNumero(46)).toBe(47);
-    expect(() => siguienteNumero(-1)).toThrow();
-    expect(() => siguienteNumero(1.5)).toThrow();
-  });
 
   it('un asiento rechazado no llega a numerarse', () => {
     const resultado = prepararPosteo(borrador({ entryDate: fecha('2025-03-10') }), contexto());

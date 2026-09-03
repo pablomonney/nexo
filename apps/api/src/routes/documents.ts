@@ -19,10 +19,13 @@ import {
   FilesystemDocumentStore,
   MockOcrEngine,
   NullOcrEngine,
+  bloqueaAprobacion,
+  bloqueaImputacion,
   claveEsDeEmpresa,
   extraer,
   ingerir,
   paginaDeTexto,
+  type BloqueaONo,
   type CampoExtraido,
   type HuellaDocumento,
   type OcrEngine,
@@ -38,6 +41,43 @@ import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 const store = new FilesystemDocumentStore(config.documents.storagePath);
 
 /**
+ * La conclusión de los hallazgos, dicha una sola vez.
+ *
+ * Las respuestas devolvían la lista de hallazgos y de duplicados con su
+ * `bloquea` fila por fila, y **no** decían lo único que quien mira necesita
+ * saber: si el documento se puede aprobar y si se puede imputar. Cada pantalla
+ * tenía que volver a sacar la conclusión, y `bloqueaAprobacion` /
+ * `bloqueaImputacion` —que existen para eso— no las llamaba nadie.
+ *
+ * Dos criterios distintos para la misma pregunta terminan divergiendo el día que
+ * se agrega una severidad nueva.
+ */
+function conclusion(
+  hallazgos: readonly BloqueaONo[],
+  duplicados: readonly BloqueaONo[],
+): {
+  puedeAprobarse: boolean;
+  puedeImputarse: boolean;
+  motivoDeBloqueo: string | null;
+} {
+  const porHallazgo = bloqueaAprobacion(hallazgos);
+  const porDuplicado = bloqueaImputacion(duplicados);
+
+  return {
+    puedeAprobarse: !porHallazgo,
+    puedeImputarse: !porHallazgo && !porDuplicado,
+    motivoDeBloqueo:
+      porHallazgo && porDuplicado
+        ? 'Hay hallazgos bloqueantes en la lectura y un duplicado sin resolver.'
+        : porHallazgo
+          ? 'Hay hallazgos bloqueantes en la lectura del documento.'
+          : porDuplicado
+            ? 'Hay un duplicado sin resolver: alguien tiene que decir si es el mismo comprobante.'
+            : null,
+  };
+}
+
+/**
  * Motor de OCR según configuración.
  *
  * Igual que con ARCA: el simulado se usa **si y solo si** está pedido
@@ -49,7 +89,9 @@ const store = new FilesystemDocumentStore(config.documents.storagePath);
 function motorOcr(): OcrEngine {
   if (config.documents.ocrEngine !== 'mock') return new NullOcrEngine();
   return new MockOcrEngine({
-    porDefecto: { paginas: [paginaDeTexto(1, ['SIMULACIÓN — sin valor probatorio'], 0.5)] },
+    porDefecto: {
+      paginas: [paginaDeTexto(1, ['SIMULACIÓN — sin valor probatorio'], 0.5)],
+    },
   });
 }
 
@@ -60,7 +102,9 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const auth = requireAuth(request);
     const actorId = `user:${auth.user.userId}`;
 
-    const archivo = await request.file({ limits: { fileSize: config.documents.maxBytes } });
+    const archivo = await request.file({
+      limits: { fileSize: config.documents.maxBytes },
+    });
     if (archivo === undefined) throw badRequest('Falta el archivo en el formulario');
 
     const bytes = await archivo.toBuffer();
@@ -104,12 +148,14 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
           userAgent: request.headers['user-agent'] ?? null,
         });
       });
-      throw badRequest(resultado.detalle, { motivo: resultado.motivo, sha256: resultado.sha256 });
+      throw badRequest(resultado.detalle, {
+        motivo: resultado.motivo,
+        sha256: resultado.sha256,
+      });
     }
 
-    const persistido = await withCompany(
-      { companyId: tenant.companyId, actorId },
-      async (tx) => guardar(tx, tenant.companyId, actorId, resultado),
+    const persistido = await withCompany({ companyId: tenant.companyId, actorId }, async (tx) =>
+      guardar(tx, tenant.companyId, actorId, resultado),
     );
 
     if (persistido.yaExistia) {
@@ -155,6 +201,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       },
       hallazgos: resultado.hallazgos,
       duplicados: resultado.duplicados,
+      ...conclusion(resultado.hallazgos, resultado.duplicados),
     };
   });
 
@@ -200,7 +247,11 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
           fecha: fila.recibidoEn,
           id: fila.id,
         }));
-        return { documentos: pagina.items, cursor: pagina.cursor, limite: pagina.limite };
+        return {
+          documentos: pagina.items,
+          cursor: pagina.cursor,
+          limite: pagina.limite,
+        };
       },
     );
   });
@@ -248,14 +299,17 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
 
         const hallazgos =
           ultima === undefined
-            ? { rows: [] }
-            : await tx.query(
+            ? { rows: [] as { bloquea: boolean }[] }
+            : await tx.query<{ bloquea: boolean }>(
                 `SELECT codigo, severidad, mensaje, campos, bloquea
                    FROM document_findings WHERE extraction_id = $1`,
                 [ultima],
               );
 
-        const duplicados = await tx.query(
+        const duplicados = await tx.query<{
+          bloquea: boolean;
+          resolucion: string | null;
+        }>(
           `SELECT id, duplicate_of_id AS "duplicadoDe", nivel, explicacion, bloquea,
                   resolucion, resuelto_por AS "resueltoPor", motivo
              FROM document_duplicates WHERE document_id = $1`,
@@ -268,6 +322,12 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
           campos: campos.rows,
           hallazgos: hallazgos.rows,
           duplicados: duplicados.rows,
+          // El duplicado que alguien ya resolvió deja de bloquear: la resolución
+          // es la intervención humana que el nivel pedía.
+          ...conclusion(
+            hallazgos.rows,
+            duplicados.rows.filter((fila) => fila.resolucion === null),
+          ),
         };
       },
     );
@@ -282,10 +342,13 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const fila = await withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
-        const result = await tx.query<{ storage_key: string; mime: string; original_name: string }>(
-          'SELECT storage_key, mime, original_name FROM documents WHERE id = $1',
-          [params.documentId],
-        );
+        const result = await tx.query<{
+          storage_key: string;
+          mime: string;
+          original_name: string;
+        }>('SELECT storage_key, mime, original_name FROM documents WHERE id = $1', [
+          params.documentId,
+        ]);
         if (result.rowCount === 0) throw notFound('Documento no encontrado');
         return result.rows[0]!;
       },
@@ -293,13 +356,17 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
 
     // Cinturón y tirantes sobre RLS: la clave tiene que pertenecer a la empresa
     // en contexto. Si RLS fallara, el archivo igual no sale.
-    if (!claveEsDeEmpresa(tenant.companyId, fila.storage_key)) throw notFound('Documento no encontrado');
+    if (!claveEsDeEmpresa(tenant.companyId, fila.storage_key))
+      throw notFound('Documento no encontrado');
 
     const bytes = await store.get(tenant.companyId, fila.storage_key);
     reply.header('Content-Type', fila.mime);
     // `attachment` y no `inline`: un HTML o un SVG servido inline se ejecutaría
     // en el origen de la aplicación.
-    reply.header('Content-Disposition', `attachment; filename="${sanitizarNombre(fila.original_name)}"`);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="${sanitizarNombre(fila.original_name)}"`,
+    );
     return reply.send(bytes);
   });
 
@@ -372,7 +439,10 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const auth = requireAuth(request);
     const actorId = `user:${auth.user.userId}`;
     const params = z
-      .object({ documentId: z.string().uuid(), duplicateId: z.string().uuid() })
+      .object({
+        documentId: z.string().uuid(),
+        duplicateId: z.string().uuid(),
+      })
       .parse(request.params);
     const body = z
       .object({
@@ -498,11 +568,11 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const extraccion = await extraer(
-      bytes,
-      documento.rows[0]!.content_type as TipoContenido,
-      { store, ocr: motorOcr(), maxBytes: config.documents.maxBytes },
-    );
+    const extraccion = await extraer(bytes, documento.rows[0]!.content_type as TipoContenido, {
+      store,
+      ocr: motorOcr(),
+      maxBytes: config.documents.maxBytes,
+    });
 
     return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
       const fila = await tx.query<{ id: string }>(
@@ -623,7 +693,11 @@ async function guardar(
       'SELECT id FROM documents WHERE company_id = $1 AND sha256 = $2',
       [companyId, documento.sha256],
     );
-    return { documentId: existente.rows[0]!.id, extractionId: null, yaExistia: true };
+    return {
+      documentId: existente.rows[0]!.id,
+      extractionId: null,
+      yaExistia: true,
+    };
   }
 
   const documentId = insertado.rows[0]!.id;
@@ -766,5 +840,4 @@ function campoDeTexto(fields: unknown, nombre: string): string | undefined {
 /** El nombre viaja en una cabecera: se le sacan comillas, saltos y rutas. */
 function sanitizarNombre(nombre: string): string {
   return nombre.replace(/[^\w.\- ]+/g, '_').slice(0, 120);
-
 }

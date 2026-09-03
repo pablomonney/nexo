@@ -45,12 +45,18 @@
  * escribirse. Hay un test que lo comprueba sobre el alta de usuario.
  */
 
-import { auditar } from '@aai/audit-engine';
+import {
+  UMBRALES_POR_DEFECTO,
+  analizarVariaciones,
+  auditar,
+  resumirVariaciones,
+} from '@aai/audit-engine';
 import { withCompany } from '@aai/db';
-import { moneyFromDecimalString, parseCalendarDate } from '@aai/shared';
+import { money, moneyFromDecimalString, parseCalendarDate, toDecimalString } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireCompany, requirePermission } from '../http/context.js';
+import { badRequest } from '../http/errors.js';
 import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 
 interface FilaBitacora {
@@ -178,6 +184,138 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
             'Ninguna anomalía es una acusación: cada una dice qué se observó y qué habría ' +
             'que mirar, y no vienen ordenadas por riesgo porque ordenarlas exigiría un ' +
             'número que el software no puede fundar.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Análisis de variaciones entre dos períodos, cuenta por cuenta.
+   *
+   * Es la herramienta más vieja de la auditoría: comparar contra el período
+   * anterior y mirar lo que se movió. El motor estaba escrito y probado en
+   * `@aai/audit-engine` desde hace tiempo, y **no lo llamaba nadie** — el mismo
+   * defecto que este archivo ya documenta para `auditar`, otra vez.
+   *
+   * ## Los dos umbrales, y por qué son dos
+   *
+   * Ordenar por porcentaje pone arriba una cuenta que pasó de $100 a $400 y
+   * abajo una que movió cuatro millones. Ordenar por importe esconde la cuenta
+   * chica que se multiplicó por cinco. Una variación es significativa si supera
+   * **cualquiera** de los dos, y la respuesta trae los dos números sin elegir
+   * por el lector.
+   *
+   * Los umbrales vienen del motor —25 % y diez mil pesos, deliberadamente
+   * conservadores— y se pueden pasar por parámetro. La respuesta dice cuáles se
+   * usaron: un análisis cuyos umbrales no se ven es una lista que hay que creer.
+   */
+  app.get('/audit/variaciones', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'audit:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+
+    const query = z
+      .object({
+        periodoActual: z.string().uuid(),
+        periodoAnterior: z.string().uuid(),
+        porcentaje: z.coerce.number().int().min(1).max(1000).optional(),
+        absoluto: z.coerce.number().int().min(0).optional(),
+      })
+      .parse(request.query);
+
+    if (query.periodoActual === query.periodoAnterior) {
+      throw badRequest('Los dos períodos son el mismo: no hay variación que analizar.');
+    }
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        // Lo que se compara es **el movimiento de cada período**, leído del
+        // Mayor. No los saldos acumulados: para una cuenta patrimonial el
+        // acumulado arrastra toda la historia, y la comparación diría que nada
+        // cambió cuando el mes tuvo actividad.
+        //
+        // Y sale de `ledger_movements` y no de `account_balances`, que es una
+        // caché que se reconstruye a pedido: si nadie la reconstruyó, la
+        // comparación no devolvería nada y parecería que no hubo movimientos.
+        const saldos = await tx.query<{
+          account_id: string; code: string; name: string;
+          actual: string; anterior: string;
+        }>(
+          `WITH m AS (
+             SELECT account_id, period_id, sum(debit - credit) AS neto
+               FROM ledger_movements
+              WHERE company_id = $1 AND period_id IN ($2, $3)
+              GROUP BY account_id, period_id
+           )
+           SELECT a.id AS account_id, a.code, a.name,
+                  coalesce(act.neto, 0)::text  AS actual,
+                  coalesce(ant.neto, 0)::text  AS anterior
+             FROM accounts a
+             LEFT JOIN m act ON act.account_id = a.id AND act.period_id = $2
+             LEFT JOIN m ant ON ant.account_id = a.id AND ant.period_id = $3
+            WHERE a.company_id = $1
+              AND (act.neto IS NOT NULL OR ant.neto IS NOT NULL)
+            ORDER BY a.code`,
+          [tenant.companyId, query.periodoActual, query.periodoAnterior],
+        );
+
+        const umbrales =
+          query.porcentaje === undefined && query.absoluto === undefined
+            ? UMBRALES_POR_DEFECTO
+            : {
+                porcentaje: query.porcentaje ?? UMBRALES_POR_DEFECTO.porcentaje,
+                absoluto:
+                  query.absoluto === undefined
+                    ? UMBRALES_POR_DEFECTO.absoluto
+                    : BigInt(query.absoluto) * 100n,
+              };
+
+        const variaciones = analizarVariaciones(
+          saldos.rows.map((s) => ({
+            accountId: s.account_id,
+            codigo: s.code,
+            nombre: s.name,
+            actual: moneyFromDecimalString(s.actual, 'ARS'),
+            anterior: moneyFromDecimalString(s.anterior, 'ARS'),
+          })),
+          umbrales,
+        );
+        const resumen = resumirVariaciones(variaciones);
+
+        return {
+          umbrales: {
+            porcentaje: umbrales.porcentaje,
+            absoluto: toDecimalString(money(umbrales.absoluto, 'ARS')),
+            deDondeSalen:
+              query.porcentaje === undefined && query.absoluto === undefined
+                ? 'Los del motor: 25 % y diez mil pesos, conservadores a propósito. Marcan de ' +
+                  'más, no de menos — un análisis que marca poco se vuelve decorativo en dos ' +
+                  'ejercicios.'
+                : 'Los que pidió quien consulta.',
+          },
+          resumen,
+          variaciones: variaciones.map((v) => ({
+            codigo: v.codigo,
+            nombre: v.nombre,
+            actual: toDecimalString(v.actual),
+            anterior: toDecimalString(v.anterior),
+            absoluta: toDecimalString(v.absoluta),
+            porcentaje: v.porcentaje,
+            tipo: v.tipo,
+            significativa: v.significativa,
+            motivo: v.motivo,
+          })),
+          metodologia:
+            'Se compara el movimiento neto de cada período —débitos menos créditos del Mayor—, ' +
+            'no el saldo acumulado: en una cuenta patrimonial el acumulado arrastra toda la ' +
+            'historia y la comparación diría que nada cambió en un mes con actividad.',
+          alcance:
+            'Una cuenta que pasó de cero a algo no tiene un porcentaje enorme: **apareció**, ' +
+            'y es una categoría propia. Lo mismo la que desapareció y la que cambió de signo: ' +
+            'las tres son significativas por sí mismas, sin importar el monto. El análisis ' +
+            'dice qué se movió; qué significa lo decide quien audita.',
         };
       },
     );

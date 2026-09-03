@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
-**Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 111 archivos de test, 1840 tests,
+**Última actualización:** 2026-09-03
+**Estado del árbol:** `verify` en verde — 113 archivos de test, 1851 tests,
 420 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -87,6 +87,9 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **NEXO Intelligence: 18 preguntas con evidencia y narración verificada** | **TERMINADO** (falta el adaptador de un proveedor real) | **`intelligence` (14), `catalogo-de-preguntas` (11)** |
 | **Escenarios guardados y variación del margen** | **TERMINADO** | **`valuacion` (29 tests)** |
 | **Radar de riesgos: seis frentes, con lo que no se puede medir** | **TERMINADO** | **`intelligence` (12 tests)** |
+| **Diario resumido del art. 327, verificado contra el subdiario emitido** | **TERMINADO** | **`diario-resumido` (5 tests)** |
+| **Verificación de una conciliación guardada** | **TERMINADO** | **`conciliacion-por-http` (9 tests)** |
+| **Pantalla de revisión de propuestas de IA** | **TERMINADO** | **`consola-contrato` (S-12), `consola-elementos` (S-15)** |
 
 ## 3. En curso
 

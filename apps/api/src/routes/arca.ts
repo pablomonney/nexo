@@ -29,6 +29,7 @@
 
 import { createHash } from 'node:crypto';
 import { X509Certificate } from 'node:crypto';
+import { SERVICIOS_DEL_PRODUCTO, leerHabilitacion, type ServiceName } from '@aai/arca';
 import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -36,9 +37,6 @@ import { envolver } from '../arca/credential-store.js';
 import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflictoTipado, notFound } from '../http/errors.js';
-
-/** Los servicios que el sistema sabe usar. Sale de `packages/arca`. */
-const SERVICIOS = ['wsfe', 'wscdc', 'ws_sr_padron_a5', 'wsapoc'] as const;
 
 export async function arcaRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -165,11 +163,10 @@ export async function arcaRoutes(app: FastifyInstance): Promise<void> {
         notBefore: notBefore.toISOString(),
         notAfter: notAfter.toISOString(),
         envoltura: referencia,
-        advertencia:
-          referencia.startsWith('local:')
-            ? 'Envuelta con la llave del entorno: sirve para desarrollo y homologación. En ' +
-              'producción hace falta un cliente de KMS, que todavía no existe.'
-            : null,
+        advertencia: referencia.startsWith('local:')
+          ? 'Envuelta con la llave del entorno: sirve para desarrollo y homologación. En ' +
+            'producción hace falta un cliente de KMS, que todavía no existe.'
+          : null,
       };
     });
   });
@@ -219,12 +216,8 @@ export async function arcaRoutes(app: FastifyInstance): Promise<void> {
       requirePermission(tenant, 'arca_credential:manage');
       const auth = requireAuth(request);
       const actorId = `user:${auth.user.userId}`;
-      const { credentialId } = z
-        .object({ credentialId: z.string().uuid() })
-        .parse(request.params);
-      const body = z
-        .object({ motivo: z.string().min(10).max(500) })
-        .parse(request.body);
+      const { credentialId } = z.object({ credentialId: z.string().uuid() }).parse(request.params);
+      const body = z.object({ motivo: z.string().min(10).max(500) }).parse(request.body);
 
       return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
         const actual = await tx.query<{ status: string; alias: string }>(
@@ -288,12 +281,18 @@ export async function arcaRoutes(app: FastifyInstance): Promise<void> {
     // trámite ante ARCA que relevar. Se consulta homologación —que es lo que el
     // estudio está tramitando— y se dice en qué ambiente está corriendo, para
     // que nadie lea «HABILITADO» y crea que el sistema está hablando con ARCA.
-    const ambienteReal = config.arca.environment === 'mock' ? 'homologacion' : config.arca.environment;
+    const ambienteReal =
+      config.arca.environment === 'mock' ? 'homologacion' : config.arca.environment;
 
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
-        const r = await tx.query<{ service: string; enabled: boolean; notes: string | null }>(
+        const r = await tx.query<{
+          service: ServiceName;
+          enabled: boolean;
+          notes: string | null;
+          verifiedAt: string | null;
+        }>(
           `SELECT service, enabled, notes, verified_at::text AS "verifiedAt",
                   last_probe_result AS "lastProbeResult"
              FROM company_arca_capabilities
@@ -302,6 +301,7 @@ export async function arcaRoutes(app: FastifyInstance): Promise<void> {
         );
 
         const porServicio = new Map(r.rows.map((f) => [f.service, f]));
+        const ahora = new Date();
 
         return {
           /** En qué ambiente corre el sistema ahora mismo. */
@@ -309,20 +309,31 @@ export async function arcaRoutes(app: FastifyInstance): Promise<void> {
           /** De qué ambiente son las capacidades que se listan. */
           ambienteConsultado: ambienteReal,
           simulado: config.arca.environment === 'mock',
-          servicios: SERVICIOS.map((s) => {
-            const fila = porServicio.get(s);
+          // La lista sale del motor y no de una constante de este archivo. La
+          // que había acá nombraba dos servicios —`ws_sr_padron_a5` y
+          // `wsapoc`— que no existen en ningún otro lugar del sistema: dos
+          // catálogos del mismo organismo, y el de la ruta era el equivocado.
+          servicios: SERVICIOS_DEL_PRODUCTO.map((s) => {
+            // El estado lo decide `leerHabilitacion`, que distingue cuatro
+            // casos donde esta ruta distinguía tres. El que faltaba es
+            // `VENCIDO`: un relevamiento de hace un año se mostraba como
+            // HABILITADO, y las delegaciones se revocan.
+            const habilitacion = leerHabilitacion(porServicio.get(s), ahora);
             return {
               servicio: s,
-              habilitado: fila?.enabled ?? false,
-              // Sin fila no es «deshabilitado»: es que nadie lo relevó. Son
-              // estados distintos y mandan a hacer cosas distintas.
-              estado: fila === undefined ? 'NO_RELEVADO' : fila.enabled ? 'HABILITADO' : 'NO_AUTORIZADO',
-              notas: fila?.notes ?? null,
+              habilitado: habilitacion.estado === 'HABILITADO',
+              estado: habilitacion.estado,
+              verificadoEl: habilitacion.verificadoEl,
+              detalle: habilitacion.detalle,
+              notas: porServicio.get(s)?.notes ?? null,
               queHacer:
-                fila?.enabled === true
+                habilitacion.estado === 'HABILITADO'
                   ? null
-                  : 'Autorizar el servicio en WSASS con la clave fiscal del contribuyente. Es un ' +
-                    'trámite ante ARCA: el sistema no lo puede hacer por su cuenta.',
+                  : habilitacion.estado === 'VENCIDO'
+                    ? 'Volver a relevar el servicio: el relevamiento anterior venció. ' +
+                      'VENCIDO no es NO_DELEGADO — puede seguir autorizado.'
+                    : 'Autorizar el servicio en WSASS con la clave fiscal del contribuyente. Es un ' +
+                      'trámite ante ARCA: el sistema no lo puede hacer por su cuenta.',
             };
           }),
         };

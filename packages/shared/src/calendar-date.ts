@@ -67,27 +67,6 @@ export function compareDates(a: CalendarDate, b: CalendarDate): -1 | 0 | 1 {
   return 0;
 }
 
-/** Intervalo cerrado [from, to]. `to` nulo significa "sin fin". */
-export function isWithin(
-  value: CalendarDate,
-  from: CalendarDate,
-  to: CalendarDate | null,
-): boolean {
-  if (value < from) return false;
-  if (to !== null && value > to) return false;
-  return true;
-}
-
-export function startOfMonth(value: CalendarDate): CalendarDate {
-  return calendarDate(yearOf(value), monthOf(value), 1);
-}
-
-export function endOfMonth(value: CalendarDate): CalendarDate {
-  const year = yearOf(value);
-  const month = monthOf(value);
-  return calendarDate(year, month, daysInMonth(year, month));
-}
-
 export function addDays(value: CalendarDate, days: number): CalendarDate {
   const utc = Date.UTC(yearOf(value), monthOf(value) - 1, dayOf(value));
   const shifted = new Date(utc + days * 86_400_000);

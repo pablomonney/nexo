@@ -27,7 +27,7 @@
  */
 
 import type { Currency, Money } from '@aai/shared';
-import { add, money, negate, zero } from '@aai/shared';
+import { add, negate, zero } from '@aai/shared';
 import type {
   ClasificacionDeCuenta,
   ControlDeEstado,
@@ -481,13 +481,3 @@ function ocultar(
   return importe.amount === 0n && (comparativo === null || comparativo.amount === 0n);
 }
 
-/** Suma de los importes de un conjunto de renglones, para los subtotales de UI. */
-export function totalDe(
-  estado: EstadoContable,
-  codigos: readonly string[],
-): Money {
-  return codigos.reduce((acc, codigo) => {
-    const renglon = estado.renglones.find((fila) => fila.codigo === codigo);
-    return renglon === undefined ? acc : add(acc, renglon.importe);
-  }, money(0n, estado.moneda));
-}

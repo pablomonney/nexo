@@ -25,6 +25,18 @@ import type { CampoExtraido } from './types.js';
 
 export type SeveridadHallazgo = 'ERROR' | 'ADVERTENCIA' | 'INFO';
 
+/**
+ * Lo único que las dos preguntas de bloqueo necesitan saber.
+ *
+ * El predicado se puede hacer sobre un hallazgo del motor o sobre una fila leída
+ * de `document_findings`, que es la misma afirmación guardada. Pedir el objeto
+ * entero obligaba a la API a inventar un cast, y un cast es una promesa que el
+ * compilador ya no revisa.
+ */
+export interface BloqueaONo {
+  readonly bloquea: boolean;
+}
+
 export interface Hallazgo {
   readonly codigo: string;
   readonly severidad: SeveridadHallazgo;
@@ -159,6 +171,6 @@ const ES_DETERMINANTE = new Set([
  */
 export const UMBRAL_REVISION = 0.75;
 
-export function bloqueaAprobacion(hallazgos: readonly Hallazgo[]): boolean {
+export function bloqueaAprobacion(hallazgos: readonly BloqueaONo[]): boolean {
   return hallazgos.some((hallazgo) => hallazgo.bloquea);
 }

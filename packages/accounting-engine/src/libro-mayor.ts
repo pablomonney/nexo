@@ -324,22 +324,6 @@ export function verificarProyeccion(
 }
 
 /**
- * Saldos de cierre del Mayor, listos para alimentar el balance del período
- * siguiente.
- *
- * Se devuelven todas las cuentas, incluidas las que quedaron en cero. Una cuenta
- * que cerró en cero y desaparece del arrastre vuelve a aparecer más adelante con
- * un saldo inicial implícito de cero, que es lo mismo — pero deja de poder
- * distinguirse de una cuenta que nunca existió.
- */
-export function saldosDeCierre(mayor: LibroMayor): SaldoDeApertura[] {
-  return mayor.cuentas.map((cuenta) => ({
-    accountId: cuenta.accountId,
-    monto: cuenta.saldoFinal,
-  }));
-}
-
-/**
  * Suma de saldos deudores y acreedores del Mayor.
  *
  * Existe para el control cruzado contra el balance de sumas y saldos: si el

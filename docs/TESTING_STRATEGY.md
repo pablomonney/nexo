@@ -123,6 +123,24 @@ métrica tiene umbral de bloqueo de release.
 > | `metricas` | S-13 | Que `/metrics` no exista sin su token |
 > | `limite-de-intentos` | S-14 | Que el límite por origen cuente fallos y no consultas |
 > | `consola-elementos` | S-15 | Que la consola escriba en el elemento que cree: ningún id repetido, ninguno inexistente |
+> | `motores-con-consumidor` | S-16 | Que cada función exportada por un paquete la use algo que no sea el propio paquete ni sus tests |
+
+#### S-16, y por qué un barrido también se equivoca
+
+S-16 persigue el defecto que este repositorio encontró cinco veces: una pieza
+construida, probada, con su tabla esperándola, y nadie recorriendo el camino
+entre las dos. La primera versión del barrido contaba como consumidor **una
+mención en un comentario**, y así se le escapó `resumirPorMes` —el Diario
+resumido del art. 327, entero— porque otro paquete la nombraba en su encabezado
+para explicar para qué servía la función que nadie llamaba.
+
+Desde entonces el barrido borra comentarios y literales de texto antes de
+contar. Las plantillas (backticks) quedan enteras a propósito: pueden llevar una
+llamada real adentro de `${...}`.
+
+Las excepciones viven en el propio test, cada una con **qué la destraba**. Una
+excepción que sobrevive a su motivo la detecta el segundo test del archivo, que
+falla cuando una excepción ya no corresponde a ninguna exportación.
 
 ### 2.8 Tests de regresión
 

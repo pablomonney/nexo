@@ -22,6 +22,42 @@ es una lista de deseos.
 | — | Variación del margen abierta en precio, costo y volumen |
 | — | Radar de riesgos: seis frentes, con lo que no se puede medir |
 
+## Terminado el 2026-09-03 — el barrido S-16, hasta el final
+
+S-16 («cada motor tiene quién lo use») se estrenó con **veintidós** funciones
+exportadas sin consumidor. El barrido además se equivocaba: contaba como uso una
+mención en un comentario, y así se le escapaba el Diario resumido entero.
+Corregido eso, la lista quedó en cero salvo cuatro excepciones, cada una con qué
+la destraba. Qué pasó con cada una:
+
+**Conectadas — la pieza existía y nadie recorría el camino:**
+
+| Pieza | Dónde se conectó |
+|---|---|
+| `resumirPorMes`, `resumenCoincideConDetalle`, `comoSubdiarioDeclarado` | `GET /books/diario-resumido` — el art. 327 completo, verificado contra el hash del subdiario emitido |
+| `verificarActa`, `totalesPorTipo` | `GET /banks/reconciliations/:id/verificar` |
+| `saldosPorNaturaleza` | `GET /books/mayor` — el cruce contra el balance de sumas y saldos |
+| `bloqueaAprobacion`, `bloqueaImputacion` | La respuesta de documentos dice si se puede aprobar e imputar, en vez de dejar la conclusión a cada pantalla |
+| `citaHabilitaAplicacion`, `renderizarCita`, `normasCitables` | Una norma que no es V1 con documento archivado ya no entra al contexto del modelo |
+| `hechosDeAfectacion` + `evaluar` | Las condiciones de una regla **se evalúan** al decidir; antes una regla vigente se daba por aplicada sin mirar su AST |
+| `leerHabilitacion` | `GET /companies/current/arca/capabilities` — aparece `VENCIDO`, que la ruta no distinguía |
+| `aSelloFiscal`, `bloqueaAprobacionAutomatica` | La constatación devuelve el sello del motor: en ambiente simulado dice que no tiene valor probatorio |
+| `promptPorHash`, `admiteAprobacionEnLote` | `GET /predictions` — y la pantalla de revisión, que tampoco existía |
+| `desambiguarPorControl` | La extracción resuelve un total ambiguo con la aritmética del propio comprobante |
+| `multiplyByRate` | `tax-engine` tenía una **segunda implementación** del mismo redondeo |
+
+**Borradas — eran una segunda forma de hacer algo que el sistema ya hace:**
+`saldosDeCierre` (el arrastre sale del cierre archivado, por diseño),
+`siguienteNumero` (numera la base), `CatalogoSemilla` y su puerto (el tipo de
+comprobante se resuelve contra `arca_comprobante_types`, por fecha), y trece
+primitivas de `@aai/shared` que solo usaban sus propios tests.
+
+**Efectos colaterales que valen por sí solos:** `vat_books.compras_sha256` y
+`ventas_sha256` existían desde la 0021 con su motivo escrito y **ningún INSERT**
+las llenaba; ahora las escribe la generación del libro, y el Diario resumido las
+verifica. La pantalla de revisión de propuestas de IA no existía: la bandeja
+mandaba ahí y contestaba que no había pantalla.
+
 ## P0 — Integridad
 
 **Nada abierto.** RLS completo con `FORCE` en 107 tablas, Mayor sin
@@ -93,6 +129,45 @@ y otra sobre qué significa «aplicar» un escenario. Ninguna es técnica.
 | Producción | REQUIERE_DECISION | Absorción de costos indirectos |
 | RRHH | REQUIERE_DECISION | ADR-012 §8 |
 | Momento de asentar el CMV | REQUIERE_DECISION | El asiento ya se **propone** (0079); automatizar cuándo es política contable |
+| Qué guarda `constatacion` en ambiente `mock` | REQUIERE_DECISION | Ver abajo |
+| Intentar la consulta con el relevamiento vencido | REQUIERE_DECISION | Ver abajo |
+
+### Qué guarda `constatacion` cuando ARCA está simulado
+
+`aSelloFiscal` clasifica un resultado del ambiente `mock` como `NO_VERIFICABLE`
+—«este resultado NO proviene de ARCA y no tiene valor probatorio»—, y la
+traducción que se guarda en `tax_transactions.constatacion` dice `OK`. Desde
+2026-09-03 la respuesta de `POST /tax-transactions/:id/constatar` muestra las
+dos y avisa que no coinciden; la columna no cambió.
+
+- **Alternativa A — guardar el sello.** En desarrollo ninguna operación queda
+  constatada, así que el circuito comprobante → decisión → asiento no se puede
+  recorrer entero sin ARCA real: `decidir` exige sello aprobado. Es lo más
+  honesto y lo más caro.
+- **Alternativa B — dejarlo como está.** La columna guarda la traducción y la
+  respuesta avisa. El riesgo es una decisión `PRODUCTIVO` fundada en una
+  constatación simulada, que hoy nada impide.
+- **Alternativa C — negarse a constatar en `mock` salvo pedido explícito**, y
+  que el circuito de desarrollo use `constatacionDeclarada`, que ya queda
+  marcada como `DECLARACION_PROFESIONAL`.
+
+No la tomo yo: cambia qué puede fundar un asiento.
+
+### Intentar la consulta con el relevamiento vencido
+
+`permiteIntentar` (motor) dice que `VENCIDO`, `NO_RELEVADO` y `NO_VERIFICABLE`
+**no** frenan el intento: no saber no es motivo para no preguntar. El
+`DbCapabilityStore` de la API falla cerrado: sin `enabled = true` no se
+consulta. Las dos políticas están escritas y son opuestas.
+
+- **Alternativa A — adoptar la del motor.** Se consulta y el organismo contesta;
+  el resultado es justamente el dato que falta. Riesgo: insistir contra un
+  servicio no delegado es cómo un CUIT termina bloqueado por ARCA.
+- **Alternativa B — mantener la de la API** y borrar `permiteIntentar`, o
+  reducirlo a describir estados sin decidir.
+
+Depende de cuánto riesgo de bloqueo acepta el estudio: es del contribuyente,
+no del sistema.
 
 ## Deuda registrada
 

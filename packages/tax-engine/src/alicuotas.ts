@@ -18,7 +18,7 @@
  */
 
 import type { CalendarDate, Money } from '@aai/shared';
-import { money } from '@aai/shared';
+import { money, multiplyByRate } from '@aai/shared';
 import type { AlicuotaRelevada, HallazgoIva } from './contracts.js';
 
 export interface IdentificacionAlicuota {
@@ -147,22 +147,25 @@ export function verificarIvaDeclarado(
 /**
  * IVA que corresponde a un neto según una alícuota, en unidades menores.
  *
- * Redondeo al centavo más cercano con desempate hacia arriba, hecho en enteros:
- * `(|neto| × num × 2 + den) / (den × 2)`, y el signo se repone al final. La
- * aritmética entera es obligatoria acá — el IVA de un neto grande calculado en
- * punto flotante se corre de a centavos y el subdiario deja de sumar.
+ * El redondeo lo hace `multiplyByRate`, y eso es el contenido de esta función.
+ * Hasta que el barrido S-16 lo mostró, acá vivía **una segunda implementación**
+ * del mismo redondeo entero: `(|neto| × num × 2 + den) / (den × 2)` con el signo
+ * repuesto al final. Daba lo mismo, y ese es justamente el problema — el
+ * comentario de `convert()` en `@aai/shared` ya lo decía: «tener dos
+ * implementaciones del redondeo es tener dos criterios que en algún momento
+ * divergen».
  *
- * El valor absoluto no es adorno. La división de `bigint` trunca hacia cero, así
- * que sobre un neto negativo —una nota de crédito cargada con signo— el mismo
- * cálculo redondearía hacia arriba en vez de al más cercano, y una nota de
- * crédito devolvería un centavo menos de IVA del que retuvo la factura.
+ * Lo que no cambió es lo que hay que sostener: aritmética entera (el IVA de un
+ * neto grande en punto flotante se corre de a centavos y el subdiario deja de
+ * sumar) y redondeo simétrico sobre el valor absoluto, para que una nota de
+ * crédito devuelva exactamente el IVA que retuvo la factura.
  */
 function esperado(neto: Money, alicuota: AlicuotaRelevada): bigint {
-  const negativo = neto.amount < 0n;
-  const absoluto = negativo ? -neto.amount : neto.amount;
-  const numerador = absoluto * alicuota.numerador * 2n + alicuota.denominador;
-  const redondeado = numerador / (alicuota.denominador * 2n);
-  return negativo ? -redondeado : redondeado;
+  return multiplyByRate(
+    neto,
+    { numerator: alicuota.numerador, denominator: alicuota.denominador },
+    'HALF_UP',
+  ).amount;
 }
 
 /** El mismo cálculo, expuesto para quien necesita el importe y no el control. */

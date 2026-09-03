@@ -32,6 +32,18 @@ import { sufijoUnico } from './helpers/identificadores.js';
 const suite = hasDatabase ? describe : describe.skip;
 const PASSWORD = 'una-contrasena-suficientemente-larga';
 
+interface Verificacion {
+  estado: string;
+  verificable: boolean;
+  /** `null` cuando no hay extracto contra el cual rehacer la cuenta. */
+  coincide: boolean | null;
+  detalle: string;
+  guardado: { saldoExtracto: string; saldoLibro: string; ajusteNeto: string };
+  recalculado: { saldoConciliado: string; saldoSegunLibro: string; cierra: boolean } | null;
+  partidasConciliatorias: { enBancoNoEnLibro: string; enLibroNoEnBanco: string } | null;
+  alcance: string;
+}
+
 suite('Conciliación bancaria por HTTP', () => {
   let app: FastifyInstance;
   let db: Client;
@@ -191,6 +203,35 @@ suite('Conciliación bancaria por HTTP', () => {
       (await pedir('POST', `/journal-entries/${alta.json<{ id: string }>().id}/approve`))
         .statusCode,
     ).toBe(200);
+
+    // El extracto del banco, importado por el camino real. Hace falta para que
+    // la verificación tenga contra qué rehacer la cuenta: sin el lado del banco
+    // no se puede distinguir una partida conciliatoria de un extracto que nadie
+    // importó. El alta del mapeo todavía no existe por HTTP, así que va por SQL
+    // (igual que la cuenta bancaria, y por el mismo motivo).
+    const layoutId = (
+      await db.query<{ id: string }>(
+        `INSERT INTO bank_statement_layouts
+           (company_id, bank_account_id, nombre, filas_encabezado, columna_fecha,
+            columna_descripcion, esquema_signo, columna_debito, columna_credito,
+            formato_fecha, formato_importe, separador, created_by)
+         VALUES ($1, $2, 'Extracto de prueba', 1, 0, 1, 'COLUMNAS_SEPARADAS', 2, 3,
+                 'AAAA-MM-DD', 'ES_AR', ';', 'tester')
+         RETURNING id`,
+        [empresa, cuentaCierra],
+      )
+    ).rows[0]!.id;
+
+    const extracto = await pedir('POST', `/banks/accounts/${cuentaCierra}/statements`, {
+      layoutId,
+      desde,
+      hasta,
+      saldoInicial: '0',
+      saldoFinal: '1000.00',
+      contenido: ['Fecha;Descripcion;Debito;Credito', `${hasta};COBRANZA ACREDITADA;;1.000,00`].join('\n'),
+    });
+    expect(extracto.statusCode, extracto.body).toBe(201);
+    expect(extracto.json<{ movimientos: number }>().movimientos).toBe(1);
   }, 60_000);
 
   afterAll(async () => {
@@ -275,6 +316,94 @@ suite('Conciliación bancaria por HTTP', () => {
     expect(fila.rows[0]!.status).toBe('CONFIRMADA');
     // Sin firma no hay confirmación: lo exige un CHECK desde la 0022.
     expect(fila.rows[0]!.confirmed_by).not.toBeNull();
+  });
+
+  /**
+   * La verificación de una conciliación confirmada.
+   *
+   * `verificarActa` estaba escrita en `@aai/bank-engine` y **no la llamaba
+   * nadie** — la encontró el barrido S-16. Una conciliación guardada es un dato
+   * derivado, y un derivado que nadie vuelve a verificar se desincroniza en
+   * silencio: alcanza con un asiento nuevo en el período.
+   */
+  it('una conciliación confirmada se puede volver a verificar', async () => {
+    const confirmada = (await pedir('GET', '/banks/reconciliations?status=CONFIRMADA'))
+      .json<{ conciliaciones: { id: string }[] }>().conciliaciones[0];
+    expect(confirmada, 'el test anterior dejó una confirmada').toBeDefined();
+
+    const r = await pedir('GET', `/banks/reconciliations/${confirmada!.id}/verificar`);
+    expect(r.statusCode, r.body).toBe(200);
+
+    const v = r.json<Verificacion>();
+
+    expect(v.estado).toBe('CONFIRMADA');
+    expect(v.verificable, 'el extracto del período está importado').toBe(true);
+    // Nada cambió desde que se confirmó: la cuenta rehecha da lo mismo.
+    expect(v.coincide, v.detalle).toBe(true);
+    expect(v.recalculado!.saldoConciliado).toBe(v.guardado.saldoLibro);
+    // El movimiento del extracto casó con la línea del Mayor: no queda nada
+    // suelto de ningún lado.
+    expect(Number(v.partidasConciliatorias!.enBancoNoEnLibro)).toBe(0);
+    expect(Number(v.partidasConciliatorias!.enLibroNoEnBanco)).toBe(0);
+    expect(v.alcance).toContain('algo cambió después');
+  });
+
+  /**
+   * El caso que la verificación **no** puede juzgar.
+   *
+   * La cuenta que no cierra nunca recibió un extracto. Rehacer la cuenta ahí
+   * daría "no coincide" siempre —sin el lado del banco, cada línea del Mayor
+   * parece una partida conciliatoria—, y eso sería acusar un cambio que no
+   * ocurrió. La respuesta correcta es que no se puede afirmar.
+   */
+  it('sin extracto importado la verificación dice que no se puede verificar', async () => {
+    const borrador = (await pedir('GET', '/banks/reconciliations?status=BORRADOR'))
+      .json<{ conciliaciones: { id: string; cuentaId: string }[] }>()
+      .conciliaciones.find((c) => c.cuentaId === cuentaNoCierra);
+    expect(borrador, 'la cuenta que no cierra dejó un acta en borrador').toBeDefined();
+
+    const v = (await pedir('GET', `/banks/reconciliations/${borrador!.id}/verificar`))
+      .json<Verificacion>();
+
+    expect(v.verificable).toBe(false);
+    // Ni `true` ni `false`: no hay con qué decirlo.
+    expect(v.coincide).toBeNull();
+    expect(v.detalle).toContain('no se puede verificar');
+    // Y no se muestran partidas conciliatorias inventadas por la falta de datos.
+    expect(v.recalculado).toBeNull();
+    expect(v.partidasConciliatorias).toBeNull();
+  });
+
+  it('un asiento nuevo en el período hace que la verificación no coincida', async () => {
+    // Es el caso que la verificación existe para detectar: la conciliación
+    // guardada sigue diciendo lo de ayer, y el libro ya no dice lo mismo.
+    const confirmada = (await pedir('GET', '/banks/reconciliations?status=CONFIRMADA'))
+      .json<{ conciliaciones: { id: string }[] }>().conciliaciones[0]!;
+
+    const antes = await pedir('GET', `/banks/reconciliations/${confirmada.id}/verificar`);
+    expect(antes.json<Verificacion>().coincide).toBe(true);
+
+    const alta = await pedir('POST', '/journal-entries', {
+      journalCode: 'GENERAL',
+      entryDate: `${anio}-01-15`,
+      description: 'Movimiento posterior a la conciliación',
+      currency: 'ARS',
+      lines: [
+        { accountCode: '1.1.03', debit: '1500.00', credit: '0' },
+        { accountCode: '4.1.01', debit: '0', credit: '1500.00' },
+      ],
+      source: { type: 'MANUAL', id: null },
+      manualJustification: 'Asiento cargado después de confirmar la conciliación',
+    });
+    expect(alta.statusCode, alta.body).toBe(201);
+    expect(
+      (await pedir('POST', `/journal-entries/${alta.json<{ id: string }>().id}/approve`)).statusCode,
+    ).toBe(200);
+
+    const despues = await pedir('GET', `/banks/reconciliations/${confirmada.id}/verificar`);
+    const v = despues.json<{ coincide: boolean; detalle: string }>();
+    expect(v.coincide, 'el libro cambió: la conciliación guardada ya no lo refleja').toBe(false);
+    expect(v.detalle).toContain('Algo cambió después de confirmarla');
   });
 
   it('sin período que contenga la fecha de corte, no se abre', async () => {

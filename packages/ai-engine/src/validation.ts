@@ -211,6 +211,6 @@ function describir(errores: readonly ErrorSchema[]): string {
  * Sigue necesitando que una persona apriete el botón. Lo que cambia entre 🟢 y
  * 🟡 es si se puede aprobar en tanda o hay que abrir cada una.
  */
-export function admiteAprobacionEnLote(propuesta: PropuestaValidada): boolean {
+export function admiteAprobacionEnLote(propuesta: { readonly triage: Triage }): boolean {
   return propuesta.triage.band === 'ALTA' && propuesta.triage.hardBlocks.length === 0;
 }

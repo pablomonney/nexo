@@ -86,6 +86,40 @@ necesita saber de una vez qué le falta.
 Si hay un rechazo, no hay resumen y el Diario va detallado. Detallado siempre es
 legal; resumido sin subdiario, no.
 
+### Cómo se pide, y qué se verifica al pedirlo
+
+```
+GET /books/diario-resumido?anio=2026&mes=3
+```
+
+El subdiario del que el resumen dice surgir es el **de IVA del período**, que ya
+existe: `POST /vat/books/:anio/:mes/generate` lo emite y archiva el `sha256` del
+archivo en `vat_books.compras_sha256` / `ventas_sha256`. El archivo se descarga
+en `GET /vat/subdiarios/:direccion/:anio/:mes.csv`, con su hash en
+`x-content-sha256`.
+
+Al pedir el resumen se rehace el subdiario y se compara su hash con el
+archivado. Tres negativas posibles, cada una con el artículo:
+
+- `SUBDIARIO_NO_EMITIDO` — el Libro de IVA del período no está generado, así que
+  no hay registro detallado del que el resumen pueda surgir.
+- `SUBDIARIO_SIN_HASH_ARCHIVADO` — se generó antes de que el sistema archivara el
+  hash: no hay contra qué verificar.
+- `SUBDIARIO_CAMBIO_DESPUES_DE_EMITIDO` — el detalle de hoy no es el que se
+  emitió. Un comprobante nuevo, uno anulado o una alícuota reidentificada
+  alcanzan. El resumen ya no surge de lo que se archivó.
+
+Y cada resumen viaja con su verificación: `resumenCoincideConDetalle` comprueba
+que sume exactamente lo mismo que los asientos que condensó, y el resultado va en
+la respuesta. Es cierto por construcción, y por eso mismo se verifica.
+
+Lo que no tiene subdiario —`GENERAL`, típicamente— no se resume: va detallado, y
+la respuesta dice cuántos asientos son y de qué libro.
+
+**Este endpoint no registra el resumen.** Arma, verifica y explica; registrar un
+asiento resumido en el Diario es un acto con firma y pasa por el único escritor
+del Mayor.
+
 ## 5. El Mayor es una proyección
 
 No tiene ningún dato propio. Cada movimiento sale de una línea de asiento y de

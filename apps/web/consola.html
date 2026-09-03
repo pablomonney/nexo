@@ -125,6 +125,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button data-vista="inteligencia">Preguntar</button>
   <button data-vista="bandeja">Pendientes</button>
   <button data-vista="documentos">Documentos</button>
+  <button data-vista="propuestas">Propuestas de IA</button>
   <button data-vista="operaciones">Operaciones</button>
   <button data-vista="terceros">Terceros</button>
   <button data-vista="productos">Productos</button>
@@ -350,10 +351,49 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
           <button id="b-corr-campo">Guardar corrección</button>
           <button id="b-corr-cancelar" class="sec">Cancelar</button>
         </div>
+        <h3>Qué dice la lectura</h3>
+        <div id="doc-estado"></div>
         <div id="doc-duplicados"></div>
       </div>
     </div>
     <div id="doc-detalle-msg"></div>
+  </div>
+</section>
+
+<!-- ══ Propuestas de IA ═══════════════════════════════════════════════════ -->
+<section id="v-propuestas" hidden>
+  <h2>Propuestas de IA</h2>
+  <p class="ayuda">Ninguna de estas propuestas está contabilizada, y ninguna se contabiliza
+    sola. Cada una dice <strong>con qué modelo y con qué prompt</strong> se produjo, en qué
+    banda cayó y qué disparadores duros tiene. Aprobar, modificar o rechazar es un acto de
+    una persona, y queda con su nombre.</p>
+  <div class="fila">
+    <div><label>Banda</label><select id="iap-banda">
+      <option value="">todas</option><option>ALTA</option><option>MEDIA</option><option>BAJA</option>
+    </select></div>
+    <div><label>&nbsp;</label><button id="b-iap" class="sec">Ver propuestas</button></div>
+  </div>
+  <div id="iap-msg"></div>
+  <div class="tabla"><table id="t-iap"><thead><tr>
+    <th>Documento</th><th>Cuenta propuesta</th><th>Confianza</th><th>Banda</th>
+    <th>Disparadores duros</th><th>Modelo</th><th>Prompt</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="iap-revisar" hidden>
+    <h3>Revisar la propuesta</h3>
+    <p class="ayuda">Modificar exige decir <strong>a qué cuenta</strong>; rechazar exige decir
+      <strong>por qué</strong>. Las dos cosas son el dato que hace que el sistema pueda
+      medirse: una corrección sin cuenta y un rechazo sin motivo no enseñan nada.</p>
+    <div class="fila">
+      <div><label>Propuesta</label><input id="iap-id" readonly></div>
+      <div><label>Decisión</label><select id="iap-decision">
+        <option>APROBADA</option><option>MODIFICADA</option><option>RECHAZADA</option>
+      </select></div>
+      <div style="flex:1"><label>Cuenta final (si se modifica)</label>
+        <select id="iap-cuenta"></select></div>
+      <div style="flex:1"><label>Motivo (si se rechaza)</label><input id="iap-motivo"></div>
+      <div><label>&nbsp;</label><button id="b-iap-revisar">Registrar la revisión</button></div>
+    </div>
   </div>
 </section>
 
@@ -1693,6 +1733,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <th>Cuenta</th><th>Desde</th><th>Hasta</th><th>Extracto</th><th>Libro</th>
       <th>Diferencia</th><th>Coincidencias</th><th>Estado</th><th></th>
     </tr></thead><tbody></tbody></table></div>
+    <div id="ban-ver-msg"></div>
   </div></details>
 </section>
 
@@ -2272,6 +2313,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div><label>Hasta</label><input id="lib-hasta" type="date"></div>
   </div>
   <button id="b-diario" class="sec">Diario</button>
+  <button id="b-diario-resumido" class="sec">Diario resumido del mes</button>
   <button id="b-mayor" class="sec">Mayor</button>
   <button id="b-balance" class="sec">Balance</button>
   <button id="b-emisiones" class="sec">Emisiones</button>
@@ -2341,6 +2383,30 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <button id="b-au" class="sec">Buscar</button>
   <button id="b-au-mas" class="sec" hidden>Ver más</button>
   <div id="au-msg"></div>
+
+  <details class="grupo"><summary>Variaciones entre períodos</summary><div>
+    <p class="ayuda">La herramienta más vieja de la auditoría: comparar contra el período
+      anterior y mirar lo que se movió. Se compara el <strong>movimiento de cada período</strong>
+      —débitos menos créditos del Mayor—, no el saldo acumulado.</p>
+    <p class="ayuda">Una variación es significativa si supera <strong>cualquiera</strong> de los
+      dos umbrales: ordenar por porcentaje pone arriba una cuenta que pasó de 00 a 00 y
+      abajo una que movió cuatro millones; ordenar por importe esconde la cuenta chica que se
+      multiplicó por cinco. Y una cuenta que pasó de cero a algo no tiene un porcentaje enorme:
+      <strong>apareció</strong>, que es otra cosa.</p>
+    <div class="fila">
+      <div><label>Período anterior</label><select id="au-var-anterior"></select></div>
+      <div><label>Período actual</label><select id="au-var-actual"></select></div>
+      <div><label>Umbral %</label><input id="au-var-pct" inputmode="numeric" placeholder="25"></div>
+      <div><label>Umbral $</label><input id="au-var-abs" inputmode="numeric" placeholder="10000"></div>
+      <div><label>&nbsp;</label><button id="b-au-var" class="sec">Comparar</button></div>
+    </div>
+    <div id="au-var-msg"></div>
+    <dl class="kv" id="au-var-resumen"></dl>
+    <div class="tabla"><table id="t-au-var"><thead><tr>
+      <th>Cuenta</th><th>Anterior</th><th>Actual</th><th>Diferencia</th><th>%</th>
+      <th>Qué pasó</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
 
   <details class="grupo"><summary>Anomalías del Diario</summary><div>
     <p class="ayuda">Cuatro detectores determinísticos sobre los asientos <strong>aprobados</strong>.
@@ -2509,7 +2575,7 @@ const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
-const VISTAS = ['login','empresa','inicio','inteligencia','bandeja','documentos','operaciones',
+const VISTAS = ['login','empresa','inicio','inteligencia','bandeja','documentos','propuestas','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
@@ -2563,7 +2629,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
-    if (v === 'auditoria') listarAuditoria();
+    if (v === 'auditoria') { listarAuditoria(); cargarPeriodosParaVariacion(); }
     if (v === 'suscripcion') cargarSuscripcion();
     if (v === 'config') cargarConfig();
   };
@@ -2631,11 +2697,13 @@ async function usarEmpresa(id) {
 
   const cuentas = await api('GET', '/accounts');
   estado.cuentas = (cuentas.datos && cuentas.datos.accounts) || [];
-  for (const sel of ['afec-cuentas', 'ne-debe', 'ne-haber']) {
+  // `iap-cuenta` va por id, igual que `afec-cuentas`: la revisión de una
+  // propuesta corrige a una cuenta concreta, y el endpoint la pide por id.
+  for (const sel of ['afec-cuentas', 'ne-debe', 'ne-haber', 'iap-cuenta']) {
     const s = E(sel); s.innerHTML = '';
     for (const a of estado.cuentas) {
       const o = document.createElement('option');
-      o.value = sel === 'afec-cuentas' ? a.id : a.code;
+      o.value = (sel === 'afec-cuentas' || sel === 'iap-cuenta') ? a.id : a.code;
       o.textContent = a.code + ' — ' + a.name;
       s.appendChild(o);
     }
@@ -2660,7 +2728,8 @@ async function usarEmpresa(id) {
  */
 function aplicarPermisosANav() {
   const requiere = {
-    documentos: 'document:read', operaciones: 'journal_entry:read',
+    documentos: 'document:read', propuestas: 'prediction:review',
+    operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
     crm: 'crm:read', proyectos: 'project:read', comisiones: 'commission:read', sucursales: 'branch:read',
     comercial: 'commercial:read', recepciones: 'receipt:read',
@@ -3038,16 +3107,86 @@ async function abrirPendiente(item) {
         '<br>El libro de IVA se genera desde el período correspondiente.</div>';
       return;
     case 'ai_predictions':
-      ir('bandeja', migas);
-      E('wq-msg').innerHTML = '<div class="aviso"><span class="p p-ia">propuesto por IA</span> ' +
-        escapar(item.motivo) + '<br>La revisión de propuestas todavía no tiene pantalla: ' +
-        'la propuesta existe y no se convierte en decisión sin que una persona la revise.</div>';
+      ir('propuestas', migas);
+      await listarPropuestas();
       return;
     default:
       E('wq-msg').innerHTML = '<div class="aviso">' + escapar(item.motivo) +
         '<br>Esta entidad todavía no tiene pantalla propia.</div>';
   }
 }
+
+// ══ 2b · Propuestas de IA ═════════════════════════════════════════════════
+//
+// `GET /predictions` y `POST /predictions/:id/review` existían desde FASE 4 y
+// **no tenían pantalla**: la bandeja de pendientes mandaba acá y contestaba que
+// la revisión "todavía no tiene pantalla". Una propuesta que nadie puede revisar
+// es una propuesta que no existe — el mismo defecto que persigue S-16, del lado
+// de la consola.
+
+/** Las propuestas pendientes de revisión, con todo lo que las explica. */
+async function listarPropuestas() {
+  const q = new URLSearchParams({ limite: '50' });
+  if (E('iap-banda').value) q.set('banda', E('iap-banda').value);
+
+  const r = await api('GET', '/predictions?' + q.toString());
+  if (!r.ok) return decir('iap-msg', r);
+
+  E('iap-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.aviso || '') + '</div>';
+  E('iap-revisar').hidden = !puede('prediction:review');
+
+  const cuerpo = E('t-iap').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of (r.datos.predicciones || [])) {
+    const salida = p.output || {};
+    const bloqueos = p.bloqueos || [];
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(p.documento || p.documentId) + '</td>' +
+      '<td class="mono">' + escapar(salida.cuentaCodigo || '—') + '</td>' +
+      '<td class="mono">' + escapar(String(p.confidence)) + '</td>' +
+      // La banda con su color, y al lado si admite tanda. Son dos cosas
+      // distintas: la banda es del modelo, la tanda la decide el motor.
+      '<td>' + pastilla(p.banda) + (p.admiteAprobacionEnLote
+        ? ' <span class="p p-bien">admite tanda</span>'
+        : ' <span class="p p-ojo">de a una</span>') + '</td>' +
+      '<td>' + (bloqueos.length === 0
+        ? '<span class="p p-bien">ninguno</span>'
+        : bloqueos.map((b) => '<span class="p p-mal">' + escapar(b) + '</span>').join(' ')) + '</td>' +
+      '<td class="mono">' + escapar(p.proveedor || '—') + '</td>' +
+      // El prompt, resuelto contra el registro. Un hash de 64 caracteres no le
+      // dice nada a quien revisa; si el hash no está en el registro, la
+      // propuesta no se puede reproducir y eso también se dice.
+      '<td>' + (p.prompt
+        ? escapar(p.prompt.nombre + ' ' + p.prompt.version)
+        : '<span class="p p-mal">prompt no registrado</span>') + '</td>' +
+      '<td>' + (puede('prediction:review') ? '<span class="clic">revisar</span>' : '') + '</td>';
+
+    const clic = tr.querySelector('.clic');
+    if (clic) clic.onclick = () => {
+      E('iap-id').value = p.id;
+      E('iap-motivo').value = '';
+      E('iap-msg').innerHTML = '<div class="aviso"><strong>' +
+        escapar(salida.cuentaCodigo || 'sin cuenta') + '</strong><p>' +
+        escapar(p.reason || '') + '</p><p class="ayuda">' +
+        'Aprobar no contabiliza nada: registra que una persona aceptó la propuesta.</p></div>';
+    };
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-iap').onclick = () => listarPropuestas();
+
+E('b-iap-revisar').onclick = async () => {
+  const decision = E('iap-decision').value;
+  const cuerpo = { decision };
+  if (decision === 'MODIFICADA') cuerpo.cuentaFinalId = E('iap-cuenta').value;
+  if (decision === 'RECHAZADA') cuerpo.motivo = E('iap-motivo').value;
+
+  const r = await api('POST', '/predictions/' + E('iap-id').value + '/review', cuerpo);
+  decir('iap-msg', r, 'Revisión registrada con tu nombre');
+  if (r.ok) listarPropuestas();
+};
 
 // ══ 3 · Documentos ════════════════════════════════════════════════════════
 async function listarDocumentos(cursor) {
@@ -3142,6 +3281,29 @@ async function abrirDocumento(id) {
       escapar(ext.motivoNoDisponible) + '</span>. No es que no se haya encontrado nada: ' +
       'es que no hubo con qué leerlo.</div>'
     : '';
+
+  // Los hallazgos de la lectura y su conclusión. La conclusión la calcula la API
+  // —`bloqueaAprobacion` / `bloqueaImputacion`, en el motor— y no esta pantalla:
+  // dos criterios para la misma pregunta terminan divergiendo.
+  const hallazgos = r.datos.hallazgos || [];
+  E('doc-estado').innerHTML =
+    '<div class="aviso' + (r.datos.puedeImputarse ? ' ok' : ' error') + '"><strong>' +
+    (r.datos.puedeAprobarse ? 'Se puede aprobar' : 'No se puede aprobar') + ' · ' +
+    (r.datos.puedeImputarse ? 'se puede imputar' : 'no se puede imputar') + '</strong>' +
+    (r.datos.motivoDeBloqueo ? '<p>' + escapar(r.datos.motivoDeBloqueo) + '</p>' : '') +
+    '</div>' +
+    (hallazgos.length === 0
+      ? '<p class="ayuda">La lectura no dejó hallazgos.</p>'
+      : '<div class="tabla"><table><thead><tr><th>Código</th><th>Severidad</th>' +
+        '<th>Qué dice</th><th>Campos</th></tr></thead><tbody>' +
+        hallazgos.map((h) =>
+          '<tr><td class="mono">' + escapar(h.codigo) + '</td>' +
+          '<td>' + (h.bloquea
+            ? '<span class="p p-mal">' + escapar(h.severidad) + ' · bloquea</span>'
+            : '<span class="p p-ojo">' + escapar(h.severidad) + '</span>') + '</td>' +
+          '<td>' + escapar(h.mensaje) + '</td>' +
+          '<td class="mono">' + escapar((h.campos || []).join(', ')) + '</td></tr>').join('') +
+        '</tbody></table></div>');
 
   pintarDuplicados(r.datos.duplicados || []);
   E('b-reextraer').hidden = !puede('document:upload');
@@ -4446,6 +4608,24 @@ E('b-constatar').onclick = async () => {
     docTipoReceptor: Number(E('doctipo').value), docNroReceptor: E('docnro').value,
   });
   decir('arca-msg', r, 'ARCA contestó');
+
+  // El sello del motor, arriba del JSON. Es lo que dice si esta respuesta tiene
+  // valor probatorio: en el ambiente simulado NO lo tiene, y la pantalla que
+  // muestra "OK" sin decirlo estaría presentando una simulación como un hecho.
+  if (r.ok && r.datos.sello) {
+    const s = r.datos.sello;
+    E('arca-msg').insertAdjacentHTML('afterbegin',
+      '<div class="aviso' + (s.coincideConLoGuardado ? '' : ' error') + '"><strong>' +
+      escapar(s.resultado) + (s.bloqueaAprobacionAutomatica
+        ? ' · no habilita aprobación automática' : '') + '</strong><p>' +
+      escapar(s.explicacion) + '</p>' +
+      (s.coincideConLoGuardado ? '' :
+        '<p class="ayuda">La operación quedó guardada como <span class="mono">' +
+        escapar(r.datos.constatacion) + '</span>, que es la traducción del vocabulario de ARCA. ' +
+        'El sello dice otra cosa y las dos se muestran.</p>') +
+      '</div>');
+  }
+
   if (r.ok) listarOperaciones();
 };
 
@@ -5583,14 +5763,16 @@ async function listarConciliaciones() {
       '<td class="mono">' + escapar(String(c.coincidencias)) + '</td>' +
       '<td>' + pastilla(c.status) + '</td>' +
       '<td>' + (c.status === 'BORRADOR' && puede('bank:confirm')
-        ? '<span class="clic">confirmar</span>' : '') + '</td>';
+        ? '<span class="clic clic-conf">confirmar</span> ' : '') +
+        '<span class="clic clic-ver">verificar</span></td>';
 
-    const boton = tr.querySelector('.clic');
+    const boton = tr.querySelector('.clic-conf');
     if (boton) boton.onclick = async () => {
       const conf = await api('POST', '/banks/reconciliations/' + c.id + '/confirm');
       decir('ban-abrir-msg', conf, 'Conciliación confirmada');
       if (conf.ok) listarConciliaciones();
     };
+    tr.querySelector('.clic-ver').onclick = () => verificarConciliacion(c);
     cuerpo.appendChild(tr);
 
     if (c.status === 'BORRADOR') {
@@ -5601,6 +5783,50 @@ async function listarConciliaciones() {
     }
   }
   sel.value = previo;
+}
+
+/**
+ * Rehace la cuenta de una conciliación guardada y muestra el veredicto.
+ *
+ * Una conciliación es un dato derivado, y un derivado que nadie vuelve a
+ * verificar se desincroniza en silencio: alcanza con un asiento nuevo en el
+ * período. Es el mismo principio que `ledger:verify` sobre el Mayor.
+ *
+ * Los tres estados se muestran distintos a propósito. "No se puede verificar"
+ * —cuando nunca se importó un extracto del período— no es "coincide" ni "no
+ * coincide": es que falta un lado, y pintarlo de verde o de rojo sería afirmar
+ * algo que el sistema no sabe.
+ */
+async function verificarConciliacion(c) {
+  const r = await api('GET', '/banks/reconciliations/' + c.id + '/verificar');
+  if (!r.ok) { decir('ban-ver-msg', r); return; }
+
+  const v = r.datos;
+  const clase = v.coincide === null ? 'aviso' : (v.coincide ? 'aviso ok' : 'aviso error');
+  const titulo = v.coincide === null ? 'No se puede verificar'
+    : (v.coincide ? 'Coincide: rehecha da lo mismo' : 'No coincide: algo cambió después');
+
+  let html = '<div class="' + clase + '"><strong>' + escapar(titulo) + '</strong>' +
+    '<p>' + escapar(c.banco + ' · ' + c.desde + ' a ' + c.hasta) + '</p>' +
+    '<p>' + escapar(v.detalle) + '</p>';
+
+  if (v.recalculado) {
+    html += '<div class="tabla"><table><thead><tr><th></th><th>Guardado</th>' +
+      '<th>Rehecho hoy</th></tr></thead><tbody>' +
+      '<tr><td>Saldo del libro</td><td class="mono">' + escapar(v.guardado.saldoLibro) +
+      '</td><td class="mono">' + escapar(v.recalculado.saldoSegunLibro) + '</td></tr>' +
+      '<tr><td>Saldo conciliado</td><td class="mono">' + escapar(v.guardado.saldoExtracto) +
+      '</td><td class="mono">' + escapar(v.recalculado.saldoConciliado) + '</td></tr>' +
+      '</tbody></table></div>';
+  }
+  if (v.partidasConciliatorias) {
+    html += '<p class="ayuda">En el banco y no en el libro: <span class="mono">' +
+      escapar(v.partidasConciliatorias.enBancoNoEnLibro) + '</span> · en el libro y no en el ' +
+      'banco: <span class="mono">' + escapar(v.partidasConciliatorias.enLibroNoEnBanco) +
+      '</span></p>';
+  }
+  html += '<p class="ayuda">' + escapar(v.alcance) + '</p></div>';
+  E('ban-ver-msg').innerHTML = html;
 }
 
 E('b-ban-abrir').onclick = async () => {
@@ -7682,6 +7908,68 @@ E('b-diario').onclick = async () => {
   pintarAccionesDeLibro('DIARIO');
 };
 
+/**
+ * El Diario resumido del mes (CCyC art. 327).
+ *
+ * El mes sale de la fecha "desde" que está en pantalla: el resumen es mensual
+ * por definición del artículo —«períodos de duración no superiores al mes»— así
+ * que no hay un rango que elegir.
+ *
+ * Los rechazos se muestran **primero** y con su fundamento. Que el mes no se
+ * pueda resumir no es un error del sistema: es que falta el registro detallado
+ * del que el resumen tiene que surgir, y eso se arregla generando el Libro de
+ * IVA del período o dejando el Diario en detalle.
+ */
+E('b-diario-resumido').onclick = async () => {
+  const desde = E('lib-desde').value;
+  if (!desde) return decir('lib-msg', { ok: false, status: 'falta la fecha',
+    datos: { message: 'Elegí una fecha en "Desde": el mes del resumen sale de ahí.' } });
+
+  const r = await api('GET', '/books/diario-resumido?anio=' + desde.slice(0, 4) +
+    '&mes=' + Number(desde.slice(5, 7)));
+  if (!r.ok) return decir('lib-msg', r);
+  limpiar('lib-msg');
+
+  const v = r.datos;
+  let html = '<div class="aviso' + (v.resumible ? ' ok' : '') + '"><strong>' +
+    escapar(v.periodo) + ' · ' + (v.resumible
+      ? 'el mes se puede llevar resumido'
+      : 'el mes NO se puede llevar resumido: va detallado') +
+    '</strong></div>';
+
+  for (const rechazo of (v.rechazos || [])) {
+    html += '<div class="aviso error"><strong>' + escapar(rechazo.journalCode) + ' · ' +
+      escapar(rechazo.motivo) + '</strong><p>' + escapar(rechazo.detalle) + '</p>' +
+      '<p class="ayuda">' + escapar(rechazo.fundamento) + '</p></div>';
+  }
+
+  for (const resumen of (v.resumidos || [])) {
+    html += '<div class="aviso"><strong>' + escapar(resumen.journalCode) + ' · ' +
+      escapar(String(resumen.operaciones)) + ' operaciones en un asiento</strong>' +
+      '<p>' + escapar(resumen.descripcion) + '</p>' +
+      // La cita del subdiario con su hash: es lo que el artículo pide poder
+      // verificar, y por eso se muestra entera y no abreviada.
+      '<p class="ayuda">Surge de: ' + escapar(resumen.subdiario.referencia) + '</p>' +
+      (resumen.verificacion.coincide
+        ? '<p class="ayuda">' + escapar(resumen.verificacion.detalle) + '</p>'
+        : '<p><span class="p p-mal">' + escapar(resumen.verificacion.detalle) + '</span></p>') +
+      '</div>' +
+      tablaDe(resumen.lineas,
+        [['Cuenta','codigo'],['Nombre','nombre'],['Debe','debe'],['Haber','haber'],
+         ['Operaciones','operaciones']]);
+  }
+
+  if (v.detallados && v.detallados.asientos > 0) {
+    html += '<div class="aviso"><strong>Van detallados</strong><p>' +
+      escapar(String(v.detallados.asientos)) + ' asiento(s) de ' +
+      escapar(v.detallados.libros.join(', ')) +
+      ': no tienen subdiario detrás, así que se registran uno por uno. Detallado siempre es legal.' +
+      '</p></div>';
+  }
+
+  E('lib-salida').innerHTML = html;
+};
+
 E('b-mayor').onclick = async () => {
   const r = await api('GET', '/books/mayor?' + rango());
   if (!r.ok) return decir('lib-msg', r);
@@ -8056,6 +8344,59 @@ async function listarAuditoria(cursor) {
   E('b-au-mas').hidden = !r.datos.cursor;
 }
 E('b-au').onclick = () => listarAuditoria();
+
+// Variaciones entre períodos. El motor estaba escrito y probado en
+// `@aai/audit-engine` desde hace tiempo y no lo llamaba nadie: lo encontró el
+// barrido S-16, no una persona leyendo.
+async function cargarPeriodosParaVariacion() {
+  const per = await api('GET', '/periods');
+  if (!per.ok) return;
+  const opciones = ((per.datos && per.datos.periods) || [])
+    .map((p) => '<option value="' + escapar(p.id) + '">' +
+      escapar(p.number) + ' · ' + escapar(p.startDate) + ' a ' + escapar(p.endDate) +
+      '</option>').join('');
+  E('au-var-anterior').innerHTML = opciones;
+  E('au-var-actual').innerHTML = opciones;
+}
+
+E('b-au-var').onclick = async () => {
+  const q = new URLSearchParams({
+    periodoActual: E('au-var-actual').value,
+    periodoAnterior: E('au-var-anterior').value,
+  });
+  if (E('au-var-pct').value.trim()) q.set('porcentaje', E('au-var-pct').value.trim());
+  if (E('au-var-abs').value.trim()) q.set('absoluto', E('au-var-abs').value.trim());
+
+  const r = await api('GET', '/audit/variaciones?' + q.toString());
+  if (!r.ok) return decir('au-var-msg', r);
+  E('au-var-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + ' ' +
+    escapar(r.datos.metodologia) + '</div>';
+
+  E('au-var-resumen').innerHTML =
+    fila('Cuentas comparadas', r.datos.resumen.total) +
+    fila('Significativas', r.datos.resumen.significativas) +
+    // Los umbrales se muestran siempre: un análisis cuyos umbrales no se ven es
+    // una lista que hay que creer.
+    fila('Umbrales usados', r.datos.umbrales.porcentaje + ' % o $ ' + r.datos.umbrales.absoluto +
+      ' — ' + r.datos.umbrales.deDondeSalen);
+
+  const cuerpo = E('t-au-var').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const v of r.datos.variaciones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(v.codigo + ' — ' + v.nombre) + '</td>' +
+      '<td class="mono">' + escapar(v.anterior) + '</td>' +
+      '<td class="mono">' + escapar(v.actual) + '</td>' +
+      '<td class="mono">' + escapar(v.absoluta) + '</td>' +
+      // Sin porcentaje no se dibuja un cero ni un infinito: no hay porcentaje.
+      '<td class="mono">' + (v.porcentaje === null ? '—' : escapar(v.porcentaje) + ' %') + '</td>' +
+      '<td>' + (v.significativa ? '<span class="p p-ojo">' + escapar(v.tipo) + '</span>'
+        : '<span class="p p-neu">' + escapar(v.tipo) + '</span>') +
+        ' ' + escapar(v.motivo) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+};
 
 E('b-au-anom').onclick = async () => {
   const q = new URLSearchParams();

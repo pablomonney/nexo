@@ -4,7 +4,6 @@ import {
   formatCuit,
   isValidCuit,
   normalizeCuit,
-  parseCuit,
   withCheckDigit,
 } from './cuit.js';
 
@@ -31,10 +30,6 @@ describe('CUIT', () => {
 
   it('normaliza separadores y espacios', () => {
     expect(normalizeCuit(' 33.69345023/9 ')).toBe('33693450239');
-  });
-
-  it('parseCuit lanza con entrada inválida', () => {
-    expect(() => parseCuit('12345678901')).toThrow(/CUIT inválido/);
   });
 
   it('formatea con guiones', () => {
