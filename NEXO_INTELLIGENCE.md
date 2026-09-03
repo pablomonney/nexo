@@ -1,7 +1,8 @@
 # NEXO_INTELLIGENCE
 
-**Estado:** IMPLEMENTADO la capa determinística · PLANIFICADA la narración ·
-BLOQUEADA la conexión a un modelo real (falta el adaptador del proveedor).
+**Estado:** IMPLEMENTADO — capa determinística de dieciocho preguntas y camino
+de narración cerrado y probado con el simulado. **BLOQUEADO** solo el adaptador
+de un proveedor real, que exige una credencial de un tercero.
 
 ---
 
@@ -42,27 +43,34 @@ número para la misma pregunta, sin forma de saber cuál está bien. Y §41 proh
 que la IA ejecute SQL arbitrario.
 
 Entonces el catálogo enumera lo que el sistema sabe contestar, y cada entrada
-dice con qué vista lo contesta. Hoy son doce:
+dice con qué vista lo contesta. Hoy son dieciocho, y cubren todos los módulos
+del ERP que producen analítica:
 
 | Pregunta | De dónde sale |
 |---|---|
-| ¿Cuánto vendí? | `analytics_operaciones_mensuales` |
-| ¿Cuánto compré? | `analytics_operaciones_mensuales` |
-| ¿Cuánto me deben? | `party_aging`, `invoice_settlement` |
+| ¿Cuánto vendí? · ¿Cuánto compré? | `analytics_operaciones_mensuales` |
+| ¿Cuánto me deben? · ¿A quién le cobro? | `party_aging`, `invoice_settlement` |
 | ¿Cuánto debo? | `party_aging`, `payment_order_status` |
+| ¿Cuánto cobré? | `party_allocations` |
 | ¿Cuánta plata tengo? | `analytics_disponible` |
+| ¿Qué cheques tengo? | `checks_en_cartera` |
 | ¿Cuánto vale mi stock? | `stock_valuation` |
+| ¿Qué productos se venden más? | `analytics_por_producto` |
 | ¿Cuál es mi margen? | `analytics_margen_por_producto` |
 | ¿Cuánto costó lo que vendí? | `cogs_por_mes` |
+| ¿Cómo van los proyectos? | `analytics_proyectos` |
+| ¿Cuánto devengaron los vendedores? | `analytics_comisiones` |
+| ¿Cómo va cada sucursal? | `analytics_sucursales` |
 | ¿Qué está en riesgo? | `analysis_signals` |
 | ¿Qué me falta hacer? | `work_queue` |
-| ¿A quién le tengo que cobrar? | `invoice_settlement` |
 | ¿Cómo viene el mes? | `analytics_resumen` |
 
+Un barrido corre **todas** en cada verify: sin él, una pregunta poco usada puede
+tener la consulta rota y nadie se entera hasta que alguien la hace.
 Agregar una pregunta es agregar una entrada con su consulta y su metodología. No
 hay forma de agregar una que no diga de dónde sale su número.
 
-## 3. Las tres respuestas posibles, y por qué son tres
+## 3. Las cuatro respuestas posibles, y por qué son cuatro
 
 **La contesta.** Con la cifra, el detalle que la compone, la vista de la que
 salió, cómo se calcula y qué no incluye.
@@ -72,6 +80,13 @@ pregunta más parecida: una respuesta correcta a una pregunta que nadie hizo se
 lee igual que la respuesta.
 
 **Entiende varias.** Las ofrece y pide elegir. Romper el empate sería adivinar.
+
+**La entiende y el sistema no hace eso.** Es distinto de no entenderla, y por
+eso se contesta distinto: con el motivo. Preguntar por los sueldos y recibir
+«no entendí» sería mentir sobre la causa; recibir una tabla de ventas por
+sucursal sería peor. Los cinco temas fuera de alcance —RRHH, retenciones,
+impuesto a pagar, pronóstico y consejo profesional— vienen cada uno con por qué
+no está: una decisión pendiente, una fuente sin archivar, o el §42.
 
 ### El defecto que esto ya evitó
 
@@ -134,15 +149,11 @@ Conectar un proveedor es implementar `LLMProvider` en un archivo y configurar su
 credencial. No está hecho porque exige una credencial de un tercero, y hasta que
 exista sería declarar una integración que no se puede ejercitar.
 
-**Riesgos por contestar.** El Risk Radar de §29 del prompt de evolución —
-liquidez, concentración, dependencia de proveedores, anomalías— hoy está
-parcialmente cubierto por `analysis_signals` y la bandeja. Lo que falta es la
-lectura transversal: hoy cada señal se enciende sola y nadie las relaciona.
-
-**Explicación causal.** «El margen cayó 6,4 puntos» se puede afirmar; «cayó
-porque subió el costo promedio 12 % y el precio solo 3 %» exige descomponer la
-variación, que es un cálculo determinístico que todavía no está escrito. Es el
-próximo paso natural de esta capa, y no necesita ningún modelo.
+**Nada más.** Las dos cosas que este archivo listaba como pendientes ya están:
+el radar de riesgos (`GET /analysis/riesgos`, seis frentes, cada uno con lo que
+no se puede medir) y la explicación causal de la variación del margen
+(`GET /analysis/margen/variacion`, precio, costo y volumen que suman
+exactamente). Ninguna necesitó un modelo — ver `NEXO_DECISION_ENGINE.md`.
 
 ## 6. Lo que esta capa no hará nunca
 

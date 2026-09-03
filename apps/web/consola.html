@@ -2853,7 +2853,13 @@ E('b-intel-preguntar').onclick = async () => {
   E('intel-respuesta').hidden = true;
   E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.explicacion) + '</div>';
   mostrarOpciones(
-    r.datos.motivo === 'AMBIGUA' ? '¿Cuál de estas?' : 'Puedo contestar esto',
+    r.datos.motivo === 'AMBIGUA'
+      ? '¿Cuál de estas?'
+      : r.datos.motivo === 'FUERA_DE_ALCANCE'
+        // Se entendió la pregunta y el sistema no hace eso. Es distinto de no
+        // entenderla, y el texto lo dice con su motivo.
+        ? 'Eso NEXO no lo hace. Sí puedo contestar esto'
+        : 'Puedo contestar esto',
     r.datos.preguntasPosibles,
   );
 };

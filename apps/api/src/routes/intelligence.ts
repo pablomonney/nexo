@@ -45,6 +45,7 @@ import { config } from '../config.js';
 import {
   CATALOGO,
   coincidencias,
+  fueraDeAlcance,
   mesDe,
   preguntasPara,
   type PreguntaDelCatalogo,
@@ -130,6 +131,20 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
         );
       }
       return responder(elegida);
+    }
+
+    // Antes de reconocer: hay preguntas que se entienden perfecto y que el
+    // sistema no contesta. Decir «no entendí» ahí sería mentir sobre el motivo,
+    // y contestar con la pregunta más parecida sería peor.
+    const afuera = fueraDeAlcance(body.pregunta);
+    if (afuera !== null && body.preguntaId === undefined) {
+      return {
+        entendida: false,
+        motivo: 'FUERA_DE_ALCANCE',
+        tema: afuera.tema,
+        explicacion: afuera.motivo,
+        preguntasPosibles: disponibles.map((p) => ({ id: p.id, pregunta: p.pregunta })),
+      };
     }
 
     const candidatas = coincidencias(body.pregunta, disponibles);

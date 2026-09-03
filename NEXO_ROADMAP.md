@@ -48,12 +48,15 @@ archivo que implemente `LLMProvider`.
 **Qué lo destraba:** una credencial de un tercero. Hasta que exista, declarar la
 integración sería declarar algo que no se puede ejercitar.
 
-### 3. Más preguntas en el catálogo
+### ~~3. Más preguntas en el catálogo~~ — hecho
 
-Doce hoy. Cada una nueva es una entrada con su consulta y su metodología.
+De doce a **dieciocho**: cobranzas, cheques, productos más vendidos, proyectos,
+comisiones y sucursales. Cubren todos los módulos del ERP que producen
+analítica, y un barrido las corre todas en cada verify.
 
-**Qué lo destraba:** nada, salvo saber cuáles hacen falta — y eso se sabe usando
-el sistema, no adivinando.
+Y se agregó lo que faltaba del otro lado: cinco temas **fuera de alcance** que se
+contestan con su motivo —RRHH, retenciones, impuesto a pagar, pronóstico y
+consejo profesional— en vez de con la pregunta más parecida.
 
 ## P2 — Producción
 

@@ -30,6 +30,7 @@ import {
   mesDe,
   normalizar,
   pesos,
+  fueraDeAlcance,
   preguntasPara,
 } from '@aai/api/intelligence/catalogo';
 
@@ -52,7 +53,7 @@ describe('El catálogo de preguntas', () => {
 
   it('una palabra genérica no alcanza para contestar', () => {
     // «tengo» y «cuánto» son apoyo en varias entradas y núcleo en ninguna.
-    expect(coincidencias('cuantos empleados tengo en Rosario')).toEqual([]);
+    expect(coincidencias('cuantos empleados tengo')).toEqual([]);
     expect(coincidencias('cuanto')).toEqual([]);
     expect(coincidencias('hola')).toEqual([]);
   });
@@ -84,7 +85,8 @@ describe('El catálogo de preguntas', () => {
   it('los permisos filtran el catálogo', () => {
     const todos = new Set([
       'analytics:read', 'allocation:read', 'party:read', 'stock:read',
-      'analysis:read', 'report:read',
+      'analysis:read', 'report:read', 'product:read', 'check:read',
+      'project:read', 'commission:read', 'branch:read',
     ]);
     expect(preguntasPara(todos)).toHaveLength(CATALOGO.length);
 
@@ -98,6 +100,23 @@ describe('El catálogo de preguntas', () => {
     // Sin ningún permiso queda solo lo que no exige ninguno.
     const ninguno = preguntasPara(new Set<string>());
     expect(ninguno.map((p) => p.id)).toEqual(['QUE_ME_FALTA']);
+  });
+
+  it('lo que el sistema no hace se dice, y no se contesta con lo más parecido', () => {
+    // «¿cuántos empleados tengo en la sucursal de Rosario?» pega en el núcleo de
+    // la pregunta de sucursales, porque dice «sucursal». La palabra está bien
+    // reconocida y la pregunta es sobre otra cosa: contestarla con las ventas
+    // por boca sería peor que un no.
+    expect(coincidencias('cuantos empleados tengo en la sucursal de Rosario').length)
+      .toBeGreaterThan(0);
+    const afuera = fueraDeAlcance('cuantos empleados tengo en la sucursal de Rosario');
+    expect(afuera?.tema).toBe('RRHH');
+    expect(afuera?.motivo).toContain('ADR-012');
+
+    expect(fueraDeAlcance('cuanto retuve de ganancias')?.tema).toBe('RETENCIONES');
+    expect(fueraDeAlcance('me conviene comprar ahora')?.tema).toBe('CONSEJO');
+    // Y una pregunta normal no cae en ninguno.
+    expect(fueraDeAlcance('cuanto vendi este mes')).toBeNull();
   });
 
   it('reconoce el mes escrito de las dos formas', () => {

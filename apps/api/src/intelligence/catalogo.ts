@@ -630,11 +630,364 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
       };
     },
   },
+  {
+    id: 'QUE_SE_VENDE_MAS',
+    pregunta: '¿Qué productos se venden más?',
+    nucleo: ['productos', 'producto', 'articulos', 'mas vendido', 'mas vendidos'],
+    apoyo: ['que', 'cuales', 'venden', 'vende'],
+    permisos: ['analytics:read', 'product:read'],
+    admiteMes: false,
+    responder: async (tx, companyId) => {
+      const r = await tx.query<{
+        producto_codigo: string; producto_nombre: string; cantidad: string; neto: string;
+      }>(
+        `SELECT producto_codigo, producto_nombre, cantidad::text, neto::text
+           FROM analytics_por_producto
+          WHERE company_id = $1 AND direccion = 'VENTAS'
+          ORDER BY neto DESC
+          LIMIT 10`,
+        [companyId],
+      );
+      const total = await tx.query<{ total: string; productos: number }>(
+        `SELECT coalesce(sum(neto), 0)::text AS total, count(*)::int AS productos
+           FROM analytics_por_producto WHERE company_id = $1 AND direccion = 'VENTAS'`,
+        [companyId],
+      );
+      return {
+        titulo: 'Los diez productos que más facturan',
+        valor: total.rows[0]!.total,
+        unidad: '$ neto de todos',
+        periodo: null,
+        datos: r.rows.map((p) => ({
+          etiqueta: `${p.producto_codigo} — ${p.producto_nombre}`,
+          valor: `${pesos(p.neto)} · ${p.cantidad} unidades`,
+          origen: 'analytics_por_producto',
+        })),
+        origen: ['analytics_por_producto'],
+        metodologia:
+          'Renglones de comprobantes de VENTAS con producto del maestro, por neto facturado. ' +
+          'Un comprobante sin detalle no aporta a ningún producto.',
+        noIncluye:
+          `De ${total.rows[0]!.productos} producto(s) facturados se muestran los diez ` +
+          'primeros. Lo facturado sin renglones no está en ninguno.',
+      };
+    },
+  },
+
+  {
+    id: 'QUE_COBRE',
+    pregunta: '¿Cuánto cobré?',
+    nucleo: ['cobre', 'cobramos', 'cobrado', 'entro', 'ingreso'],
+    apoyo: ['cuanto', 'mes'],
+    permisos: ['allocation:read'],
+    admiteMes: true,
+    responder: async (tx, companyId, mes) => {
+      const r = await tx.query<{ imputado: string; imputaciones: number; terceros: number }>(
+        `SELECT coalesce(sum(a.importe), 0)::text AS imputado,
+                count(*)::int AS imputaciones,
+                count(DISTINCT a.party_id)::int AS terceros
+           FROM party_allocations a
+           JOIN tax_transactions t
+             ON t.id = a.tax_transaction_id AND t.company_id = a.company_id
+          WHERE a.company_id = $1 AND a.status = 'ACTIVA'
+            AND t.direction = 'VENTAS'
+            AND date_trunc('month', a.created_at)::date = ($2 || '-01')::date`,
+        [companyId, mes],
+      );
+      const f = r.rows[0]!;
+      return {
+        titulo: 'Cobranzas imputadas en el mes',
+        valor: pesos(f.imputado),
+        unidad: '$',
+        periodo: mes,
+        datos: [
+          { etiqueta: 'Imputaciones', valor: String(f.imputaciones), origen: 'party_allocations' },
+          { etiqueta: 'Clientes distintos', valor: String(f.terceros), origen: 'party_allocations' },
+        ],
+        origen: ['party_allocations'],
+        metodologia:
+          'Suma de las imputaciones activas sobre comprobantes de VENTAS, por el mes en que ' +
+          'se imputaron. No es la fecha del cobro: es la fecha en que alguien declaró qué ' +
+          'factura cancelaba.',
+        noIncluye:
+          'Un cobro asentado y todavía sin imputar no está acá: hasta que no se dice qué ' +
+          'factura cancela, no se sabe de qué cobranza es.',
+      };
+    },
+  },
+
+  {
+    id: 'QUE_CHEQUES_TENGO',
+    pregunta: '¿Qué cheques tengo?',
+    nucleo: ['cheques', 'cheque', 'cartera'],
+    apoyo: ['que', 'tengo', 'cuantos'],
+    permisos: ['check:read'],
+    admiteMes: false,
+    responder: async (tx, companyId) => {
+      const r = await tx.query<{
+        cantidad: number; total: string; al_dia_de_hoy: string; proximos_30: string;
+        proxima_fecha: string | null;
+      }>(
+        `SELECT cantidad, total::text, al_dia_de_hoy::text, proximos_30::text,
+                proxima_fecha::text
+           FROM checks_en_cartera WHERE company_id = $1`,
+        [companyId],
+      );
+      const f = r.rows[0];
+      return {
+        titulo: 'Cheques de terceros en cartera',
+        valor: f === undefined ? null : pesos(f.total),
+        unidad: '$',
+        periodo: null,
+        datos:
+          f === undefined
+            ? []
+            : [
+                { etiqueta: 'Cantidad', valor: String(f.cantidad), origen: 'checks_en_cartera' },
+                { etiqueta: 'Cobrables hoy', valor: pesos(f.al_dia_de_hoy)!, origen: 'checks_en_cartera' },
+                { etiqueta: 'Próximos 30 días', valor: pesos(f.proximos_30)!, origen: 'checks_en_cartera' },
+                {
+                  etiqueta: 'Próxima fecha de pago',
+                  valor: f.proxima_fecha ?? 'sin dato',
+                  origen: 'checks_en_cartera',
+                },
+              ],
+        origen: ['checks_en_cartera'],
+        metodologia:
+          'Cheques de terceros recibidos y no depositados, por su fecha de pago declarada — ' +
+          'no por la del comprobante que los originó.',
+        noIncluye:
+          f === undefined
+            ? 'No hay cheques de terceros en cartera.'
+            : 'No suma a la proyección de cobranzas: la factura que el cheque canceló ya no ' +
+              'figura como pendiente, y contarlos juntos sería contar la misma plata dos veces.',
+      };
+    },
+  },
+
+  {
+    id: 'COMO_VAN_LOS_PROYECTOS',
+    pregunta: '¿Cómo van los proyectos?',
+    nucleo: ['proyectos', 'proyecto', 'obras', 'trabajos'],
+    apoyo: ['como', 'van', 'cuanto'],
+    permisos: ['project:read'],
+    admiteMes: false,
+    responder: async (tx, companyId) => {
+      const r = await tx.query<{
+        proyecto_codigo: string; proyecto_nombre: string; status: string;
+        ingresos: string; costos: string; margen: string | null;
+      }>(
+        `SELECT proyecto_codigo, proyecto_nombre, status,
+                ingresos::text, costos::text, margen::text
+           FROM analytics_proyectos WHERE company_id = $1
+          ORDER BY status, proyecto_codigo`,
+        [companyId],
+      );
+      const sinMargen = r.rows.filter((p) => p.margen === null).length;
+      return {
+        titulo: 'Proyectos',
+        valor: String(r.rowCount),
+        unidad: 'proyectos',
+        periodo: null,
+        datos: r.rows.map((p) => ({
+          etiqueta: `${p.proyecto_codigo} — ${p.proyecto_nombre} (${p.status})`,
+          valor:
+            p.margen === null
+              ? `ingresos ${pesos(p.ingresos)} · margen no afirmable`
+              : `ingresos ${pesos(p.ingresos)} · costos ${pesos(p.costos)} · margen ${pesos(p.margen)}`,
+          origen: 'analytics_proyectos',
+        })),
+        origen: ['analytics_proyectos'],
+        metodologia:
+          'Ingresos y costos leídos del Mayor por centro de costo del proyecto; las horas se ' +
+          'valúan a la tarifa declarada del día en que se trabajaron.',
+        noIncluye:
+          sinMargen === 0
+            ? null
+            : `${sinMargen} proyecto(s) no tienen margen afirmable: les falta la tarifa ` +
+              'declarada o el centro de costo, y un margen a medias es peor que ninguno.',
+      };
+    },
+  },
+
+  {
+    id: 'CUANTO_DEVENGARON_LOS_VENDEDORES',
+    pregunta: '¿Cuánto devengaron los vendedores?',
+    nucleo: ['comisiones', 'comision', 'vendedores', 'vendedor'],
+    apoyo: ['cuanto', 'devengaron', 'ganaron'],
+    permisos: ['commission:read'],
+    admiteMes: false,
+    responder: async (tx, companyId) => {
+      const r = await tx.query<{
+        vendedor_codigo: string; vendedor_nombre: string; facturado: string;
+        cobrado: string; comision_devengada: string; comprobantes_sin_esquema: number;
+      }>(
+        `SELECT vendedor_codigo, vendedor_nombre, facturado::text, cobrado::text,
+                comision_devengada::text, comprobantes_sin_esquema
+           FROM analytics_comisiones WHERE company_id = $1
+          ORDER BY comision_devengada DESC`,
+        [companyId],
+      );
+      const total = await tx.query<{ total: string; sin_esquema: number }>(
+        `SELECT coalesce(sum(comision_devengada), 0)::text AS total,
+                coalesce(sum(comprobantes_sin_esquema), 0)::int AS sin_esquema
+           FROM analytics_comisiones WHERE company_id = $1`,
+        [companyId],
+      );
+      const t = total.rows[0]!;
+      return {
+        titulo: 'Comisiones devengadas',
+        valor: pesos(t.total),
+        unidad: '$',
+        periodo: null,
+        datos: r.rows.map((v) => ({
+          etiqueta: `${v.vendedor_codigo} — ${v.vendedor_nombre}`,
+          valor: `devengado ${pesos(v.comision_devengada)} · facturado ${pesos(v.facturado)}`,
+          origen: 'analytics_comisiones',
+        })),
+        origen: ['analytics_comisiones'],
+        metodologia:
+          'Comisión devengada según el esquema vigente el día de la venta. Devengar no es ' +
+          'pagar: acá no hay ningún pago registrado.',
+        noIncluye:
+          t.sin_esquema === 0
+            ? null
+            : `${t.sin_esquema} comprobante(s) con vendedor no tienen esquema vigente ese ` +
+              'día y quedan afuera del total: sin acuerdo declarado no hay comisión que afirmar.',
+      };
+    },
+  },
+
+  {
+    id: 'COMO_VAN_LAS_SUCURSALES',
+    pregunta: '¿Cómo va cada sucursal?',
+    nucleo: ['sucursal', 'sucursales', 'locales', 'bocas'],
+    apoyo: ['como', 'van', 'cuanto'],
+    permisos: ['branch:read', 'analytics:read'],
+    admiteMes: false,
+    responder: async (tx, companyId) => {
+      const r = await tx.query<{
+        sucursal_codigo: string; sucursal_nombre: string; ventas_neto: string;
+        resultado_imputado: string | null; brecha_de_atribucion: string | null;
+      }>(
+        `SELECT sucursal_codigo, sucursal_nombre, ventas_neto::text,
+                resultado_imputado::text, brecha_de_atribucion::text
+           FROM analytics_sucursales WHERE company_id = $1
+          ORDER BY ventas_neto DESC`,
+        [companyId],
+      );
+      const conBrecha = r.rows.filter((s) => s.brecha_de_atribucion !== null).length;
+      return {
+        titulo: 'Sucursales',
+        valor: String(r.rowCount),
+        unidad: 'sucursales',
+        periodo: null,
+        datos: r.rows.map((s) => ({
+          etiqueta: `${s.sucursal_codigo} — ${s.sucursal_nombre}`,
+          valor:
+            `ventas ${pesos(s.ventas_neto)}` +
+            (s.brecha_de_atribucion === null
+              ? ' · sin centro de costo, no hay brecha que calcular'
+              : ` · brecha de atribución ${pesos(s.brecha_de_atribucion)}`),
+          origen: 'analytics_sucursales',
+        })),
+        origen: ['analytics_sucursales'],
+        metodologia:
+          'Ventas por punto de venta vigente el día del comprobante; ingresos y gastos del ' +
+          'Mayor por centro de costo. Son dos atribuciones distintas.',
+        noIncluye:
+          conBrecha === 0
+            ? null
+            : 'La brecha entre las dos atribuciones se informa en vez de promediarse: ' +
+              'promediarlas daría un número que no es ninguna de las dos.',
+      };
+    },
+  },
 ];
 
 export interface Coincidencia {
   readonly pregunta: PreguntaDelCatalogo;
   readonly puntaje: number;
+}
+
+/**
+ * Temas que NEXO no cubre, con el motivo.
+ *
+ * No es una lista de palabras prohibidas: es la diferencia entre «no entendí» y
+ * «entendí perfecto, y esto el sistema no lo hace». Preguntar por los sueldos y
+ * recibir una tabla de ventas por sucursal es peor que recibir un no.
+ *
+ * Lo encontró un test: «¿cuántos empleados tengo en la sucursal de Rosario?»
+ * pegaba en el núcleo de la pregunta de sucursales —porque dice «sucursal»— y se
+ * contestaba con las ventas de cada boca. La palabra estaba bien reconocida; la
+ * pregunta era sobre otra cosa.
+ */
+export const FUERA_DE_ALCANCE: readonly {
+  readonly tema: string;
+  readonly terminos: readonly string[];
+  readonly motivo: string;
+}[] = [
+  {
+    tema: 'RRHH',
+    terminos: ['empleado', 'empleados', 'sueldo', 'sueldos', 'nomina', 'salarios',
+      'recibo de sueldo', 'liquidacion de sueldos', 'personal'],
+    motivo:
+      'NEXO no liquida sueldos ni lleva legajos. Está anotado como decisión pendiente en ' +
+      'ADR-012 §8, no como algo que falte programar: exige definir convenios, cargas ' +
+      'sociales y un calendario que ninguna fuente archivada cubre hoy.',
+  },
+  {
+    tema: 'RETENCIONES',
+    terminos: ['retencion', 'retenciones', 'retuve', 'percepcion', 'percepciones',
+      'certificado de retencion'],
+    motivo:
+      'Las retenciones y percepciones no se calculan: exigen los regímenes y sus normas ' +
+      'archivadas, y todavía no lo están. Inventar una alícuota produciría un certificado ' +
+      'mal emitido, que es peor que no emitirlo.',
+  },
+  {
+    tema: 'IMPUESTO_A_PAGAR',
+    terminos: ['ganancias', 'impuesto a pagar', 'cuanto voy a pagar de impuestos',
+      'anticipo', 'anticipos'],
+    motivo:
+      'Cuánto se va a pagar de un impuesto exige aplicar normativa a hechos futuros. El ' +
+      'sistema arma los libros de IVA con lo registrado; proyectar el impuesto es otra cosa ' +
+      'y no está.',
+  },
+  {
+    tema: 'PRONOSTICO',
+    terminos: ['pronostico', 'prediccion', 'voy a vender', 'demanda futura',
+      'cuanto vendere'],
+    motivo:
+      'La proyección de cobranzas extrapola plazos ya declarados; no predice demanda. Un ' +
+      'pronóstico exige elegir un método con nombre, y esa elección es una decisión de ' +
+      'producto pendiente (ADR-017 §6). Lo que sí se puede es simular un escenario con ' +
+      'supuestos explícitos.',
+  },
+  {
+    tema: 'CONSEJO',
+    terminos: ['me conviene', 'que hago', 'que deberia hacer', 'aconsejame',
+      'recomendame'],
+    motivo:
+      'Eso es asesoramiento profesional y lo da un contador, no un sistema (§42). NEXO ' +
+      'puede mostrar qué dicen los números y qué cambiaría en un escenario; qué conviene ' +
+      'hacer con eso no.',
+  },
+];
+
+/** El tema fuera de alcance que menciona la pregunta, si menciona alguno. */
+export function fueraDeAlcance(
+  texto: string,
+): { tema: string; motivo: string } | null {
+  const normalizado = normalizar(texto);
+  const palabras = new Set(normalizado.split(' '));
+  for (const item of FUERA_DE_ALCANCE) {
+    const pega = item.terminos.some((t) =>
+      t.includes(' ') ? normalizado.includes(t) : palabras.has(t),
+    );
+    if (pega) return { tema: item.tema, motivo: item.motivo };
+  }
+  return null;
 }
 
 /**

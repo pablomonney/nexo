@@ -56,6 +56,8 @@ suite('NEXO Intelligence', () => {
     return r.json<{
       entendida: boolean;
       motivo?: string;
+      explicacion?: string;
+      tema?: string;
       preguntaId?: string;
       preguntasPosibles?: { id: string; pregunta: string }[];
       respuesta?: {
@@ -262,10 +264,22 @@ suite('NEXO Intelligence', () => {
   });
 
   it('lo que no sabe contestar, no lo contesta', async () => {
-    const r = await preguntar('¿cuántos empleados tengo en la sucursal de Rosario?');
+    const r = await preguntar('¿de qué color es el galpón?');
     expect(r.entendida).toBe(false);
     expect(r.motivo).toBe('NO_ENTENDIDA');
     // Y ofrece lo que sí sabe: la lista no puede venir vacía.
+    expect(r.preguntasPosibles!.length).toBeGreaterThan(5);
+  });
+
+  it('lo que el sistema no hace se dice con su motivo, no como un «no entendí»', async () => {
+    // La pregunta se entiende perfecto: menciona una sucursal y pide empleados.
+    // Contestarla con las ventas por boca sería peor que un no, y decir «no
+    // entendí» sería mentir sobre el motivo.
+    const r = await preguntar('¿cuántos empleados tengo en la sucursal de Rosario?');
+    expect(r.entendida).toBe(false);
+    expect(r.motivo).toBe('FUERA_DE_ALCANCE');
+    expect(r.explicacion).toContain('no liquida sueldos');
+    // Y ofrece lo que sí sabe, para que la pregunta no termine en nada.
     expect(r.preguntasPosibles!.length).toBeGreaterThan(5);
   });
 
@@ -328,6 +342,60 @@ suite('NEXO Intelligence', () => {
     expect(p.tarjetas.every((t) => t.origen.length > 0 && t.metodologia.length > 0)).toBe(true);
     expect(p.tarjetas.find((t) => t.preguntaId === 'CUANTO_ME_DEBEN')).toBeDefined();
     expect(p.alcance).toContain('null no es cero');
+  });
+
+  /**
+   * Todas las preguntas del catálogo, contra una empresa real.
+   *
+   * Sin esto, una pregunta poco usada puede tener la consulta rota y nadie se
+   * entera hasta que alguien la hace. El barrido no comprueba los números —eso
+   * lo hacen los tests de cada módulo— sino que **cada entrada del catálogo
+   * conteste con su forma completa**: valor o `null` explicado, evidencia,
+   * origen y metodología.
+   */
+  it('cada pregunta del catálogo contesta, con su origen y su metodología', async () => {
+    const catalogo = await pedir('GET', '/intelligence/preguntas');
+    expect(catalogo.statusCode, catalogo.body).toBe(200);
+    const preguntas = catalogo.json<{ preguntas: { id: string; pregunta: string }[] }>().preguntas;
+
+    // Que el barrido esté mirando algo: si el catálogo llegara vacío, el bucle
+    // pasaría sin comprobar nada.
+    expect(preguntas.length).toBeGreaterThanOrEqual(15);
+
+    for (const p of preguntas) {
+      const r = await pedir('POST', '/intelligence/preguntar', {
+        pregunta: p.pregunta,
+        preguntaId: p.id,
+      });
+      expect(r.statusCode, `${p.id}: ${r.body}`).toBe(200);
+
+      const d = r.json<{
+        entendida: boolean;
+        respuesta: {
+          titulo: string; valor: string | null; unidad: string;
+          datos: { etiqueta: string; valor: string; origen: string }[];
+          origen: string[]; metodologia: string; noIncluye: string | null;
+        };
+      }>();
+
+      expect(d.entendida, p.id).toBe(true);
+      expect(d.respuesta.titulo.length, p.id).toBeGreaterThan(0);
+      expect(d.respuesta.origen.length, `${p.id} sin origen`).toBeGreaterThan(0);
+      expect(d.respuesta.metodologia.length, `${p.id} sin metodología`).toBeGreaterThan(10);
+      // Un valor en null es una respuesta válida —«no se puede afirmar»— pero
+      // entonces la metodología o la salvedad tienen que decir por qué.
+      if (d.respuesta.valor === null) {
+        expect(
+          `${d.respuesta.metodologia} ${d.respuesta.noIncluye ?? ''}`.length,
+          `${p.id} no afirma y no explica`,
+        ).toBeGreaterThan(20);
+      }
+      // Cada dato dice de dónde salió: un detalle sin origen no se puede abrir.
+      expect(
+        d.respuesta.datos.every((x) => x.origen.length > 0),
+        `${p.id} tiene datos sin origen`,
+      ).toBe(true);
+    }
   });
 
   /**
