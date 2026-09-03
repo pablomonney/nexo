@@ -220,6 +220,80 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  /**
+   * El resultado de cada centro de costo, derivado del Mayor.
+   *
+   * `journal_entry_lines.cost_center_id` existe desde la 0003 y **nadie lo
+   * agrupaba**: la dimensión se completaba fila por fila y no se leía nunca.
+   * Quien la cargaba no podía ver el resultado de haberla cargado.
+   *
+   * Dos cosas que esta respuesta no hace, y las dice:
+   *
+   *   - **No reparte lo que no tiene centro.** Las líneas sin asignar salen
+   *     como `SIN_CENTRO` con su importe. Prorratearlas sería inventar una
+   *     asignación que nadie declaró, y la diferencia contra el estado de
+   *     resultados es exactamente esa fila.
+   *   - **No distribuye gastos indirectos.** Eso es contabilidad de costos, con
+   *     su método y sus bases declaradas, y no está relevada.
+   */
+  app.get('/reports/cost-centers', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'cost_center:read');
+    // Son movimientos del Mayor agrupados: quien no puede leer el Mayor no los
+    // puede leer por esta puerta.
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({
+        desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const r = await tx.query<{ centroId: string; resultado: string }>(
+          `SELECT centro_id AS "centroId", centro_codigo AS codigo,
+                  centro_nombre AS nombre,
+                  sum(ingresos)::text  AS ingresos,
+                  sum(gastos)::text    AS gastos,
+                  sum(resultado)::text AS resultado,
+                  sum(movimientos)::int AS movimientos
+             FROM cost_center_results
+            WHERE company_id = $1 AND mes BETWEEN date_trunc('month', $2::date) AND $3::date
+            GROUP BY centro_id, centro_codigo, centro_nombre
+            ORDER BY centro_codigo`,
+          [tenant.companyId, query.desde, query.hasta],
+        );
+
+        const sinCentro = r.rows.find((fila) => fila.centroId === 'SIN_CENTRO');
+
+        return {
+          desde: query.desde,
+          hasta: query.hasta,
+          centros: r.rows,
+          // Que haya resultado sin centro no es un error: es lo que falta
+          // asignar, y decirlo evita leer la suma de los centros como si fuera
+          // el resultado de la empresa.
+          sinAsignar:
+            sinCentro === undefined
+              ? null
+              : {
+                  resultado: sinCentro.resultado,
+                  motivo:
+                    'Estas líneas no declaran centro de costo. No se reparten entre los ' +
+                    'centros: hacerlo sería inventar una asignación que nadie declaró.',
+                },
+          alcance:
+            'Suma de los movimientos APROBADOS de cuentas de resultado, agrupados por el ' +
+            'centro que declara cada línea. No distribuye gastos indirectos: eso exige un ' +
+            'método de costeo declarado, que no está relevado.',
+        };
+      },
+    );
+  });
+
   app.post('/cost-centers', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'cost_center:write');

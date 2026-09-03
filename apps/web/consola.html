@@ -2574,6 +2574,22 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div class="tabla"><table id="t-cc"><thead><tr>
     <th>Código</th><th>Nombre</th><th>Depende de</th><th>Estado</th>
   </tr></thead><tbody></tbody></table></div>
+
+  <h3>Resultado por centro de costo</h3>
+  <p class="ayuda">Sale del Mayor: ingresos menos gastos de las cuentas de resultado, agrupados
+    por el centro que declara cada línea. Lo que <strong>no</strong> tiene centro no se reparte
+    —prorratearlo sería inventar una asignación que nadie declaró— y por eso se muestra aparte:
+    esa fila es exactamente la diferencia contra el estado de resultados.</p>
+  <div class="fila">
+    <div><label>Desde</label><input id="ccr-desde" type="date"></div>
+    <div><label>Hasta</label><input id="ccr-hasta" type="date"></div>
+    <div><label>&nbsp;</label><button id="b-ccr" class="sec">Ver resultados</button></div>
+  </div>
+  <div id="ccr-msg"></div>
+  <div class="tabla"><table id="t-ccr"><thead><tr>
+    <th>Centro</th><th>Nombre</th><th>Ingresos</th><th>Gastos</th><th>Resultado</th>
+    <th>Movimientos</th>
+  </tr></thead><tbody></tbody></table></div>
 </section>
 
 </main>
@@ -2786,6 +2802,8 @@ async function usarEmpresa(id) {
   const hoy = new Date().toISOString().slice(0, 10);
   for (const campo of ['tt-fecha', 'ne-fecha']) E(campo).value = hoy;
   E('lib-desde').value = hoy.slice(0, 4) + '-01-01';
+  E('ccr-desde').value = hoy.slice(0, 4) + '-01-01';
+  E('ccr-hasta').value = hoy;
   E('lib-hasta').value = hoy.slice(0, 4) + '-12-31';
 
   ir('inicio', ['Inicio']);
@@ -8780,6 +8798,48 @@ async function listarCentrosDeCosto() {
     sel.appendChild(o);
   }
 }
+
+/**
+ * El resultado de cada centro, y lo que quedó sin asignar.
+ *
+ * La dimensión se completaba fila por fila y solo se leía desde adentro de
+ * Proyectos —la 0070 agrupa por el centro que declara un proyecto—. Una empresa
+ * que usa centros de costo sin proyectos no tenía dónde ver el resultado de
+ * haberlos completado.
+ */
+async function verResultadoPorCentro() {
+  const r = await api('GET', '/reports/cost-centers?desde=' + E('ccr-desde').value +
+    '&hasta=' + E('ccr-hasta').value);
+  if (!r.ok) return decir('ccr-msg', r);
+
+  const v = r.datos;
+  E('ccr-msg').innerHTML =
+    (v.sinAsignar
+      ? '<div class="aviso"><strong>Sin asignar: ' + escapar(v.sinAsignar.resultado) +
+        '</strong><p>' + escapar(v.sinAsignar.motivo) + '</p></div>'
+      : '<div class="aviso ok">Todas las líneas de resultado tienen centro declarado.</div>') +
+    '<p class="ayuda">' + escapar(v.alcance) + '</p>';
+
+  const cuerpo = E('t-ccr').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of (v.centros || [])) {
+    const tr = document.createElement('tr');
+    // La fila sin centro se distingue: no es un centro, es lo que falta asignar.
+    const esSinCentro = c.codigo === 'SIN_CENTRO';
+    tr.innerHTML =
+      '<td class="mono">' + (esSinCentro
+        ? '<span class="p p-ojo">sin centro</span>'
+        : escapar(c.codigo)) + '</td>' +
+      '<td>' + escapar(c.nombre) + '</td>' +
+      '<td class="mono">' + escapar(c.ingresos) + '</td>' +
+      '<td class="mono">' + escapar(c.gastos) + '</td>' +
+      '<td class="mono">' + escapar(c.resultado) + '</td>' +
+      '<td class="mono">' + escapar(String(c.movimientos)) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-ccr').onclick = () => verResultadoPorCentro();
 
 E('b-cc').onclick = async () => {
   const cuerpo = { code: E('cc-codigo').value, name: E('cc-nombre').value };

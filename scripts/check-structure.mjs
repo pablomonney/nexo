@@ -538,6 +538,9 @@ const VISTAS_INVOKER = [
   // Señales deterministas (0058). Sin `security_invoker` un desvío de una
   // empresa aparecería en la bandeja de otra.
   'analysis_signals',
+  // Resultado por centro de costo (0088). Sin `security_invoker` el resultado
+  // de un centro de una empresa aparecería en el reporte de otra.
+  'cost_center_results',
   // El pendiente por cuota se deriva acá y en ningún otro lado (0060).
   'installment_settlement',
   'price_list_coverage',

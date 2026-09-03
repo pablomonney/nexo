@@ -331,6 +331,57 @@ suite('Proyectos', () => {
     }
   });
 
+  /**
+   * El centro de costo, mirado por sí mismo.
+   *
+   * Hasta la 0088 la única consulta que agrupaba por centro de costo estaba
+   * adentro de este módulo: se leía el Mayor por el centro que declara un
+   * proyecto. Una empresa que usa centros de costo **sin** proyectos completaba
+   * la dimensión y no podía ver el resultado de haberla completado.
+   *
+   * El reporte suma lo mismo que el proyecto —son el mismo Mayor— y agrega lo
+   * que el proyecto no puede ver: lo que quedó **sin asignar**.
+   */
+  it('el reporte por centro de costo suma lo mismo que el proyecto, y dice lo que falta asignar', async () => {
+    // Un gasto sin centro: no se reparte, se informa aparte.
+    const suelto = await pedir('POST', '/journal-entries', {
+      journalCode: 'GENERAL',
+      entryDate: '2026-06-30',
+      description: 'Gasto general sin centro declarado',
+      currency: 'ARS',
+      lines: [
+        { accountCode: '5.1.01', debit: '7000.00', credit: '0' },
+        { accountCode: '2.1.01', debit: '0', credit: '7000.00' },
+      ],
+      source: { type: 'MANUAL', id: null },
+      manualJustification: 'Gasto que nadie atribuyó a un centro de costo',
+    });
+    expect(suelto.statusCode, suelto.body).toBe(201);
+    expect(
+      (await pedir('POST', `/journal-entries/${suelto.json<{ id: string }>().id}/approve`))
+        .statusCode,
+    ).toBe(200);
+
+    const r = await pedir('GET', '/reports/cost-centers?desde=2026-01-01&hasta=2026-12-31');
+    expect(r.statusCode, r.body).toBe(200);
+    const cuerpo = r.json<{
+      centros: { codigo: string; ingresos: string; gastos: string; resultado: string }[];
+      sinAsignar: { resultado: string; motivo: string } | null;
+      alcance: string;
+    }>();
+
+    const nuestro = cuerpo.centros.find((c) => c.codigo === `CC-${stamp}`)!;
+    expect(nuestro.ingresos, 'el mismo Mayor que ve el proyecto').toBe('500000.00');
+    expect(nuestro.gastos).toBe('120000.00');
+    expect(nuestro.resultado).toBe('380000.00');
+
+    // Lo que no tiene centro no se reparte: se muestra con su motivo.
+    expect(cuerpo.sinAsignar).not.toBeNull();
+    expect(cuerpo.sinAsignar!.resultado).toBe('-7000.00');
+    expect(cuerpo.sinAsignar!.motivo).toContain('inventar una asignación');
+    expect(cuerpo.alcance).toContain('No distribuye gastos indirectos');
+  });
+
   it('la rentabilidad se informa con su método, y dice cuándo no puede afirmarse', async () => {
     const r = await pedir('GET', '/analysis/proyectos');
     expect(r.statusCode).toBe(200);
