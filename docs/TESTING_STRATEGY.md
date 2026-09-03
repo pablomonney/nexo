@@ -125,6 +125,7 @@ métrica tiene umbral de bloqueo de release.
 > | `consola-elementos` | S-15 | Que la consola escriba en el elemento que cree: ningún id repetido, ninguno inexistente |
 > | `motores-con-consumidor` | S-16 | Que cada función exportada por un paquete la use algo que no sea el propio paquete ni sus tests |
 > | `tablas-con-escritor` | S-17 | Que cada tabla del esquema tenga al menos un `INSERT` fuera de los tests |
+> | `solo-lectura` | S-18 | Que ninguna ruta de escritura le conteste otra cosa que 403 a un usuario de solo lectura |
 
 #### S-16, y por qué un barrido también se equivoca
 
@@ -161,6 +162,23 @@ migración: una fila escrita por un trigger está tan escrita como una escrita p
 un handler. Las diecinueve tablas que hoy no lo tienen están declaradas con su
 motivo, y dos tests más impiden que la lista se vuelva decoración: uno falla si
 una excepción ya tiene escritor, otro si nombra una tabla que ya no existe.
+
+#### S-18, y por qué exige 403 y no «cualquier cosa menos 2xx»
+
+El aislamiento por empresa (S-1) barre todas las rutas con una empresa ajena.
+Adentro de la empresa propia no había barrido: un endpoint al que le falte
+`requirePermission` pasa S-1 sin problema —el rol existe, el RLS deja, la
+empresa es la suya— y solo se nota probando con un usuario de solo lectura.
+
+La versión floja del control («que no conteste 2xx») se ve razonable y **no
+sirve**: casi todos los handlers validan el cuerpo, así que un endpoint sin
+permiso contesta 400 al pedido vacío del barrido y pasa igual. Se comprobó
+sacándole el `requirePermission` a `POST /banks/accounts`: con la regla floja el
+control seguía en verde; con **403 obligatorio** falla.
+
+El 403 obligatorio además ordena los handlers: leer el cuerpo antes de mirar el
+permiso le cuenta a quien no puede entrar qué campos espera el endpoint. Tres
+transiciones de solicitudes de compra lo hacían.
 
 ### 2.8 Tests de regresión
 

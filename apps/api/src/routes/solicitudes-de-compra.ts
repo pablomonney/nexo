@@ -90,9 +90,7 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'purchase_request:read');
     const auth = requireAuth(request);
-    const { solicitudId } = z
-      .object({ solicitudId: z.string().uuid() })
-      .parse(request.params);
+    const { solicitudId } = z.object({ solicitudId: z.string().uuid() }).parse(request.params);
 
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
@@ -152,15 +150,23 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
              VALUES ($1,$2,$3,$4,$5,$6)
              RETURNING id, numero::text`,
             [
-              tenant.companyId, body.fecha, body.justificacion,
-              body.centroDeCostoId ?? null, body.necesariaPara ?? null,
+              tenant.companyId,
+              body.fecha,
+              body.justificacion,
+              body.centroDeCostoId ?? null,
+              body.necesariaPara ?? null,
               `user:${auth.user.userId}`,
             ],
           );
           const solicitud = r.rows[0]!;
 
-          await insertarRenglones(tx, tenant.companyId, solicitud.id, body.renglones,
-            `user:${auth.user.userId}`);
+          await insertarRenglones(
+            tx,
+            tenant.companyId,
+            solicitud.id,
+            body.renglones,
+            `user:${auth.user.userId}`,
+          );
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -189,9 +195,7 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'purchase_request:write');
     const auth = requireAuth(request);
-    const { solicitudId } = z
-      .object({ solicitudId: z.string().uuid() })
-      .parse(request.params);
+    const { solicitudId } = z.object({ solicitudId: z.string().uuid() }).parse(request.params);
     const body = z.object({ renglones: z.array(renglon).max(200) }).parse(request.body);
 
     try {
@@ -209,8 +213,13 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
               WHERE purchase_request_id = $1 AND company_id = $2`,
             [solicitudId, tenant.companyId],
           );
-          await insertarRenglones(tx, tenant.companyId, solicitudId, body.renglones,
-            `user:${auth.user.userId}`);
+          await insertarRenglones(
+            tx,
+            tenant.companyId,
+            solicitudId,
+            body.renglones,
+            `user:${auth.user.userId}`,
+          );
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -255,26 +264,26 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
       extra: [`user:${auth.user.userId}`],
       accion: 'APROBAR_SOLICITUD_DE_COMPRA',
       estado: 'APROBADA',
-      motivo: 'Aprobada. Falta armar la orden de compra: el proveedor y los precios no salen ' +
+      motivo:
+        'Aprobada. Falta armar la orden de compra: el proveedor y los precios no salen ' +
         'de la solicitud.',
     });
   });
 
   app.post('/purchase-requests/:solicitudId/rechazar', async (request) => {
     const auth = requireAuth(request);
-    const { motivo } = z
-      .object({ motivo: z.string().min(5).max(2000) })
-      .parse(request.body);
+    const leerMotivo = () =>
+      z.object({ motivo: z.string().min(5).max(2000) }).parse(request.body).motivo;
     return cambiarEstado(request, {
       permiso: 'purchase_request:approve',
       sql: `UPDATE purchase_requests
                SET status = 'RECHAZADA', resuelta_at = now(), resuelta_por = $3,
                    motivo_rechazo = $4
              WHERE id = $1 AND company_id = $2 RETURNING numero::text`,
-      extra: [`user:${auth.user.userId}`, motivo],
+      extra: () => [`user:${auth.user.userId}`, leerMotivo()],
       accion: 'RECHAZAR_SOLICITUD_DE_COMPRA',
       estado: 'RECHAZADA',
-      motivo,
+      motivo: 'Rechazada con el motivo que dejó quien resolvió.',
     });
   });
 
@@ -287,9 +296,8 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
    */
   app.post('/purchase-requests/:solicitudId/convertir', async (request) => {
     const auth = requireAuth(request);
-    const { ordenDeCompraId } = z
-      .object({ ordenDeCompraId: z.string().uuid() })
-      .parse(request.body);
+    const leerOrden = () =>
+      z.object({ ordenDeCompraId: z.string().uuid() }).parse(request.body).ordenDeCompraId;
     return cambiarEstado(request, {
       permiso: 'purchase_request:approve',
       sql: `UPDATE purchase_requests
@@ -297,7 +305,7 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
                    resuelta_at = coalesce(resuelta_at, now()),
                    resuelta_por = coalesce(resuelta_por, $3)
              WHERE id = $1 AND company_id = $2 RETURNING numero::text`,
-      extra: [`user:${auth.user.userId}`, ordenDeCompraId],
+      extra: () => [`user:${auth.user.userId}`, leerOrden()],
       accion: 'CONVERTIR_SOLICITUD_DE_COMPRA',
       estado: 'CONVERTIDA',
       motivo: 'La solicitud cita la orden de compra que salió de ella.',
@@ -305,17 +313,16 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.post('/purchase-requests/:solicitudId/anular', async (request) => {
-    const { motivo } = z
-      .object({ motivo: z.string().min(5).max(2000) })
-      .parse(request.body);
+    const leerMotivo = () =>
+      z.object({ motivo: z.string().min(5).max(2000) }).parse(request.body).motivo;
     return cambiarEstado(request, {
       permiso: 'purchase_request:write',
       sql: `UPDATE purchase_requests SET status = 'ANULADA', motivo_anulacion = $3
              WHERE id = $1 AND company_id = $2 RETURNING numero::text`,
-      extra: [motivo],
+      extra: () => [leerMotivo()],
       accion: 'ANULAR_SOLICITUD_DE_COMPRA',
       estado: 'ANULADA',
-      motivo,
+      motivo: 'Anulada con el motivo que dejó quien la anuló.',
     });
   });
 
@@ -331,7 +338,8 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
     opciones: {
       permiso: string;
       sql: string;
-      extra: unknown[];
+      /** Perezoso cuando depende del cuerpo: se lee después de mirar el permiso. */
+      extra: unknown[] | (() => unknown[]);
       accion: string;
       estado: string;
       motivo: string;
@@ -340,17 +348,19 @@ export async function solicitudDeCompraRoutes(app: FastifyInstance): Promise<voi
     const tenant = await requireCompany(request);
     requirePermission(tenant, opciones.permiso);
     const auth = requireAuth(request);
-    const { solicitudId } = z
-      .object({ solicitudId: z.string().uuid() })
-      .parse(request.params);
+    const { solicitudId } = z.object({ solicitudId: z.string().uuid() }).parse(request.params);
+
+    // Lo que dependa del cuerpo se lee **después** del permiso. Tres de estas
+    // transiciones lo leían antes, así que a un usuario sin permiso le
+    // contestaban 400 diciéndole qué campos esperaban en vez de 403. Lo
+    // encontró S-18, que exige que toda ruta de escritura conteste 403.
+    const extra = typeof opciones.extra === 'function' ? opciones.extra() : opciones.extra;
 
     try {
       return await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
-          const r = await tx.query(opciones.sql, [
-            solicitudId, tenant.companyId, ...opciones.extra,
-          ]);
+          const r = await tx.query(opciones.sql, [solicitudId, tenant.companyId, ...extra]);
           if (r.rowCount === 0) throw notFound('Solicitud no encontrada');
 
           await recordAudit(tx, tenant.companyId, {
@@ -390,8 +400,15 @@ async function insertarRenglones(
           cantidad, unidad, observaciones, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [
-        companyId, solicitudId, orden, linea.productoId ?? null, linea.descripcion,
-        linea.cantidad, linea.unidad, linea.observaciones ?? null, actor,
+        companyId,
+        solicitudId,
+        orden,
+        linea.productoId ?? null,
+        linea.descripcion,
+        linea.cantidad,
+        linea.unidad,
+        linea.observaciones ?? null,
+        actor,
       ],
     );
   }
@@ -423,16 +440,8 @@ function traducirSolicitud(error: unknown): unknown {
       'ORDEN_INVALIDA',
       'El documento citado no es una orden de compra: tiene que ser un pedido de compras.',
     ],
-    [
-      'E_SOL_ORDEN_ANULADA',
-      'ORDEN_ANULADA',
-      'La orden de compra citada está anulada.',
-    ],
-    [
-      'E_SOL_TRANSICION',
-      'TRANSICION_INVALIDA',
-      'Ese estado no puede seguir al anterior.',
-    ],
+    ['E_SOL_ORDEN_ANULADA', 'ORDEN_ANULADA', 'La orden de compra citada está anulada.'],
+    ['E_SOL_TRANSICION', 'TRANSICION_INVALIDA', 'Ese estado no puede seguir al anterior.'],
     [
       'E_SOL_NO_SE_BORRA',
       'SOLICITUD_NO_SE_BORRA',

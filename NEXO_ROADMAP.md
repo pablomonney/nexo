@@ -141,6 +141,7 @@ y otra sobre qué significa «aplicar» un escenario. Ninguna es técnica.
 | RRHH | REQUIERE_DECISION | ADR-012 §8 |
 | Momento de asentar el CMV | REQUIERE_DECISION | El asiento ya se **propone** (0079); automatizar cuándo es política contable |
 | Qué guarda `constatacion` en ambiente `mock` | REQUIERE_DECISION | Ver abajo |
+| Qué permiso exige guardar un escenario | REQUIERE_DECISION | Ver abajo |
 | Intentar la consulta con el relevamiento vencido | REQUIERE_DECISION | Ver abajo |
 
 ### Qué guarda `constatacion` cuando ARCA está simulado
@@ -163,6 +164,25 @@ dos y avisa que no coinciden; la columna no cambió.
   marcada como `DECLARACION_PROFESIONAL`.
 
 No la tomo yo: cambia qué puede fundar un asiento.
+
+### Qué permiso exige guardar un escenario
+
+`POST /analysis/scenarios` y su `archive` piden `analysis:read`, que la 0058 le
+dio a **todos** los roles: un usuario de `SOLO_LECTURA` puede crear y archivar
+escenarios. Lo encontró S-18, que barre todas las rutas de escritura con un
+usuario de lectura.
+
+Un escenario guarda la pregunta y nunca el resultado, así que no afirma ninguna
+cifra. Pero es una fila con nombre que el resto de la empresa ve en una lista.
+
+- **Alternativa A — dejarlo.** Guardar una pregunta es parte de consultar.
+- **Alternativa B — exigir `analysis:configure`** (hoy de ADMINISTRADOR y
+  CONTADOR), que es el permiso de declarar umbrales: la misma idea de «esto lo
+  fija alguien que responde por ello».
+- **Alternativa C — un permiso nuevo** `analysis:write`, con su migración y su
+  reparto por rol.
+
+Es una decisión de producto sobre quién deja rastro en los datos de la empresa.
 
 ### Intentar la consulta con el relevamiento vencido
 
