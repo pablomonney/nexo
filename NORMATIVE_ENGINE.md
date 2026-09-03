@@ -143,6 +143,40 @@ Si el nivel es `V2`/`V3`/`V4`, la UI **no muestra la regla como aplicada**: mues
 
 ---
 
+## 6b. La capa, mirada de frente
+
+El motor resuelve cada vez que alguien decide sobre un comprobante, y hasta
+2026-09-03 **no había forma de mirarlo**: se veía el resultado —una decisión, una
+propuesta, un bloqueo— y nunca el estado de la capa. `GET /normative/gaps` decía
+lo que falta; faltaba decir lo que hay.
+
+```
+GET /normative/rules?fecha=2026-03-20
+```
+
+Contesta, para esa fecha y esta empresa, en qué estado queda cada regla del
+catálogo:
+
+| Estado | Qué significa |
+|---|---|
+| `RESUELTA` | Rige, y su cita se puede presentar como aplicada |
+| `NO_PRESENTABLE` | El motor la resolvió y su fuente no alcanza: no es V1 o su documento no está archivado |
+| `CONFLICTO_NORMATIVO` | Dos normas la gobiernan y ninguna gana. No se aplica ninguna |
+| `FUENTE_NO_ENCONTRADA` · `ADOPCION_NO_RELEVADA` · `FUENTE_NO_VERIFICADA` | Los tres motivos por los que el motor no pudo resolverla |
+
+**No hay estado intermedio y no hay «probablemente».** Una regla que no aparece
+como `RESUELTA` no se aplica.
+
+La respuesta trae además el **contexto con el que se resolvió** —jurisdicción,
+tipo de ente, marco contable— y `faltaDeclarar` cuando algo de ese contexto no
+está: sin ejercicio que contenga la fecha no hay eje temporal para una norma
+profesional, y sin marco declarado no se sabe cuál rige. Ninguna de las dos
+ausencias se completa con un valor por defecto.
+
+El estado normal hoy es que ninguna regla real esté activa, y **verlo es el
+punto**: una pantalla que solo muestra huecos deja creer que lo demás está
+resuelto.
+
 ## 7. `Normative Update Service` (§32)
 
 ```mermaid

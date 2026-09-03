@@ -521,4 +521,55 @@ suite('Circuito MVP de punta a punta', () => {
     );
     expect(activas.rows[0]!.n, 'se activó una regla real durante el circuito').toBe('0');
   });
+
+  /**
+   * S-21 — la capa normativa, mirada de frente.
+   *
+   * Todo el circuito de arriba la usa y nunca la muestra: se ve el resultado
+   * —una decisión, un bloqueo— y no el estado de la capa. `GET
+   * /normative/rules` contesta qué gobierna a esta empresa en una fecha, y el
+   * estado normal hoy es «ninguna regla real activa». Que eso se pueda ver es
+   * el punto: un sistema que no lo muestra deja creer que sí hay reglas
+   * aplicándose.
+   */
+  it('16 · la normativa vigente se puede mirar, y dice qué falta para resolver', async () => {
+    const r = await pedir('GET', '/normative/rules?fecha=2026-03-20');
+    expect(r.statusCode, r.body).toBe(200);
+
+    const v = r.json<{
+      contexto: { jurisdiccion: string; tipoDeEnte: string; marco: string | null };
+      reglas: { ruleKey: string; estado: string; presentable: boolean }[];
+      faltaDeclarar: string[];
+      motivo: string | null;
+      alcance: string;
+    }>();
+
+    // El contexto con el que el motor resuelve, dicho en la respuesta: sin
+    // marco contable declarado no se sabe qué norma profesional rige.
+    expect(v.contexto.marco).toBe('RT_FACPCE');
+    expect(v.contexto.jurisdiccion).toBe('AR-C');
+    expect(v.faltaDeclarar).toEqual([]);
+
+    // La regla real del catálogo está en DRAFT, así que no aparece: el motor
+    // solo carga las ACTIVE. Lo que aparezca son fixtures de otras suites, y de
+    // cada una se exige la misma forma.
+    for (const regla of v.reglas) {
+      expect(
+        ['RESUELTA', 'NO_PRESENTABLE', 'CONFLICTO_NORMATIVO', 'FUENTE_NO_ENCONTRADA',
+         'FUENTE_NO_VERIFICADA', 'ADOPCION_NO_RELEVADA'],
+        `estado inesperado para ${regla.ruleKey}`,
+      ).toContain(regla.estado);
+      // Una regla que no está RESUELTA no se presenta como aplicada. Nunca.
+      if (regla.estado !== 'RESUELTA') expect(regla.presentable).toBe(false);
+    }
+
+    expect(v.reglas.map((x) => x.ruleKey)).not.toContain('AR-IVA-CF-VINCULACION-001');
+    expect(v.alcance).toContain('no hay estado intermedio');
+  });
+
+  it('17 · sin fecha no hay resolución posible, y se dice con esas palabras', async () => {
+    // La vigencia de una norma se evalúa contra la fecha del hecho. Sin eje
+    // temporal, resolver sería suponer.
+    expect((await pedir('GET', '/normative/rules')).statusCode).toBe(400);
+  });
 });

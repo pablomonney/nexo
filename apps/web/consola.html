@@ -8962,6 +8962,42 @@ async function cargarConfig() {
   }
 
   if (puede('rule:read')) {
+    // Lo que gobierna, antes de lo que falta. El estado normal hoy es «ninguna
+    // regla activa», y verlo es el punto: una pantalla que solo muestra huecos
+    // deja creer que lo demás está resuelto.
+    const hoy = new Date().toISOString().slice(0, 10);
+    const reglas = await api('GET', '/normative/rules?fecha=' + hoy);
+    if (reglas.ok) {
+      const v = reglas.datos;
+      caja.innerHTML += '<h3>Normativa vigente hoy</h3>' +
+        '<p class="ayuda">Resuelto para <span class="mono">' + escapar(v.contexto.jurisdiccion) +
+        '</span> · <span class="mono">' + escapar(v.contexto.tipoDeEnte) + '</span> · marco ' +
+        (v.contexto.marco === null
+          ? '<span class="p p-mal">sin declarar</span>'
+          : '<span class="mono">' + escapar(v.contexto.marco) + '</span>') + '</p>' +
+        (v.motivo ? '<div class="aviso">' + escapar(v.motivo) + '</div>' : '') +
+        (v.faltaDeclarar.length === 0
+          ? ''
+          : '<div class="aviso error">Falta declarar: ' +
+            escapar(v.faltaDeclarar.join(', ')) + '</div>') +
+        (v.reglas.length === 0
+          ? ''
+          : '<div class="tabla"><table><thead><tr><th>Regla</th><th>Estado</th><th>Norma</th>' +
+            '<th>Nivel</th><th>Detalle</th></tr></thead><tbody>' +
+            v.reglas.map((r) =>
+              '<tr><td class="mono">' + escapar(r.ruleKey) + '</td>' +
+              // Una regla que no está RESUELTA no se aplica: no hay estado
+              // intermedio, y la pantalla no lo dibuja como si lo hubiera.
+              '<td>' + (r.estado === 'RESUELTA'
+                ? '<span class="p p-bien">rige</span>'
+                : '<span class="p p-mal">' + escapar(r.estado) + '</span>') + '</td>' +
+              '<td>' + escapar(r.norma || '—') + '</td>' +
+              '<td class="mono">' + escapar(r.nivelVerificacion || '—') + '</td>' +
+              '<td class="ayuda">' + escapar(r.detalle || '') + '</td></tr>').join('') +
+            '</tbody></table></div>') +
+        '<p class="ayuda">' + escapar(v.alcance) + '</p>';
+    }
+
     const gaps = await api('GET', '/normative/gaps');
     if (gaps.ok) {
       const huecos = gaps.datos.gaps || gaps.datos.huecos || [];
