@@ -27,7 +27,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { leerMapeo } from './mapeo-contable.js';
-import { conflict, notFound, unprocessable } from '../http/errors.js';
+import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
+import { variacionDeMargen } from '../intelligence/variacion-de-margen.js';
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
 
@@ -449,6 +450,48 @@ export async function valuacionRoutes(app: FastifyInstance): Promise<void> {
             'El costo sale del promedio vigente **en el momento de cada salida**, no del de ' +
             'hoy. La propuesta no registra nada: se carga por `POST /journal-entries`, ' +
             'entra en borrador y la firma una persona.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Por qué cambió el margen entre dos meses.
+   *
+   * El sistema sabía decir cuánto cambió; esto dice de dónde salió el cambio.
+   * No hace falta un modelo: es una descomposición aritmética que cierra
+   * exactamente, y la respuesta trae la comprobación de que cierra.
+   */
+  app.get('/analysis/margen/variacion', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'stock:read');
+    requirePermission(tenant, 'analysis:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({
+        desde: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u, 'Mes AAAA-MM'),
+        hasta: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u, 'Mes AAAA-MM'),
+      })
+      .parse(request.query);
+
+    if (query.desde >= query.hasta) {
+      throw badRequest(
+        'El mes de comparación tiene que ser anterior: la variación se lee del primero al ' +
+          'segundo.',
+      );
+    }
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const v = await variacionDeMargen(tx, tenant.companyId, query.desde, query.hasta);
+        return {
+          ...v,
+          alcance:
+            'Los tres efectos suman exactamente la variación — la respuesta trae la ' +
+            'comprobación. Un producto que estuvo en un solo mes no se abre en precio y ' +
+            'volumen: no hay contra qué compararlo, y repartirlo sería inventar un precio ' +
+            'anterior que no existió.',
         };
       },
     );

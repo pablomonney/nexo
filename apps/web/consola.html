@@ -952,6 +952,17 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       error más peligroso de los dos, porque parece bueno. Un servicio no tiene costo de
       mercadería y no se informa con margen del 100 %.</p>
     <button id="b-val-margen" class="sec">Ver el margen</button>
+    <div class="fila">
+      <div><label>Comparar el mes</label><input id="val-var-desde" placeholder="AAAA-MM" maxlength="7"></div>
+      <div><label>contra</label><input id="val-var-hasta" placeholder="AAAA-MM" maxlength="7"></div>
+      <div><label>&nbsp;</label><button id="b-val-variacion" class="sec">¿Por qué cambió?</button></div>
+    </div>
+    <div id="val-var-msg"></div>
+    <dl class="kv" id="val-var-efectos"></dl>
+    <div class="tabla"><table id="t-val-var"><thead><tr>
+      <th>Producto</th><th>Efecto total</th><th>Precio</th><th>Costo</th><th>Volumen</th>
+      <th>Situación</th>
+    </tr></thead><tbody></tbody></table></div>
     <dl class="kv" id="val-margen-total"></dl>
     <div id="val-margen-msg"></div>
     <div class="tabla"><table id="t-val-margen"><thead><tr>
@@ -4538,6 +4549,48 @@ async function cargarValuacion() {
     }
   }
 }
+
+// Por qué cambió el margen. Es aritmética, no un modelo: los tres efectos
+// suman exactamente la variación, y la respuesta trae la comprobación de que
+// suman. Se muestra la comprobación porque una identidad mal escrita se ve
+// igual que un número plausible.
+E('b-val-variacion').onclick = async () => {
+  const q = new URLSearchParams({
+    desde: E('val-var-desde').value,
+    hasta: E('val-var-hasta').value,
+  });
+  const r = await api('GET', '/analysis/margen/variacion?' + q.toString());
+  if (!r.ok) return decir('val-var-msg', r);
+  E('val-var-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) +
+    (r.datos.noIncluye ? ' ' + escapar(r.datos.noIncluye) : '') + '</div>';
+
+  const e = r.datos.efectos;
+  E('val-var-efectos').innerHTML =
+    fila('Margen de ' + r.datos.desde, r.datos.margenAnterior) +
+    fila('Margen de ' + r.datos.hasta, r.datos.margenActual) +
+    fila('Variación', r.datos.variacion) +
+    fila('Por precio', e.precio) +
+    fila('Por costo', e.costo) +
+    fila('Por volumen', e.volumen) +
+    fila('Productos nuevos', e.altas) +
+    fila('Productos que dejaron de venderse', e.bajas) +
+    fila('Suma de los efectos',
+      r.datos.comprobacion.suma + (r.datos.comprobacion.cierra ? ' · cierra' : ' · NO CIERRA'));
+
+  const cuerpo = E('t-val-var').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const p of r.datos.porProducto || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(p.codigo + ' — ' + p.nombre) + '</td>' +
+      '<td class="mono"><strong>' + escapar(p.efecto) + '</strong></td>' +
+      '<td class="mono">' + escapar(p.precio) + '</td>' +
+      '<td class="mono">' + escapar(p.costo) + '</td>' +
+      '<td class="mono">' + escapar(p.volumen) + '</td>' +
+      '<td>' + escapar(p.situacion) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+};
 
 E('b-val-margen').onclick = async () => {
   const r = await api('GET', '/analysis/margen');

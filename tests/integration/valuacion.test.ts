@@ -22,6 +22,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from './helpers/db.js';
 import { sufijoUnico } from './helpers/identificadores.js';
+import { diasDeLaBase } from './helpers/fechas.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 const PASSWORD = 'una-contrasena-suficientemente-larga';
@@ -991,6 +992,116 @@ suite('Valuación de existencias', () => {
     });
     expect(r.statusCode, r.body).toBe(422);
     expect(r.json<{ error: string }>().error).toBe('ESCENARIO_SIN_CAMBIOS');
+  });
+
+  /**
+   * Por qué cambió el margen, con los dos meses armados a mano.
+   *
+   * Se arma un producto que existe en dos meses con precio, costo y cantidad
+   * distintos, para poder verificar la descomposición contra una cuenta hecha
+   * aparte. Sin eso el test diría «cierra» sin saber contra qué.
+   */
+  it('la variación del margen se abre en precio, costo y volumen, y cierra exacta', async () => {
+    const codigo = `VAR-${stamp}`;
+    const producto = (
+      await pedir('POST', '/products', {
+        codigo, nombre: 'Para variación', tipo: 'PRODUCTO',
+        llevaStock: true, impuesto: 'IVA',
+      })
+    ).json<{ id: string }>().id;
+
+    const mesAnterior = await diasDeLaBase(db, -45);
+    const mesPrevio = mesAnterior.slice(0, 7);
+    const mesActual = hoy.slice(0, 7);
+    // Los dos meses tienen que ser distintos para que haya variación que abrir.
+    if (mesPrevio === mesActual) return;
+
+    /** Una venta con su salida costeada: las dos puntas, que es lo que el margen exige. */
+    const vender = async (
+      fecha: string, unidades: string, precioUnitario: string, costoUnitario: string,
+      numero: number,
+    ) => {
+      await recibir(producto, unidades, costoUnitario, fecha);
+
+      const neto = (Number(unidades) * Number(precioUnitario)).toFixed(2);
+      const iva = (Number(neto) * 0.21).toFixed(2);
+      const forma =
+        `--X\r\nContent-Disposition: form-data; name="file"; filename="var-${stamp}-${numero}.xml"\r\n` +
+        `Content-Type: application/xml\r\n\r\n<c><n>${numero}</n></c>\r\n--X--\r\n`;
+      const subida = await app.inject({
+        method: 'POST',
+        url: '/documents',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'x-company-id': empresa,
+          'content-type': 'multipart/form-data; boundary=X',
+        },
+        payload: forma,
+      });
+      expect(subida.statusCode, subida.body).toBe(201);
+
+      const op = await pedir(
+        'POST', `/documents/${subida.json<{ id: string }>().id}/tax-transaction`,
+        {
+          direction: 'VENTAS', cbteTipo: 1, puntoVenta: 1, numero, fecha,
+          cuitContraparte: `30${stamp}${cuitCheckDigit(`30${stamp}`)}`,
+          razonSocial: `Cliente val ${stamp}`, condicionIva: 'RESPONSABLE_INSCRIPTO',
+          neto, iva, noGravado: '0', exento: '0', percepciones: '0',
+          total: (Number(neto) + Number(iva)).toFixed(2),
+        },
+      );
+      expect(op.statusCode, op.body).toBe(201);
+      const comprobante = op.json<{ taxTransactionId: string }>().taxTransactionId;
+
+      expect(
+        (await pedir('PUT', `/tax-transactions/${comprobante}/lines`, {
+          renglones: [{
+            productoId: producto, descripcion: 'Para variación', cantidad: unidades,
+            precioUnitario, tratamiento: 'GRAVADO', neto, iva,
+          }],
+        })).statusCode,
+      ).toBe(200);
+
+      expect(
+        (await pedir('POST', '/stock-movements/salida', {
+          productoId: producto, depositoId: deposito, cantidad: unidades, fecha,
+          taxTransactionId: comprobante,
+        })).statusCode,
+      ).toBe(201);
+    };
+
+    // Mes anterior: 10 unidades a 100, costo 60 → margen 400.
+    await vender(mesAnterior, '10', '100.00', '60.00', 9101);
+    // Mes actual: 12 unidades a 110, costo 70 → margen 480.
+    await vender(hoy, '12', '110.00', '70.00', 9102);
+
+    const r = await pedir(
+      'GET', `/analysis/margen/variacion?desde=${mesPrevio}&hasta=${mesActual}`,
+    );
+    expect(r.statusCode, r.body).toBe(200);
+    const v = r.json<{
+      margenAnterior: string; margenActual: string; variacion: string;
+      efectos: { precio: string; costo: string; volumen: string; altas: string; bajas: string };
+      comprobacion: { suma: string; cierra: boolean };
+      productosComparables: number;
+      porProducto: { codigo: string; precio: string; costo: string; volumen: string }[];
+      metodologia: string;
+    }>();
+
+    // La comprobación es lo primero: una identidad mal escrita se ve como un
+    // número plausible.
+    expect(v.comprobacion.cierra, `${v.comprobacion.suma} vs ${v.variacion}`).toBe(true);
+    expect(v.comprobacion.suma).toBe(v.variacion);
+    expect(v.productosComparables).toBeGreaterThanOrEqual(1);
+
+    const p = v.porProducto.find((x) => x.codigo === codigo)!;
+    // Precio: (110 − 100) × 12 = +120.
+    expect(p.precio).toBe('120.00');
+    // Costo: −(70 − 60) × 12 = −120.
+    expect(p.costo).toBe('-120.00');
+    // Volumen: (100 − 60) × (12 − 10) = +80.
+    expect(p.volumen).toBe('80.00');
+    expect(v.metodologia).toContain('no hay reparto proporcional');
   });
 
   it('las vistas de valuación conservan security_invoker', async () => {
