@@ -182,7 +182,7 @@ try {
   await db.query('COMMIT');
 
   console.log(`✔ ${clave} v${version} quedó ACTIVE.`);
-  console.log(`  Constancia registrada en audit_logs: "${constancia.trim().slice(0, 80)}…"`);
+  console.log(`  Constancia registrada en normative_audit_logs: "${constancia.trim().slice(0, 80)}…"`);
 } catch (error) {
   await db.query('ROLLBACK').catch(() => {});
   console.error(`\n✘ No se pudo aprobar: ${error.message}`);

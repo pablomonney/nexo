@@ -226,7 +226,7 @@ export async function vatRoutes(app: FastifyInstance): Promise<void> {
         await recordAudit(tx, tenant.companyId, {
           actorType: 'USER',
           actorId,
-          action: 'vat_book.generate',
+          action: 'GENERAR_LIBRO_IVA',
           objectType: 'vat_books',
           objectId: guardado.rows[0]!.id,
           ip: clientIp(request),

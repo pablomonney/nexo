@@ -152,7 +152,7 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
       await recordAudit(tx, tenant.companyId, {
         actorType: 'USER',
         actorId,
-        action: 'bank_account.create',
+        action: 'CREAR_CUENTA_BANCARIA',
         objectType: 'bank_accounts',
         objectId: fila.rows[0]!.id,
         ip: clientIp(request),
@@ -303,7 +303,7 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
       await recordAudit(tx, tenant.companyId, {
         actorType: 'USER',
         actorId,
-        action: 'bank_statement_layout.create',
+        action: 'CREAR_MAPEO_DE_EXTRACTO',
         objectType: 'bank_statement_layouts',
         objectId: fila.rows[0]!.id,
         ip: clientIp(request),
@@ -431,7 +431,7 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
         await recordAudit(tx, tenant.companyId, {
           actorType: 'USER',
           actorId,
-          action: 'bank_statement.import',
+          action: 'IMPORTAR_EXTRACTO',
           objectType: 'bank_statements',
           objectId: statementId,
           ip: clientIp(request),
@@ -719,7 +719,7 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
             actorId,
-            action: 'bank_reconciliation.open',
+            action: 'ABRIR_CONCILIACION',
             objectType: 'bank_reconciliations',
             objectId: r.rows[0]!.id,
             newValue: {
@@ -967,7 +967,7 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
         await recordAudit(tx, tenant.companyId, {
           actorType: 'USER',
           actorId,
-          action: 'bank_reconciliation.confirm',
+          action: 'CONFIRMAR_CONCILIACION',
           objectType: 'bank_reconciliations',
           objectId: params.reconciliationId,
           ip: clientIp(request),

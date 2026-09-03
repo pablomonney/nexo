@@ -171,7 +171,7 @@ export async function statementRoutes(app: FastifyInstance): Promise<void> {
       await recordAudit(tx, tenant.companyId, {
         actorType: 'USER',
         actorId,
-        action: 'financial_statement.issue',
+        action: 'EMITIR_ESTADO_CONTABLE',
         objectType: 'financial_statements',
         objectId: statementId,
         ip: clientIp(request),

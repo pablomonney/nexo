@@ -434,7 +434,7 @@ export async function bookRoutes(app: FastifyInstance): Promise<void> {
         await recordAudit(tx, tenant.companyId, {
           actorType: 'USER',
           actorId: `user:${auth.user.userId}`,
-          action: 'book.emit',
+          action: 'EMITIR_LIBRO',
           objectType: 'book_emissions',
           objectId: emision.rows[0]!.id,
           ip: clientIp(request),

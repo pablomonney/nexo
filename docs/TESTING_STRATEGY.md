@@ -127,6 +127,7 @@ métrica tiene umbral de bloqueo de release.
 > | `tablas-con-escritor` | S-17 | Que cada tabla del esquema tenga al menos un `INSERT` fuera de los tests |
 > | `solo-lectura` | S-18 | Que ninguna ruta de escritura le conteste otra cosa que 403 a un usuario de solo lectura |
 > | `cadena-de-ventas` | S-19 | Que la misma operación cruce todas las capas: comercial → fiscal → stock → cuenta corriente → Mayor → cobranza → costo |
+> | `vocabulario-de-eventos` | S-20 | Que la bitácora sea un vocabulario estable, y que renombrar una acción excepcional no apague su candado en silencio |
 
 #### S-16, y por qué un barrido también se equivoca
 
@@ -203,6 +204,24 @@ la existencia inicial de una empresa entra por ajuste, el endpoint de ajuste no
 dejaba declarar el costo —aunque la base sí— y sin costo de entrada ninguna
 salida se puede costear. El último eslabón de la cadena, el asiento del costo de
 lo vendido, era inalcanzable para toda empresa que no hubiera comprado nunca.
+
+#### S-20: un candado que se apaga renombrando
+
+`audit_logs` exige motivo para cinco acciones excepcionales —anular un asiento,
+reabrir un período, activar una regla, reclasificar un aprobado, cambiar el plan
+de cuentas— y el CHECK las compara **por texto**.
+
+Renombrar cualquiera de las cinco en el código no rompe nada: la aplicación
+sigue andando, los tests siguen verdes, y desde ese día se puede anular un
+asiento sin explicar por qué. Se comprobó: renombrando `ANULAR_ASIENTO` el
+barrido falla; sin él, nada lo hacía.
+
+De paso midió el vocabulario entero y encontró que derivaba: 106 acciones en
+`VERBO_EN_MAYUSCULAS` y ocho en `objeto.verbo`, todas de un puñado de archivos
+donde cada uno copió el estilo de su vecino. Ninguna estaba mal escrita; el
+conjunto sí. Es la materia prima de todo lo que se construya encima —métricas,
+detección, agentes—: un vocabulario con dos formas obliga a cada consulta a
+conocer las dos, y la tercera que aparezca no la va a conocer nadie.
 
 ### 2.8 Tests de regresión
 
