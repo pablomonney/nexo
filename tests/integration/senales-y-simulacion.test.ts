@@ -297,6 +297,7 @@ suite('Señales, proyección y simulación', () => {
     const cuerpo = r.json<{
       base: { netoFacturado: string };
       resultado: { netoProyectado: string; variacionTotalPct: string };
+      margen: { base: unknown; motivo: string | null };
       supuestos: string[];
       limitaciones: string[];
       metodologia: string;
@@ -310,7 +311,13 @@ suite('Señales, proyección y simulación', () => {
 
     // Lo frágil, impreso: sin esto es un número que engaña.
     expect(cuerpo.supuestos.join(' ')).toContain('elasticidad');
-    expect(cuerpo.limitaciones.join(' ')).toContain('costo de lo vendido');
+    // La limitación cambió de sentido cuando el margen pasó a ser calculable
+    // (0081): antes decía que no se podía proyectar por falta de costo; ahora
+    // dice cuánta venta queda afuera porque su costo no se conoce. En esta
+    // empresa de prueba no hay ningún renglón con costo, así que lo dice entero.
+    expect(cuerpo.limitaciones.join(' ')).toContain('margen');
+    expect(cuerpo.margen.motivo).toContain('sin costo no hay');
+    expect(cuerpo.margen.base).toBeNull();
     expect(cuerpo.metodologia).toContain('variación de precio');
   });
 

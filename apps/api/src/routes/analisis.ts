@@ -599,10 +599,17 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         meses: z.number().int().min(1).max(36).default(12),
         variacionDePrecio: porcentaje.default(0),
         variacionDeVolumen: porcentaje.default(0),
+        // Agregada cuando el margen pasó a ser calculable (0081). Antes no
+        // tenía sentido preguntarla: no había contra qué proyectarla.
+        variacionDeCosto: porcentaje.default(0),
       })
       .parse(request.body);
 
-    if (body.variacionDePrecio === 0 && body.variacionDeVolumen === 0) {
+    if (
+      body.variacionDePrecio === 0 &&
+      body.variacionDeVolumen === 0 &&
+      body.variacionDeCosto === 0
+    ) {
       throw badRequest(
         'La simulación necesita al menos un cambio: sin variación el resultado es la base.',
       );
@@ -646,6 +653,58 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
 
         const fila = base.rows[0]!;
 
+        /**
+         * El margen proyectado, cuando hay margen que proyectar.
+         *
+         * Toma **solo** los renglones con margen afirmable: los que tienen
+         * costo, sin salidas sin costear, y con lo facturado coincidiendo con
+         * lo que salió del depósito. Proyectar sobre una venta cuyo costo no se
+         * conoce daría un margen más alto que el real, que es el error más
+         * peligroso de los dos porque parece bueno.
+         *
+         * La venta que queda afuera se informa: sin eso, el margen proyectado
+         * parecería ser el de toda la empresa.
+         */
+        const margen = await tx.query<{
+          venta: string; costo: string; margen: string; margen_pct: string | null;
+          venta_proyectada: string; costo_proyectado: string;
+          margen_proyectado: string; margen_pct_proyectado: string | null;
+          venta_sin_afirmar: string; renglones: string;
+        }>(
+          `WITH b AS (
+             SELECT coalesce(sum(venta) FILTER (WHERE margen IS NOT NULL), 0) AS venta,
+                    coalesce(sum(costo) FILTER (WHERE margen IS NOT NULL), 0) AS costo,
+                    coalesce(sum(margen), 0) AS margen,
+                    coalesce(sum(venta) FILTER (WHERE margen IS NULL), 0) AS venta_sin_afirmar,
+                    count(*) FILTER (WHERE margen IS NOT NULL) AS renglones
+               FROM analytics_margen_por_producto
+              WHERE company_id = $1
+                AND mes >= date_trunc('month', current_date - make_interval(months => $2))::date
+           ), f AS (
+             SELECT (1 + $3::numeric / 100) * (1 + $4::numeric / 100) AS venta,
+                    (1 + $5::numeric / 100) * (1 + $4::numeric / 100) AS costo
+           )
+           SELECT round(b.venta, 2)::text                                  AS venta,
+                  round(b.costo, 2)::text                                  AS costo,
+                  round(b.margen, 2)::text                                 AS margen,
+                  round(b.margen * 100 / nullif(b.venta, 0), 2)::text      AS margen_pct,
+                  round(b.venta * f.venta, 2)::text                        AS venta_proyectada,
+                  round(b.costo * f.costo, 2)::text                        AS costo_proyectado,
+                  round(b.venta * f.venta - b.costo * f.costo, 2)::text    AS margen_proyectado,
+                  round((b.venta * f.venta - b.costo * f.costo) * 100
+                        / nullif(b.venta * f.venta, 0), 2)::text           AS margen_pct_proyectado,
+                  round(b.venta_sin_afirmar, 2)::text                      AS venta_sin_afirmar,
+                  b.renglones::text                                        AS renglones
+             FROM b CROSS JOIN f`,
+          [
+            tenant.companyId, body.meses,
+            body.variacionDePrecio, body.variacionDeVolumen, body.variacionDeCosto,
+          ],
+        );
+
+        const m = margen.rows[0]!;
+        const hayMargen = Number(m.renglones) > 0;
+
         return {
           base: {
             netoFacturado: fila.neto,
@@ -656,6 +715,7 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
           escenario: {
             variacionDePrecio: body.variacionDePrecio,
             variacionDeVolumen: body.variacionDeVolumen,
+            variacionDeCosto: body.variacionDeCosto,
           },
           resultado: {
             netoProyectado: fila.proyectado,
@@ -665,6 +725,31 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
             // permitiría rehacer la cuenta.
             variacionTotalPct: fila.variacionTotalPct,
           },
+          margen: hayMargen
+            ? {
+                base: {
+                  venta: m.venta, costo: m.costo, margen: m.margen, margenPct: m.margen_pct,
+                },
+                proyectado: {
+                  venta: m.venta_proyectada,
+                  costo: m.costo_proyectado,
+                  margen: m.margen_proyectado,
+                  margenPct: m.margen_pct_proyectado,
+                },
+                renglonesAfirmables: Number(m.renglones),
+                ventaSinMargenAfirmable: m.venta_sin_afirmar,
+                motivo: null,
+              }
+            : {
+                base: null,
+                proyectado: null,
+                renglonesAfirmables: 0,
+                ventaSinMargenAfirmable: m.venta_sin_afirmar,
+                motivo:
+                  'No hay ningún renglón con margen afirmable en el período: sin costo no hay ' +
+                  'margen que proyectar. Proyectar sobre la venta sola daría un margen más ' +
+                  'alto que el real.',
+              },
           // Lo frágil, impreso. Una simulación cuyos supuestos no se ven es un
           // número que engaña.
           supuestos: [
@@ -672,17 +757,27 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
             'La composición de lo vendido no cambia.',
             'Los meses sin datos cuentan como cero, no se interpolan.',
             'Es una proyección aritmética sobre lo facturado, no un pronóstico.',
+            // El supuesto más fuerte del bloque de margen, y el que más fácil se
+            // olvida al leer el resultado.
+            'El costo se mueve con el volumen: se lo trata como enteramente variable. Una ' +
+              'empresa con costos fijos adentro del costo de ventas verá un margen proyectado ' +
+              'peor que el real cuando el volumen baja, y mejor cuando sube.',
           ],
           limitaciones: [
-            'No calcula margen ni rentabilidad: exigen el costo de lo vendido, y el stock ' +
-              'lleva cantidades, no valores.',
+            hayMargen
+              ? 'El margen se proyecta solo sobre los renglones donde se puede afirmar: ' +
+                m.venta_sin_afirmar +
+                ' de venta quedan afuera porque su costo no se conoce.'
+              : 'No hay margen que proyectar: ningún renglón del período tiene costo afirmable.',
             'No considera inflación, estacionalidad ni capacidad instalada.',
             'No se guarda: es una función de los parámetros y de la base informada acá, ' +
               'que se puede rehacer con esos mismos números.',
           ],
           metodologia:
             'Neto facturado de VENTAS de los últimos ' + body.meses + ' meses, multiplicado ' +
-            'por (1 + variación de precio) y por (1 + variación de volumen).',
+            'por (1 + variación de precio) y por (1 + variación de volumen). El margen sale ' +
+            'de los renglones con margen afirmable del mismo período: la venta se mueve con ' +
+            'precio y volumen, el costo con costo y volumen.',
         };
       },
     );

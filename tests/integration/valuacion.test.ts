@@ -827,6 +827,65 @@ suite('Valuación de existencias', () => {
     expect(permisos.rows.map((p) => p.privilege_type).sort()).toEqual(['SELECT']);
   });
 
+  it('la simulación proyecta el margen y dice qué venta queda afuera', async () => {
+    // Hasta la 0081 el simulador decía, con razón, que no podía proyectar
+    // margen «porque el stock lleva cantidades, no valores». Ya no es cierto:
+    // con el margen afirmable calculado, el escenario se puede correr — y sigue
+    // corriéndose **solo** sobre lo afirmable.
+    const r = await pedir('POST', '/analysis/simulate', {
+      meses: 12,
+      variacionDePrecio: 10,
+    });
+    expect(r.statusCode, r.body).toBe(200);
+
+    const m = r.json<{
+      margen: {
+        base: { venta: string; costo: string; margen: string } | null;
+        proyectado: { venta: string; costo: string; margen: string; margenPct: string } | null;
+        renglonesAfirmables: number;
+        ventaSinMargenAfirmable: string;
+      };
+      limitaciones: string[];
+      supuestos: string[];
+    }>().margen;
+
+    // El producto vendido a pérdida: 500 de venta contra 1.000 de costo.
+    expect(m.base!.venta).toBe('500.00');
+    expect(m.base!.costo).toBe('1000.00');
+    expect(m.base!.margen).toBe('-500.00');
+
+    // Con 10 % más de precio y el costo quieto: 550 − 1.000 = −450.
+    expect(m.proyectado!.venta).toBe('550.00');
+    expect(m.proyectado!.costo).toBe('1000.00');
+    expect(m.proyectado!.margen).toBe('-450.00');
+
+    // Y lo que queda afuera se dice: la venta del producto sin costo declarado.
+    expect(Number(m.ventaSinMargenAfirmable)).toBeGreaterThan(0);
+    expect(r.json<{ limitaciones: string[] }>().limitaciones.join(' '))
+      .toContain('quedan afuera porque su costo no se conoce');
+
+    // El supuesto que más fácil se olvida al leer el resultado.
+    expect(r.json<{ supuestos: string[] }>().supuestos.join(' '))
+      .toContain('enteramente variable');
+  });
+
+  it('subir el costo empeora el margen proyectado, y la cuenta se puede rehacer', async () => {
+    const r = await pedir('POST', '/analysis/simulate', {
+      meses: 12,
+      variacionDeCosto: 20,
+    });
+    expect(r.statusCode, r.body).toBe(200);
+
+    const m = r.json<{
+      margen: { proyectado: { venta: string; costo: string; margen: string } };
+    }>().margen;
+
+    // La venta no se mueve; el costo sí: 1.000 × 1,20 = 1.200 → margen −700.
+    expect(m.proyectado.venta).toBe('500.00');
+    expect(m.proyectado.costo).toBe('1200.00');
+    expect(m.proyectado.margen).toBe('-700.00');
+  });
+
   it('las vistas de valuación conservan security_invoker', async () => {
     const r = await db.query<{ relname: string; reloptions: string[] | null }>(
       `SELECT relname, reloptions FROM pg_class

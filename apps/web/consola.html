@@ -2161,7 +2161,12 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div><label>Meses de base</label><input id="sen-s-meses" inputmode="numeric" value="12"></div>
     <div><label>Variación de precio (%)</label><input id="sen-s-precio" inputmode="decimal" value="0"></div>
     <div><label>Variación de volumen (%)</label><input id="sen-s-vol" inputmode="decimal" value="0"></div>
+    <div><label>Variación de costo (%)</label><input id="sen-s-costo" inputmode="decimal" value="0"></div>
   </div>
+  <p class="ayuda">El margen se proyecta <strong>solo sobre lo afirmable</strong>: los renglones
+    donde lo facturado coincide con lo que salió del depósito y su costo se pudo calcular. La
+    venta que queda afuera se informa — proyectar sobre una venta sin costo daría un margen
+    más alto que el real.</p>
   <button id="b-sen-simular">Simular</button>
   <div id="sen-s-msg"></div>
   <dl class="kv" id="sen-s-resultado"></dl>
@@ -7342,6 +7347,7 @@ E('b-sen-simular').onclick = async () => {
     meses: Number(E('sen-s-meses').value),
     variacionDePrecio: Number(E('sen-s-precio').value),
     variacionDeVolumen: Number(E('sen-s-vol').value),
+    variacionDeCosto: Number(E('sen-s-costo').value),
   });
   if (!r.ok) { E('sen-s-resultado').innerHTML = ''; E('sen-s-supuestos').innerHTML = ''; return decir('sen-s-msg', r); }
   limpiar('sen-s-msg');
@@ -7351,7 +7357,13 @@ E('b-sen-simular').onclick = async () => {
     fila('Meses con datos', r.datos.base.mesesConDatos + ' de ' + r.datos.base.mesesPedidos) +
     fila('Neto proyectado', r.datos.resultado.netoProyectado) +
     fila('Diferencia', r.datos.resultado.diferencia) +
-    fila('Variación total', r.datos.resultado.variacionTotalPct + ' %');
+    fila('Variación total', r.datos.resultado.variacionTotalPct + ' %') +
+    // El margen, cuando hay con qué. "No se afirma" y "cero" no se dibujan igual.
+    (r.datos.margen.base === null
+      ? fila('Margen', 'no se proyecta — ' + r.datos.margen.motivo)
+      : fila('Margen base', r.datos.margen.base.margen + ' (' + r.datos.margen.base.margenPct + ' %)') +
+        fila('Margen proyectado', r.datos.margen.proyectado.margen + ' (' + r.datos.margen.proyectado.margenPct + ' %)') +
+        fila('Venta sin margen afirmable', r.datos.margen.ventaSinMargenAfirmable));
 
   // Los supuestos se muestran siempre y con el mismo peso que el número. Una
   // simulación cuyos supuestos no se ven es un número que engaña.
