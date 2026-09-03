@@ -33,6 +33,7 @@ import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
 import { simular } from '../intelligence/simulacion.js';
+import { radarDeRiesgos } from '../intelligence/riesgos.js';
 
 const porcentaje = z.number().min(-100).max(1000);
 
@@ -810,6 +811,35 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       throw traducirEscenario(error);
     }
+  });
+
+  /**
+   * El radar: seis frentes, cada uno con sus hechos y con qué le falta.
+   *
+   * Un frente que no se puede evaluar **no** se informa como «sin riesgo».
+   * Un tablero en verde por falta de datos es peor que no tener tablero.
+   */
+  app.get('/analysis/riesgos', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const frentes = await radarDeRiesgos(tx, tenant.companyId);
+        return {
+          frentes,
+          sinEvaluar: frentes.filter((f) => !f.evaluable).map((f) => f.frente),
+          alcance:
+            'Cada frente trae los hechos que lo componen y, si no se puede medir, qué falta ' +
+            'declarar para poder hacerlo. No hay una nota global: sumar frentes que se miden ' +
+            'en días, pesos y porcentajes exigiría ponderarlos, y esa ponderación sería una ' +
+            'opinión sin dueño.',
+        };
+      },
+    );
   });
 }
 

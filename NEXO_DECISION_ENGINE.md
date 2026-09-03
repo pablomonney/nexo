@@ -14,7 +14,7 @@ preguntas, `NEXO_INTELLIGENCE.md`.
 ```
 QUÉ PASÓ          ✔ analítica, cuenta corriente, valuación, margen
 POR QUÉ           ✔ descomposición de la variación del margen
-QUÉ ESTÁ EN RIESGO ✔ señales contra umbrales declarados + hechos sin umbral
+QUÉ ESTÁ EN RIESGO ✔ seis frentes, cada uno con lo que no se puede medir
 QUÉ PASA SI        ✔ simulación de precio, volumen y costo, con escenarios guardados
 QUÉ CONVIENE       ✗ recomendación
 APROBAR            ✗

@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 111 archivos de test, 1833 tests,
+**Estado del árbol:** `verify` en verde — 111 archivos de test, 1835 tests,
 420 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -86,6 +86,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Margen real por producto** | **TERMINADO** | **`valuacion` (23 tests)** |
 | **NEXO Intelligence: preguntas con evidencia y narración verificada** | **TERMINADO** (falta el adaptador de un proveedor real) | **`intelligence` (10), `catalogo-de-preguntas` (10)** |
 | **Escenarios guardados y variación del margen** | **TERMINADO** | **`valuacion` (29 tests)** |
+| **Radar de riesgos: seis frentes, con lo que no se puede medir** | **TERMINADO** | **`intelligence` (12 tests)** |
 
 ## 3. En curso
 

@@ -330,6 +330,55 @@ suite('NEXO Intelligence', () => {
     expect(p.alcance).toContain('null no es cero');
   });
 
+  /**
+   * El radar de riesgos.
+   *
+   * Lo que se comprueba no es que los seis frentes den «bien»: es que un frente
+   * que no se puede medir **no** se informe como si estuviera bien. Un tablero
+   * en verde por falta de datos es peor que no tener tablero.
+   */
+  it('el radar informa los seis frentes, y dice cuáles no puede evaluar', async () => {
+    const r = await pedir('GET', '/analysis/riesgos');
+    expect(r.statusCode, r.body).toBe(200);
+    const d = r.json<{
+      frentes: {
+        frente: string; evaluable: boolean; noSeEvalua: string | null;
+        hechos: { que: string; valor: string }[]; origen: string[];
+      }[];
+      sinEvaluar: string[];
+      alcance: string;
+    }>();
+
+    expect(d.frentes.map((f) => f.frente).sort()).toEqual([
+      'COBRANZA', 'CONCENTRACION', 'CONTABLE', 'LIQUIDEZ', 'MARGEN', 'OPERATIVO',
+    ]);
+    // Cada frente trae sus hechos y de dónde salieron: sin eso sería una nota
+    // que hay que creer.
+    expect(d.frentes.every((f) => f.hechos.length > 0 && f.origen.length > 0)).toBe(true);
+
+    // Esta empresa no lleva stock ni declaró método de valuación: el margen no
+    // se puede evaluar, y el radar lo dice en vez de informarlo como sano.
+    const margen = d.frentes.find((f) => f.frente === 'MARGEN')!;
+    expect(margen.evaluable).toBe(false);
+    expect(margen.noSeEvalua).toContain('no se puede decir si');
+    expect(d.sinEvaluar).toContain('MARGEN');
+
+    // La cobranza sí: el cliente tiene plazo declarado y hay facturas abiertas.
+    const cobranza = d.frentes.find((f) => f.frente === 'COBRANZA')!;
+    expect(cobranza.evaluable).toBe(true);
+    expect(cobranza.noSeEvalua).toBeNull();
+
+    expect(d.alcance).toContain('No hay una nota global');
+  });
+
+  it('el radar no suma una nota global de riesgo', async () => {
+    // Sumar frentes que se miden en días, pesos y porcentajes exigiría
+    // ponderarlos, y esa ponderación sería una opinión sin dueño.
+    const r = await pedir('GET', '/analysis/riesgos');
+    const cuerpo = r.json<Record<string, unknown>>();
+    expect(Object.keys(cuerpo).sort()).toEqual(['alcance', 'frentes', 'sinEvaluar']);
+  });
+
   it('el catálogo completo llega a un rol de solo lectura', async () => {
     // Un usuario de solo lectura no tiene `allocation:read` ni `stock:read`.
     const email = `mirona-int-${stamp}@estudio.test`;

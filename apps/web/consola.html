@@ -232,6 +232,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       <input id="intel-pregunta" maxlength="200" placeholder="¿cuánto vendí este mes?"></div>
     <div><label>&nbsp;</label><button id="b-intel-preguntar">Preguntar</button></div>
     <div><label>&nbsp;</label><button id="b-intel-panorama" class="sec">Ver el panorama</button></div>
+    <div><label>&nbsp;</label><button id="b-intel-riesgos" class="sec">Ver los riesgos</button></div>
   </div>
   <div id="intel-msg"></div>
   <div id="intel-narracion"></div>
@@ -251,6 +252,17 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div id="intel-opciones" hidden class="grupo">
     <h3 id="intel-opciones-titulo">Puedo contestar esto</h3>
     <div id="intel-opciones-lista"></div>
+  </div>
+
+  <div id="intel-riesgos" hidden class="grupo">
+    <h3>Riesgos</h3>
+    <p class="ayuda">Un frente que <strong>no se puede evaluar</strong> no se informa como «sin
+      riesgo»: dice qué falta declarar para poder medirlo. Un tablero en verde por falta de
+      datos es peor que no tener tablero. Y no hay una nota global — sumar frentes que se miden
+      en días, pesos y porcentajes exigiría una ponderación que sería una opinión sin dueño.</p>
+    <div class="tabla"><table id="t-intel-riesgos"><thead><tr>
+      <th>Frente</th><th>Hechos</th><th>Desvíos declarados</th><th>Estado</th>
+    </tr></thead><tbody></tbody></table></div>
   </div>
 
   <div id="intel-panorama" hidden class="grupo">
@@ -2844,6 +2856,33 @@ E('b-intel-preguntar').onclick = async () => {
     r.datos.motivo === 'AMBIGUA' ? '¿Cuál de estas?' : 'Puedo contestar esto',
     r.datos.preguntasPosibles,
   );
+};
+
+E('b-intel-riesgos').onclick = async () => {
+  const r = await api('GET', '/analysis/riesgos');
+  if (!r.ok) return decir('intel-msg', r);
+  E('intel-riesgos').hidden = false;
+  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-intel-riesgos').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const f of r.datos.frentes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><strong>' + escapar(f.titulo) + '</strong><br><span class="mono">' +
+        escapar(f.frente) + '</span></td>' +
+      '<td>' + (f.hechos || []).map((h) =>
+        escapar(h.que) + ': <span class="mono">' + escapar(h.valor) + '</span>').join('<br>') + '</td>' +
+      '<td>' + ((f.desviosDeclarados || []).length === 0
+        ? '<span class="p p-neu">ninguno</span>'
+        : f.desviosDeclarados.map((d) =>
+            '<span class="p p-ojo">' + escapar(d.tipo) + '</span> ' + escapar(d.detalle)).join('<br>')) + '</td>' +
+      // «No se puede evaluar» no se dibuja como «está bien».
+      '<td>' + (f.evaluable
+        ? '<span class="p p-ok">medido</span>'
+        : '<span class="p p-neu">no se evalúa</span><br>' + escapar(f.noSeEvalua)) + '</td>';
+    cuerpo.appendChild(tr);
+  }
 };
 
 E('b-intel-panorama').onclick = async () => {
