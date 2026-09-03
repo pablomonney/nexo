@@ -12,7 +12,7 @@
  * llamada nueva a una ruta inexistente falla acá, no en producción.
  *
  * No comprueba que la respuesta tenga la forma esperada ni dónde se dibuja: lo
- * segundo lo mira S-13 (consola-elementos), que comprueba que cada id exista y
+ * segundo lo mira S-15 (consola-elementos), que comprueba que cada id exista y
  * sea único. **No hay tests de navegación**: nadie ejercita las pantallas contra
  * un DOM, y por eso un error de dibujo solo se ve abriendo la consola.
  */

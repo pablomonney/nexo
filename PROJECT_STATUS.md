@@ -41,7 +41,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | ARCA: WSAA, WSFE, constatación | TERMINADO (homologación) | `packages/arca` |
 | Bandeja de trabajo (`work_queue`) | TERMINADO | `navegacion-e2e` |
 | Bitácora consultable (`GET /audit`) | TERMINADO | `bitacora` |
-| Consola web (31 pantallas) | TERMINADO | `consola-contrato` (S-12, ida y vuelta) |
+| Consola web (33 pantallas) | TERMINADO | `consola-contrato` (S-12), `consola-elementos` (S-15) |
 | **Maestro de terceros** | **TERMINADO** | **`terceros` (20 tests)** |
 | **Maestro de productos** | **TERMINADO** | **`productos` (14 tests)** |
 | **Detalle de comprobante** | **TERMINADO** | **`renglones-de-comprobante` (9 tests)** |
@@ -80,6 +80,10 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Exportaciones a CSV** | **TERMINADO** | **`exportaciones` (5 tests)** |
 | **Imagen, sondas y métricas** | **TERMINADO** | **`metricas` (S-13, 4 tests), `docs/DESPLIEGUE.md`** |
 | **Límite de intentos por origen** | **TERMINADO** | **`limite-de-intentos` (S-14, 5 tests)** |
+| **Órdenes de pago** | **TERMINADO** | **`ordenes-de-pago` (13 tests)** |
+| **Notas aplicadas a su factura** | **TERMINADO** | **`notas-aplicadas` (10 tests)** |
+| **Solicitudes de compra** | **TERMINADO** | **`solicitudes-de-compra` (10 tests)** |
+| **Margen real por producto** | **TERMINADO** | **`valuacion` (23 tests)** |
 
 ## 3. En curso
 
@@ -126,7 +130,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0083 | La nota de crédito dice qué factura corrige: aplicarla traslada saldo de un comprobante al otro, y la cuota baja con él |
 | 0084 | El margen llega a la capa de decisión: vender bajo costo se señala sin umbral —es un hecho— y el margen mínimo se declara |
 | 0085 | La solicitud de compra: pedir no es comprar. Sin precios, y «convertida» exige citar una orden de compra de verdad (ADR-021) |
-| 0086 | El promedio se calcula al escribir: la valuación pasa de 25 s a 44 ms con 50.000 movimientos, y se sigue comprobando contra la derivación |
+| 0086 | El promedio se calcula al escribir: la valuación pasa de 25 s a 44 ms con 50.000 movimientos, y se sigue comprobando contra la derivación (ADR-022) |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido
@@ -243,12 +247,24 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
   la empresa en contexto, que es como consulta la API. Con el promedio
   calculado al escribir, **44 ms**.
 
-  Lo que eso deja abierto: las demás vistas derivadas —la bandeja, que es la
-  unión de veintitrés vistas; el flujo de fondos; la antigüedad de saldos— no
-  se midieron con volumen. No hay motivo para suponer que estén mal, y tampoco
-  para afirmar que estén bien: hasta que se midan, es una pregunta sin
-  contestar. El molde para contestarla es el de la 0086 — cargar volumen en
-  `aai_test`, medir con el rol de la aplicación, y guardar el número.
+  La medición dejó de ser un experimento suelto: es `npm run bench:vistas`, que
+  carga volumen en la base descartable y mide once consultas con el rol de la
+  aplicación. Con 50.014 movimientos de stock de una empresa:
+
+  | Vista | Mejor de tres |
+  |---|---|
+  | `stock_valuation` | 75 ms |
+  | `stock_ppp` | 27 ms |
+  | `work_queue` (la bandeja entera) | 229 ms |
+  | `work_queue`, una página de 50 | 242 ms |
+  | `analysis_signals` | 18 ms |
+  | `analytics_flujo_de_fondos` | 9 ms |
+  | las otras cinco | menos de 7 ms |
+
+  Lo que **no** dice esa tabla: el volumen cargado es de stock. Las ramas de la
+  bandeja que cuelgan de comprobantes, cheques o proyectos siguen sin volumen
+  detrás, así que 229 ms es el piso de la bandeja, no su techo. Es la próxima
+  medición pendiente, y ahora hay con qué hacerla.
 
 - **Restauración probada, y lo que la prueba encontró.** `npm run db:backup` y
   `npm run db:restaurar` cierran el ciclo: la copia se restaura en una base

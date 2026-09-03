@@ -58,7 +58,8 @@
     "verify:db": "node scripts/verification-db.mjs",
     "verify:arranque": "node scripts/verify-primer-arranque.mjs",
     "ci": "node scripts/pipeline.mjs",
-    "ci:desde-cero": "node scripts/pipeline.mjs --desde-cero"
+    "ci:desde-cero": "node scripts/pipeline.mjs --desde-cero",
+    "bench:vistas": "node scripts/bench-vistas.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

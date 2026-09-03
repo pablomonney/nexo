@@ -252,10 +252,9 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 LANGUAGE plpgsql AS $$
 DECLARE
-  anterior    record;
-  posteriores boolean;
-  delta       numeric;
-  promedio    numeric;
+  anterior record;
+  delta    numeric;
+  promedio numeric;
 BEGIN
   -- Las transferencias no entran al recorrido: mueven de depósito, no cambian
   -- la existencia ni el costo de la empresa. Es lo mismo que hace
@@ -264,30 +263,35 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  SELECT EXISTS (
-           SELECT 1 FROM stock_movements x
-            WHERE x.company_id = NEW.company_id
-              AND x.product_id = NEW.product_id
-              AND x.tipo NOT IN ('TRANSFERENCIA_ENTRADA', 'TRANSFERENCIA_SALIDA')
-              AND (x.fecha, x.created_at, x.id) > (NEW.fecha, NEW.created_at, NEW.id)
-         ) INTO posteriores;
-
-  -- Con fecha anterior a algo ya cargado, la cadena de atrás cambia: se rehace
-  -- entera. Es el caso raro y es el que cuesta.
-  IF posteriores THEN
-    PERFORM recalcular_ppp_de_producto(NEW.company_id, NEW.product_id);
-    RETURN NULL;
-  END IF;
-
   delta := CASE WHEN NEW.tipo IN ('ENTRADA', 'AJUSTE_POSITIVO')
                 THEN NEW.cantidad ELSE -NEW.cantidad END;
 
-  SELECT c.n, c.cantidad, c.costo_total, c.falta_costo
+  -- El último eslabón de la cadena de este producto, con su lugar en el orden
+  -- del libro. Una sola búsqueda contesta las dos preguntas: de dónde sigue la
+  -- cuenta, y si el movimiento nuevo va después o se mete en el medio.
+  --
+  -- La primera versión hacía además un `EXISTS` sobre `stock_movements`
+  -- buscando movimientos posteriores. Con la tabla casi vacía al planificar
+  -- —una sesión que arranca cargando— el plan quedaba en recorrido secuencial
+  -- y se repetía en cada alta: cargar cincuenta mil movimientos no terminaba
+  -- nunca. Lo encontró `npm run bench:vistas`.
+  SELECT c.n, c.cantidad, c.costo_total, c.falta_costo,
+         m.fecha, m.created_at, m.id
     INTO anterior
     FROM stock_movement_ppp c
+    JOIN stock_movements m ON m.id = c.movement_id AND m.company_id = c.company_id
    WHERE c.company_id = NEW.company_id AND c.product_id = NEW.product_id
    ORDER BY c.n DESC
    LIMIT 1;
+
+  -- Se metió antes del último: la cadena de atrás cambia y se rehace entera.
+  -- Es el caso raro, y es el único que cuesta.
+  IF anterior IS NOT NULL
+     AND (anterior.fecha, anterior.created_at, anterior.id)
+         > (NEW.fecha, NEW.created_at, NEW.id) THEN
+    PERFORM recalcular_ppp_de_producto(NEW.company_id, NEW.product_id);
+    RETURN NULL;
+  END IF;
 
   -- El primero del producto: no hay promedio previo, así que una salida
   -- inicial no se puede costear.

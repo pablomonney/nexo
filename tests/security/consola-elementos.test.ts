@@ -1,5 +1,5 @@
 /**
- * S-13 — la consola escribe en el elemento que cree.
+ * S-15 — la consola escribe en el elemento que cree.
  *
  * ## El defecto que este barrido encontró
  *
@@ -50,7 +50,7 @@ const CONSOLA = join(
  */
 const ARMADOS_AL_VUELO = new Map<string, string>([]);
 
-describe('S-13 — la consola escribe en el elemento que cree', () => {
+describe('S-15 — la consola escribe en el elemento que cree', () => {
   let html = '';
 
   beforeAll(async () => {

@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from './helpers/db.js';
 import { sufijoUnico } from './helpers/identificadores.js';
+import { diasDeLaBase, hoyDeLaBase } from './helpers/fechas.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 const PASSWORD = 'una-contrasena-suficientemente-larga';
@@ -57,13 +58,11 @@ suite('Sucursales', () => {
       ...(payload === undefined ? {} : { payload }),
     });
 
-  const hoy = new Date().toISOString().slice(0, 10);
-
-  const haceDias = (dias: number): string => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - dias);
-    return d.toISOString().slice(0, 10);
-  };
+  // Las dos salen de la base: acá se comparan contra vigencias que la base
+  // evalúa con , y después de las 21:00 el reloj del proceso
+  // —que cuenta en UTC— ya está en otro día.
+  let hoy: string;
+  const haceDias = (dias: number): Promise<string> => diasDeLaBase(db, -dias);
 
   /** Una venta desde un punto de venta y una fecha dados. */
   const venta = async (puntoVenta: number, neto: string, fecha: string): Promise<string> => {
@@ -108,6 +107,7 @@ suite('Sucursales', () => {
     await app.ready();
     db = await connect();
     stamp = await sufijoUnico(db);
+    hoy = await hoyDeLaBase(db);
 
     const { hash: argonHash } = await import('@node-rs/argon2');
     const fundadorId = (
@@ -221,7 +221,7 @@ suite('Sucursales', () => {
   });
 
   it('sin sucursales declaradas, la bandeja no reclama por los puntos de venta', async () => {
-    await venta(1, '10000.00', haceDias(40));
+    await venta(1, '10000.00', await haceDias(40));
 
     const items = (await pedir('GET', '/work-queue?limite=200'))
       .json<{ items: { rama: string }[] }>().items;
@@ -266,7 +266,7 @@ suite('Sucursales', () => {
   it('la atribución se deriva del punto de venta: no hay columna en la factura', async () => {
     expect(
       (await pedir('POST', `/branches/${norte}/points-of-sale`, {
-        puntoVenta: 1, vigenciaDesde: haceDias(60),
+        puntoVenta: 1, vigenciaDesde: await haceDias(60),
       })).statusCode,
     ).toBe(201);
 
@@ -298,7 +298,7 @@ suite('Sucursales', () => {
     await db.query(
       `UPDATE branch_points_of_sale SET vigencia_hasta = $3
         WHERE company_id = $1 AND branch_id = $2 AND punto_venta = 1`,
-      [empresa, norte, haceDias(1)],
+      [empresa, norte, await haceDias(1)],
     );
     expect(
       (await pedir('POST', `/branches/${sur}/points-of-sale`, {

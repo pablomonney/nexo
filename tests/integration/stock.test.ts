@@ -650,14 +650,15 @@ suite('Stock: depósitos, movimientos y existencias', () => {
       })
     ).json<{ id: string }>().id;
 
-    const ayer = new Date();
-    ayer.setUTCDate(ayer.getUTCDate() - 1);
+    // El vencimiento lo calcula la base y no el proceso: 'ayer' en UTC y 'ayer'
+    // para `current_date` son días distintos después de las 21:00, y este test
+    // se caía exactamente en esa franja.
     await db.query(
       `INSERT INTO stock_movements
          (company_id, product_id, warehouse_id, tipo, cantidad, fecha, origen_tipo,
           motivo, lote, fecha_vencimiento, created_by)
-       VALUES ($1,$2,$3,'AJUSTE_POSITIVO',12,'2026-03-03','AJUSTE','carga inicial','L-VENCIDO',$4,'test')`,
-      [empresa, perecedero, central, ayer.toISOString().slice(0, 10)],
+       VALUES ($1,$2,$3,'AJUSTE_POSITIVO',12,'2026-03-03','AJUSTE','carga inicial','L-VENCIDO', current_date - 1, 'test')`,
+      [empresa, perecedero, central],
     );
 
     const items = (await pedir('GET', '/work-queue?limite=200'))
