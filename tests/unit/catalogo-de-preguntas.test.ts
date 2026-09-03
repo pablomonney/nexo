@@ -86,7 +86,7 @@ describe('El catálogo de preguntas', () => {
     const todos = new Set([
       'analytics:read', 'allocation:read', 'party:read', 'stock:read',
       'analysis:read', 'report:read', 'product:read', 'check:read',
-      'project:read', 'commission:read', 'branch:read',
+      'project:read', 'commission:read', 'branch:read', 'cost_center:read',
     ]);
     expect(preguntasPara(todos)).toHaveLength(CATALOGO.length);
 

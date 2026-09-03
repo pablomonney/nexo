@@ -84,7 +84,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Notas aplicadas a su factura** | **TERMINADO** | **`notas-aplicadas` (10 tests)** |
 | **Solicitudes de compra** | **TERMINADO** | **`solicitudes-de-compra` (10 tests)** |
 | **Margen real por producto** | **TERMINADO** | **`valuacion` (23 tests)** |
-| **NEXO Intelligence: 18 preguntas con evidencia y narración verificada** | **TERMINADO** (falta el adaptador de un proveedor real) | **`intelligence` (14), `catalogo-de-preguntas` (11)** |
+| **NEXO Intelligence: 19 preguntas con evidencia y narración verificada** | **TERMINADO** (falta el adaptador de un proveedor real) | **`intelligence` (14), `catalogo-de-preguntas` (11)** |
 | **Escenarios guardados y variación del margen** | **TERMINADO** | **`valuacion` (29 tests)** |
 | **Radar de riesgos: seis frentes, con lo que no se puede medir** | **TERMINADO** | **`intelligence` (12 tests)** |
 | **Diario resumido del art. 327, verificado contra el subdiario emitido** | **TERMINADO** | **`diario-resumido` (5 tests)** |

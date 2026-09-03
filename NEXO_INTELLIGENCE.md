@@ -1,6 +1,6 @@
 # NEXO_INTELLIGENCE
 
-**Estado:** IMPLEMENTADO — capa determinística de dieciocho preguntas y camino
+**Estado:** IMPLEMENTADO — capa determinística de diecinueve preguntas y camino
 de narración cerrado y probado con el simulado. **BLOQUEADO** solo el adaptador
 de un proveedor real, que exige una credencial de un tercero.
 
@@ -43,7 +43,7 @@ número para la misma pregunta, sin forma de saber cuál está bien. Y §41 proh
 que la IA ejecute SQL arbitrario.
 
 Entonces el catálogo enumera lo que el sistema sabe contestar, y cada entrada
-dice con qué vista lo contesta. Hoy son dieciocho, y cubren todos los módulos
+dice con qué vista lo contesta. Hoy son diecinueve, y cubren todos los módulos
 del ERP que producen analítica:
 
 | Pregunta | De dónde sale |
@@ -64,6 +64,7 @@ del ERP que producen analítica:
 | ¿Qué está en riesgo? | `analysis_signals` |
 | ¿Qué me falta hacer? | `work_queue` |
 | ¿Cómo viene el mes? | `analytics_resumen` |
+| ¿Cómo va cada centro de costo? | `cost_center_results` |
 
 Un barrido corre **todas** en cada verify: sin él, una pregunta poco usada puede
 tener la consulta rota y nadie se entera hasta que alguien la hace.
@@ -175,7 +176,7 @@ sistema, derivar en vez de guardar, aplicada a la metadata.
 
 Las hojas del árbol son tablas. **Un número cuyo linaje no llega a ninguna tabla
 no viene de ningún lado**, y eso se puede comprobar en vez de suponerlo: un test
-recorre los dieciocho orígenes que el catálogo promete y falla si alguno dejó de
+recorre los orígenes que el catálogo promete y falla si alguno dejó de
 existir. Una respuesta que cita una vista renombrada dice de dónde sale un
 número y manda a un lugar que no está, que es peor que no decirlo.
 

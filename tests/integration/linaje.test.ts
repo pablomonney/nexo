@@ -56,6 +56,8 @@ const ORIGENES_DEL_CATALOGO = [
   'payment_order_status',
   'stock_valuation',
   'work_queue',
+  // Agregado con la pregunta por centro de costo (0088).
+  'cost_center_results',
 ];
 
 suite('S-20 — el linaje de un número', () => {

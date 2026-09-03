@@ -903,6 +903,64 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
       };
     },
   },
+
+  {
+    id: 'COMO_VA_CADA_CENTRO_DE_COSTO',
+    pregunta: '¿Cómo va cada centro de costo?',
+    nucleo: ['centro de costo', 'centros de costo', 'centro', 'centros'],
+    apoyo: ['como', 'va', 'van', 'resultado', 'cuanto'],
+    permisos: ['cost_center:read', 'report:read'],
+    admiteMes: true,
+    responder: async (tx, companyId, mes) => {
+      const desde = mes === null ? null : `${mes}-01`;
+      const r = await tx.query<{
+        centro_codigo: string;
+        centro_nombre: string;
+        ingresos: string;
+        gastos: string;
+        resultado: string;
+      }>(
+        `SELECT centro_codigo, centro_nombre,
+                sum(ingresos)::text  AS ingresos,
+                sum(gastos)::text    AS gastos,
+                sum(resultado)::text AS resultado
+           FROM cost_center_results
+          WHERE company_id = $1
+            AND ($2::date IS NULL OR mes = $2::date)
+          GROUP BY centro_codigo, centro_nombre
+          ORDER BY sum(resultado) DESC`,
+        [companyId, desde],
+      );
+
+      const sinCentro = r.rows.find((f) => f.centro_codigo === 'SIN_CENTRO');
+      const centros = r.rows.filter((f) => f.centro_codigo !== 'SIN_CENTRO');
+
+      return {
+        titulo: 'Resultado por centro de costo',
+        valor: String(centros.length),
+        unidad: 'centros con movimiento',
+        periodo: mes,
+        datos: centros.map((c) => ({
+          etiqueta: `${c.centro_codigo} — ${c.centro_nombre}`,
+          valor: `ingresos ${pesos(c.ingresos)} · gastos ${pesos(c.gastos)} · resultado ${pesos(c.resultado)}`,
+          origen: 'cost_center_results',
+        })),
+        origen: ['cost_center_results'],
+        metodologia:
+          'Movimientos APROBADOS de cuentas de resultado, agrupados por el centro que declara ' +
+          'cada línea del asiento. No distribuye gastos indirectos: eso exige un método de ' +
+          'costeo declarado, que no está relevado.',
+        // Lo que quedó sin atribuir no se reparte ni se esconde: es la
+        // diferencia entre la suma de los centros y el resultado de la empresa.
+        noIncluye:
+          sinCentro === undefined
+            ? null
+            : `Hay ${pesos(sinCentro.resultado)} de resultado en líneas sin centro de costo. ` +
+              'No se reparten entre los centros: prorratearlos sería inventar una asignación ' +
+              'que nadie declaró.',
+      };
+    },
+  },
 ];
 
 export interface Coincidencia {
