@@ -124,15 +124,22 @@ externo) · **REQUIERE_DECISION** (falta una definición contable o de producto)
 | Pieza | Estado |
 |---|---|
 | `packages/ai-engine` · clasificación, validación, confianza, aprendizaje | IMPLEMENTADO y **consumido** por `POST /documents/:id/classify` |
-| `packages/ai-engine` · **respondedor** (`answering.ts`, 281 líneas, con tests) | IMPLEMENTADO y **sin ningún consumidor** |
+| Capa determinística de preguntas (`/intelligence/*`) | IMPLEMENTADO — doce preguntas, cada una con su vista y su metodología |
+| `packages/ai-engine` · **respondedor** (`answering.ts`, 281 líneas, con tests) | IMPLEMENTADO; espera el adaptador de un proveedor real para redactar |
 | Tabla `ai_answers` + vista `ai_answer_metrics` (migración 0027) | IMPLEMENTADO y **sin ningún escritor** |
 | Proveedor de modelo | `none` por defecto; existe `mock`; **no hay adaptador real** |
 
-**Es el mismo patrón que este repositorio ya encontró cuatro veces**: la pieza
+**Era el mismo patrón que este repositorio ya encontró cuatro veces**: la pieza
 existe, está probada, la tabla la espera, y nadie recorre el camino entre las
-dos. El respondedor tiene el control que lo hace utilizable —cada numeral de la
-respuesta tiene que estar en el contexto o la respuesta se rechaza entera— y no
-hay endpoint que lo llame.
+dos.
+
+La mitad determinística de ese camino ya está cerrada: `/intelligence/preguntas`,
+`/intelligence/preguntar` y `/intelligence/panorama` contestan doce preguntas con
+el motor que ya calcula cada número, y cada respuesta trae su origen, su
+metodología y qué no incluye. Lo que sigue faltando es la redacción en prosa, y
+lo único que la separa es el adaptador de un proveedor real: el control que la
+hace utilizable —cada numeral de la respuesta tiene que estar en el contexto, o
+se rechaza entera— ya está escrito y probado.
 
 ## 5. Deuda técnica registrada
 
