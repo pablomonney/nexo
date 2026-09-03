@@ -31,7 +31,8 @@ import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { badRequest } from '../http/errors.js';
+import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
+import { simular } from '../intelligence/simulacion.js';
 
 const porcentaje = z.number().min(-100).max(1000);
 
@@ -618,168 +619,227 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
-        // Toda la aritmética ocurre en `numeric`, del lado de la base. Es la
-        // única forma de que el resultado sea reproducible: un `Number` de por
-        // medio convierte a IEEE 754 y el mismo escenario simulado dos veces
-        // puede diferir en el último centavo. `check:no-float` rechazó la
-        // primera versión de este bloque, que multiplicaba en JavaScript.
-        const base = await tx.query<{
-          neto: string;
-          comprobantes: string;
-          meses: string;
-          proyectado: string;
-          diferencia: string;
-          variacionTotalPct: string;
+        // La cuenta la hace `simular`, que también usa el escenario guardado:
+        // dos copias se desincronizan a la primera semana.
+        return simular(tx, tenant.companyId, {
+          meses: body.meses,
+          variacionDePrecio: body.variacionDePrecio,
+          variacionDeVolumen: body.variacionDeVolumen,
+          variacionDeCosto: body.variacionDeCosto,
+        });
+      },
+    );
+  });
+
+  /**
+   * Guarda un escenario: la pregunta, no la respuesta.
+   *
+   * «¿Qué pasaba si subía diez por ciento?» se pregunta en marzo y se vuelve a
+   * preguntar en junio, y la respuesta **tiene que ser distinta** — en el medio
+   * la empresa vendió. Por eso se guardan los parámetros y el resultado se
+   * recalcula cada vez que se mira.
+   */
+  app.post('/analysis/scenarios', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+
+    const body = z
+      .object({
+        nombre: z.string().min(3).max(120),
+        pregunta: z.string().min(5).max(500),
+        meses: z.number().int().min(1).max(36).default(12),
+        variacionDePrecio: porcentaje.default(0),
+        variacionDeVolumen: porcentaje.default(0),
+        variacionDeCosto: porcentaje.default(0),
+      })
+      .parse(request.body);
+
+    try {
+      const id = await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const r = await tx.query<{ id: string }>(
+            `INSERT INTO analysis_scenarios
+               (company_id, nombre, pregunta, meses, variacion_precio,
+                variacion_volumen, variacion_costo, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+             RETURNING id`,
+            [
+              tenant.companyId, body.nombre, body.pregunta, body.meses,
+              body.variacionDePrecio, body.variacionDeVolumen, body.variacionDeCosto,
+              `user:${auth.user.userId}`,
+            ],
+          );
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'GUARDAR_ESCENARIO',
+            objectType: 'analysis_scenarios',
+            objectId: r.rows[0]!.id,
+            newValue: { nombre: body.nombre, meses: body.meses },
+            motivo: 'Se guardan los parámetros. El resultado se recalcula al mirarlo.',
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return r.rows[0]!.id;
+        },
+      );
+      reply.code(201);
+      return { id };
+    } catch (error) {
+      throw traducirEscenario(error);
+    }
+  });
+
+  /**
+   * Los escenarios guardados, cada uno con su resultado de hoy.
+   *
+   * Es la comparación: los mismos parámetros de siempre contra las cifras de
+   * ahora. Un escenario cuyo resultado hubiera quedado congelado diría hoy lo
+   * que era cierto cuando se guardó, y nadie tendría cómo saberlo.
+   */
+  app.get('/analysis/scenarios', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({ incluirArchivados: z.enum(['si', 'no']).default('no') })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const guardados = await tx.query<{
+          id: string; nombre: string; pregunta: string; meses: number;
+          precio: string; volumen: string; costo: string; status: string;
+          motivo_archivo: string | null; created_by: string; created_at: Date;
         }>(
-          `WITH b AS (
-             SELECT coalesce(sum(neto), 0) AS neto,
-                    coalesce(sum(comprobantes), 0) AS comprobantes,
-                    count(*) AS meses
-               FROM analytics_operaciones_mensuales
-              WHERE company_id = $1 AND direccion = 'VENTAS'
-                AND mes >= date_trunc('month', current_date - make_interval(months => $2))::date
-           ), f AS (
-             SELECT (1 + $3::numeric / 100) * (1 + $4::numeric / 100) AS factor
-           )
-           SELECT round(b.neto, 2)::text AS neto,
-                  b.comprobantes::text AS comprobantes,
-                  b.meses::text AS meses,
-                  round(b.neto * f.factor, 2)::text AS proyectado,
-                  round(b.neto * f.factor - b.neto, 2)::text AS diferencia,
-                  round((f.factor - 1) * 100, 4)::text AS "variacionTotalPct"
-             FROM b CROSS JOIN f`,
-          [tenant.companyId, body.meses, body.variacionDePrecio, body.variacionDeVolumen],
+          `SELECT id, nombre, pregunta, meses,
+                  variacion_precio::text AS precio,
+                  variacion_volumen::text AS volumen,
+                  variacion_costo::text AS costo,
+                  status, motivo_archivo, created_by, created_at
+             FROM analysis_scenarios
+            WHERE company_id = $1 AND ($2::bool OR status = 'ACTIVO')
+            ORDER BY created_at DESC`,
+          [tenant.companyId, query.incluirArchivados === 'si'],
         );
 
-        const fila = base.rows[0]!;
-
-        /**
-         * El margen proyectado, cuando hay margen que proyectar.
-         *
-         * Toma **solo** los renglones con margen afirmable: los que tienen
-         * costo, sin salidas sin costear, y con lo facturado coincidiendo con
-         * lo que salió del depósito. Proyectar sobre una venta cuyo costo no se
-         * conoce daría un margen más alto que el real, que es el error más
-         * peligroso de los dos porque parece bueno.
-         *
-         * La venta que queda afuera se informa: sin eso, el margen proyectado
-         * parecería ser el de toda la empresa.
-         */
-        const margen = await tx.query<{
-          venta: string; costo: string; margen: string; margen_pct: string | null;
-          venta_proyectada: string; costo_proyectado: string;
-          margen_proyectado: string; margen_pct_proyectado: string | null;
-          venta_sin_afirmar: string; renglones: string;
-        }>(
-          `WITH b AS (
-             SELECT coalesce(sum(venta) FILTER (WHERE margen IS NOT NULL), 0) AS venta,
-                    coalesce(sum(costo) FILTER (WHERE margen IS NOT NULL), 0) AS costo,
-                    coalesce(sum(margen), 0) AS margen,
-                    coalesce(sum(venta) FILTER (WHERE margen IS NULL), 0) AS venta_sin_afirmar,
-                    count(*) FILTER (WHERE margen IS NOT NULL) AS renglones
-               FROM analytics_margen_por_producto
-              WHERE company_id = $1
-                AND mes >= date_trunc('month', current_date - make_interval(months => $2))::date
-           ), f AS (
-             SELECT (1 + $3::numeric / 100) * (1 + $4::numeric / 100) AS venta,
-                    (1 + $5::numeric / 100) * (1 + $4::numeric / 100) AS costo
-           )
-           SELECT round(b.venta, 2)::text                                  AS venta,
-                  round(b.costo, 2)::text                                  AS costo,
-                  round(b.margen, 2)::text                                 AS margen,
-                  round(b.margen * 100 / nullif(b.venta, 0), 2)::text      AS margen_pct,
-                  round(b.venta * f.venta, 2)::text                        AS venta_proyectada,
-                  round(b.costo * f.costo, 2)::text                        AS costo_proyectado,
-                  round(b.venta * f.venta - b.costo * f.costo, 2)::text    AS margen_proyectado,
-                  round((b.venta * f.venta - b.costo * f.costo) * 100
-                        / nullif(b.venta * f.venta, 0), 2)::text           AS margen_pct_proyectado,
-                  round(b.venta_sin_afirmar, 2)::text                      AS venta_sin_afirmar,
-                  b.renglones::text                                        AS renglones
-             FROM b CROSS JOIN f`,
-          [
-            tenant.companyId, body.meses,
-            body.variacionDePrecio, body.variacionDeVolumen, body.variacionDeCosto,
-          ],
-        );
-
-        const m = margen.rows[0]!;
-        const hayMargen = Number(m.renglones) > 0;
+        const escenarios = [];
+        for (const e of guardados.rows) {
+          const resultado = await simular(tx, tenant.companyId, {
+            meses: e.meses,
+            variacionDePrecio: Number(e.precio),
+            variacionDeVolumen: Number(e.volumen),
+            variacionDeCosto: Number(e.costo),
+          });
+          escenarios.push({
+            id: e.id,
+            nombre: e.nombre,
+            pregunta: e.pregunta,
+            estado: e.status,
+            motivoArchivo: e.motivo_archivo,
+            guardadoPor: e.created_by,
+            guardadoEn: e.created_at,
+            parametros: {
+              meses: e.meses,
+              variacionDePrecio: e.precio,
+              variacionDeVolumen: e.volumen,
+              variacionDeCosto: e.costo,
+            },
+            resultadoDeHoy: resultado,
+          });
+        }
 
         return {
-          base: {
-            netoFacturado: fila.neto,
-            comprobantes: Number(fila.comprobantes),
-            mesesConDatos: Number(fila.meses),
-            mesesPedidos: body.meses,
-          },
-          escenario: {
-            variacionDePrecio: body.variacionDePrecio,
-            variacionDeVolumen: body.variacionDeVolumen,
-            variacionDeCosto: body.variacionDeCosto,
-          },
-          resultado: {
-            netoProyectado: fila.proyectado,
-            diferencia: fila.diferencia,
-            // Decimal exacto y no número: 8% de precio con 5% de volumen da
-            // 13.4%, y un `Number` redondeado esconde justo el resto que
-            // permitiría rehacer la cuenta.
-            variacionTotalPct: fila.variacionTotalPct,
-          },
-          margen: hayMargen
-            ? {
-                base: {
-                  venta: m.venta, costo: m.costo, margen: m.margen, margenPct: m.margen_pct,
-                },
-                proyectado: {
-                  venta: m.venta_proyectada,
-                  costo: m.costo_proyectado,
-                  margen: m.margen_proyectado,
-                  margenPct: m.margen_pct_proyectado,
-                },
-                renglonesAfirmables: Number(m.renglones),
-                ventaSinMargenAfirmable: m.venta_sin_afirmar,
-                motivo: null,
-              }
-            : {
-                base: null,
-                proyectado: null,
-                renglonesAfirmables: 0,
-                ventaSinMargenAfirmable: m.venta_sin_afirmar,
-                motivo:
-                  'No hay ningún renglón con margen afirmable en el período: sin costo no hay ' +
-                  'margen que proyectar. Proyectar sobre la venta sola daría un margen más ' +
-                  'alto que el real.',
-              },
-          // Lo frágil, impreso. Una simulación cuyos supuestos no se ven es un
-          // número que engaña.
-          supuestos: [
-            'El volumen no reacciona al precio: no se modela elasticidad de demanda.',
-            'La composición de lo vendido no cambia.',
-            'Los meses sin datos cuentan como cero, no se interpolan.',
-            'Es una proyección aritmética sobre lo facturado, no un pronóstico.',
-            // El supuesto más fuerte del bloque de margen, y el que más fácil se
-            // olvida al leer el resultado.
-            'El costo se mueve con el volumen: se lo trata como enteramente variable. Una ' +
-              'empresa con costos fijos adentro del costo de ventas verá un margen proyectado ' +
-              'peor que el real cuando el volumen baja, y mejor cuando sube.',
-          ],
-          limitaciones: [
-            hayMargen
-              ? 'El margen se proyecta solo sobre los renglones donde se puede afirmar: ' +
-                m.venta_sin_afirmar +
-                ' de venta quedan afuera porque su costo no se conoce.'
-              : 'No hay margen que proyectar: ningún renglón del período tiene costo afirmable.',
-            'No considera inflación, estacionalidad ni capacidad instalada.',
-            'No se guarda: es una función de los parámetros y de la base informada acá, ' +
-              'que se puede rehacer con esos mismos números.',
-          ],
-          metodologia:
-            'Neto facturado de VENTAS de los últimos ' + body.meses + ' meses, multiplicado ' +
-            'por (1 + variación de precio) y por (1 + variación de volumen). El margen sale ' +
-            'de los renglones con margen afirmable del mismo período: la venta se mueve con ' +
-            'precio y volumen, el costo con costo y volumen.',
+          escenarios,
+          alcance:
+            'Lo guardado son los parámetros. El resultado se recalcula cada vez que se mira, ' +
+            'así que el mismo escenario contesta distinto en marzo y en junio — en el medio ' +
+            'la empresa vendió. Un resultado congelado diría hoy lo que era cierto entonces, ' +
+            'y quien lo lee no tendría cómo saberlo.',
         };
       },
     );
   });
+
+  /** Archiva un escenario, con motivo. No se borra: la comparación en la que aparecía queda. */
+  app.post('/analysis/scenarios/:escenarioId/archive', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const { escenarioId } = z
+      .object({ escenarioId: z.string().uuid() })
+      .parse(request.params);
+    const { motivo } = z.object({ motivo: z.string().min(5).max(500) }).parse(request.body);
+
+    try {
+      return await withCompany(
+        { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+        async (tx) => {
+          const r = await tx.query(
+            `UPDATE analysis_scenarios
+                SET status = 'ARCHIVADO', motivo_archivo = $3
+              WHERE id = $1 AND company_id = $2 AND status = 'ACTIVO'
+              RETURNING nombre`,
+            [escenarioId, tenant.companyId, motivo],
+          );
+          if (r.rowCount === 0) throw notFound('Escenario no encontrado o ya archivado');
+
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'ARCHIVAR_ESCENARIO',
+            objectType: 'analysis_scenarios',
+            objectId: escenarioId,
+            newValue: { estado: 'ARCHIVADO' },
+            motivo,
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+
+          return { estado: 'ARCHIVADO' };
+        },
+      );
+    } catch (error) {
+      throw traducirEscenario(error);
+    }
+  });
+}
+
+/** Del candado de la base al error del dominio. */
+function traducirEscenario(error: unknown): unknown {
+  const fallo = error as { code?: string; message?: string; constraint?: string };
+  const mensaje = fallo.message ?? '';
+
+  if (mensaje.includes('E_ESC_INMUTABLE')) {
+    return unprocessable(
+      'ESCENARIO_INMUTABLE',
+      'Los parámetros de un escenario no se editan: cambiarlos lo convertiría en otro con el ' +
+        'mismo nombre, y la comparación de la semana pasada pasaría a hablar de algo distinto ' +
+        'sin avisar. Archivalo y guardá uno nuevo.',
+    );
+  }
+  if (mensaje.includes('E_ESC_NO_SE_BORRA')) {
+    return unprocessable(
+      'ESCENARIO_NO_SE_BORRA',
+      'Un escenario se archiva con motivo, no se borra.',
+    );
+  }
+  if (fallo.code === '23514' && mensaje.includes('sc_algo_cambia')) {
+    return unprocessable(
+      'ESCENARIO_SIN_CAMBIOS',
+      'Un escenario sin ninguna variación es la base: no es un escenario.',
+    );
+  }
+  if (fallo.code === '23505') {
+    return conflict('Ya hay un escenario con ese nombre en esta empresa.');
+  }
+  return error;
 }

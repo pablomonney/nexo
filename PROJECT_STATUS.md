@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-02
-**Estado del árbol:** `verify` en verde — 111 archivos de test, 1830 tests,
-416 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 111 archivos de test, 1832 tests,
+420 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -132,6 +132,7 @@ Nada bloqueado a mitad de camino. Los bloques cerrados en esta evolución:
 | 0084 | El margen llega a la capa de decisión: vender bajo costo se señala sin umbral —es un hecho— y el margen mínimo se declara |
 | 0085 | La solicitud de compra: pedir no es comprar. Sin precios, y «convertida» exige citar una orden de compra de verdad (ADR-021) |
 | 0086 | El promedio se calcula al escribir: la valuación pasa de 25 s a 44 ms con 50.000 movimientos, y se sigue comprobando contra la derivación (ADR-022) |
+| 0087 | Escenarios guardados: se guarda la pregunta y el resultado se recalcula, así que no puede envejecer |
 
 El circuito comercial cierra contra el fiscal sin duplicarlo: al facturar, el
 pedido **se convierte** en una `tax_transaction` con sus renglones. Un pedido

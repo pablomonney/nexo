@@ -886,6 +886,113 @@ suite('Valuación de existencias', () => {
     expect(m.proyectado.margen).toBe('-700.00');
   });
 
+  it('un escenario guardado se recalcula: guarda la pregunta, no la respuesta', async () => {
+    const alta = await pedir('POST', '/analysis/scenarios', {
+      nombre: `Suba de precios ${stamp}`,
+      pregunta: '¿Qué pasa si subo diez por ciento?',
+      meses: 12,
+      variacionDePrecio: 10,
+    });
+    expect(alta.statusCode, alta.body).toBe(201);
+
+    const leer = async () => {
+      const r = await pedir('GET', '/analysis/scenarios');
+      expect(r.statusCode, r.body).toBe(200);
+      return r
+        .json<{
+          escenarios: {
+            nombre: string;
+            parametros: { variacionDePrecio: string };
+            resultadoDeHoy: { base: { netoFacturado: string } };
+          }[];
+        }>()
+        .escenarios.find((e) => e.nombre === `Suba de precios ${stamp}`)!;
+    };
+
+    const antes = await leer();
+    expect(antes.parametros.variacionDePrecio).toBe('10.00');
+    const baseAntes = antes.resultadoDeHoy.base.netoFacturado;
+
+    // Entra una venta nueva. Si el escenario hubiera guardado su resultado,
+    // seguiría diciendo lo de recién — y quien lo lea no tendría cómo saber que
+    // está mirando una foto vieja.
+    const forma =
+      `--X\r\nContent-Disposition: form-data; name="file"; filename="esc-${stamp}.xml"\r\n` +
+      `Content-Type: application/xml\r\n\r\n<c><n>4</n></c>\r\n--X--\r\n`;
+    const subida = await app.inject({
+      method: 'POST',
+      url: '/documents',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-company-id': empresa,
+        'content-type': 'multipart/form-data; boundary=X',
+      },
+      payload: forma,
+    });
+    expect(subida.statusCode, subida.body).toBe(201);
+    const op = await pedir(
+      'POST', `/documents/${subida.json<{ id: string }>().id}/tax-transaction`,
+      {
+        direction: 'VENTAS', cbteTipo: 1, puntoVenta: 1, numero: 9004, fecha: hoy,
+        cuitContraparte: `30${stamp}${cuitCheckDigit(`30${stamp}`)}`,
+        razonSocial: `Cliente val ${stamp}`, condicionIva: 'RESPONSABLE_INSCRIPTO',
+        neto: '1000.00', iva: '210.00', noGravado: '0', exento: '0', percepciones: '0',
+        total: '1210.00',
+      },
+    );
+    expect(op.statusCode, op.body).toBe(201);
+
+    const despues = await leer();
+    expect(despues.resultadoDeHoy.base.netoFacturado).not.toBe(baseAntes);
+    expect(Number(despues.resultadoDeHoy.base.netoFacturado))
+      .toBe(Number(baseAntes) + 1000);
+  });
+
+  it('los parámetros de un escenario no se editan, y no se borra', async () => {
+    const escenario = await db.query<{ id: string }>(
+      `SELECT id FROM analysis_scenarios WHERE company_id = $1 LIMIT 1`,
+      [empresa],
+    );
+    const id = escenario.rows[0]!.id;
+
+    // Editarlo lo convertiría en otro con el mismo nombre, y la comparación de
+    // la semana pasada pasaría a hablar de algo distinto sin avisar.
+    await expect(
+      db.query('UPDATE analysis_scenarios SET variacion_precio = 25 WHERE id = $1', [id]),
+    ).rejects.toThrow(/E_ESC_INMUTABLE/);
+
+    await expect(
+      db.query('DELETE FROM analysis_scenarios WHERE id = $1', [id]),
+    ).rejects.toThrow(/E_ESC_NO_SE_BORRA/);
+
+    // Archivarlo sí, con motivo.
+    const r = await pedir('POST', `/analysis/scenarios/${id}/archive`, {
+      motivo: 'La suba se aplicó: ya no es un escenario',
+    });
+    expect(r.statusCode, r.body).toBe(200);
+
+    const activos = await pedir('GET', '/analysis/scenarios');
+    expect(
+      activos.json<{ escenarios: { id: string }[] }>().escenarios.find((e) => e.id === id),
+    ).toBeUndefined();
+
+    const todos = await pedir('GET', '/analysis/scenarios?incluirArchivados=si');
+    expect(
+      todos.json<{ escenarios: { id: string; motivoArchivo: string }[] }>()
+        .escenarios.find((e) => e.id === id)!.motivoArchivo,
+    ).toContain('ya no es un escenario');
+  });
+
+  it('un escenario sin ninguna variación no se guarda', async () => {
+    const r = await pedir('POST', '/analysis/scenarios', {
+      nombre: `Sin cambios ${stamp}`,
+      pregunta: '¿Y si no cambio nada?',
+      meses: 12,
+    });
+    expect(r.statusCode, r.body).toBe(422);
+    expect(r.json<{ error: string }>().error).toBe('ESCENARIO_SIN_CAMBIOS');
+  });
+
   it('las vistas de valuación conservan security_invoker', async () => {
     const r = await db.query<{ relname: string; reloptions: string[] | null }>(
       `SELECT relname, reloptions FROM pg_class

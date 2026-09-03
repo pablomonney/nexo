@@ -2169,6 +2169,22 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     más alto que el real.</p>
   <button id="b-sen-simular">Simular</button>
   <div id="sen-s-msg"></div>
+
+  <h4>Guardar y comparar</h4>
+  <p class="ayuda">Se guardan <strong>los parámetros, no el resultado</strong>. La misma
+    pregunta contesta distinto en marzo y en junio, porque en el medio la empresa vendió — y
+    un resultado congelado diría hoy lo que era cierto entonces sin que nadie pueda saberlo.</p>
+  <div class="fila">
+    <div><label>Nombre</label><input id="sen-e-nombre" maxlength="80"></div>
+    <div style="flex:1"><label>Qué se está preguntando</label><input id="sen-e-pregunta" maxlength="200"></div>
+    <div><label>&nbsp;</label><button id="b-sen-guardar-esc" class="sec">Guardar este escenario</button></div>
+    <div><label>&nbsp;</label><button id="b-sen-escenarios" class="sec">Comparar los guardados</button></div>
+  </div>
+  <div id="sen-e-msg"></div>
+  <div class="tabla"><table id="t-sen-esc"><thead><tr>
+    <th>Escenario</th><th>Pregunta</th><th>Parámetros</th><th>Neto proyectado hoy</th>
+    <th>Margen proyectado hoy</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
   <dl class="kv" id="sen-s-resultado"></dl>
   <div id="sen-s-supuestos"></div>
 </section>
@@ -7372,6 +7388,58 @@ E('b-sen-simular').onclick = async () => {
     (r.datos.supuestos || []).map((s) => '<li>' + escapar(s) + '</li>').join('') +
     '</ul></div>';
 };
+
+E('b-sen-guardar-esc').onclick = async () => {
+  const r = await api('POST', '/analysis/scenarios', {
+    nombre: E('sen-e-nombre').value,
+    pregunta: E('sen-e-pregunta').value,
+    meses: Number(E('sen-s-meses').value),
+    variacionDePrecio: Number(E('sen-s-precio').value),
+    variacionDeVolumen: Number(E('sen-s-vol').value),
+    variacionDeCosto: Number(E('sen-s-costo').value),
+  });
+  decir('sen-e-msg', r, 'Escenario guardado. Se guardaron los parámetros: el resultado se ' +
+    'recalcula cada vez que se mira.');
+  if (r.ok) listarEscenarios();
+};
+
+E('b-sen-escenarios').onclick = () => listarEscenarios();
+
+async function listarEscenarios() {
+  const r = await api('GET', '/analysis/scenarios');
+  if (!r.ok) return decir('sen-e-msg', r);
+  E('sen-e-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-sen-esc').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const e of r.datos.escenarios || []) {
+    const m = e.resultadoDeHoy.margen;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(e.nombre) + '</td>' +
+      '<td>' + escapar(e.pregunta) + '</td>' +
+      '<td class="mono">' + escapar(e.parametros.meses) + ' m · precio ' +
+        escapar(e.parametros.variacionDePrecio) + ' % · volumen ' +
+        escapar(e.parametros.variacionDeVolumen) + ' % · costo ' +
+        escapar(e.parametros.variacionDeCosto) + ' %</td>' +
+      '<td class="mono">' + escapar(e.resultadoDeHoy.resultado.netoProyectado) + '</td>' +
+      // Igual que en el resto: «no se afirma» y «cero» no se dibujan igual.
+      '<td class="mono">' + (m.base === null
+        ? '<span class="p p-neu">no se proyecta</span>'
+        : escapar(m.proyectado.margen) + ' (' + escapar(m.proyectado.margenPct) + ' %)') + '</td>' +
+      '<td><span class="clic">archivar</span></td>';
+    tr.querySelector('.clic').onclick = async () => {
+      const motivo = E('sen-e-pregunta').value.trim();
+      const a = await api('POST', '/analysis/scenarios/' + e.id + '/archive', {
+        motivo: motivo.length >= 5 ? motivo : 'Ya no se está evaluando este escenario',
+      });
+      decir('sen-e-msg', a, 'Escenario archivado. No se borra: la comparación en la que ' +
+        'aparecía sigue teniendo sentido.');
+      if (a.ok) listarEscenarios();
+    };
+    cuerpo.appendChild(tr);
+  }
+}
 
 // ══ 5 · Asientos ══════════════════════════════════════════════════════════
 async function listarAsientos(cursor) {

@@ -127,6 +127,7 @@ const CHECKS = [
   ['purchase_requests', 'pr_rechazada_con_motivo', '0085: rechazar una solicitud exige decir por qué'],
   ['purchase_requests', 'pr_convertida_con_orden', '0085: convertida si y solo si hay orden de compra'],
   ['purchase_requests', 'pr_resuelta_firmada', '0085: quien resolvió una solicitud queda escrito'],
+  ['analysis_scenarios', 'sc_algo_cambia', '0087: un escenario sin variación es la base, no un escenario'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -221,6 +222,8 @@ const TRIGGERS = [
   ['tax_transaction_corrections', 'ttc_no_delete', '0083: una corrección se anula, no se borra'],
   ['purchase_requests', 'pr_transicion', '0085: convertir exige citar una orden de compra de verdad'],
   ['purchase_requests', 'pr_baja', '0085: una solicitud enviada se anula, no se borra'],
+  ['analysis_scenarios', 'sc_no_delete', '0087: un escenario se archiva, no se borra'],
+  ['analysis_scenarios', 'sc_inmutable', '0087: los parámetros de un escenario no se editan'],
   ['purchase_request_lines', 'prl_reglas', '0085: los renglones se tocan mientras es borrador'],
   ['stock_movements', 'sm_proyecta_ppp', '0086: el promedio se calcula al escribir el movimiento'],
   ['stock_movements', 'stock_movements_inmutable', '0054: el libro de stock solo crece'],
@@ -437,6 +440,8 @@ const RLS_FORZADO = [
   'tax_transaction_corrections',
   // Solicitudes de compra (0085): qué necesita comprar cada empresa.
   'purchase_requests', 'purchase_request_lines',
+  // Escenarios guardados (0087): qué preguntó cada empresa.
+  'analysis_scenarios',
   // La caché del promedio (0086): el costo de las existencias de cada empresa.
   'stock_movement_ppp',
 ];
