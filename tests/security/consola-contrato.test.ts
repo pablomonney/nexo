@@ -92,8 +92,14 @@ function leerArgumento(texto: string, desde: number): { expresion: string; fin: 
       else if (c === comilla) comilla = null;
       continue;
     }
-    if (c === "'" || c === '"' || c === '`') { comilla = c; continue; }
-    if (c === '(' || c === '[' || c === '{') { profundidad += 1; continue; }
+    if (c === "'" || c === '"' || c === '`') {
+      comilla = c;
+      continue;
+    }
+    if (c === '(' || c === '[' || c === '{') {
+      profundidad += 1;
+      continue;
+    }
     if (c === ')' || c === ']' || c === '}') {
       if (profundidad === 0) break;
       profundidad -= 1;
@@ -149,12 +155,10 @@ const SIN_PANTALLA = new Map<string, string>([
   ['health', 'Sondas de infraestructura, no vistas'],
   ['consola', 'Es la consola misma: se sirve, no se consume'],
   ['organizations', 'Administración del estudio, anterior a elegir empresa'],
-  ['predictions', 'La revisión de propuestas de IA todavía no tiene pantalla (ver bandeja)'],
   ['cost-centers', 'Se eligen dentro de cada asiento; no tienen ABM propio todavía'],
   // Lo lee un recolector, no una persona, y su token no puede estar en una
   // página que se sirve sin autenticación.
   ['metrics', 'Es para el recolector de métricas: exige un token que la consola no tiene'],
-
 ]);
 
 // Nota para quien venga después: acá hubo cuatro excepciones más —`vat`,
@@ -196,7 +200,9 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
         '^' +
           ruta.url
             .split('/')
-            .map((parte) => (parte.startsWith(':') ? '[^/]+' : parte.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+            .map((parte) =>
+              parte.startsWith(':') ? '[^/]+' : parte.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+            )
             .join('/') +
           '$',
       ),
@@ -204,10 +210,11 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
 
     const huerfanas: string[] = [];
     for (const llamada of llamadasDe(html)) {
-      const candidata = llamada.url.split('/').map((p) => (p === VARIABLE ? 'x' : p)).join('/');
-      const existe = patrones.some(
-        (p) => p.metodo === llamada.metodo && p.regex.test(candidata),
-      );
+      const candidata = llamada.url
+        .split('/')
+        .map((p) => (p === VARIABLE ? 'x' : p))
+        .join('/');
+      const existe = patrones.some((p) => p.metodo === llamada.metodo && p.regex.test(candidata));
       if (!existe) huerfanas.push(`${llamada.metodo} ${llamada.url.replace(/§/g, '<var>')}`);
     }
 
@@ -245,7 +252,9 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
   it('cada dominio de la API tiene puerta de entrada en la consola', () => {
     const inalcanzables: string[] = [];
     const conPuerta = new Set(
-      llamadasDe(html).map((l) => l.url.split('/')[1] ?? '').filter((s) => s !== ''),
+      llamadasDe(html)
+        .map((l) => l.url.split('/')[1] ?? '')
+        .filter((s) => s !== ''),
     );
 
     for (const ruta of app.routeTable) {
@@ -276,6 +285,32 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
   });
 
   /**
+   * La excepción que dejó de ser cierta.
+   *
+   * El control de arriba solo miraba si el dominio **existía**. Faltaba el otro
+   * caso, que es el que pasó con `predictions`: la excepción decía «todavía no
+   * tiene pantalla», alguien le hizo la pantalla, y la excepción quedó ahí
+   * eximiendo a un dominio que ya no lo necesitaba.
+   *
+   * Eso no rompe nada hoy, y ese es el problema: el día que la pantalla se
+   * borre, la lista va a decir que estaba previsto.
+   */
+  it('ninguna excepción cubre un dominio que ya tiene puerta', () => {
+    const conPuerta = new Set(
+      llamadasDe(html)
+        .map((l) => l.url.split('/')[1] ?? '')
+        .filter((s) => s !== ''),
+    );
+    const sobrantes = [...SIN_PANTALLA.keys()].filter((d) => conPuerta.has(d));
+
+    expect(
+      sobrantes,
+      'Estos dominios ya tienen pantalla y siguen declarados como si no:\n  ' +
+        sobrantes.join('\n  '),
+    ).toEqual([]);
+  });
+
+  /**
    * Un `id` mal escrito no rompe una pantalla: rompe la consola entera.
    *
    * Los manejadores se asignan a nivel de módulo —`E('b-stk').onclick = …`— así
@@ -288,8 +323,10 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
     const declarados = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]!));
     const usados = new Set([...html.matchAll(/E\('([^']+)'\)/g)].map((m) => m[1]!));
 
-    expect(usados.size, 'el barrido tiene que encontrar referencias: no pasa por vacío')
-      .toBeGreaterThan(100);
+    expect(
+      usados.size,
+      'el barrido tiene que encontrar referencias: no pasa por vacío',
+    ).toBeGreaterThan(100);
 
     const huerfanos = [...usados].filter((u) => !declarados.has(u));
     expect(
@@ -306,8 +343,10 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
     // la use tantas veces como pantallas de acción tiene.
     expect(html).toMatch(/const puede\s*=/);
     const usos = (html.match(/puede\('/g) ?? []).length;
-    expect(usos, 'la consola tiene que consultar permisos antes de ofrecer acciones')
-      .toBeGreaterThanOrEqual(10);
+    expect(
+      usos,
+      'la consola tiene que consultar permisos antes de ofrecer acciones',
+    ).toBeGreaterThanOrEqual(10);
   });
 
   it('distingue el origen IA del profesional con estilo propio', () => {

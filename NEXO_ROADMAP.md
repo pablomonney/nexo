@@ -52,6 +52,17 @@ la destraba. Qué pasó con cada una:
 comprobante se resuelve contra `arca_comprobante_types`, por fecha), y trece
 primitivas de `@aai/shared` que solo usaban sus propios tests.
 
+**Y el barrido siguiente, S-17 — tablas sin escritor.** El mismo defecto un piso
+más abajo: 140 tablas, 21 sin un solo `INSERT` fuera de los tests. Dos eran un
+hueco de producto y se cerraron —`bank_accounts` y `bank_statement_layouts`: el
+módulo de bancos entero empezaba en dos filas que solo se podían crear por SQL, y
+la consola pedía el `layoutId` escrito a mano sin que hubiera de dónde sacarlo—.
+Las diecinueve restantes quedaron declaradas con qué las destraba: siete son el
+Normative Update Service del §32, dos son deuda ya registrada (`alerts`,
+`audit_findings`), tres esperan una decisión de producto (`plan_limits`,
+`profit_centers`, `confidence_policies`) y el resto son estructuras que el diseño
+resolvió de otra forma —derivando en vez de guardar— y sobran en el esquema.
+
 **Efectos colaterales que valen por sí solos:** `vat_books.compras_sha256` y
 `ventas_sha256` existían desde la 0021 con su motivo escrito y **ningún INSERT**
 las llenaba; ahora las escribe la generación del libro, y el Diario resumido las

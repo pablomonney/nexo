@@ -124,6 +124,7 @@ métrica tiene umbral de bloqueo de release.
 > | `limite-de-intentos` | S-14 | Que el límite por origen cuente fallos y no consultas |
 > | `consola-elementos` | S-15 | Que la consola escriba en el elemento que cree: ningún id repetido, ninguno inexistente |
 > | `motores-con-consumidor` | S-16 | Que cada función exportada por un paquete la use algo que no sea el propio paquete ni sus tests |
+> | `tablas-con-escritor` | S-17 | Que cada tabla del esquema tenga al menos un `INSERT` fuera de los tests |
 
 #### S-16, y por qué un barrido también se equivoca
 
@@ -141,6 +142,25 @@ llamada real adentro de `${...}`.
 Las excepciones viven en el propio test, cada una con **qué la destraba**. Una
 excepción que sobrevive a su motivo la detecta el segundo test del archivo, que
 falla cuando una excepción ya no corresponde a ninguna exportación.
+
+#### S-17, el mismo defecto un piso más abajo
+
+S-16 mira las funciones exportadas; S-17 mira el esquema: **cada tabla tiene que
+tener al menos un `INSERT` fuera de los tests**. Sale de tres hallazgos que
+encontró una persona leyendo, no un control:
+
+1. `bank_reconciliations` sin ningún INSERT — se podían proponer coincidencias y
+   confirmarlas, y no había forma de crear la conciliación que las sostiene.
+2. `vat_books.compras_sha256` / `ventas_sha256`, con el motivo escrito desde la
+   0021 y ningún escritor.
+3. `bank_accounts` y `bank_statement_layouts`: el módulo de bancos entero
+   empezaba en dos filas que solo se podían crear por SQL.
+
+Cuenta como escritor un `INSERT` en `apps/`, `scripts/`, `packages/` o en una
+migración: una fila escrita por un trigger está tan escrita como una escrita por
+un handler. Las diecinueve tablas que hoy no lo tienen están declaradas con su
+motivo, y dos tests más impiden que la lista se vuelva decoración: uno falla si
+una excepción ya tiene escritor, otro si nombra una tabla que ya no existe.
 
 ### 2.8 Tests de regresión
 

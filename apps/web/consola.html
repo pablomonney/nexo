@@ -1683,12 +1683,69 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <th>Cuenta contable</th><th>Estado</th>
   </tr></thead><tbody></tbody></table></div>
 
+  <details class="grupo" id="ban-alta" hidden><summary>Dar de alta una cuenta bancaria</summary><div>
+    <p class="ayuda">La <strong>cuenta contable es obligatoria</strong>: conciliar es comparar
+      el extracto contra el Mayor de esa cuenta. Tiene que ser imputable, y una cuenta contable
+      representa a un solo banco — si no, habría dos actas sobre el mismo saldo.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Banco</label><input id="ban-a-nombre" maxlength="120"></div>
+      <div style="flex:1"><label>Cuenta contable</label><select id="ban-a-cuenta"></select></div>
+      <div><label>CBU (22 dígitos)</label><input id="ban-a-cbu" maxlength="22" inputmode="numeric"></div>
+      <div><label>Alias</label><input id="ban-a-alias" maxlength="60"></div>
+      <div><label>Número</label><input id="ban-a-numero" maxlength="40"></div>
+      <div><label>&nbsp;</label><button id="b-ban-alta">Dar de alta</button></div>
+    </div>
+    <div id="ban-alta-msg"></div>
+  </div></details>
+
+  <details class="grupo" id="ban-mapeos" hidden><summary>Mapeos de extracto</summary><div>
+    <p class="ayuda">Qué columna es cada cosa lo dice el archivo del banco, no el sistema:
+      adivinarlo produce un extracto interpretado al revés que igual «importa bien». Las
+      columnas se numeran desde <strong>0</strong>.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Cuenta bancaria</label><select id="ban-m-cuenta"></select></div>
+      <div style="flex:1"><label>Nombre del mapeo</label><input id="ban-m-nombre" maxlength="80"></div>
+      <div><label>Filas de encabezado</label><input id="ban-m-encabezado" type="number" min="0" value="1"></div>
+      <div><label>Separador</label><input id="ban-m-sep" maxlength="1" value=";"></div>
+    </div>
+    <div class="fila">
+      <div><label>Col. fecha</label><input id="ban-m-fecha" type="number" min="0" value="0"></div>
+      <div><label>Col. descripción</label><input id="ban-m-desc" type="number" min="0" value="1"></div>
+      <div><label>Col. referencia</label><input id="ban-m-ref" type="number" min="0" placeholder="—"></div>
+      <div><label>Col. saldo</label><input id="ban-m-saldo" type="number" min="0" placeholder="—"></div>
+      <div><label>Formato de fecha</label><select id="ban-m-ffecha">
+        <option>DD/MM/AAAA</option><option>DD-MM-AAAA</option><option>AAAA-MM-DD</option>
+        <option>DD/MM/AA</option></select></div>
+      <div><label>Formato de importe</label><select id="ban-m-fimporte">
+        <option>ES_AR</option><option>EN_US</option><option>PLANO</option></select></div>
+    </div>
+    <div class="fila">
+      <div><label>Esquema del banco</label><select id="ban-m-esquema">
+        <option value="COLUMNAS_SEPARADAS">Débito y crédito en columnas separadas</option>
+        <option value="COLUMNA_UNICA_CON_SIGNO">Una sola columna con signo</option>
+      </select></div>
+      <div><label>Col. débito</label><input id="ban-m-debito" type="number" min="0" value="2"></div>
+      <div><label>Col. crédito</label><input id="ban-m-credito" type="number" min="0" value="3"></div>
+      <div><label>Col. importe</label><input id="ban-m-importe" type="number" min="0" placeholder="—"></div>
+      <div><label>¿El negativo sale?</label><select id="ban-m-negativo">
+        <option value="si">sí, el negativo es plata que sale</option>
+        <option value="no">no: el negativo es plata que entra</option>
+      </select></div>
+      <div><label>&nbsp;</label><button id="b-ban-mapeo">Crear el mapeo</button></div>
+    </div>
+    <div id="ban-mapeo-msg"></div>
+    <div class="tabla"><table id="t-ban-mapeos"><thead><tr>
+      <th>Nombre</th><th>Banco</th><th>Esquema</th><th>Fecha</th><th>Importe</th>
+      <th>Cadena de saldos</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
+
   <details class="grupo" id="ban-importar" hidden><summary>Importar un extracto</summary><div>
     <p class="ayuda">El extracto entra con su mapeo de columnas y sus saldos declarados. Si no
       trae columna de saldo, la cadena <strong>no se puede verificar</strong> — y eso se
       informa, porque no es lo mismo que haberla verificado y que dé bien.</p>
     <div class="fila">
-      <div><label>Mapeo (layoutId)</label><input id="ban-layout" maxlength="60"></div>
+      <div style="flex:1"><label>Mapeo</label><select id="ban-layout"></select></div>
       <div><label>Saldo inicial</label><input id="ban-si" inputmode="decimal"></div>
       <div><label>Saldo final</label><input id="ban-sf" inputmode="decimal"></div>
     </div>
@@ -5688,6 +5745,21 @@ E('b-iva-sub').onclick = () => cargarSubdiario();
 // ══ 4b3 · Bancos ══════════════════════════════════════════════════════════
 async function listarBancos() {
   E('ban-importar').hidden = !puede('bank:import');
+  E('ban-mapeos').hidden = !puede('bank:import');
+  E('ban-alta').hidden = !puede('account:write');
+
+  // El plan de cuentas para el alta. Solo imputables: una cuenta de agrupación
+  // no lleva movimientos, así que no hay Mayor contra el cual conciliar — y el
+  // endpoint la rechaza. Ofrecerla sería enseñar un camino que termina en 400.
+  const cuentasContables = E('ban-a-cuenta');
+  cuentasContables.innerHTML = '';
+  for (const a of estado.cuentas) {
+    if (a.isPostable === false) continue;
+    const o = document.createElement('option');
+    o.value = a.code;
+    o.textContent = a.code + ' — ' + a.name;
+    cuentasContables.appendChild(o);
+  }
 
   const r = await api('GET', '/banks/accounts');
   if (!r.ok) return decir('ban-msg', r);
@@ -5699,6 +5771,7 @@ async function listarBancos() {
   const previo = sel.value;
   sel.innerHTML = '';
   E('ban-r-cuenta').innerHTML = '';
+  E('ban-m-cuenta').innerHTML = '';
   for (const c of r.datos.cuentas || []) {
     const tr = document.createElement('tr');
     tr.innerHTML =
@@ -5709,7 +5782,7 @@ async function listarBancos() {
       '<td class="mono">' + escapar(c.cuentaCodigo) + ' — ' + escapar(c.cuentaNombre) + '</td>' +
       '<td>' + pastilla(c.estado) + '</td>';
     cuerpo.appendChild(tr);
-    for (const destino of [sel, E('ban-r-cuenta')]) {
+    for (const destino of [sel, E('ban-r-cuenta'), E('ban-m-cuenta')]) {
       const o = document.createElement('option');
       o.value = c.id; o.textContent = c.banco + ' — ' + (c.alias || c.numero || c.cbu || '');
       destino.appendChild(o);
@@ -5717,10 +5790,98 @@ async function listarBancos() {
   }
   sel.value = previo;
 
+  await listarMapeos();
   await listarConciliaciones();
 }
 
+/**
+ * Los mapeos de extracto, en un desplegable.
+ *
+ * El campo de importación pedía el `layoutId` escrito a mano, y **no había de
+ * dónde sacarlo**: `bank_statement_layouts` no tenía alta. Un campo que pide un
+ * uuid sin decir de dónde viene casi siempre está tapando que no hay de dónde
+ * — es el mismo hallazgo que tuvo la conciliación.
+ */
+async function listarMapeos() {
+  const r = await api('GET', '/banks/statement-layouts');
+  if (!r.ok) return;
+
+  const sel = E('ban-layout');
+  const previo = sel.value;
+  sel.innerHTML = '<option value="">— sin mapeos cargados —</option>';
+
+  const cuerpo = E('t-ban-mapeos').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const m of r.datos.mapeos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(m.nombre) + '</td><td>' + escapar(m.banco) + '</td>' +
+      '<td class="mono">' + escapar(m.esquema) + '</td>' +
+      '<td class="mono">' + escapar(m.formatoFecha) + '</td>' +
+      '<td class="mono">' + escapar(m.formatoImporte) + '</td>' +
+      // Sin columna de saldo la cadena no se puede verificar, y eso no es lo
+      // mismo que haberla verificado y que dé bien.
+      '<td>' + (m.columnaSaldo === null
+        ? '<span class="p p-ojo">no verificable: sin columna de saldo</span>'
+        : '<span class="p p-bien">se verifica al importar</span>') + '</td>';
+    cuerpo.appendChild(tr);
+
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.nombre + ' · ' + m.banco;
+    sel.appendChild(o);
+  }
+  sel.value = previo;
+}
+
 E('b-ban').onclick = () => listarBancos();
+
+E('b-ban-alta').onclick = async () => {
+  const cuerpo = {
+    banco: E('ban-a-nombre').value,
+    cuentaCodigo: E('ban-a-cuenta').value,
+  };
+  // Los opcionales viajan solo si están: mandar cadena vacía sería declarar un
+  // CBU vacío en vez de no declarar CBU.
+  for (const par of [['ban-a-cbu', 'cbu'], ['ban-a-alias', 'alias'], ['ban-a-numero', 'numero']]) {
+    if (E(par[0]).value.trim()) cuerpo[par[1]] = E(par[0]).value.trim();
+  }
+
+  const r = await api('POST', '/banks/accounts', cuerpo);
+  decir('ban-alta-msg', r, 'Cuenta bancaria dada de alta');
+  if (r.ok) listarBancos();
+};
+
+E('b-ban-mapeo').onclick = async () => {
+  const num = (id) => (E(id).value === '' ? null : Number(E(id).value));
+  const esquema = E('ban-m-esquema').value;
+
+  const r = await api('POST', '/banks/statement-layouts', {
+    bankAccountId: E('ban-m-cuenta').value,
+    nombre: E('ban-m-nombre').value,
+    filasEncabezado: Number(E('ban-m-encabezado').value),
+    columnaFecha: Number(E('ban-m-fecha').value),
+    columnaDescripcion: Number(E('ban-m-desc').value),
+    columnaReferencia: num('ban-m-ref'),
+    columnaSaldo: num('ban-m-saldo'),
+    formatoFecha: E('ban-m-ffecha').value,
+    formatoImporte: E('ban-m-fimporte').value,
+    separador: E('ban-m-sep').value,
+    signo: esquema === 'COLUMNAS_SEPARADAS'
+      ? {
+          tipo: 'COLUMNAS_SEPARADAS',
+          columnaDebito: Number(E('ban-m-debito').value),
+          columnaCredito: Number(E('ban-m-credito').value),
+        }
+      : {
+          tipo: 'COLUMNA_UNICA_CON_SIGNO',
+          columnaImporte: Number(E('ban-m-importe').value),
+          negativoEsSalida: E('ban-m-negativo').value === 'si',
+        },
+  });
+  decir('ban-mapeo-msg', r, 'Mapeo creado');
+  if (r.ok) listarMapeos();
+};
 
 E('b-ban-importar').onclick = async () => {
   const r = await api('POST', '/banks/accounts/' + E('ban-cuenta').value + '/statements', {

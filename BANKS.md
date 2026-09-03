@@ -115,6 +115,34 @@ veces lo insinúa, y aun así:
 Lo que sí hace es decir de qué lado quedó y **dónde mirar**. La calificación la
 pone el contador, en `bank_reconciliation_differences.explicacion`.
 
+## 5b. Dónde empieza todo: la cuenta y su mapeo
+
+Hasta el 2026-09-03 el módulo entero empezaba en dos filas que **no se podían
+crear**: `bank_accounts` y `bank_statement_layouts` no tenían un solo `INSERT`
+productivo. Se creaban por SQL en los tests, la consola pedía el `layoutId`
+escrito a mano, y no había de dónde sacarlo. Es el mismo defecto que tuvo
+`bank_reconciliations`, un escalón más abajo, y lo encontró el barrido S-17.
+
+```
+POST /banks/accounts             { banco, cuentaCodigo, cbu?, alias?, numero? }
+POST /banks/statement-layouts    { bankAccountId, nombre, columnas…, signo }
+GET  /banks/statement-layouts
+```
+
+Dos cosas que el alta de la cuenta **no** deja pasar:
+
+- **Sin cuenta contable no hay cuenta bancaria**, y tiene que ser imputable.
+  Conciliar es comparar el extracto contra el Mayor de esa cuenta; una cuenta de
+  agrupación no lleva movimientos, así que no habría contra qué comparar.
+- **Una cuenta contable representa a un solo banco.** Dos cuentas bancarias
+  sobre la misma cuenta del Mayor serían dos actas de conciliación sobre el
+  mismo saldo.
+
+El mapeo se declara entero —qué columna es el débito, qué formato tiene la fecha,
+si el negativo es plata que sale— y el pedido usa un discriminado: pedir «una
+sola columna con signo» sin decir qué significa el signo no se puede ni escribir.
+Es el `CONSTRAINT layout_coherente` de la 0022, un paso antes.
+
 ## 6. La importación no adivina
 
 No hay un formato de extracto en Argentina. Cada banco exporta columnas

@@ -64,6 +64,266 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * Alta de una cuenta bancaria.
+   *
+   * **No existía.** `bank_accounts` no tenía un solo INSERT productivo: la
+   * cuenta se creaba por SQL en los tests y en ningún otro lado, así que el
+   * módulo de bancos entero —importar extractos, proponer conciliación,
+   * confirmarla— empezaba en una fila que nadie podía crear. Es el mismo defecto
+   * que tuvo `bank_reconciliations`, un escalón más abajo.
+   *
+   * Lo que sí decide este endpoint: **la cuenta contable es obligatoria**. Sin
+   * ella no hay nada que conciliar, porque conciliar es comparar el extracto
+   * contra el Mayor de esa cuenta. Y tiene que ser imputable: una cuenta de
+   * agrupación no lleva movimientos.
+   */
+  app.post('/banks/accounts', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    // El alta de una cuenta bancaria es configuración contable —fija contra qué
+    // cuenta del Mayor se concilia—, no una tarea de tesorería.
+    requirePermission(tenant, 'account:write');
+    const auth = requireAuth(request);
+    const actorId = `user:${auth.user.userId}`;
+    const body = z
+      .object({
+        banco: z.string().min(1).max(120),
+        /** Código de la cuenta contable que representa a este banco. */
+        cuentaCodigo: z.string().min(1).max(40),
+        // 22 dígitos. El dígito verificador NO se valida: el algoritmo sale de
+        // una comunicación del BCRA que no está archivada, y validar contra un
+        // algoritmo recordado de memoria es peor que no validar.
+        cbu: z
+          .string()
+          .regex(/^\d{22}$/, 'El CBU son 22 dígitos')
+          .nullable()
+          .default(null),
+        alias: z.string().min(1).max(60).nullable().default(null),
+        numero: z.string().min(1).max(40).nullable().default(null),
+        moneda: z.string().length(3).default(MONEDA),
+      })
+      .parse(request.body);
+
+    return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+      const cuenta = await tx.query<{ id: string; is_postable: boolean; name: string }>(
+        'SELECT id, is_postable, name FROM accounts WHERE company_id = $1 AND code = $2',
+        [tenant.companyId, body.cuentaCodigo],
+      );
+      if (cuenta.rowCount === 0) {
+        throw notFound(`No existe la cuenta ${body.cuentaCodigo} en el plan de esta empresa`);
+      }
+      if (!cuenta.rows[0]!.is_postable) {
+        throw badRequest(
+          `La cuenta ${body.cuentaCodigo} es de agrupación y no admite movimientos. ` +
+            'Una cuenta bancaria tiene que apuntar a una cuenta imputable: si no, no hay Mayor ' +
+            'contra el cual conciliar.',
+        );
+      }
+
+      const existente = await tx.query<{ id: string; bank_name: string }>(
+        'SELECT id, bank_name FROM bank_accounts WHERE company_id = $1 AND account_id = $2',
+        [tenant.companyId, cuenta.rows[0]!.id],
+      );
+      if (Number(existente.rowCount) > 0) {
+        // Dos cuentas bancarias sobre la misma cuenta contable serían dos actas
+        // de conciliación sobre el mismo saldo del Mayor.
+        throw conflict(
+          `La cuenta ${body.cuentaCodigo} ya está asignada a "${existente.rows[0]!.bank_name}". ` +
+            'Una cuenta contable representa a un solo banco.',
+          { bankAccountId: existente.rows[0]!.id },
+        );
+      }
+
+      const fila = await tx.query<{ id: string }>(
+        `INSERT INTO bank_accounts
+           (company_id, bank_name, cbu, alias, numero, currency, account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id`,
+        [
+          tenant.companyId,
+          body.banco,
+          body.cbu,
+          body.alias,
+          body.numero,
+          body.moneda,
+          cuenta.rows[0]!.id,
+        ],
+      );
+
+      await recordAudit(tx, tenant.companyId, {
+        actorType: 'USER',
+        actorId,
+        action: 'bank_account.create',
+        objectType: 'bank_accounts',
+        objectId: fila.rows[0]!.id,
+        ip: clientIp(request),
+        newValue: { banco: body.banco, cuenta: body.cuentaCodigo, cbu: body.cbu },
+      });
+
+      reply.code(201);
+      return {
+        id: fila.rows[0]!.id,
+        banco: body.banco,
+        cuentaCodigo: body.cuentaCodigo,
+        cuentaNombre: cuenta.rows[0]!.name,
+        alcance:
+          'La conciliación de esta cuenta compara el extracto contra el Mayor de ' +
+          `${body.cuentaCodigo}. Cambiar de cuenta contable es dar de alta otra cuenta bancaria.`,
+      };
+    });
+  });
+
+  /** Los mapeos de extracto de la empresa, para poder elegir uno al importar. */
+  app.get('/banks/statement-layouts', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'bank:read');
+    const auth = requireAuth(request);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const r = await tx.query(
+          `SELECT l.id, l.nombre, l.bank_account_id AS "cuentaId", b.bank_name AS "banco",
+                  l.filas_encabezado AS "filasEncabezado", l.esquema_signo AS "esquema",
+                  l.formato_fecha AS "formatoFecha", l.formato_importe AS "formatoImporte",
+                  l.separador, l.columna_saldo AS "columnaSaldo"
+             FROM bank_statement_layouts l
+             JOIN bank_accounts b ON b.id = l.bank_account_id
+            WHERE l.company_id = $1
+            ORDER BY b.bank_name, l.nombre`,
+          [tenant.companyId],
+        );
+        return { mapeos: r.rows };
+      },
+    );
+  });
+
+  /**
+   * Alta de un mapeo de extracto.
+   *
+   * El otro INSERT que faltaba: `POST /banks/accounts/:id/statements` pide un
+   * `layoutId` que **no se podía obtener** —la tabla no tenía escritor—, así que
+   * el camino de importación estaba cortado en su primer paso. Es el mismo
+   * hallazgo que la conciliación sin INSERT, repetido un escalón más arriba.
+   *
+   * El mapeo se declara entero acá y no se adivina al importar: qué columna es
+   * el débito y qué formato tiene la fecha lo sabe quien mira el archivo del
+   * banco, y adivinarlo produce un extracto interpretado al revés que igual
+   * "importa bien".
+   */
+  app.post('/banks/statement-layouts', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'bank:import');
+    const auth = requireAuth(request);
+    const actorId = `user:${auth.user.userId}`;
+
+    const columna = z.number().int().min(0).max(200);
+    const body = z
+      .object({
+        bankAccountId: z.string().uuid(),
+        nombre: z.string().min(1).max(80),
+        filasEncabezado: z.number().int().min(0).max(50).default(1),
+        columnaFecha: columna,
+        columnaFechaValor: columna.nullable().default(null),
+        columnaDescripcion: columna,
+        columnaReferencia: columna.nullable().default(null),
+        columnaSaldo: columna.nullable().default(null),
+        formatoFecha: z.enum(['DD/MM/AAAA', 'DD-MM-AAAA', 'AAAA-MM-DD', 'DD/MM/AA']),
+        formatoImporte: z.enum(['ES_AR', 'EN_US', 'PLANO']),
+        separador: z.string().length(1).default(';'),
+        // El esquema del banco: dos columnas, o una con signo. El constraint
+        // `layout_coherente` exige que las columnas del esquema elegido estén,
+        // y el discriminante hace que el pedido no se pueda escribir a medias.
+        signo: z.discriminatedUnion('tipo', [
+          z.object({
+            tipo: z.literal('COLUMNAS_SEPARADAS'),
+            columnaDebito: columna,
+            columnaCredito: columna,
+          }),
+          z.object({
+            tipo: z.literal('COLUMNA_UNICA_CON_SIGNO'),
+            columnaImporte: columna,
+            /** Si un importe negativo es plata que sale. Lo dice el banco, no el sistema. */
+            negativoEsSalida: z.boolean(),
+          }),
+        ]),
+      })
+      .parse(request.body);
+
+    return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+      const cuenta = await cargarCuenta(tx, tenant.companyId, body.bankAccountId);
+      if (cuenta === null) throw notFound('No existe esa cuenta bancaria en esta empresa');
+
+      // El discriminante se estrecha una vez y se usa por rama: `separadas` como
+      // booleano suelto no le dice nada al compilador sobre qué campos hay.
+      const signo = body.signo;
+      const columnas =
+        signo.tipo === 'COLUMNAS_SEPARADAS'
+          ? {
+              debito: signo.columnaDebito,
+              credito: signo.columnaCredito,
+              importe: null,
+              negativoEsSalida: null,
+            }
+          : {
+              debito: null,
+              credito: null,
+              importe: signo.columnaImporte,
+              negativoEsSalida: signo.negativoEsSalida,
+            };
+      const fila = await tx.query<{ id: string }>(
+        `INSERT INTO bank_statement_layouts
+           (company_id, bank_account_id, nombre, filas_encabezado, columna_fecha,
+            columna_fecha_valor, columna_descripcion, columna_referencia, columna_saldo,
+            esquema_signo, columna_debito, columna_credito, columna_importe, negativo_es_salida,
+            formato_fecha, formato_importe, separador, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+         RETURNING id`,
+        [
+          tenant.companyId,
+          body.bankAccountId,
+          body.nombre,
+          body.filasEncabezado,
+          body.columnaFecha,
+          body.columnaFechaValor,
+          body.columnaDescripcion,
+          body.columnaReferencia,
+          body.columnaSaldo,
+          signo.tipo,
+          columnas.debito,
+          columnas.credito,
+          columnas.importe,
+          columnas.negativoEsSalida,
+          body.formatoFecha,
+          body.formatoImporte,
+          body.separador,
+          actorId,
+        ],
+      );
+
+      await recordAudit(tx, tenant.companyId, {
+        actorType: 'USER',
+        actorId,
+        action: 'bank_statement_layout.create',
+        objectType: 'bank_statement_layouts',
+        objectId: fila.rows[0]!.id,
+        ip: clientIp(request),
+        newValue: { nombre: body.nombre, esquema: signo.tipo },
+      });
+
+      reply.code(201);
+      return {
+        id: fila.rows[0]!.id,
+        nombre: body.nombre,
+        alcance:
+          body.columnaSaldo === null
+            ? 'Sin columna de saldo, la cadena de saldos del extracto no se va a poder ' +
+              'verificar al importar. No es lo mismo que haberla verificado y que dé bien.'
+            : 'Con columna de saldo: cada importación va a verificar que la cadena cierre.',
+      };
+    });
+  });
+
+  /**
    * Importa un extracto ya subido como documento.
    *
    * El archivo tiene que estar archivado antes: un extracto importado cuyo

@@ -83,21 +83,34 @@ suite('Conciliación bancaria por HTTP', () => {
         [
           `fundador-conc-${stamp}@estudio.test`,
           'Fundador',
-          await argonHash(PASSWORD, { algorithm: 2, memoryCost: 19_456, timeCost: 2, parallelism: 1 }),
+          await argonHash(PASSWORD, {
+            algorithm: 2,
+            memoryCost: 19_456,
+            timeCost: 2,
+            parallelism: 1,
+          }),
         ],
       )
     ).rows[0]!.id;
 
     const organizationId = (
       await db.query<{ create_organization: string }>('SELECT create_organization($1,$2,$3)', [
-        `Estudio conc ${stamp}`, withCheckDigit(`30${stamp}`), fundadorId,
+        `Estudio conc ${stamp}`,
+        withCheckDigit(`30${stamp}`),
+        fundadorId,
       ])
     ).rows[0]!.create_organization;
 
     empresa = (
       await db.query<{ create_company: string }>('SELECT create_company($1,$2,$3,$4,$5,$6,$7,$8)', [
-        fundadorId, organizationId, `Empresa conc ${stamp}`, withCheckDigit(`27${stamp}`),
-        'SA', 'AR-C', 'IGJ', '12-31',
+        fundadorId,
+        organizationId,
+        `Empresa conc ${stamp}`,
+        withCheckDigit(`27${stamp}`),
+        'SA',
+        'AR-C',
+        'IGJ',
+        '12-31',
       ])
     ).rows[0]!.create_company;
 
@@ -129,7 +142,11 @@ suite('Conciliación bancaria por HTTP', () => {
     }
 
     const inicial = (
-      await app.inject({ method: 'POST', url: '/auth/login', payload: { email, password: PASSWORD } })
+      await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email, password: PASSWORD },
+      })
     ).json<{ token: string }>().token;
     const secret = (
       await app.inject({
@@ -145,7 +162,11 @@ suite('Conciliación bancaria por HTTP', () => {
       headers: { authorization: `Bearer ${inicial}` },
     });
     token = (
-      await app.inject({ method: 'POST', url: '/auth/login', payload: { email, password: PASSWORD } })
+      await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email, password: PASSWORD },
+      })
     ).json<{ token: string }>().token;
     await app.inject({
       method: 'POST',
@@ -155,9 +176,13 @@ suite('Conciliación bancaria por HTTP', () => {
     });
 
     expect(
-      (await pedir('POST', '/fiscal-years', {
-        code: `EJ${anio}-${stamp}`, startDate: `${anio}-01-01`, endDate: `${anio}-12-31`,
-      })).statusCode,
+      (
+        await pedir('POST', '/fiscal-years', {
+          code: `EJ${anio}-${stamp}`,
+          startDate: `${anio}-01-01`,
+          endDate: `${anio}-12-31`,
+        })
+      ).statusCode,
     ).toBe(201);
 
     for (const cuenta of [
@@ -168,21 +193,21 @@ suite('Conciliación bancaria por HTTP', () => {
       expect((await pedir('POST', '/accounts', cuenta)).statusCode, cuenta.code).toBe(201);
     }
 
-    // El alta de cuentas bancarias por HTTP no existe todavía, y este archivo
-    // prueba la conciliación y no el alta. Se insertan directo, igual que hace
-    // la suite de cheques.
-    for (const [codigo, destino] of [['1.1.03', 'cierra'], ['1.1.04', 'no cierra']] as const) {
-      const cuenta = await db.query<{ id: string }>(
-        'SELECT id FROM accounts WHERE company_id = $1 AND code = $2',
-        [empresa, codigo],
-      );
-      const banco = await db.query<{ id: string }>(
-        `INSERT INTO bank_accounts (company_id, account_id, bank_name)
-         VALUES ($1,$2,$3) RETURNING id`,
-        [empresa, cuenta.rows[0]!.id, `Banco ${destino} ${stamp}`],
-      );
-      if (codigo === '1.1.03') cuentaCierra = banco.rows[0]!.id;
-      else cuentaNoCierra = banco.rows[0]!.id;
+    // Las cuentas bancarias ahora se dan de alta por HTTP. Antes se insertaban
+    // por SQL acá y en la suite de cheques, porque `bank_accounts` no tenía un
+    // solo escritor productivo: el módulo entero empezaba en una fila que nadie
+    // podía crear.
+    for (const [codigo, destino] of [
+      ['1.1.03', 'cierra'],
+      ['1.1.04', 'no cierra'],
+    ] as const) {
+      const r = await pedir('POST', '/banks/accounts', {
+        banco: `Banco ${destino} ${stamp}`,
+        cuentaCodigo: codigo,
+      });
+      expect(r.statusCode, r.body).toBe(201);
+      if (codigo === '1.1.03') cuentaCierra = r.json<{ id: string }>().id;
+      else cuentaNoCierra = r.json<{ id: string }>().id;
     }
 
     // Un movimiento real en el Mayor: la cuenta que cierra queda en 1.000.
@@ -207,20 +232,19 @@ suite('Conciliación bancaria por HTTP', () => {
     // El extracto del banco, importado por el camino real. Hace falta para que
     // la verificación tenga contra qué rehacer la cuenta: sin el lado del banco
     // no se puede distinguir una partida conciliatoria de un extracto que nadie
-    // importó. El alta del mapeo todavía no existe por HTTP, así que va por SQL
-    // (igual que la cuenta bancaria, y por el mismo motivo).
-    const layoutId = (
-      await db.query<{ id: string }>(
-        `INSERT INTO bank_statement_layouts
-           (company_id, bank_account_id, nombre, filas_encabezado, columna_fecha,
-            columna_descripcion, esquema_signo, columna_debito, columna_credito,
-            formato_fecha, formato_importe, separador, created_by)
-         VALUES ($1, $2, 'Extracto de prueba', 1, 0, 1, 'COLUMNAS_SEPARADAS', 2, 3,
-                 'AAAA-MM-DD', 'ES_AR', ';', 'tester')
-         RETURNING id`,
-        [empresa, cuentaCierra],
-      )
-    ).rows[0]!.id;
+    // importó.
+    const mapeo = await pedir('POST', '/banks/statement-layouts', {
+      bankAccountId: cuentaCierra,
+      nombre: 'Extracto de prueba',
+      filasEncabezado: 1,
+      columnaFecha: 0,
+      columnaDescripcion: 1,
+      formatoFecha: 'AAAA-MM-DD',
+      formatoImporte: 'ES_AR',
+      signo: { tipo: 'COLUMNAS_SEPARADAS', columnaDebito: 2, columnaCredito: 3 },
+    });
+    expect(mapeo.statusCode, mapeo.body).toBe(201);
+    const layoutId = mapeo.json<{ id: string }>().id;
 
     const extracto = await pedir('POST', `/banks/accounts/${cuentaCierra}/statements`, {
       layoutId,
@@ -228,7 +252,10 @@ suite('Conciliación bancaria por HTTP', () => {
       hasta,
       saldoInicial: '0',
       saldoFinal: '1000.00',
-      contenido: ['Fecha;Descripcion;Debito;Credito', `${hasta};COBRANZA ACREDITADA;;1.000,00`].join('\n'),
+      contenido: [
+        'Fecha;Descripcion;Debito;Credito',
+        `${hasta};COBRANZA ACREDITADA;;1.000,00`,
+      ].join('\n'),
     });
     expect(extracto.statusCode, extracto.body).toBe(201);
     expect(extracto.json<{ movimientos: number }>().movimientos).toBe(1);
@@ -259,8 +286,12 @@ suite('Conciliación bancaria por HTTP', () => {
     const r = await pedir('GET', '/banks/reconciliations');
     expect(r.statusCode).toBe(200);
     const lista = r.json<{
-      conciliaciones: { status: string; saldoLibro: string; diferencia: string;
-                        coincidencias: number }[];
+      conciliaciones: {
+        status: string;
+        saldoLibro: string;
+        diferencia: string;
+        coincidencias: number;
+      }[];
     }>().conciliaciones;
 
     expect(lista).toHaveLength(1);
@@ -273,7 +304,9 @@ suite('Conciliación bancaria por HTTP', () => {
 
   it('no hay dos actas del mismo período para la misma cuenta', async () => {
     const r = await pedir('POST', `/banks/accounts/${cuentaCierra}/reconciliations`, {
-      desde, hasta, saldoExtracto: '1000.00',
+      desde,
+      hasta,
+      saldoExtracto: '1000.00',
     });
     // Dos actas confirmadas del mismo mes son dos verdades sobre el mismo saldo.
     expect(r.statusCode).toBe(409);
@@ -284,7 +317,9 @@ suite('Conciliación bancaria por HTTP', () => {
     // La otra cuenta no tiene movimientos: el libro está en cero y el extracto
     // dice 900. La diferencia es real y la base no deja confirmarla.
     const abierta = await pedir('POST', `/banks/accounts/${cuentaNoCierra}/reconciliations`, {
-      desde, hasta, saldoExtracto: '900.00',
+      desde,
+      hasta,
+      saldoExtracto: '900.00',
     });
     expect(abierta.statusCode, abierta.body).toBe(201);
     expect(abierta.json<{ saldoLibro: string }>().saldoLibro).toBe('0');
@@ -302,12 +337,14 @@ suite('Conciliación bancaria por HTTP', () => {
   });
 
   it('el acta que cierra se confirma, y queda firmada', async () => {
-    const lista = (await pedir('GET', '/banks/reconciliations?status=BORRADOR'))
-      .json<{ conciliaciones: { id: string; diferencia: string }[] }>().conciliaciones;
+    const lista = (await pedir('GET', '/banks/reconciliations?status=BORRADOR')).json<{
+      conciliaciones: { id: string; diferencia: string }[];
+    }>().conciliaciones;
     const cierra = lista.find((c) => Number(c.diferencia) === 0)!;
 
-    expect((await pedir('POST', `/banks/reconciliations/${cierra.id}/confirm`)).statusCode)
-      .toBe(200);
+    expect((await pedir('POST', `/banks/reconciliations/${cierra.id}/confirm`)).statusCode).toBe(
+      200,
+    );
 
     const fila = await db.query<{ status: string; confirmed_by: string | null }>(
       'SELECT status, confirmed_by FROM bank_reconciliations WHERE id = $1',
@@ -327,8 +364,9 @@ suite('Conciliación bancaria por HTTP', () => {
    * silencio: alcanza con un asiento nuevo en el período.
    */
   it('una conciliación confirmada se puede volver a verificar', async () => {
-    const confirmada = (await pedir('GET', '/banks/reconciliations?status=CONFIRMADA'))
-      .json<{ conciliaciones: { id: string }[] }>().conciliaciones[0];
+    const confirmada = (await pedir('GET', '/banks/reconciliations?status=CONFIRMADA')).json<{
+      conciliaciones: { id: string }[];
+    }>().conciliaciones[0];
     expect(confirmada, 'el test anterior dejó una confirmada').toBeDefined();
 
     const r = await pedir('GET', `/banks/reconciliations/${confirmada!.id}/verificar`);
@@ -362,8 +400,9 @@ suite('Conciliación bancaria por HTTP', () => {
       .conciliaciones.find((c) => c.cuentaId === cuentaNoCierra);
     expect(borrador, 'la cuenta que no cierra dejó un acta en borrador').toBeDefined();
 
-    const v = (await pedir('GET', `/banks/reconciliations/${borrador!.id}/verificar`))
-      .json<Verificacion>();
+    const v = (
+      await pedir('GET', `/banks/reconciliations/${borrador!.id}/verificar`)
+    ).json<Verificacion>();
 
     expect(v.verificable).toBe(false);
     // Ni `true` ni `false`: no hay con qué decirlo.
@@ -377,8 +416,9 @@ suite('Conciliación bancaria por HTTP', () => {
   it('un asiento nuevo en el período hace que la verificación no coincida', async () => {
     // Es el caso que la verificación existe para detectar: la conciliación
     // guardada sigue diciendo lo de ayer, y el libro ya no dice lo mismo.
-    const confirmada = (await pedir('GET', '/banks/reconciliations?status=CONFIRMADA'))
-      .json<{ conciliaciones: { id: string }[] }>().conciliaciones[0]!;
+    const confirmada = (await pedir('GET', '/banks/reconciliations?status=CONFIRMADA')).json<{
+      conciliaciones: { id: string }[];
+    }>().conciliaciones[0]!;
 
     const antes = await pedir('GET', `/banks/reconciliations/${confirmada.id}/verificar`);
     expect(antes.json<Verificacion>().coincide).toBe(true);
@@ -397,7 +437,8 @@ suite('Conciliación bancaria por HTTP', () => {
     });
     expect(alta.statusCode, alta.body).toBe(201);
     expect(
-      (await pedir('POST', `/journal-entries/${alta.json<{ id: string }>().id}/approve`)).statusCode,
+      (await pedir('POST', `/journal-entries/${alta.json<{ id: string }>().id}/approve`))
+        .statusCode,
     ).toBe(200);
 
     const despues = await pedir('GET', `/banks/reconciliations/${confirmada.id}/verificar`);
@@ -414,5 +455,103 @@ suite('Conciliación bancaria por HTTP', () => {
     });
     expect(r.statusCode).toBe(409);
     expect(r.json<{ message: string }>().message).toContain('período');
+  });
+
+  /**
+   * El alta que faltaba, y lo que se niega a aceptar.
+   *
+   * `bank_accounts` no tenía escritor productivo: todo el módulo empezaba en una
+   * fila que solo se podía crear por SQL. Lo encontró el barrido de tablas sin
+   * escritor, hermano de S-16.
+   */
+  describe('alta de cuentas bancarias', () => {
+    it('una cuenta bancaria necesita una cuenta contable que exista', async () => {
+      const r = await pedir('POST', '/banks/accounts', {
+        banco: 'Banco inventado',
+        cuentaCodigo: '9.9.99',
+      });
+      expect(r.statusCode).toBe(404);
+      expect(r.json<{ message: string }>().message).toContain('9.9.99');
+    });
+
+    it('dos bancos no comparten la misma cuenta del Mayor', async () => {
+      // Serían dos actas de conciliación sobre el mismo saldo.
+      const r = await pedir('POST', '/banks/accounts', {
+        banco: 'Otro banco',
+        cuentaCodigo: '1.1.03',
+      });
+      expect(r.statusCode).toBe(409);
+      expect(r.json<{ message: string }>().message).toContain('un solo banco');
+    });
+
+    it('el CBU es de 22 dígitos o no es un CBU', async () => {
+      const r = await pedir('POST', '/banks/accounts', {
+        banco: 'Banco con CBU corto',
+        cuentaCodigo: '4.1.01',
+        cbu: '123',
+      });
+      expect(r.statusCode).toBe(400);
+    });
+
+    it('la cuenta aparece en la lista con su cuenta contable al lado', async () => {
+      const cuentas = (await pedir('GET', '/banks/accounts')).json<{
+        cuentas: { id: string; banco: string; cuentaCodigo: string; estado: string }[];
+      }>().cuentas;
+
+      const nuestra = cuentas.find((c) => c.id === cuentaCierra);
+      expect(nuestra?.cuentaCodigo).toBe('1.1.03');
+      expect(nuestra?.estado).toBe('ACTIVA');
+    });
+  });
+
+  describe('alta de mapeos de extracto', () => {
+    it('el mapeo se lista con su banco, y sirve para importar', async () => {
+      const mapeos = (await pedir('GET', '/banks/statement-layouts')).json<{
+        mapeos: {
+          nombre: string;
+          cuentaId: string;
+          esquema: string;
+          columnaSaldo: number | null;
+        }[];
+      }>().mapeos;
+
+      const nuestro = mapeos.find((m) => m.nombre === 'Extracto de prueba');
+      expect(nuestro?.cuentaId).toBe(cuentaCierra);
+      expect(nuestro?.esquema).toBe('COLUMNAS_SEPARADAS');
+      // Sin columna de saldo declarada: la cadena no se va a poder verificar, y
+      // el alta lo dijo cuando se creó.
+      expect(nuestro?.columnaSaldo).toBeNull();
+    });
+
+    it('un mapeo de columna única exige decir qué significa el signo', async () => {
+      // El esquema es un discriminado: no se puede pedir COLUMNA_UNICA_CON_SIGNO
+      // sin decir si el negativo es plata que sale. El constraint
+      // `layout_coherente` lo exige en la base; acá el pedido ni se arma.
+      const r = await pedir('POST', '/banks/statement-layouts', {
+        bankAccountId: cuentaNoCierra,
+        nombre: 'Sin óptica',
+        columnaFecha: 0,
+        columnaDescripcion: 1,
+        formatoFecha: 'DD/MM/AAAA',
+        formatoImporte: 'ES_AR',
+        signo: { tipo: 'COLUMNA_UNICA_CON_SIGNO', columnaImporte: 2 },
+      });
+      expect(r.statusCode).toBe(400);
+    });
+
+    it('el mapeo con columna de saldo avisa que la cadena se va a verificar', async () => {
+      const r = await pedir('POST', '/banks/statement-layouts', {
+        bankAccountId: cuentaNoCierra,
+        nombre: 'Con saldo',
+        columnaFecha: 0,
+        columnaDescripcion: 1,
+        columnaSaldo: 4,
+        formatoFecha: 'DD/MM/AAAA',
+        formatoImporte: 'ES_AR',
+        signo: { tipo: 'COLUMNA_UNICA_CON_SIGNO', columnaImporte: 2, negativoEsSalida: true },
+      });
+      expect(r.statusCode, r.body).toBe(201);
+      expect(r.json<{ alcance: string }>().alcance).toContain('cadena cierre');
+    });
   });
 });
