@@ -58,6 +58,8 @@ const ORIGENES_DEL_CATALOGO = [
   'work_queue',
   // Agregado con la pregunta por centro de costo (0088).
   'cost_center_results',
+  // Y con «cuánto dura lo que hay» (0089).
+  'stock_coverage',
 ];
 
 suite('S-20 — el linaje de un número', () => {

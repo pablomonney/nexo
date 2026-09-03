@@ -1,6 +1,6 @@
 # NEXO_INTELLIGENCE
 
-**Estado:** IMPLEMENTADO — capa determinística de diecinueve preguntas y camino
+**Estado:** IMPLEMENTADO — capa determinística de veinte preguntas y camino
 de narración cerrado y probado con el simulado. **BLOQUEADO** solo el adaptador
 de un proveedor real, que exige una credencial de un tercero.
 
@@ -43,7 +43,7 @@ número para la misma pregunta, sin forma de saber cuál está bien. Y §41 proh
 que la IA ejecute SQL arbitrario.
 
 Entonces el catálogo enumera lo que el sistema sabe contestar, y cada entrada
-dice con qué vista lo contesta. Hoy son diecinueve, y cubren todos los módulos
+dice con qué vista lo contesta. Hoy son veinte, y cubren todos los módulos
 del ERP que producen analítica:
 
 | Pregunta | De dónde sale |
@@ -65,6 +65,7 @@ del ERP que producen analítica:
 | ¿Qué me falta hacer? | `work_queue` |
 | ¿Cómo viene el mes? | `analytics_resumen` |
 | ¿Cómo va cada centro de costo? | `cost_center_results` |
+| ¿Qué me va a faltar? | `stock_coverage` |
 
 Un barrido corre **todas** en cada verify: sin él, una pregunta poco usada puede
 tener la consulta rota y nadie se entera hasta que alguien la hace.

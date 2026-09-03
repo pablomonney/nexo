@@ -905,6 +905,73 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
   },
 
   {
+    id: 'QUE_ME_VA_A_FALTAR',
+    pregunta: '¿Qué me va a faltar?',
+    nucleo: ['faltar', 'agotar', 'agota', 'quiebre', 'reponer', 'alcanza'],
+    apoyo: ['stock', 'que', 'me', 'cuanto', 'dura'],
+    permisos: ['stock:read'],
+    admiteMes: false,
+    responder: async (tx, companyId) => {
+      const r = await tx.query<{
+        producto_codigo: string;
+        producto_nombre: string;
+        unidad: string;
+        existencia: string;
+        dias_de_cobertura: number | null;
+        alcanza_hasta: string | null;
+        salidas_en_la_ventana: number;
+        motivo_sin_cobertura: string | null;
+      }>(
+        `SELECT producto_codigo, producto_nombre, unidad, existencia::text,
+                dias_de_cobertura, alcanza_hasta::text, salidas_en_la_ventana,
+                motivo_sin_cobertura
+           FROM stock_coverage
+          WHERE company_id = $1
+          -- Los que no se pueden afirmar van al final: primero lo que se sabe.
+          ORDER BY dias_de_cobertura NULLS LAST
+          LIMIT 15`,
+        [companyId],
+      );
+
+      const conCobertura = r.rows.filter((f) => f.dias_de_cobertura !== null);
+      const sinCobertura = r.rows.filter((f) => f.dias_de_cobertura === null);
+
+      return {
+        titulo: 'Cuánto dura lo que hay',
+        // El valor es cuántos productos tienen cobertura afirmable, no cuántos
+        // «van a faltar»: eso último exigiría un umbral que nadie declaró.
+        valor: String(conCobertura.length),
+        unidad: 'productos con consumo medible',
+        periodo: null,
+        datos: conCobertura.map((f) => ({
+          etiqueta: `${f.producto_codigo} — ${f.producto_nombre}`,
+          valor:
+            `${f.existencia} ${f.unidad} · alcanza ~${String(f.dias_de_cobertura)} días ` +
+            `(hasta ${f.alcanza_hasta ?? '—'}), con ${String(f.salidas_en_la_ventana)} salida(s) ` +
+            'en la ventana',
+          origen: 'stock_coverage',
+        })),
+        origen: ['stock_coverage'],
+        metodologia:
+          'Existencia dividida por el consumo diario, y el consumo diario es lo que salió por ' +
+          'venta en los últimos 90 días dividido 90. Es una división al ritmo pasado, no un ' +
+          'pronóstico: la cantidad de salidas que produjo ese ritmo va al lado para poder ' +
+          'descartarlo. No dice cuánto comprar — eso depende del plazo del proveedor, de la ' +
+          'caja y de una política que el sistema no tiene.',
+        noIncluye:
+          sinCobertura.length === 0
+            ? null
+            : `${sinCobertura.length} producto(s) sin cobertura afirmable: ` +
+              `${sinCobertura
+                .map((f) => `${f.producto_codigo} (${f.motivo_sin_cobertura ?? 'sin dato'})`)
+                .join(', ')}. Sin salidas en la ventana no se puede afirmar cuánto dura: un ` +
+              'producto sin movimiento puede ser obsoleto o estacional, y el sistema no sabe ' +
+              'cuál.',
+      };
+    },
+  },
+
+  {
     id: 'COMO_VA_CADA_CENTRO_DE_COSTO',
     pregunta: '¿Cómo va cada centro de costo?',
     nucleo: ['centro de costo', 'centros de costo', 'centro', 'centros'],

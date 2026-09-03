@@ -538,6 +538,9 @@ const VISTAS_INVOKER = [
   // Señales deterministas (0058). Sin `security_invoker` un desvío de una
   // empresa aparecería en la bandeja de otra.
   'analysis_signals',
+  // Cuánto dura la existencia al ritmo de las salidas (0089). Sin
+  // `security_invoker` el consumo de una empresa alimentaría la cobertura de otra.
+  'stock_coverage',
   // Resultado por centro de costo (0088). Sin `security_invoker` el resultado
   // de un centro de una empresa aparecería en el reporte de otra.
   'cost_center_results',

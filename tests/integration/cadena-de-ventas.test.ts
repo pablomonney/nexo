@@ -625,7 +625,80 @@ suite('S-19 — la cadena de ventas completa', () => {
     expect(v.coincide, v.detalle).toBe(true);
   });
 
-  it('11 · desde el asiento se vuelve al comprobante y al presupuesto', async () => {
+  /**
+   * S-22 — el primer número que mira para adelante, y sigue siendo una división.
+   *
+   * La cadena dejó cuatro unidades vendidas y seis en el depósito. «Cuánto dura
+   * lo que hay» es existencia sobre consumo diario, y el consumo diario es lo
+   * que salió por venta en noventa días dividido noventa. No es un pronóstico:
+   * es el ritmo pasado, dicho con la cantidad de salidas que lo produjo para
+   * que quien mire pueda descartarlo.
+   */
+  it('12 · el sistema puede decir cuánto dura lo que hay, y qué no puede afirmar', async () => {
+    // Un segundo producto con existencia y sin una sola venta: es el caso que
+    // no se puede afirmar, y tiene que decirse distinto de «alcanza para
+    // siempre».
+    const dormido = (
+      await pedir('POST', '/products', {
+        codigo: `DORM-${stamp}`,
+        nombre: 'Producto que nadie compró',
+        impuesto: 'IVA',
+        cuentaVenta: '4.1.01',
+        llevaStock: true,
+      })
+    ).json<{ id: string }>().id;
+
+    expect(
+      (
+        await pedir('POST', '/stock-movements/ajuste', {
+          productoId: dormido,
+          depositoId: deposito,
+          fecha: hoy,
+          cantidad: '3',
+          sentido: 'POSITIVO',
+          motivo: 'Existencia inicial de un producto sin movimiento',
+          costoUnitario: '10.0000',
+        })
+      ).statusCode,
+    ).toBe(201);
+
+    const r = await pedir('POST', '/intelligence/preguntar', {
+      pregunta: '¿qué me va a faltar?',
+      preguntaId: 'QUE_ME_VA_A_FALTAR',
+    });
+    expect(r.statusCode, r.body).toBe(200);
+
+    const v = r.json<{
+      entendida: boolean;
+      respuesta: {
+        valor: string;
+        datos: { etiqueta: string; valor: string }[];
+        metodologia: string;
+        noIncluye: string | null;
+        origen: string[];
+      };
+    }>();
+    expect(v.entendida).toBe(true);
+
+    // Seis unidades al ritmo de cuatro cada noventa días: 135 días.
+    const nuestro = v.respuesta.datos.find((d) => d.etiqueta.startsWith(`PRD-${stamp}`));
+    expect(nuestro, 'el producto que se vendió tiene cobertura afirmable').toBeDefined();
+    expect(nuestro!.valor).toContain('~135 días');
+    expect(nuestro!.valor, 'la cantidad de salidas que produjo el ritmo va al lado').toContain(
+      '1 salida(s)',
+    );
+
+    // Y el que nadie compró no aparece con una cobertura inventada: aparece en
+    // lo que no se puede afirmar, con el motivo.
+    expect(v.respuesta.datos.map((d) => d.etiqueta)).not.toContain(
+      `DORM-${stamp} — Producto que nadie compró`,
+    );
+    expect(v.respuesta.noIncluye).toContain('SIN_CONSUMO_EN_LA_VENTANA');
+    expect(v.respuesta.metodologia).toContain('no un pronóstico');
+    expect(v.respuesta.origen).toContain('stock_coverage');
+  });
+
+  it('13 · desde el asiento se vuelve al comprobante y al presupuesto', async () => {
     // El asiento cita la operación fiscal…
     const asiento = await db.query<{ source_type: string; source_id: string }>(
       'SELECT source_type, source_id::text FROM journal_entries WHERE id = $1',

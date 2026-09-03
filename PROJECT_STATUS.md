@@ -1,8 +1,8 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-03
-**Estado del árbol:** `verify` en verde — 118 archivos de test, 1890 tests,
-421 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
+**Estado del árbol:** `verify` en verde — 118 archivos de test, 1891 tests,
+422 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
 Este archivo dice **dónde está el proyecto de verdad**, no dónde debería estar.
@@ -84,7 +84,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Notas aplicadas a su factura** | **TERMINADO** | **`notas-aplicadas` (10 tests)** |
 | **Solicitudes de compra** | **TERMINADO** | **`solicitudes-de-compra` (10 tests)** |
 | **Margen real por producto** | **TERMINADO** | **`valuacion` (23 tests)** |
-| **NEXO Intelligence: 19 preguntas con evidencia y narración verificada** | **TERMINADO** (falta el adaptador de un proveedor real) | **`intelligence` (14), `catalogo-de-preguntas` (11)** |
+| **NEXO Intelligence: 20 preguntas con evidencia y narración verificada** | **TERMINADO** (falta el adaptador de un proveedor real) | **`intelligence` (14), `catalogo-de-preguntas` (11)** |
 | **Escenarios guardados y variación del margen** | **TERMINADO** | **`valuacion` (29 tests)** |
 | **Radar de riesgos: seis frentes, con lo que no se puede medir** | **TERMINADO** | **`intelligence` (12 tests)** |
 | **Diario resumido del art. 327, verificado contra el subdiario emitido** | **TERMINADO** | **`diario-resumido` (5 tests)** |
