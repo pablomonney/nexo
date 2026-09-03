@@ -1,7 +1,7 @@
 # PROJECT_STATUS — NEXO
 
 **Última actualización:** 2026-09-03
-**Estado del árbol:** `verify` en verde — 117 archivos de test, 1883 tests,
+**Estado del árbol:** `verify` en verde — 118 archivos de test, 1888 tests,
 421 objetos estructurales presentes, 0 discrepancias en el Mayor, cadena de
 bitácora íntegra en las dos empresas de verificación.
 
@@ -93,6 +93,7 @@ dependencias están en [`docs/roadmap/ERP_EVOLUCION.md`](docs/roadmap/ERP_EVOLUC
 | **Alta de cuentas bancarias y mapeos de extracto** | **TERMINADO** | **`conciliacion-por-http` (16 tests)** |
 | **La cadena de ventas cruzando todas las capas** | **VERIFICADO** | **`cadena-de-ventas` (10 tests, de punta a punta por HTTP, hasta la conciliación bancaria)** |
 | **Resultado por centro de costo, con lo que falta asignar** | **TERMINADO** | **`proyectos` (12 tests)** |
+| **Linaje de un número: de la respuesta a las tablas** | **TERMINADO** | **`linaje` (5 tests)** |
 
 ## 3. En curso
 

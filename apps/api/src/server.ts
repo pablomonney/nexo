@@ -55,6 +55,7 @@ import { solicitudDeCompraRoutes } from './routes/solicitudes-de-compra.js';
 import { ordenDePagoRoutes } from './routes/ordenes-de-pago.js';
 import { valuacionRoutes } from './routes/valuacion.js';
 import { exportacionRoutes } from './routes/exportaciones.js';
+import { linajeRoutes } from './routes/linaje.js';
 
 /**
  * Las rutas donde un intento cuesta poco y probar mil sale gratis.
@@ -267,6 +268,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(noteRoutes);
   await app.register(workQueueRoutes);
   await app.register(auditRoutes);
+  await app.register(linajeRoutes);
 
   return app;
 }

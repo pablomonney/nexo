@@ -155,6 +155,33 @@ no se puede medir) y la explicación causal de la variación del margen
 (`GET /analysis/margen/variacion`, precio, costo y volumen que suman
 exactamente). Ninguna necesitó un modelo — ver `NEXO_DECISION_ENGINE.md`.
 
+## 5b. De dónde sale un número, hasta las tablas
+
+Cada respuesta trae su `origen`: la vista que la contestó. Eso alcanza para un
+escalón. `GET /lineage/:relacion` contesta la cadena entera:
+
+```
+margen
+  → analytics_margen_por_producto
+      → stock_valuation, tax_transaction_lines, …
+          → stock_movements, tax_transactions, journal_entry_lines
+```
+
+**El linaje no está declarado en ningún lado: se lee del catálogo de
+PostgreSQL** (`pg_rewrite`, `pg_depend`), que es cómo el motor ejecuta la vista.
+Un mapa escrito a mano sería más lindo de leer y habría envejecido con la
+primera vista que alguien cambiara — la misma regla que gobierna el resto del
+sistema, derivar en vez de guardar, aplicada a la metadata.
+
+Las hojas del árbol son tablas. **Un número cuyo linaje no llega a ninguna tabla
+no viene de ningún lado**, y eso se puede comprobar en vez de suponerlo: un test
+recorre los dieciocho orígenes que el catálogo promete y falla si alguno dejó de
+existir. Una respuesta que cita una vista renombrada dice de dónde sale un
+número y manda a un lugar que no está, que es peor que no decirlo.
+
+En la consola, cada origen de una respuesta es un enlace: se toca y muestra de
+qué está hecho. Es el paso «¿por qué? → datos» sin salir de la respuesta.
+
 ## 6. Lo que esta capa no hará nunca
 
 - Escribir en el Mayor. La autoridad sigue siendo `POST /journal-entries` con

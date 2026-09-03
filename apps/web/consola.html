@@ -247,7 +247,9 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <p class="ayuda"><strong>Cómo se calcula:</strong> <span id="intel-metodologia"></span></p>
     <p class="ayuda" id="intel-no-incluye-caja" hidden><strong>Qué no incluye:</strong>
       <span id="intel-no-incluye"></span></p>
-    <p class="ayuda"><strong>De dónde sale:</strong> <span id="intel-origen" class="mono"></span></p>
+    <p class="ayuda"><strong>De dónde sale:</strong> <span id="intel-origen" class="mono"></span>
+      — tocá una vista para ver de qué está hecha, hasta las tablas.</p>
+    <div id="intel-linaje"></div>
   </div>
 
   <div id="intel-opciones" hidden class="grupo">
@@ -2990,7 +2992,37 @@ function mostrarRespuesta(d) {
   E('intel-metodologia').textContent = d.respuesta.metodologia;
   E('intel-no-incluye-caja').hidden = !d.respuesta.noIncluye;
   E('intel-no-incluye').textContent = d.respuesta.noIncluye || '';
-  E('intel-origen').textContent = (d.respuesta.origen || []).join(', ');
+  // El origen deja de ser un texto: cada vista se puede abrir y contar de qué
+  // está hecha, hasta las tablas donde se escribió el hecho. Es el paso
+  // «¿por qué? → datos» sin salir de la respuesta.
+  E('intel-origen').innerHTML = (d.respuesta.origen || [])
+    .map((o) => '<span class="clic mono" data-origen="' + escapar(o) + '">' + escapar(o) + '</span>')
+    .join(' · ');
+  for (const enlace of E('intel-origen').querySelectorAll('.clic')) {
+    enlace.onclick = () => verLinaje(enlace.dataset.origen);
+  }
+  limpiar('intel-linaje');
+}
+
+/** De qué está hecha la vista que contestó, hasta las tablas. */
+async function verLinaje(relacion) {
+  const r = await api('GET', '/lineage/' + relacion);
+  if (!r.ok) return decir('intel-linaje', r);
+
+  const v = r.datos;
+  E('intel-linaje').innerHTML =
+    '<div class="aviso"><strong>' + escapar(v.relacion) + '</strong> — ' +
+    escapar(v.tipo.toLowerCase()) + '</div>' +
+    (v.vistas.length === 0
+      ? ''
+      : '<p class="ayuda">Se apoya en: ' +
+        v.vistas.map((x) => '<span class="mono">' + escapar(x.nombre) + '</span>').join(' · ') +
+        '</p>') +
+    // Las hojas son donde el hecho se escribió: un número cuyo linaje no llega a
+    // ninguna tabla no viene de ningún lado.
+    '<p class="ayuda">Los hechos se escriben en: ' +
+    v.tablas.map((t) => '<span class="mono">' + escapar(t) + '</span>').join(' · ') +
+    '</p><p class="ayuda">' + escapar(v.alcance) + '</p>';
 }
 
 async function preguntarPorId(preguntaId) {
