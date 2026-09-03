@@ -30,5 +30,6 @@ Los verificadores informan **cuatro estados y no dos**: `VERIFIED`, `VIOLATED`,
 `NOT_EXERCISED` y `VACUO_PERMITIDO`. «No encontré nada» y «no miré» no se ven
 igual — mezclarlos es cómo un control deja de controlar sin que nadie se entere.
 
-Los invariantes son A-1 a A-14 y las puertas de seguridad S-1 a S-12. Corren en
+Los invariantes son A-1 a A-14 y las puertas de seguridad S-1 a S-15 —con la
+salvedad de numeración que explica `docs/TESTING_STRATEGY.md` §2.7—. Corren en
 `npm run verify` y en CI, y un test comprueba que esas dos listas no se separen.

@@ -102,6 +102,28 @@ métrica tiene umbral de bloqueo de release.
 | S-13 | Un código de recuperación de MFA sirve una sola vez |
 | S-14 | La cuenta se bloquea tras N intentos fallidos, y con la cuenta bloqueada la contraseña correcta tampoco entra |
 
+> ⚠ **Estos números y los de `tests/security/` son dos series distintas.**
+> Esta tabla enumera **requisitos**, escritos antes de que existieran los tests.
+> Los archivos de `tests/security/` se rotularon después con su propia
+> numeración, y desde S-11 las dos dejaron de coincidir: acá S-12 es «un rol que
+> exige MFA no entra sin configurarlo» y en los archivos S-12 es el barrido de la
+> consola. No se renumeró nada porque las etiquetas de los archivos ya están
+> citadas en una docena de lugares, y cambiarlas sin cambiar cada cita dejaría
+> referencias apuntando a otra cosa — que es peor que la colisión.
+>
+> Qué hay en los archivos, con su rótulo:
+>
+> | Archivo | Rótulo propio | Qué defiende |
+> |---|---|---|
+> | `aislamiento-multiempresa`, `endpoint-isolation` | S-1, S-9 | Aislamiento entre empresas, endpoint por endpoint |
+> | `adr-001` | S-8 | El lint de arquitectura falla de verdad |
+> | `auth` | S-2, S-10 | Permisos de solo lectura y no enumeración de cuentas |
+> | `coherencia-fase4` | S-11 | Que ningún estado afirme lo que los hechos niegan |
+> | `consola-contrato` | S-12 | Que la consola solo llame a rutas que existen, y que cada dominio tenga puerta |
+> | `metricas` | S-13 | Que `/metrics` no exista sin su token |
+> | `limite-de-intentos` | S-14 | Que el límite por origen cuente fallos y no consultas |
+> | `consola-elementos` | S-15 | Que la consola escriba en el elemento que cree: ningún id repetido, ninguno inexistente |
+
 ### 2.8 Tests de regresión
 
 Todo bug reproducido primero como test que falla. Los bugs contables entran además al corpus

@@ -40,7 +40,8 @@ Están escritas arriba del archivo y son las que dirimen cada decisión de dise�
 
 | Dónde | Qué comprueba |
 |---|---|
-| `tests/security/consola-contrato.ts` (S-12) | Que cada llamada resuelva contra una ruta registrada, que **cada dominio de la API tenga puerta** —la dirección inversa, que encontró veintisiete endpoints inalcanzables—, que ningún `E(id)` quede sin elemento, y que ninguna escritura se ofrezca sin pedir su permiso. |
+| `tests/security/consola-contrato.ts` (S-12) | Que cada llamada resuelva contra una ruta registrada y que **cada dominio de la API tenga puerta** — la dirección inversa, que encontró veintisiete endpoints inalcanzables. |
+| `tests/security/consola-elementos.ts` (S-15) | Que ningún `id` esté dos veces —la pantalla que aparece después escribiría en la de antes, en silencio— y que ningún `E(id)` quede sin elemento. |
 | `tests/security/mvp-fronteras.ts` | Que no lleve datos, que no hable con la base y que su CSP no admita recursos externos. |
 | `tests/integration/navegacion-e2e.ts` | Que las pantallas funcionen contra datos reales. |
 
