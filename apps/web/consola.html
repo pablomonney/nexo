@@ -2305,9 +2305,19 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   </div>
   <div id="sen-e-msg"></div>
   <div class="tabla"><table id="t-sen-esc"><thead><tr>
-    <th>Escenario</th><th>Pregunta</th><th>Parámetros</th><th>Neto proyectado hoy</th>
+    <th></th><th>Escenario</th><th>Pregunta</th><th>Parámetros</th><th>Neto proyectado hoy</th>
     <th>Margen proyectado hoy</th><th></th>
   </tr></thead><tbody></tbody></table></div>
+  <p class="ayuda">Marcá dos a cinco y compará. La comparación <strong>no dice cuál
+    conviene</strong>: elegir exige un objetivo declarado por la empresa —maximizar margen,
+    sostener volumen, no perder clientes— y el sistema no lo tiene.</p>
+  <button id="b-sen-comparar" class="sec">Comparar los marcados</button>
+  <div id="sen-c-msg"></div>
+  <div class="tabla"><table id="t-sen-comp"><thead><tr>
+    <th>Escenario</th><th>Base</th><th>Neto proyectado</th><th>Contra la base</th>
+    <th>Margen proyectado</th>
+  </tr></thead><tbody></tbody></table></div>
+  <dl class="kv" id="sen-c-deltas"></dl>
   <dl class="kv" id="sen-s-resultado"></dl>
   <div id="sen-s-supuestos"></div>
 </section>
@@ -7967,6 +7977,7 @@ async function listarEscenarios() {
     const m = e.resultadoDeHoy.margen;
     const tr = document.createElement('tr');
     tr.innerHTML =
+      '<td><input type="checkbox" class="marca" value="' + escapar(e.id) + '"></td>' +
       '<td>' + escapar(e.nombre) + '</td>' +
       '<td>' + escapar(e.pregunta) + '</td>' +
       '<td class="mono">' + escapar(e.parametros.meses) + ' m · precio ' +
@@ -7991,6 +8002,54 @@ async function listarEscenarios() {
     cuerpo.appendChild(tr);
   }
 }
+
+E('b-sen-comparar').onclick = async () => {
+  const ids = [...E('t-sen-esc').querySelectorAll('.marca:checked')].map((c) => c.value);
+  if (ids.length < 2) {
+    E('sen-c-msg').innerHTML = '<div class="aviso error">Marcá al menos dos. ' +
+      'Un escenario solo no es una comparación.</div>';
+    return;
+  }
+
+  const r = await api('GET', '/analysis/scenarios/compare?ids=' + ids.join(','));
+  if (!r.ok) return decir('sen-c-msg', r);
+
+  const cuerpo = E('t-sen-comp').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const e of r.datos.escenarios) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(e.nombre) + '</td>' +
+      '<td class="mono">' + escapar(e.base) + '</td>' +
+      '<td class="mono">' + escapar(e.netoProyectado) + '</td>' +
+      '<td class="mono">' + escapar(e.diferenciaContraLaBase) + '</td>' +
+      // Un margen que no se puede afirmar dice por qué, en vez de un cero que
+      // se leería como «no gana nada».
+      '<td class="mono">' + (e.margenProyectado === null
+        ? '<span class="p p-neu">' + escapar(e.motivoSinMargen || 'no se proyecta') + '</span>'
+        : escapar(e.margenProyectado)) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  // Cuando las ventanas no coinciden no hay deltas que mostrar: el motivo ocupa
+  // ese lugar, para que el vacío no se lea como «no hay diferencia».
+  const kv = E('sen-c-deltas');
+  kv.innerHTML = '';
+  if (!r.datos.baseComparable) {
+    E('sen-c-msg').innerHTML = '<div class="aviso">' +
+      escapar(r.datos.motivoNoComparable) + '</div>';
+    return;
+  }
+  E('sen-c-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  for (const c of r.datos.comparacion) {
+    kv.innerHTML +=
+      '<dt>' + escapar(c.escenario) + ' contra ' + escapar(c.contra) + '</dt>' +
+      '<dd class="mono">neto ' + escapar(c.diferenciaDeNeto) +
+      (c.diferenciaDeMargen === null
+        ? ' · margen no comparable'
+        : ' · margen ' + escapar(c.diferenciaDeMargen)) + '</dd>';
+  }
+};
 
 // ══ 5 · Asientos ══════════════════════════════════════════════════════════
 async function listarAsientos(cursor) {

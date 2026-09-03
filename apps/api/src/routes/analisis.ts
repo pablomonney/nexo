@@ -769,6 +769,159 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
+  /**
+   * Dos o más escenarios, uno al lado del otro (S-23).
+   *
+   * Guardar escenarios sirve para compararlos, y hasta acá había que abrir la
+   * lista y restar a ojo. Esta ruta los recalcula a todos **contra las cifras de
+   * hoy** y pone las diferencias.
+   *
+   * ## La comparación que se niega a hacer
+   *
+   * Dos escenarios con distinta cantidad de meses **no comparan la misma base**:
+   * uno proyecta sobre lo facturado en seis meses y el otro sobre doce. Los dos
+   * números son correctos y ponerlos en la misma tabla como si midieran lo mismo
+   * es el error. Cuando pasa, `baseComparable` es `false` y la respuesta dice
+   * por qué — no se normaliza a la ventana más corta, porque eso descartaría
+   * datos que alguien eligió mirar.
+   *
+   * ## Y la que no hace
+   *
+   * No dice cuál conviene. Elegir exige un objetivo declarado por la empresa
+   * —maximizar margen, sostener volumen, cuidar la caja— y eso es una decisión
+   * de producto anotada en `NEXO_DECISION_ENGINE.md`. Poner un ganador acá sería
+   * inventarla.
+   */
+  app.get('/analysis/scenarios/compare', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const query = z
+      .object({
+        /** Dos a cinco escenarios guardados. Comparar uno solo no es comparar. */
+        ids: z
+          .string()
+          .min(36)
+          .transform((s) => s.split(',').map((x) => x.trim()))
+          .pipe(z.array(z.string().uuid()).min(2).max(5)),
+      })
+      .parse(request.query);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const guardados = await tx.query<{
+          id: string;
+          nombre: string;
+          pregunta: string;
+          meses: number;
+          precio: string;
+          volumen: string;
+          costo: string;
+          status: string;
+        }>(
+          `SELECT id, nombre, pregunta, meses,
+                  variacion_precio::text  AS precio,
+                  variacion_volumen::text AS volumen,
+                  variacion_costo::text   AS costo,
+                  status
+             FROM analysis_scenarios
+            WHERE company_id = $1 AND id = ANY($2::uuid[])`,
+          [tenant.companyId, query.ids],
+        );
+
+        if (guardados.rowCount !== query.ids.length) {
+          const encontrados = new Set(guardados.rows.map((e) => e.id));
+          throw notFound(
+            'No existen en esta empresa: ' +
+              query.ids.filter((id) => !encontrados.has(id)).join(', '),
+          );
+        }
+
+        const escenarios = [];
+        for (const e of guardados.rows) {
+          const resultado = (await simular(tx, tenant.companyId, {
+            meses: e.meses,
+            variacionDePrecio: Number(e.precio),
+            variacionDeVolumen: Number(e.volumen),
+            variacionDeCosto: Number(e.costo),
+          })) as {
+            base: { netoFacturado: string };
+            resultado: { netoProyectado: string; diferencia: string };
+            margen: { proyectado: { margen: string } | null; motivo: string | null };
+          };
+
+          escenarios.push({
+            id: e.id,
+            nombre: e.nombre,
+            pregunta: e.pregunta,
+            estado: e.status,
+            parametros: {
+              meses: e.meses,
+              variacionDePrecio: e.precio,
+              variacionDeVolumen: e.volumen,
+              variacionDeCosto: e.costo,
+            },
+            base: resultado.base.netoFacturado,
+            netoProyectado: resultado.resultado.netoProyectado,
+            diferenciaContraLaBase: resultado.resultado.diferencia,
+            margenProyectado: resultado.margen.proyectado?.margen ?? null,
+            motivoSinMargen: resultado.margen.motivo,
+          });
+        }
+
+        // Dos escenarios comparten base si miran la misma cantidad de meses. Si
+        // no, cada uno proyecta sobre otra cosa.
+        const ventanas = new Set(escenarios.map((e) => e.parametros.meses));
+        const baseComparable = ventanas.size === 1;
+
+        // Las diferencias entre escenarios se calculan en `numeric`, del lado
+        // de la base: restar dos importes en JavaScript es exactamente lo que
+        // `check:no-float` prohíbe, y acá el resultado se muestra como cifra.
+        const contra = [];
+        if (baseComparable) {
+          const primero = escenarios[0]!;
+          for (const otro of escenarios.slice(1)) {
+            const delta = await tx.query<{ neto: string; margen: string | null }>(
+              `SELECT ($1::numeric - $2::numeric)::text AS neto,
+                      CASE WHEN $3::text IS NULL OR $4::text IS NULL THEN NULL
+                           ELSE ($3::numeric - $4::numeric)::text END AS margen`,
+              [
+                otro.netoProyectado,
+                primero.netoProyectado,
+                otro.margenProyectado,
+                primero.margenProyectado,
+              ],
+            );
+            contra.push({
+              escenario: otro.nombre,
+              contra: primero.nombre,
+              diferenciaDeNeto: delta.rows[0]!.neto,
+              diferenciaDeMargen: delta.rows[0]!.margen,
+            });
+          }
+        }
+
+        return {
+          escenarios,
+          comparacion: contra,
+          baseComparable,
+          motivoNoComparable: baseComparable
+            ? null
+            : `Los escenarios miran ventanas distintas (${[...ventanas].sort().join(', ')} meses), ` +
+              'así que cada uno proyecta sobre una base distinta. Las cifras de cada uno son ' +
+              'correctas; restarlas entre sí no significa nada. No se normalizan a la ventana ' +
+              'más corta porque eso descartaría datos que alguien eligió mirar.',
+          alcance:
+            'Cada escenario se recalcula contra las cifras de hoy: lo guardado son los ' +
+            'parámetros. Esta respuesta no dice cuál conviene — elegir exige un objetivo ' +
+            'declarado por la empresa, y ponerlo acá sería inventarlo.',
+        };
+      },
+    );
+  });
+
   /** Archiva un escenario, con motivo. No se borra: la comparación en la que aparecía queda. */
   app.post('/analysis/scenarios/:escenarioId/archive', async (request) => {
     const tenant = await requireCompany(request);

@@ -16,6 +16,7 @@ QUÉ PASÓ          ✔ analítica, cuenta corriente, valuación, margen
 POR QUÉ           ✔ descomposición de la variación del margen
 QUÉ ESTÁ EN RIESGO ✔ seis frentes, cada uno con lo que no se puede medir
 QUÉ PASA SI        ✔ simulación de precio, volumen y costo, con escenarios guardados
+CUÁL CONTRA CUÁL   ✔ dos a cinco escenarios lado a lado, sin ganador
 QUÉ CONVIENE       ✗ recomendación
 APROBAR            ✗
 EJECUTAR           ✔ existe el camino (el ERP), no existe el puente desde una decisión
@@ -70,6 +71,29 @@ diría hoy lo que era cierto entonces, y quien lo lee no tendría cómo saberlo.
 Los parámetros no se editan: cambiarlos convertiría al escenario en otro con el
 mismo nombre, y la comparación de la semana pasada pasaría a hablar de algo
 distinto sin avisar. Se archiva con motivo y se guarda uno nuevo.
+
+### Comparar escenarios
+
+`GET /analysis/scenarios/compare?ids=a,b` toma **dos a cinco** escenarios
+guardados, los recalcula a todos contra las cifras de hoy y los pone al lado.
+Uno solo no se acepta: no es una comparación. Un id que no exista en la empresa
+devuelve 404 nombrándolo, en vez de comparar los que sí encontró y dejar que
+alguien lea una comparación a la que le falta un escenario.
+
+Las diferencias entre escenarios se calculan **en `numeric` del lado de la
+base** —`SELECT ($1::numeric - $2::numeric)::text`—: restar dos importes en
+JavaScript es exactamente lo que prohíbe `check:no-float`, y acá el resultado se
+muestra como cifra.
+
+**Cuando las ventanas no coinciden, no se resta.** Dos escenarios que miran 12 y
+3 meses proyectan cada uno sobre una base distinta; las cifras de cada uno son
+correctas, pero la diferencia entre ellas no significa nada. La respuesta trae
+`baseComparable: false`, `comparacion: []` y el motivo. No se normalizan a la
+ventana más corta porque eso descartaría datos que alguien eligió mirar.
+
+**No dice cuál conviene.** La respuesta enumera, ordena por nada y no marca un
+ganador — por lo mismo que la sección siguiente: elegir exige un objetivo
+declarado por la empresa, y ponerlo acá sería inventarlo.
 
 ## 3. Lo que falta, y qué necesita cada cosa
 

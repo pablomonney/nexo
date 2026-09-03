@@ -949,6 +949,80 @@ suite('Valuación de existencias', () => {
       .toBe(Number(baseAntes) + 1000);
   });
 
+  /**
+   * S-23 — dos escenarios uno al lado del otro, y la comparación que se niega.
+   *
+   * Guardar escenarios sirve para compararlos. Lo que la respuesta **no** hace
+   * es decir cuál conviene: elegir exige un objetivo declarado por la empresa, y
+   * ponerlo acá sería inventarlo.
+   */
+  it('dos escenarios se comparan, y con ventanas distintas se dice que no son comparables', async () => {
+    const crear = async (nombre: string, meses: number, precio: number): Promise<string> => {
+      const r = await pedir('POST', '/analysis/scenarios', {
+        nombre: `${nombre} ${stamp}`,
+        pregunta: `¿Y si el precio se mueve ${precio}%?`,
+        meses,
+        variacionDePrecio: precio,
+      });
+      expect(r.statusCode, r.body).toBe(201);
+      return r.json<{ id: string }>().id;
+    };
+
+    const conservador = await crear('Conservador', 12, 5);
+    const agresivo = await crear('Agresivo', 12, 20);
+
+    const r = await pedir('GET', `/analysis/scenarios/compare?ids=${conservador},${agresivo}`);
+    expect(r.statusCode, r.body).toBe(200);
+
+    const v = r.json<{
+      escenarios: { nombre: string; netoProyectado: string; base: string }[];
+      comparacion: { escenario: string; contra: string; diferenciaDeNeto: string }[];
+      baseComparable: boolean;
+      motivoNoComparable: string | null;
+      alcance: string;
+    }>();
+
+    expect(v.baseComparable, 'las dos miran doce meses').toBe(true);
+    expect(v.escenarios).toHaveLength(2);
+    // Las dos proyectan sobre la misma base: es lo que las hace comparables.
+    expect(v.escenarios[0]!.base).toBe(v.escenarios[1]!.base);
+
+    // El agresivo proyecta más neto que el conservador, y la diferencia sale en
+    // `numeric` del lado de la base — restar importes en JavaScript es lo que
+    // `check:no-float` prohíbe.
+    expect(v.comparacion).toHaveLength(1);
+    expect(Number(v.comparacion[0]!.diferenciaDeNeto)).toBeGreaterThan(0);
+    expect(v.alcance).toContain('no dice cuál conviene');
+
+    // Con ventanas distintas cada uno proyecta sobre otra cosa, y la respuesta
+    // se niega a restarlos en vez de dar un número que no significa nada.
+    const corto = await crear('Corto', 3, 5);
+    const distinto = await pedir('GET', `/analysis/scenarios/compare?ids=${conservador},${corto}`);
+    const d = distinto.json<{
+      baseComparable: boolean;
+      comparacion: unknown[];
+      motivoNoComparable: string;
+    }>();
+    expect(d.baseComparable).toBe(false);
+    expect(d.comparacion).toEqual([]);
+    expect(d.motivoNoComparable).toContain('ventanas distintas');
+  });
+
+  it('comparar exige al menos dos escenarios, y que existan en esta empresa', async () => {
+    const uno = await db.query<{ id: string }>(
+      'SELECT id FROM analysis_scenarios WHERE company_id = $1 LIMIT 1',
+      [empresa],
+    );
+    // Uno solo no es una comparación.
+    expect((await pedir('GET', `/analysis/scenarios/compare?ids=${uno.rows[0]!.id}`)).statusCode)
+      .toBe(400);
+
+    const ajeno = '00000000-0000-7000-8000-000000000000';
+    const r = await pedir('GET', `/analysis/scenarios/compare?ids=${uno.rows[0]!.id},${ajeno}`);
+    expect(r.statusCode).toBe(404);
+    expect(r.json<{ message: string }>().message).toContain(ajeno);
+  });
+
   it('los parámetros de un escenario no se editan, y no se borra', async () => {
     const escenario = await db.query<{ id: string }>(
       `SELECT id FROM analysis_scenarios WHERE company_id = $1 LIMIT 1`,
