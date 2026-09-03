@@ -49,6 +49,16 @@ if (!URL_BASE.endsWith('/aai_test')) {
 
 const PRODUCTOS = Number(process.argv[2] ?? 200);
 const POR_PRODUCTO = Number(process.argv[3] ?? 250);
+/**
+ * Volumen comercial: terceros y comprobantes.
+ *
+ * La primera versión de este script cargaba **solo stock**, y con eso la
+ * bandeja daba 229 ms. Ese número era el piso, no el techo: sus ramas de
+ * comprobantes, cobranzas y terceros no tenían nada detrás. Medir una vista
+ * cuyas fuentes están vacías es medir otra cosa.
+ */
+const TERCEROS = Number(process.argv[4] ?? 300);
+const POR_TERCERO = Number(process.argv[5] ?? 40);
 const REPETICIONES = 3;
 
 /**
@@ -76,6 +86,9 @@ const CONSULTAS = [
   ['party_aging', 'SELECT count(*) FROM party_aging WHERE company_id = $1'],
   ['analytics_flujo_de_fondos', 'SELECT count(*) FROM analytics_flujo_de_fondos WHERE company_id = $1'],
   ['company_readiness', 'SELECT count(*) FROM company_readiness WHERE company_id = $1'],
+  ['analytics_por_tercero', 'SELECT count(*) FROM analytics_por_tercero WHERE company_id = $1'],
+  ['analytics_operaciones_mensuales', 'SELECT count(*) FROM analytics_operaciones_mensuales WHERE company_id = $1'],
+  ['analytics_resumen', 'SELECT count(*) FROM analytics_resumen WHERE company_id = $1'],
 ];
 
 const cliente = new pg.Client(URL_BASE);
@@ -135,8 +148,69 @@ await cliente.query(
 );
 console.log(`  cargado en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
+/**
+ * Volumen comercial: terceros con plazo declarado y comprobantes de los dos
+ * lados, repartidos en el último año.
+ *
+ * El plazo se declara a propósito: sin él la cuenta corriente no afirma mora,
+ * y las ramas de cobranzas de la bandeja quedan vacías — que es justo lo que
+ * hacía que 229 ms pareciera el costo de la bandeja llena.
+ *
+ * `cuit_contraparte` va en NULL: con CUIT, el trigger de coherencia compara
+ * contra el documento del tercero y la unicidad exige combinaciones distintas.
+ * Nada de eso es lo que se está midiendo.
+ */
+const t1 = Date.now();
+const fiscal = (
+  await cliente.query(
+    `SELECT tax_id, period_id FROM tax_transactions WHERE company_id = $1 LIMIT 1`,
+    [empresa],
+  )
+).rows[0];
+
+if (fiscal === undefined) {
+  console.log('  (sin comprobantes previos en esta empresa: no se puede derivar impuesto ni período)');
+} else {
+  console.log(`Cargando ${TERCEROS} terceros × ${POR_TERCERO} comprobantes…`);
+  await cliente.query(
+    `WITH nuevos AS (
+       INSERT INTO parties
+         (company_id, tipo_documento, numero_documento, razon_social, condicion_iva,
+          dias_de_pago, created_by)
+       SELECT $1, 'CUIT',
+              '30' || lpad((900000000 + g)::text, 9, '0'),
+              'Tercero de medición ' || g,
+              'RESPONSABLE_INSCRIPTO',
+              30,
+              'bench'
+         FROM generate_series(1, $2) g
+       RETURNING id
+     ),
+     numerados AS (
+       SELECT id, row_number() OVER () AS n FROM nuevos
+     )
+     INSERT INTO tax_transactions
+       (company_id, tax_id, period_id, direction, cbte_tipo, punto_venta, cbte_numero,
+        cbte_fecha, party_id, condicion_iva, neto, iva, no_gravado, exento, percepciones,
+        total, created_by)
+     SELECT $1, $3, $4,
+            CASE WHEN m % 2 = 0 THEN 'VENTAS' ELSE 'COMPRAS' END,
+            1, 9,
+            900000 + (t.n * $5) + m,
+            current_date - 365 + (m * 365 / $5)::int,
+            t.id, 'RESPONSABLE_INSCRIPTO',
+            1000, 210, 0, 0, 0, 1210,
+            'bench'
+       FROM numerados t, generate_series(1, $5) m`,
+    [empresa, TERCEROS, fiscal.tax_id, fiscal.period_id, POR_TERCERO],
+  );
+  console.log(`  cargado en ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+}
+
 await cliente.query('ANALYZE stock_movements');
 await cliente.query('ANALYZE stock_movement_ppp');
+await cliente.query('ANALYZE tax_transactions');
+await cliente.query('ANALYZE parties');
 
 // A partir de acá, como la aplicación: sin privilegios y con RLS.
 await cliente.query('SET ROLE aai_app');
@@ -180,6 +254,11 @@ if (lentas.length > 0) {
 } else {
   console.log('\nNinguna pasó de 1000 ms con esta carga.');
 }
+
+console.log(
+  '\nEl panorama de inteligencia corre estas mismas consultas en fila: su costo es la\n' +
+    'suma de las que lo componen, no una consulta aparte.',
+);
 
 console.log(
   '\nEsta base quedó con datos de medición. Para dejarla limpia:\n' +

@@ -252,24 +252,18 @@ Ninguno es un problema técnico. Están anotados, no olvidados.
   calculado al escribir, **44 ms**.
 
   La medición dejó de ser un experimento suelto: es `npm run bench:vistas`, que
-  carga volumen en la base descartable y mide once consultas con el rol de la
-  aplicación. Con 50.014 movimientos de stock de una empresa:
+  carga volumen en la base descartable y mide catorce consultas con el rol de la
+  aplicación. Con 50.014 movimientos de stock, 300 terceros y 12.000
+  comprobantes de una empresa, ninguna pasa de un segundo. La más cara es la
+  bandeja: **416 ms** contarla y **540 ms** pedirle una página — pedir cincuenta
+  filas cuesta más que contarlas todas, porque es una unión de veinticuatro
+  vistas y ordenar por fecha obliga a materializarla entera.
 
-  | Vista | Mejor de tres |
-  |---|---|
-  | `stock_valuation` | 75 ms |
-  | `stock_ppp` | 27 ms |
-  | `work_queue` (la bandeja entera) | 229 ms |
-  | `work_queue`, una página de 50 | 242 ms |
-  | `analysis_signals` | 18 ms |
-  | `analytics_flujo_de_fondos` | 9 ms |
-  | las otras cinco | menos de 7 ms |
+  Es la pantalla más visitada, así que es la que hay que mirar si el volumen
+  crece. Materializarla no aplica: a diferencia del libro de stock (ADR-022), lo
+  que hay abajo cambia todo el tiempo.
 
-  Lo que **no** dice esa tabla: el volumen cargado es de stock. Las ramas de la
-  bandeja que cuelgan de comprobantes, cheques o proyectos siguen sin volumen
-  detrás, así que 229 ms es el piso de la bandeja, no su techo. Es la próxima
-  medición pendiente, y ahora hay con qué hacerla.
-
+  El detalle por vista está en `NEXO_EVOLUTION_BASELINE.md` §3.
 - **Restauración probada, y lo que la prueba encontró.** `npm run db:backup` y
   `npm run db:restaurar` cierran el ciclo: la copia se restaura en una base
   descartable (`aai_restauracion`, el único espacio de nombres que el script

@@ -53,21 +53,27 @@ declarados presentes, cadena de bitácora íntegra, Mayor sin discrepancias.
 ## 3. Rendimiento — lo medido y lo que falta medir
 
 `npm run bench:vistas` carga volumen en la base descartable y mide con el rol
-`aai_app`. Con **50.014 movimientos de stock de una empresa**:
+`aai_app`. Con **50.014 movimientos de stock, 300 terceros y 12.000
+comprobantes** de una empresa:
 
 | Vista | Mejor de tres |
 |---|---|
-| `stock_valuation` | 75 ms |
-| `stock_ppp` | 27 ms |
-| `work_queue` (la bandeja entera) | 229 ms |
-| `work_queue`, una página de 50 | 242 ms |
-| `analysis_signals` | 18 ms |
-| `analytics_flujo_de_fondos` | 9 ms |
-| las otras cinco | menos de 10 ms |
+| `work_queue`, una página de 50 | **540 ms** |
+| `work_queue` (la bandeja entera) | 416 ms |
+| `analytics_flujo_de_fondos` | 165 ms |
+| `party_aging` | 109 ms |
+| `analysis_signals` | 83 ms |
+| `stock_valuation` | 69 ms |
+| `analytics_resumen` | 31 ms |
+| `stock_ppp` | 25 ms |
+| las otras seis | menos de 12 ms |
 
-**PLANIFICADO:** el volumen cargado es de stock. Las ramas de la bandeja que
-cuelgan de comprobantes, cheques, proyectos o terceros no tienen volumen detrás,
-así que 229 ms es el piso de la bandeja y no su techo.
+Ninguna pasa de un segundo. **La bandeja es la que hay que mirar**: es la
+pantalla más visitada y es la más cara, y pedirle una página cuesta más que
+contarla entera — es una unión de veinticuatro vistas, así que ordenar por fecha
+obliga a materializarla toda antes de quedarse con cincuenta filas. No hay
+índice que arregle eso, y materializar la bandeja no aplica: a diferencia del
+libro de stock (ADR-022), lo que hay abajo cambia todo el tiempo.
 
 ## 4. Módulos: estado real
 

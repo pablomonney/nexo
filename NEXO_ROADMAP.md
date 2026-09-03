@@ -30,12 +30,15 @@ midió y se corrigió.
 
 ## P1 — Lo que se puede construir hoy
 
-### 1. Medir el resto de las vistas con volumen
+### ~~1. Medir el resto de las vistas con volumen~~ — hecho
 
-`npm run bench:vistas` carga volumen de **stock**. La bandeja da 229 ms con eso,
-pero sus ramas de comprobantes, cheques y proyectos no tienen volumen detrás.
+El generador ahora carga terceros y comprobantes además de stock. Con 12.000
+comprobantes la bandeja pasa de 229 ms a **416 ms**, y pedirle una página cuesta
+**540 ms**. Ninguna vista pasa de un segundo.
 
-**Qué lo destraba:** nada. Es extender el generador del benchmark.
+Lo que queda como vigilancia, no como tarea: la bandeja es la pantalla más
+visitada y la más cara. Si el volumen crece un orden de magnitud, es la primera
+que hay que volver a medir.
 
 ### 2. El adaptador de un proveedor de modelo
 
