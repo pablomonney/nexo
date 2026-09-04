@@ -383,7 +383,7 @@ suite('El loop de decisión: ERP → datos → inteligencia → decisión → ER
     expect(v.aplicacion.actoCitado.accion).toBe('CREAR_LISTA_DE_PRECIOS');
 
     // Y la afirmación que el sistema NO hace.
-    expect(v.alcance).toContain('no dice');
+    expect(v.alcance).toContain('no dice que la diferencia');
     expect(v.metodologia).toContain('ritmos mensuales');
   });
 

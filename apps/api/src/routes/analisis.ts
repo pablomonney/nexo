@@ -1254,8 +1254,10 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
             `base cubría (${f.baseMeses}), no por la ventana que el escenario pidió mirar ` +
             `(${f.meses}). Lo real sale de los comprobantes de VENTAS por mes, fechados por ` +
             'el comprobante.',
+          // Sin asteriscos: esto se muestra tal cual, escapado, y un `**` en
+          // pantalla es ruido. La negrita es del documento, no de la respuesta.
           alcance:
-            'Esto **no dice** que la diferencia la haya causado la decisión. Atribuírsela ' +
+            'Esto no dice que la diferencia la haya causado la decisión. Atribuírsela ' +
             'exigiría que nada más hubiera cambiado en el período —el mercado, los costos, la ' +
             'estacionalidad—, y eso es falso en general. Dice qué se esperaba, qué pasó, y ' +
             'cuánto se separaron.',
