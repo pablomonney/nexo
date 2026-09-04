@@ -226,11 +226,16 @@ suite('Integridad contra SQL directo', () => {
       // alguien aflojara el NOT NULL para "arreglarlo por el lado fácil", la
       // fila quedaría invisible para todos los inquilinos dentro de la bitácora
       // contable, y este test avisa antes.
+      // La acción tiene que estar registrada en `audit_actions` (0091): desde
+      // esa migración, una acción desconocida la rechaza un trigger BEFORE, que
+      // corre **antes** que el NOT NULL. Con `RULE_APPROVED` —que es del plano
+      // normativo y no de esta tabla— este test habría fallado por el motivo
+      // equivocado y parecería seguir probando lo que dice.
       const { code } = await expectFailureCode(() =>
         db.query(
           `INSERT INTO audit_logs
              (company_id, actor_type, actor_id, action, object_type, object_id, prev_hash, hash)
-           VALUES (NULL, 'USER', 'u', 'RULE_APPROVED', 'accounting_rules', 'x', '', '')`,
+           VALUES (NULL, 'USER', 'u', 'CREAR_ASIENTO', 'journal_entries', 'x', '', '')`,
         ),
       );
       expect(code).toBe('23502');

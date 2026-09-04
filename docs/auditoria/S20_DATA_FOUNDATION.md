@@ -22,9 +22,36 @@ por hash, con actor, objeto y motivo— y lo que faltaba era que hablara un solo
 idioma. Ahora lo hace, y `tests/security/vocabulario-de-eventos.test.ts` impide
 que vuelva a derivar.
 
-**Lo que encontró de paso:** `audit_logs` exige motivo para cinco acciones
-excepcionales y las compara **por texto**. Renombrar cualquiera de las cinco no
-rompe nada visible y apaga el candado en silencio. Se comprobó rompiéndolo.
+**Lo que encontró de paso:** `audit_logs` exigía motivo para cinco acciones
+excepcionales y las comparaba **por texto**. Renombrar cualquiera de las cinco no
+rompía nada visible y apagaba el candado en silencio. Se comprobó rompiéndolo.
+
+### Cerrado el 2026-09-03 — la acción tiene identidad (0091)
+
+Se le dio identidad a la acción, que es lo que faltaba: `audit_actions` registra
+las que el sistema sabe emitir y `audit_logs.action` la referencia. Una acción
+sin registrar **no se puede escribir**, y la regla del motivo dejó de vivir en un
+CHECK con cinco literales para leer `requiere_motivo` del registro. Renombrar
+`ANULAR_ASIENTO` ya no apaga nada: falla la escritura, ruidosamente.
+
+**Y el barrido tenía un agujero.** Leía `action: 'LITERAL'` en TypeScript, y hay
+**tres** caminos por los que una acción llega a la bitácora:
+
+| Camino | Cuántas | ¿Lo veía? |
+|---|---|---|
+| `action: 'LITERAL'` en un `recordAudit` | 112 | sí |
+| `accion: 'LITERAL'` en la tabla de acciones de una ruta | 9 | **no** |
+| Un trigger SQL que inserta en `audit_logs` | 9 | **no** |
+
+Así que «106 acciones, todas VERBO_EN_MAYUSCULAS» era cierto sobre lo que veía y
+falso sobre el vocabulario. Dos de las que no veía —las del trigger de
+afectaciones— estaban **en inglés**: `AFFECTATION_DECLARED` y
+`AFFECTATION_CHANGED`. La 0092 las pasó a `AFECTACION_DECLARADA` y
+`AFECTACION_CAMBIADA`, en la forma que ya usaban los otros dos triggers.
+
+El barrido ahora lee los tres caminos, y el tercero lo lee de `pg_proc` y no de
+los archivos de migración: una migración es historia —la 0031 define el trigger
+y la 0092 lo reemplaza— y leer los archivos encontraba las dos versiones.
 
 Dos de esas cinco son nombres que nadie escribe, y quedan declarados con su
 motivo: `ACTIVAR_REGLA` (activar una regla no ocurre dentro de una empresa: va a
@@ -52,8 +79,30 @@ existe como operación; lo que hay es anular y volver a asentar).
 | Por vendedor | ✔ | `analytics_comisiones` |
 | Por sucursal | ✔ | `analytics_sucursales` |
 | Por centro de costo | ✔ | `cost_center_results` (0088) |
+| Cobranzas y pagos por mes | ✔ | `collections_by_month` (0090) |
 | **Rotación de stock** | **FALTA** | Ver abajo |
 | **Rentabilidad por cliente** | **FALTA** | Ver abajo |
+
+### Cobranzas del mes — la métrica que vivía adentro de una respuesta
+
+«¿Cuánto cobré este mes?» era la única pregunta del catálogo que se contestaba
+con un `SELECT` sobre una **tabla** del ERP. Eso tiene dos consecuencias, y la
+segunda es la grave.
+
+La primera: la métrica no existía en ningún lado. Cualquier otra capa que
+necesitara cobranzas del mes iba a escribir su propia versión, y a partir de ahí
+habría dos definiciones de lo mismo que nadie podría comparar.
+
+La segunda: **la fecha estaba mal**. Agrupaba por `party_allocations.created_at`
+—cuándo alguien registró la imputación— mientras todo el resto del sistema fecha
+por el hecho. Un cobro de marzo imputado en abril figuraba como cobrado en abril,
+y las cobranzas de un mes cerrado cambiaban con solo cargar una imputación
+atrasada. Nadie lo había elegido: se fue con la tabla que había a mano.
+
+`collections_by_month` (0090) es la definición canónica: fecha por el asiento que
+registró el cobro, cuenta solo imputaciones ACTIVAS contra asientos APROBADOS, y
+trae las dos direcciones —cobranzas y pagos— en una columna en vez de en dos
+vistas que después habría que mantener iguales.
 
 ### Rotación de stock — qué le falta
 
@@ -111,7 +160,22 @@ En la consola cada origen es un enlace: se toca y muestra su linaje. Es el paso
 
 ---
 
-## 4. Lo que sigue
+## 4. El contrato entre el ERP e Intelligence
+
+**Estado: COMPLETO Y DEFENDIDO.**
+
+La frontera existía y no la defendía nadie: estaba respetada por costumbre. Al
+medirla, las diecinueve preguntas del catálogo salían de **dieciocho vistas y una
+tabla** —la de las cobranzas, la que estaba mal fechada—.
+
+Hoy no hay ninguna. `S-26` (`tests/security/contrato-erp-inteligencia.test.ts`)
+comprueba que cada `FROM` del catálogo resuelva contra una vista, y lo hace
+contra `information_schema` y no contra una lista escrita a mano: una vista que
+alguien convierta en tabla lo rompe, que es lo correcto.
+
+La lista de excepciones **está vacía**, y esa es la afirmación.
+
+## 5. Lo que sigue
 
 Las dos métricas que faltan están descriptas arriba con lo que necesita cada
 una; ninguna está bloqueada por un tercero.

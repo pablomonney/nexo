@@ -301,7 +301,7 @@ suite('afectación fiscal — infraestructura', () => {
     );
 
     expect(Number(despues.rowCount)).toBe(1);
-    expect(despues.rows[0]!.action).toBe('AFFECTATION_CHANGED');
+    expect(despues.rows[0]!.action).toBe('AFECTACION_CAMBIADA');
     expect(despues.rows[0]!.old_value?.afectacion).toBe('MIXTA');
     expect(despues.rows[0]!.new_value.afectacion).toBe('GRAVADAS');
 

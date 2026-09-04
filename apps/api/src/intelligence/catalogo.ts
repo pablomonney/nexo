@@ -679,36 +679,63 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
     pregunta: '¿Cuánto cobré?',
     nucleo: ['cobre', 'cobramos', 'cobrado', 'entro', 'ingreso'],
     apoyo: ['cuanto', 'mes'],
-    permisos: ['allocation:read'],
+    // La respuesta depende del Mayor —la fecha del cobro sale del asiento—, así
+    // que también exige poder leerlo. Antes no, porque no lo miraba.
+    permisos: ['allocation:read', 'journal_entry:read'],
     admiteMes: true,
     responder: async (tx, companyId, mes) => {
-      const r = await tx.query<{ imputado: string; imputaciones: number; terceros: number }>(
-        `SELECT coalesce(sum(a.importe), 0)::text AS imputado,
-                count(*)::int AS imputaciones,
-                count(DISTINCT a.party_id)::int AS terceros
-           FROM party_allocations a
-           JOIN tax_transactions t
-             ON t.id = a.tax_transaction_id AND t.company_id = a.company_id
-          WHERE a.company_id = $1 AND a.status = 'ACTIVA'
-            AND t.direction = 'VENTAS'
-            AND date_trunc('month', a.created_at)::date = ($2 || '-01')::date`,
+      const r = await tx.query<{
+        imputado: string;
+        imputaciones: number;
+        terceros: number;
+        comprobantes: number;
+      }>(
+        `SELECT coalesce(imputado, 0)::text AS imputado,
+                coalesce(imputaciones, 0) AS imputaciones,
+                coalesce(terceros, 0)     AS terceros,
+                coalesce(comprobantes, 0) AS comprobantes
+           FROM collections_by_month
+          WHERE company_id = $1 AND direccion = 'VENTAS'
+            AND mes = ($2 || '-01')::date`,
         [companyId, mes],
       );
-      const f = r.rows[0]!;
+      // Un mes sin cobranzas no devuelve fila, y eso es cero de verdad: no hubo
+      // ninguna imputación. Es distinto de los `null` que este catálogo usa para
+      // «no se puede afirmar».
+      const f = r.rows[0] ?? {
+        imputado: '0',
+        imputaciones: 0,
+        terceros: 0,
+        comprobantes: 0,
+      };
       return {
-        titulo: 'Cobranzas imputadas en el mes',
+        titulo: 'Cobranzas del mes',
         valor: pesos(f.imputado),
         unidad: '$',
         periodo: mes,
         datos: [
-          { etiqueta: 'Imputaciones', valor: String(f.imputaciones), origen: 'party_allocations' },
-          { etiqueta: 'Clientes distintos', valor: String(f.terceros), origen: 'party_allocations' },
+          {
+            etiqueta: 'Imputaciones',
+            valor: String(f.imputaciones),
+            origen: 'collections_by_month',
+          },
+          {
+            etiqueta: 'Clientes distintos',
+            valor: String(f.terceros),
+            origen: 'collections_by_month',
+          },
+          {
+            etiqueta: 'Facturas alcanzadas',
+            valor: String(f.comprobantes),
+            origen: 'collections_by_month',
+          },
         ],
-        origen: ['party_allocations'],
+        origen: ['collections_by_month'],
         metodologia:
-          'Suma de las imputaciones activas sobre comprobantes de VENTAS, por el mes en que ' +
-          'se imputaron. No es la fecha del cobro: es la fecha en que alguien declaró qué ' +
-          'factura cancelaba.',
+          'Suma de las imputaciones activas sobre comprobantes de VENTAS, ubicadas por la ' +
+          'fecha del asiento que registró el cobro —no por cuándo alguien cargó la ' +
+          'imputación—. Es el mismo criterio que usa el resto del sistema: el mes sale del ' +
+          'hecho, no de cuándo se declaró. Solo cuenta asientos APROBADOS.',
         noIncluye:
           'Un cobro asentado y todavía sin imputar no está acá: hasta que no se dice qué ' +
           'factura cancela, no se sabe de qué cobranza es.',

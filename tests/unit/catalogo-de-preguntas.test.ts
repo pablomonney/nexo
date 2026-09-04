@@ -87,6 +87,9 @@ describe('El catálogo de preguntas', () => {
       'analytics:read', 'allocation:read', 'party:read', 'stock:read',
       'analysis:read', 'report:read', 'product:read', 'check:read',
       'project:read', 'commission:read', 'branch:read', 'cost_center:read',
+      // La cobranza del mes se fecha por el asiento que la registra (0090), así
+      // que la respuesta exige poder leer el Mayor. Antes no lo miraba.
+      'journal_entry:read',
     ]);
     expect(preguntasPara(todos)).toHaveLength(CATALOGO.length);
 

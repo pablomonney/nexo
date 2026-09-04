@@ -382,7 +382,7 @@ suite('Afectación profesional, constatación ARCA y auditoría de permisos', ()
       // registra el acto por HTTP con su IP y su motivo. Son cosas distintas.
       const r = await db.query<{ n: string }>(
         `SELECT count(*)::text AS n FROM audit_logs
-          WHERE company_id = $1 AND action = 'AFFECTATION_DECLARED'`,
+          WHERE company_id = $1 AND action = 'AFECTACION_DECLARADA'`,
         [empresa],
       );
       expect(r.rows[0]!.n).toBe('1');

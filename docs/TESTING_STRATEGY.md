@@ -130,6 +130,7 @@ métrica tiene umbral de bloqueo de release.
 > | `vocabulario-de-eventos` | S-20 | Que la bitácora sea un vocabulario estable, y que renombrar una acción excepcional no apague su candado en silencio |
 | `agentes-con-ejecucion` | S-21 | Que cada agente que el `CHECK` de `ai_predictions` acepta lo produzca algo, y no exista solo como miembro de una unión de tipos |
 | `capacidades-con-puerta` | S-25 | Que cada ruta registrada esté nombrada en la consola: S-12 pregunta lo mismo por dominio, y esto lo pregunta ruta por ruta |
+| `contrato-erp-inteligencia` | S-26 | Que Intelligence consulte vistas y no tablas del ERP: una métrica calculada sobre la tabla queda encerrada en la respuesta y decide su significado ahí |
 
 #### S-16, y por qué un barrido también se equivoca
 

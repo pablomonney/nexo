@@ -226,6 +226,38 @@ suite('Bitácora — cadena de hashes', () => {
         [fx.companyA],
       ),
     );
-    expect(message).toMatch(/audit_reason_required/);
+    // Desde la 0091 la regla la impone un trigger que lee `audit_actions`, no un
+    // CHECK con cinco literales. El código del error se fija acá porque es lo
+    // que un cliente puede distinguir; el nombre de la restricción no lo era.
+    expect(message).toMatch(/E_AUDIT_MOTIVO_REQUERIDO/);
+  });
+
+  it('un motivo en blanco no es un motivo', async () => {
+    // El CHECK anterior solo pedía `IS NOT NULL`, así que la cadena vacía lo
+    // satisfacía: se podía anular un asiento con un motivo de cero caracteres y
+    // la auditoría quedaba igual de muda que sin motivo.
+    const message = await expectFailure(() =>
+      client.query(
+        `INSERT INTO audit_logs
+           (company_id, actor_type, actor_id, action, object_type, object_id, motivo)
+         VALUES ($1, 'USER', 'admin', 'REABRIR_PERIODO', 'period', 'p2', '   ')`,
+        [fx.companyA],
+      ),
+    );
+    expect(message).toMatch(/E_AUDIT_MOTIVO_REQUERIDO/);
+  });
+
+  it('una acción sin registrar no se puede escribir', async () => {
+    // Es la garantía nueva: renombrar una acción crítica ya no apaga su candado
+    // en silencio. El nombre nuevo no existe en el registro, y la escritura
+    // falla en la primera prueba que la ejercite.
+    const message = await expectFailure(() =>
+      client.query(
+        `INSERT INTO audit_logs (company_id, actor_type, actor_id, action, object_type, object_id)
+         VALUES ($1, 'USER', 'admin', 'ANULAR_ASIENTO_CONTABLE', 'journal_entries', 'j1')`,
+        [fx.companyA],
+      ),
+    );
+    expect(message).toMatch(/audit_logs_action_fk|E_AUDIT_ACTION_DESCONOCIDA/);
   });
 });
