@@ -131,6 +131,8 @@ métrica tiene umbral de bloqueo de release.
 | `agentes-con-ejecucion` | S-21 | Que cada agente que el `CHECK` de `ai_predictions` acepta lo produzca algo, y no exista solo como miembro de una unión de tipos |
 | `capacidades-con-puerta` | S-25 | Que cada ruta registrada esté nombrada en la consola: S-12 pregunta lo mismo por dominio, y esto lo pregunta ruta por ruta |
 | `contrato-erp-inteligencia` | S-26 | Que Intelligence consulte vistas y no tablas del ERP: una métrica calculada sobre la tabla queda encerrada en la respuesta y decide su significado ahí |
+| `inyeccion-en-datos` | S-4 | Que un documento con instrucciones adentro no cambie la clasificación: la defensa es el enum cerrado y la validación, no el prompt |
+| `secretos-fuera-del-log` | S-27 | Que la credencial del proveedor de modelo no llegue a un log, a un error ni a una tabla |
 
 #### S-16, y por qué un barrido también se equivoca
 

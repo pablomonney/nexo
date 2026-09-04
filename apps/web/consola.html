@@ -262,6 +262,27 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div id="intel-msg"></div>
   <div id="intel-narracion"></div>
 
+  <details class="grupo"><summary>Cuánto se consumió, y contra qué tope</summary><div>
+    <p class="ayuda">Preguntar puede implicar una llamada a un proveedor de modelo, y esa
+      llamada <strong>cuesta</strong> y <strong>saca cifras de la empresa</strong>. Por eso
+      hay dos topes distintos: uno técnico por minuto y por usuario, contra el bucle, y uno
+      diario por empresa, contra el gasto.</p>
+    <p class="ayuda">El diario <strong>lo declara la empresa</strong>: cuántas preguntas
+      entran en un día depende del plan y de lo que esté dispuesta a gastar, y NEXO no lo
+      inventa. Sin declararlo no hay tope. El consumo se cuenta por empresa, así que entrar
+      con otro usuario no lo cambia.</p>
+    <button id="b-intel-cupo" class="sec">Ver el consumo</button>
+    <dl class="kv" id="intel-cupo"></dl>
+    <div class="fila" id="intel-cupo-declarar" hidden>
+      <div><label>Preguntas por día</label>
+        <input id="intel-cupo-n" inputmode="numeric"></div>
+      <div style="flex:1"><label>Por qué ese número</label>
+        <input id="intel-cupo-motivo" maxlength="500"></div>
+      <div><label>&nbsp;</label><button id="b-intel-cupo-guardar">Declarar el cupo</button></div>
+    </div>
+    <div id="intel-cupo-msg"></div>
+  </div></details>
+
   <div id="intel-respuesta" hidden class="grupo">
     <h3 id="intel-titulo">Respuesta</h3>
     <p><span id="intel-valor" class="mono" style="font-size:1.6em"></span>
@@ -3284,6 +3305,39 @@ E('b-intel-riesgos').onclick = async () => {
         : '<span class="p p-neu">no se evalúa</span><br>' + escapar(f.noSeEvalua)) + '</td>';
     cuerpo.appendChild(tr);
   }
+};
+
+/**
+ * El consumo de IA y su tope.
+ *
+ * «Sin tope declarado» se dibuja con esas palabras y no como un guion: un
+ * denominador vacío invita a leer «cero» o «ilimitado por diseño», y no es
+ * ninguna de las dos — es que nadie lo decidió todavía.
+ */
+E('b-intel-cupo').onclick = async () => {
+  const r = await api('GET', '/intelligence/quota');
+  if (!r.ok) return decir('intel-cupo-msg', r);
+  const d = r.datos;
+
+  E('intel-cupo').innerHTML =
+    fila('Preguntas de la empresa hoy', d.usadasHoy) +
+    '<dt>Cupo diario</dt><dd>' + (d.sinTopeDeclarado
+      ? '<span class="p p-neu">sin tope declarado</span>'
+      : '<span class="mono">' + escapar(d.topeDiario) + '</span>') + '</dd>' +
+    fila('De este usuario, en el último minuto', d.delUsuarioEnElMinuto) +
+    fila('Tope técnico por minuto', d.topePorMinuto);
+
+  E('intel-cupo-msg').innerHTML = '<div class="aviso">' + escapar(d.alcance) + '</div>';
+  E('intel-cupo-declarar').hidden = !puede('analysis:configure');
+};
+
+E('b-intel-cupo-guardar').onclick = async () => {
+  const r = await api('POST', '/intelligence/quota', {
+    llamadasPorDia: Number(E('intel-cupo-n').value),
+    motivo: E('intel-cupo-motivo').value,
+  });
+  decir('intel-cupo-msg', r, 'Cupo declarado. Se cuenta por empresa, no por usuario.');
+  if (r.ok) E('b-intel-cupo').click();
 };
 
 E('b-intel-panorama').onclick = async () => {

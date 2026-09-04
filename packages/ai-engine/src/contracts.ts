@@ -40,7 +40,33 @@ export interface LLMProvider {
     readonly schema: Record<string, unknown>;
     readonly temperature: 0;
     readonly maxTokens: number;
-  }): Promise<{ readonly output: unknown; readonly modelId: string; readonly latencyMs: number }>;
+  }): Promise<{
+    readonly output: unknown;
+    readonly modelId: string;
+    readonly latencyMs: number;
+    /**
+     * Cuántos tokens costó, si el proveedor lo informa.
+     *
+     * Opcional a propósito: hay proveedores que no lo devuelven, y el simulado
+     * tampoco. `null` o ausente es «no se puede afirmar» — de ahí sale el costo
+     * en `NULL`, que es distinto de un costo cero.
+     */
+    readonly uso?: UsoDelModelo | null;
+  }>;
+}
+
+/**
+ * El uso de un modelo, en unidades que no son de ningún proveedor.
+ *
+ * Los nombres son propios: cada proveedor llama a esto de una manera distinta
+ * —`prompt_tokens`, `input_tokens`, `promptTokenCount`— y traducirlo en el
+ * adaptador es lo que permite cambiar de proveedor sin tocar lo que guarda la
+ * base ni lo que muestra una pantalla.
+ */
+export interface UsoDelModelo {
+  readonly tokensDeEntrada: number;
+  readonly tokensDeSalida: number;
+  readonly tokensTotales: number;
 }
 
 /** Cita normativa devuelta por un agente. Se resuelve contra `norm_versions`. */

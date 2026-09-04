@@ -30,20 +30,18 @@
 import { recordAudit, withCompany, type Tx } from '@aai/db';
 import {
   ClassificationAgent,
-  MockLLMProvider,
-  NullLLMProvider,
   POLITICA_POR_DEFECTO,
   PROMPT_DETERMINISTICO,
   PROMPT_HASH_DETERMINISTICO,
   TRATAMIENTOS_POR_DEFECTO,
   admiteAprobacionEnLote,
+  calcularCostoEnMicros,
   cambiosPorRevision,
   promptPorHash,
   promptsRegistrados,
   type ContextoClasificacion,
   type CuentaDelPlan,
   type HechosDelComprobante,
-  type LLMProvider,
   type PreferenciaAprendida,
   type NormaDisponible,
   type ResultadoSelloFiscal,
@@ -59,36 +57,13 @@ import {
 import { parseCalendarDate, type CalendarDate } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { crearProveedor } from '../ai/proveedor.js';
+import { precioVigente } from '../ai/cupo.js';
 import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, notFound } from '../http/errors.js';
 import { cargarCatalogo, documentosArchivados } from '../normativa/catalogo.js';
 
-/**
- * Proveedor según configuración.
- *
- * Mismo criterio que con ARCA y con el OCR: el simulado se usa si y solo si está
- * pedido explícitamente. Sin configuración, `NullLLMProvider` — y el sistema
- * sigue sugiriendo con la historia de la empresa, sin mandar nada afuera (§8).
- */
-function proveedor(): LLMProvider {
-  if (config.ai.provider !== 'mock') return new NullLLMProvider();
-  return new MockLLMProvider({
-    respuestas: [
-      {
-        output: {
-          cuentaCodigo: '__SIMULACION__',
-          tratamiento: 'NO_DETERMINADO',
-          confianza: 0.1,
-          razon: 'Respuesta de simulación: no proviene de ningún modelo y no tiene valor.',
-          citas: [],
-          abstencion: true,
-        },
-      },
-    ],
-    alAgotarse: 'REPETIR',
-  });
-}
 
 export async function predictionRoutes(app: FastifyInstance): Promise<void> {
   app.post('/documents/:documentId/classify', async (request, reply) => {
@@ -102,7 +77,7 @@ export async function predictionRoutes(app: FastifyInstance): Promise<void> {
       armarContexto(tx, tenant.companyId, params.documentId),
     );
 
-    const resultado = await new ClassificationAgent({ provider: proveedor() }).clasificar(contexto);
+    const resultado = await new ClassificationAgent({ provider: crearProveedor() }).clasificar(contexto);
 
     if (resultado.estado === 'SIN_SUGERENCIA') {
       // Una propuesta descartada por la Validation Layer no se pierde: se
@@ -136,12 +111,22 @@ export async function predictionRoutes(app: FastifyInstance): Promise<void> {
     const predictionId = await withCompany(
       { companyId: tenant.companyId, actorId },
       async (tx) => {
+        // El costo, si se puede afirmar. Necesita las dos puntas: que el
+        // proveedor haya informado tokens y que alguien haya declarado el
+        // precio de ese modelo. Sin alguna de las dos queda en `NULL`, que es
+        // distinto de cero — un costo cero se suma en un informe y no se
+        // distingue de una llamada gratis.
+        const costoEnMicros = calcularCostoEnMicros(
+          propuesta.uso,
+          await precioVigente(tx, propuesta.modelProvider, propuesta.modelId),
+        );
+
         const insertado = await tx.query<{ id: string }>(
           `INSERT INTO ai_predictions
              (company_id, document_id, agent, model_provider, model_id, prompt_hash,
               input_ref, output, confidence, reason, normative_sources,
-              triage_band, hard_blocks, advertencias, passes, latency_ms)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+              triage_band, hard_blocks, advertencias, passes, latency_ms, cost_micros)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
            RETURNING id`,
           [
             tenant.companyId,
@@ -160,6 +145,7 @@ export async function predictionRoutes(app: FastifyInstance): Promise<void> {
             propuesta.advertencias,
             propuesta.pasadas,
             propuesta.latencyMs,
+            costoEnMicros,
           ],
         );
 

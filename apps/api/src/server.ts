@@ -103,7 +103,37 @@ declare module 'fastify' {
 
 export async function buildServer(options: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: options.logger ?? false,
+    logger:
+      options.logger === true
+        ? {
+            /**
+             * Lo que nunca se escribe en un log.
+             *
+             * `authorization` es la primera de la lista y la que importa: la
+             * credencial del proveedor de modelo viaja ahí, y un log con nivel
+             * de depuración en producción la dejaría en disco. La cookie de
+             * sesión es un token vivo; `x-company-id` no es secreto pero
+             * tampoco hace falta.
+             *
+             * Se redacta por **camino**, que es lo que pino sabe hacer, y se
+             * cubren las dos formas en que una cabecera puede aparecer: la del
+             * pedido entrante y la de un error serializado.
+             */
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'res.headers["set-cookie"]',
+                'headers.authorization',
+                'headers.cookie',
+                '*.headers.authorization',
+                '*.apiKey',
+                '*.api_key',
+              ],
+              censor: '[redactado]',
+            },
+          }
+        : false,
     // Sin esto, un proxy podría inyectar cabeceras de identidad.
     trustProxy: false,
     bodyLimit: 1_048_576,

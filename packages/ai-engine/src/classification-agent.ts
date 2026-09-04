@@ -22,7 +22,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { AgentName, LLMProvider, Message, Proposal } from './contracts.js';
+import type { AgentName, LLMProvider, Message, Proposal, UsoDelModelo } from './contracts.js';
 import type { ContextoClasificacion } from './contexto.js';
 import { TRATAMIENTOS_POR_DEFECTO } from './contexto.js';
 import { CLASSIFICATION_V1, type PromptVersion } from './prompts/registry.js';
@@ -49,6 +49,8 @@ export interface PropuestaClasificacion
   readonly inputRef: string;
   readonly pasadas: number;
   readonly latencyMs: number;
+  /** Tokens, si el proveedor los informó. `null` es «no se puede afirmar». */
+  readonly uso: UsoDelModelo | null;
 }
 
 export type MotivoSinSugerencia =
@@ -93,6 +95,7 @@ export class ClassificationAgent {
     });
 
     let latencyMs = 0;
+    let uso: UsoDelModelo | null = null;
     let modelId = this.#opciones.provider.id;
     let pasadas = 0;
     let veredicto: Veredicto | null = null;
@@ -118,6 +121,10 @@ export class ClassificationAgent {
 
       pasadas += 1;
       latencyMs += respuesta.latencyMs;
+      // La segunda pasada reemplaza el uso de la primera y no lo suma: son dos
+      // llamadas distintas y `ai_predictions` guarda una fila. Sumarlas diría
+      // que una llamada gastó lo de dos.
+      uso = respuesta.uso ?? null;
       modelId = respuesta.modelId;
       veredicto = validarSalida(respuesta.output, schema, contexto);
 
@@ -166,6 +173,7 @@ export class ClassificationAgent {
         inputRef: contexto.documentId,
         pasadas,
         latencyMs,
+        uso,
       },
     };
   }
@@ -228,6 +236,8 @@ export class ClassificationAgent {
         inputRef: contexto.documentId,
         pasadas: 0,
         latencyMs: 0,
+        // No hubo modelo: no hay tokens que informar.
+        uso: null,
       },
     };
   }

@@ -31,16 +31,23 @@
 
 import {
   AnsweringAgent,
-  MockLLMProvider,
-  NullLLMProvider,
+  ErrorDeProveedor,
   type ContextoDeRespuesta,
-  type LLMProvider,
+  type ResultadoDelRespondedor,
 } from '@aai/ai-engine';
 import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { clientIp, requireAuth, requireCompany, type RequestTenant } from '../http/context.js';
-import { forbidden } from '../http/errors.js';
+import {
+  clientIp,
+  requireAuth,
+  requireCompany,
+  requirePermission,
+  type RequestTenant,
+} from '../http/context.js';
+import { forbidden, tooManyRequests } from '../http/errors.js';
+import { crearProveedor } from '../ai/proveedor.js';
+import { evaluarCupo, leerCupo } from '../ai/cupo.js';
 import { config } from '../config.js';
 import {
   CATALOGO,
@@ -60,6 +67,45 @@ function disponiblesPara(tenant: RequestTenant): PreguntaDelCatalogo[] {
 }
 
 const mesCorriente = (): string => new Date().toISOString().slice(0, 7);
+
+/**
+ * Corta antes de preguntar, no después.
+ *
+ * Se evalúa aunque el proveedor sea `none`: el límite es del **acto de
+ * preguntar**, y si dependiera de qué proveedor hay configurado, el día que se
+ * conecte uno real el sistema cambiaría de comportamiento en un lugar que nadie
+ * probó. Además `ai_answers` registra la llamada igual, así que el consumo se
+ * cuenta igual.
+ */
+async function verificarCupo(companyId: string, actorId: string): Promise<void> {
+  const corte = await evaluarCupo(companyId, actorId, config.ai.preguntasPorMinuto);
+  if (corte !== null) throw tooManyRequests(`${corte.codigo}: ${corte.detalle}`);
+}
+
+/**
+ * La llamada al proveedor, con su fallo convertido en un estado.
+ *
+ * El fallo del proveedor **no se lleva puesta la respuesta**. La cifra ya la
+ * calculó el motor determinístico y es correcta con o sin narración; dejar que
+ * un 429 o un timeout suba como excepción convertiría una respuesta válida en
+ * un 500, y la IA pasaría a ser un punto único de fallo del ERP — que es
+ * exactamente lo contrario de lo que esta capa es.
+ *
+ * Se informa el **código** y no el mensaje crudo del proveedor: ese texto puede
+ * traer el pedido completo, y el pedido lleva la cabecera de autorización.
+ */
+async function redactar(
+  contexto: ContextoDeRespuesta,
+): Promise<ResultadoDelRespondedor | { readonly estado: 'FALLO'; readonly codigo: string }> {
+  try {
+    return await new AnsweringAgent({ provider: crearProveedor() }).responder(contexto);
+  } catch (error) {
+    return {
+      estado: 'FALLO',
+      codigo: error instanceof ErrorDeProveedor ? error.codigo : 'DESCONOCIDO',
+    };
+  }
+}
 
 export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -99,6 +145,85 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * Cuánto se consumió, y contra qué tope.
+   *
+   * Se lee sin decidir nada: una pantalla que dice «van 180 de 200» es distinta
+   * de una que corta en la 201 sin aviso.
+   */
+  app.get('/intelligence/quota', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'intelligence:ask');
+    const auth = requireAuth(request);
+    const actorId = `user:${auth.user.userId}`;
+
+    const estado = await withCompany({ companyId: tenant.companyId, actorId }, (tx) =>
+      leerCupo(tx, tenant.companyId, actorId, config.ai.preguntasPorMinuto),
+    );
+
+    return {
+      ...estado,
+      // `null` no es «cero» ni «ilimitado por diseño»: es que la empresa no
+      // declaró un tope. Decirlo con esas palabras evita que una pantalla
+      // dibuje una barra de progreso sobre un denominador que no existe.
+      sinTopeDeclarado: estado.topeDiario === null,
+      alcance:
+        'El cupo diario lo declara la empresa: cuántas preguntas entran en un día depende de ' +
+        'su plan y de lo que esté dispuesta a gastar, y NEXO no lo inventa. El consumo se ' +
+        'cuenta de las llamadas registradas, no de un contador aparte, y es por empresa: ' +
+        'entrar con otro usuario no lo cambia.',
+    };
+  });
+
+  /**
+   * Declara el cupo diario.
+   *
+   * Es una decisión comercial y por eso exige motivo: un número sin explicación,
+   * seis meses después, es una traba que nadie sabe por qué está.
+   */
+  app.post('/intelligence/quota', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    // Configurar el análisis, no preguntarle: es el mismo permiso con el que se
+    // declaran los umbrales, y lo tienen ADMINISTRADOR y CONTADOR.
+    requirePermission(tenant, 'analysis:configure');
+    const auth = requireAuth(request);
+    const actorId = `user:${auth.user.userId}`;
+    const body = z
+      .object({
+        llamadasPorDia: z.number().int().min(0).max(1_000_000),
+        motivo: z.string().min(5).max(500),
+      })
+      .parse(request.body);
+
+    await withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
+      await tx.query(
+        `INSERT INTO ai_quotas (company_id, llamadas_por_dia, motivo, declarado_por)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (company_id) DO UPDATE
+           SET llamadas_por_dia = EXCLUDED.llamadas_por_dia,
+               motivo = EXCLUDED.motivo,
+               declarado_por = EXCLUDED.declarado_por,
+               declarado_at = now()`,
+        [tenant.companyId, body.llamadasPorDia, body.motivo, actorId],
+      );
+
+      await recordAudit(tx, tenant.companyId, {
+        actorType: 'USER',
+        actorId,
+        action: 'DECLARAR_CUPO_DE_IA',
+        objectType: 'ai_quotas',
+        objectId: tenant.companyId,
+        newValue: { llamadasPorDia: body.llamadasPorDia },
+        motivo: body.motivo,
+        ip: clientIp(request),
+        userAgent: request.headers['user-agent'] ?? null,
+      });
+    });
+
+    reply.code(201);
+    return { llamadasPorDia: body.llamadasPorDia, motivo: body.motivo };
+  });
+
+  /**
    * Contesta una pregunta escrita a mano.
    *
    * Tres respuestas posibles, y las tres son honestas: la contesta, dice que no
@@ -106,7 +231,15 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/intelligence/preguntar', async (request) => {
     const tenant = await requireCompany(request);
+    // Preguntar no es leer. Leer la analítica y **hacer que el sistema le
+    // pregunte a un tercero** son dos actos distintos: el segundo puede costar
+    // plata y saca cifras de la empresa hacia afuera. Hasta la 0094 los
+    // gobernaba el mismo permiso.
+    requirePermission(tenant, 'intelligence:ask');
     const auth = requireAuth(request);
+
+    await verificarCupo(tenant.companyId, `user:${auth.user.userId}`);
+
     const body = z
       .object({
         pregunta: z.string().min(3).max(500),
@@ -259,29 +392,6 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
-/**
- * Proveedor según configuración.
- *
- * Mismo criterio que la clasificación (0018) y que ARCA: el simulado se usa si
- * y solo si está pedido explícitamente, y **contesta una abstención declarada**
- * — no un párrafo inventado que se vería igual que uno real.
- */
-function proveedor(): LLMProvider {
-  if (config.ai.provider !== 'mock') return new NullLLMProvider();
-  return new MockLLMProvider({
-    respuestas: [
-      {
-        output: {
-          texto: '',
-          datosUsados: [],
-          normasCitadas: [],
-          abstencion: true,
-        },
-      },
-    ],
-    alAgotarse: 'REPETIR',
-  });
-}
 
 /**
  * La redacción, cuando hay con qué.
@@ -318,7 +428,30 @@ async function narrar(
     periodo: respuesta.periodo,
   };
 
-  const resultado = await new AnsweringAgent({ provider: proveedor() }).responder(contexto);
+  /**
+   * El fallo del proveedor no se lleva puesta la respuesta.
+   *
+   * La cifra ya está calculada por el motor determinístico y es correcta con o
+   * sin narración. Dejar que un 429 o un timeout suba como excepción convertiría
+   * una respuesta válida en un 500: la IA pasaría a ser un punto único de fallo
+   * del ERP, que es exactamente lo contrario de lo que esta capa es.
+   *
+   * El motivo se informa con su código —`TIMEOUT`, `LIMITE_DE_TASA`,
+   * `PROVEEDOR_CAIDO`— y no con el mensaje crudo del proveedor: ese texto puede
+   * traer el pedido completo, y el pedido lleva la cabecera de autorización.
+   */
+  const resultado = await redactar(contexto);
+
+  if (resultado.estado === 'FALLO') {
+    return {
+      disponible: false,
+      motivo: 'PROVEEDOR_FALLO',
+      codigo: resultado.codigo,
+      explicacion:
+        'La cifra y su evidencia son del motor determinístico y siguen siendo correctas. ' +
+        'El proveedor de modelo no pudo redactar el párrafo, y eso no cambia el número.',
+    };
+  }
 
   if (resultado.estado === 'SIN_PROVEEDOR') {
     return {

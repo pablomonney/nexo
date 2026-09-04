@@ -27,6 +27,9 @@ export const ACTIONS_REQUIRING_REASON = [
   // Declarar que un escenario se aplicó sin decir por qué sería un vínculo sin
   // argumento: es lo único que conecta el acto con la predicción.
   'DECLARAR_ESCENARIO_APLICADO',
+  // Un cupo es una traba: sin motivo, seis meses despues nadie sabe por que
+  // esta puesta ni si sigue teniendo sentido.
+  'DECLARAR_CUPO_DE_IA',
 ] as const;
 
 export interface AuditEvent {

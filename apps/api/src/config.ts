@@ -104,13 +104,54 @@ export const config = {
 
   ai: {
     /**
-     * Proveedor de modelo: `none` (por defecto) o `mock`.
+     * Proveedor de modelo. Tres valores, y ninguno más:
      *
-     * `none` no es "sin funcionalidad": el sistema sigue sugiriendo con la
-     * historia de la empresa, sin mandar un solo documento afuera. Es un modo de
-     * operación previsto (§8), no un estado degradado.
+     *   `none`  sin IA externa. Es el valor por defecto y **es un modo de
+     *           operación** (§8): el sistema sigue sugiriendo con la historia de
+     *           la empresa, sin mandar un solo documento afuera.
+     *   `mock`  el simulado, que siempre se abstiene. Para desarrollo y tests.
+     *   `http`  el adaptador HTTP contra un proveedor real.
+     *
+     * Un valor desconocido **no cae a `none`**: `verificarProveedor()` lo
+     * rechaza y el servidor no arranca. Un typo que degrada en silencio es peor
+     * que un arranque fallido — el sistema diría que tiene IA y no la tendría.
      */
     provider: process.env.AI_PROVIDER ?? 'none',
+
+    /**
+     * La credencial. Nunca se loguea, nunca se persiste, nunca sale en un error.
+     *
+     * `null` con `provider=http` es un estado legítimo y nombrado: **preparado,
+     * no conectado**. El arranque lo dice con esas palabras.
+     */
+    apiKey: process.env.AI_API_KEY ?? null,
+
+    /** El modelo. Es del proveedor, así que no hay valor por defecto sensato. */
+    modelId: process.env.AI_MODEL_ID ?? null,
+    baseUrl: process.env.AI_BASE_URL ?? null,
+
+    /**
+     * Timeout de cada intento, en milisegundos.
+     *
+     * Treinta segundos: un modelo tarda más que una API común, y menos que esto
+     * corta respuestas legítimas. Toda llamada tiene timeout — no existe un
+     * `fetch` sin límite en este camino.
+     */
+    timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 30_000),
+
+    /**
+     * Reintentos **además** del primer intento. Solo para lo que puede salir
+     * distinto la próxima vez: 429, 5xx y fallos de red.
+     */
+    maxRetries: Number(process.env.AI_MAX_RETRIES ?? 2),
+
+    /**
+     * Preguntas por minuto y por usuario sobre `POST /intelligence/preguntar`.
+     *
+     * Es un límite **técnico**, no comercial: ataja el bucle, no el gasto. El
+     * gasto lo gobierna el cupo diario por empresa, que la empresa declara.
+     */
+    preguntasPorMinuto: Number(process.env.AI_PREGUNTAS_POR_MINUTO ?? 20),
   },
 
   /** Registrar la IP en la bitácora queda sujeto a evaluación legal (§21). */

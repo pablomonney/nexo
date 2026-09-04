@@ -17,10 +17,20 @@
 import { origenEnv } from './cargar-env.js';
 import { closePool, initPool } from '@aai/db';
 import { modosDeOperacion, verificarEsquema } from './arranque.js';
+import { verificarProveedor } from './ai/proveedor.js';
 import { config } from './config.js';
 import { buildServer } from './server.js';
 
 initPool(config.databaseUrl);
+
+// Un `AI_PROVIDER` desconocido no degrada en silencio: el sistema diría que
+// tiene IA y no la tendría, y nadie iría a buscar por qué no hay sugerencias.
+const proveedorInvalido = verificarProveedor(config.ai);
+if (proveedorInvalido !== null) {
+  console.error(`NEXO no arranca:\n\n  ✘ ${proveedorInvalido}\n`);
+  await closePool();
+  process.exit(1);
+}
 
 const problemas = await verificarEsquema();
 if (problemas.length > 0) {
@@ -56,5 +66,10 @@ await app.listen({ port: config.port, host: '0.0.0.0' });
 console.log(`\nNEXO escuchando en :${config.port}`);
 console.log(`  .env      ${origenEnv}`);
 for (const modo of modosDeOperacion(config)) {
-  console.log(`  ${modo.nombre.padEnd(9)} ${modo.valor}${modo.real ? '' : '   · simulado o apagado'}`);
+  // El detalle importa tanto como el `real`: «preparado, no conectado» y «sin
+  // IA externa» son los dos `real: false`, y quien mira el banner necesita
+  // saber cuál de los dos tiene delante.
+  const marca = modo.real ? '' : '   · simulado o apagado';
+  console.log(`  ${modo.nombre.padEnd(9)} ${modo.valor}${marca}`);
+  if (modo.detalle !== undefined) console.log(`            ${modo.detalle}`);
 }

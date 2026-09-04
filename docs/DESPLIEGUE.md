@@ -47,10 +47,24 @@ secretos. Elegirlos es una decisión con costo y con contrato detrás.
 | `ARCA_ENVIRONMENT` | `mock` | La constatación no consulta al organismo: informa `NO_VERIFICABLE` |
 | `OCR_ENGINE` | `none` | Los documentos se archivan y la extracción informa `SIN_MOTOR_OCR` |
 | `AI_PROVIDER` | `none` | Las sugerencias salen del historial de la empresa, sin mandar nada afuera |
+| `AI_API_KEY`, `AI_MODEL_ID`, `AI_BASE_URL` | vacías | Con `AI_PROVIDER=http` y alguna vacía: **preparado, no conectado**. El arranque lo dice y nombra la que falta |
+| `AI_TIMEOUT_MS` | `30000` | Timeout por intento. No existe una llamada al modelo sin límite |
+| `AI_MAX_RETRIES` | `2` | Reintentos **además** del primero, solo para 429, 5xx y fallos de red |
+| `AI_PREGUNTAS_POR_MINUTO` | `20` | Tope técnico por usuario contra el bucle. El gasto lo gobierna el cupo diario, que declara cada empresa |
 
 Ninguna de las últimas cuatro es un estado degradado disfrazado: son modos de
 operación previstos, y cada uno **dice** en qué modo está en vez de contestar
 como si hubiera mirado.
+
+> ⚠ **`AI_PROVIDER` admite exactamente `none`, `mock` o `http`.** Cualquier otro
+> valor —el nombre de un proveedor real, un typo— **hace que el servidor no
+> arranque**. Antes degradaba en silencio y el banner informaba `real: true`
+> mientras el sistema no usaba ningún modelo: decía tener una capacidad que no
+> tenía, y nadie iba a buscar por qué no aparecían las sugerencias.
+>
+> Que haya credencial cargada tampoco significa «conectado». Lo único que
+> prueba una conexión es una llamada que volvió, y eso lo dice
+> `ai_predictions`, no una variable de entorno.
 
 ## 3 · El orden de un despliegue
 

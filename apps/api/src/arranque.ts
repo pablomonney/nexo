@@ -38,6 +38,11 @@
  * por un reinicio. Dice qué falta y con qué comando se arregla.
  */
 
+import {
+  estadoDelProveedor,
+  faltantesDeHttp,
+  type ConfiguracionDeIa,
+} from './ai/proveedor.js';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -147,6 +152,54 @@ export interface ModoDeOperacion {
   readonly nombre: string;
   readonly valor: string;
   readonly real: boolean;
+  /** Qué falta para que `real` sea cierto, cuando falta algo. */
+  readonly detalle?: string;
+}
+
+/**
+ * El modo de la IA, que es el que más fácil miente.
+ *
+ * La versión anterior calculaba `real: config.ai.provider !== 'none' && !== 'mock'`,
+ * y con eso `AI_PROVIDER=openai` informaba **IA: openai, real** mientras la
+ * fábrica devolvía el proveedor deshabilitado. El sistema decía tener una
+ * capacidad que no tenía, que es la peor clase de error que puede dar un
+ * arranque: no falla, y nadie va a buscar por qué no aparecen las sugerencias.
+ *
+ * Ahora `real` significa una sola cosa: **hay transporte y hay con qué llamar**.
+ * Ni siquiera eso es «conectado» —que la credencial exista no prueba que sirva,
+ * y lo único que lo prueba es una llamada que volvió—, y por eso el detalle lo
+ * dice con esas palabras.
+ */
+export function modoDeIa(ia: ConfiguracionDeIa): ModoDeOperacion {
+  const estado = estadoDelProveedor(ia);
+
+  if (estado === 'CONFIGURADO') {
+    return {
+      nombre: 'IA',
+      valor: `${ia.provider} (${ia.modelId})`,
+      real: true,
+      detalle: 'configurado, sin verificar: una credencial cargada no prueba una conexión',
+    };
+  }
+
+  if (estado === 'PREPARADO') {
+    return {
+      nombre: 'IA',
+      valor: ia.provider,
+      real: false,
+      detalle: `preparado, no conectado: falta ${faltantesDeHttp(ia).join(', ')}`,
+    };
+  }
+
+  return {
+    nombre: 'IA',
+    valor: ia.provider,
+    real: false,
+    detalle:
+      estado === 'SIMULADO'
+        ? 'el simulado se abstiene siempre: no proviene de ningún modelo'
+        : 'sin IA externa; las sugerencias salen de la historia de la empresa',
+  };
 }
 
 /**
@@ -157,7 +210,7 @@ export interface ModoDeOperacion {
  */
 export function modosDeOperacion(config: {
   readonly arca: { readonly environment: string };
-  readonly ai: { readonly provider: string };
+  readonly ai: ConfiguracionDeIa;
   readonly documents: { readonly ocrEngine: string };
   readonly isProduction: boolean;
 }): ModoDeOperacion[] {
@@ -168,7 +221,7 @@ export function modosDeOperacion(config: {
       real: config.arca.environment === 'homologacion' || config.arca.environment === 'produccion',
     },
     { nombre: 'OCR', valor: config.documents.ocrEngine, real: config.documents.ocrEngine !== 'none' && config.documents.ocrEngine !== 'mock' },
-    { nombre: 'IA', valor: config.ai.provider, real: config.ai.provider !== 'none' && config.ai.provider !== 'mock' },
+    modoDeIa(config.ai),
     { nombre: 'entorno', valor: config.isProduction ? 'production' : 'development', real: true },
   ];
 }

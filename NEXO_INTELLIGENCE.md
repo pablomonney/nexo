@@ -140,16 +140,75 @@ control aunque nadie lo haya calculado. Lo que lo contiene es que el prompt
 prohíbe calcular y el schema no tiene dónde poner el resultado; no es lo mismo
 que un candado, y por eso está escrito acá.
 
-### Lo que sigue faltando
+### El proveedor de modelo: tres estados, y en cuál estamos
 
-**El adaptador de un proveedor real.** Con `AI_PROVIDER=mock` el camino entero
-se recorre y el simulado **se abstiene siempre**: no proviene de ningún modelo y
-no tiene valor, y la pantalla lo dice así. Un mock que redactara un párrafo
-produciría algo indistinguible de una respuesta real.
+Conviene no confundirlos, porque el error más caro de esta capa es afirmar el
+siguiente:
 
-Conectar un proveedor es implementar `LLMProvider` en un archivo y configurar su
-credencial. No está hecho porque exige una credencial de un tercero, y hasta que
-exista sería declarar una integración que no se puede ejercitar.
+| | Qué significa | Hoy |
+|---|---|---|
+| **PREPARADO** | La arquitectura y el transporte están. Falta la credencial. | ✔ |
+| **CONECTADO** | Una llamada a un proveedor real volvió. | ✗ |
+| **OPERATIVO** | Además: observabilidad, límites y seguridad probados en uso. | ✗ |
+
+**Estamos en PREPARADO desde 2026-09-04.** Y esto corrige lo que este mismo
+archivo decía antes —«conectar un proveedor es implementar `LLMProvider` en un
+archivo y configurar su credencial»—, que subestimaba el trabajo interno: no
+había dónde poner la credencial, la selección del proveedor estaba duplicada en
+dos rutas, y no existían timeout, reintentos, límites ni contabilidad de costo.
+
+Lo que hay ahora:
+
+```
+crearProveedor()            una fábrica, no dos copias de un `if`
+  ↓
+LLMProvider                 la interfaz, intacta desde el principio
+  ↓
+HttpLLMProvider             timeout, reintentos, errores tipados, uso
+  ↓
+DialectoHttp                la forma de UN proveedor: dos funciones puras
+  ↓
+(el proveedor real)         ← lo único que falta, y es una credencial
+```
+
+**No hay ningún proveedor real en el repositorio**, y no es un olvido: un
+adaptador que nadie pudo ejercitar nunca es una integración declarada, no una
+integración. El único dialecto que viene es el contrato propio, documentado en
+`providers-http.ts`, contra el que corren treinta y tres tests sin red.
+
+**Un valor desconocido en `AI_PROVIDER` no arranca.** Antes degradaba en
+silencio y el banner informaba `real: true` mientras el sistema no usaba ningún
+modelo: decía tener una capacidad que no tenía, que es la peor forma de
+equivocarse porque no falla nada.
+
+### Preguntar cuesta, y por eso tiene su permiso
+
+Leer la analítica y **hacer que el sistema le pregunte a un tercero** son dos
+actos distintos: el segundo puede costar plata y saca cifras de la empresa hacia
+afuera. `intelligence:ask` los separa. Un usuario de solo lectura sigue viendo
+todas las pantallas determinísticas.
+
+Dos topes, que protegen de cosas distintas:
+
+- **Por minuto y por usuario** — técnico, contra el bucle. Lo fija NEXO.
+- **Por día y por empresa** — comercial, contra el gasto. **Lo declara la
+  empresa**: cuántas preguntas entran en un día depende de su plan, y sin fila
+  declarada no hay tope. El consumo se cuenta de las llamadas ya registradas, no
+  de un contador aparte, así que cambiar de usuario no lo saltea.
+
+### Si el proveedor se cae, la cifra llega igual
+
+Es la propiedad central y la más fácil de romper sin querer. La llamada al
+modelo está en el medio de una ruta que **ya calculó la respuesta**, y una
+excepción que suba desde ahí convierte un 200 correcto en un 500. El día que eso
+pase, la IA deja de ser una capacidad adicional y pasa a ser un punto único de
+fallo del ERP.
+
+`tests/integration/ia-proveedor-caido.test.ts` lo ejercita apuntando el
+adaptador a un puerto donde no escucha nadie: la respuesta sigue siendo 200, con
+su cifra, su origen y su metodología, y la narración dice `PROVEEDOR_FALLO` con
+el código —`RED`, `TIMEOUT`— y no con el mensaje crudo del proveedor, que puede
+traer adentro la cabecera de autorización.
 
 **Nada más.** Las dos cosas que este archivo listaba como pendientes ya están:
 el radar de riesgos (`GET /analysis/riesgos`, seis frentes, cada uno con lo que

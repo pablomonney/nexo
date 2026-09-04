@@ -24,6 +24,18 @@
     "./arca/credential-store": {
       "types": "./dist/arca/credential-store.d.ts",
       "default": "./dist/arca/credential-store.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
+    },
+    "./ai/proveedor": {
+      "types": "./dist/ai/proveedor.d.ts",
+      "default": "./dist/ai/proveedor.js"
+    },
+    "./ai/cupo": {
+      "types": "./dist/ai/cupo.d.ts",
+      "default": "./dist/ai/cupo.js"
     }
   },
   "dependencies": {
