@@ -203,13 +203,31 @@ Ninguno de los cinco se resuelve escribiendo código.
 
 ## P3 — Decision Engine
 
-El ciclo está cortado después de «qué pasaría si». Ver
-`NEXO_DECISION_ENGINE.md` §3: recomendar exige un objetivo declarado por la
-empresa; medir el resultado de una decisión exige poder declarar que un
-escenario se aplicó.
+**Medir ya no está cortado.** El 2026-09-04 se construyó el puente: una persona
+declara que un escenario se aplicó **citando una fila de la bitácora**, y
+`GET /analysis/scenarios/:id/result` compara la predicción congelada de ese día
+contra lo que el ERP registró después. NEXO no deduce la aplicación: la
+declaración es un acto humano con motivo, igual que todo lo que toca la
+contabilidad.
 
-**Qué lo destraba:** una decisión de producto sobre cómo se declara un objetivo,
-y otra sobre qué significa «aplicar» un escenario. Ninguna es técnica.
+Lo que sigue abierto:
+
+**Recomendar** exige un objetivo declarado por la empresa. Sin eso, cualquier
+recomendación sería la preferencia de quien programó el sistema disfrazada de
+análisis.
+
+**Deducir la aplicación.** Hoy se declara. Si NEXO debería alguna vez inferir que
+un cambio de precios ejecuta un escenario es una decisión de producto, y la
+respuesta fácil —«el acto más cercano en el tiempo»— es la que fabrica
+atribuciones falsas.
+
+**Qué permiso exige.** Declarar una aplicación pide `analysis:configure`, que ya
+tienen ADMINISTRADOR y CONTADOR. Si merece permiso propio es la misma pregunta
+abierta que la de guardar un escenario, y crear el permiso obligaría a decidir
+qué rol lo tiene.
+
+**Aprender** no está bloqueado por infraestructura sino por **evidencia**: con un
+caso medido no se aprende nada.
 
 ## P4 — ERP: lo que falta y por qué
 

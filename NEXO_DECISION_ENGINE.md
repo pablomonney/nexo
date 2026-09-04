@@ -19,9 +19,10 @@ QUÉ PASA SI        ✔ simulación de precio, volumen y costo, con escenarios g
 CUÁL CONTRA CUÁL   ✔ dos a cinco escenarios lado a lado, sin ganador
 QUÉ CONVIENE       ✗ recomendación
 APROBAR            ✗
-EJECUTAR           ✔ existe el camino (el ERP), no existe el puente desde una decisión
-MEDIR              ✗ predicción contra resultado
-APRENDER           ✗
+EJECUTAR           ✔ existe el camino (el ERP)
+DECLARAR APLICADO  ✔ el puente: una persona lo declara citando el acto
+MEDIR              ✔ qué se esperaba, qué pasó, cuánto se separaron
+APRENDER           ✗ hace falta más de un caso medido
 ```
 
 Los cuatro primeros pasos comparten una propiedad y por eso están: **son
@@ -123,16 +124,44 @@ precios es escribir en la lista de precios; sobre compras, armar una orden.
 Todos esos caminos existen y **exigen firma humana**. El puente que falta no es
 la ejecución: es el registro de que una decisión determinada llevó a ese acto.
 
-### Medir y aprender
+### ~~Medir~~ — hecho el 2026-09-04
 
-`decisión → predicción → resultado real → error` necesita las dos puntas. La
-predicción existe (un escenario guardado es exactamente eso). El resultado real
-también. Lo que falta es **la declaración de que este escenario se aplicó** —
-sin ella, comparar el escenario contra lo que pasó atribuiría a una decisión un
-resultado que pudo venir de cualquier otra cosa.
+`decisión → predicción → resultado real → error` necesitaba las dos puntas y las
+dos existían: la predicción es un escenario guardado y el resultado lo tiene el
+ERP. Faltaba **el puente**, y es el mismo criterio de ADR-021: un documento cita
+el hecho, y la cita se verifica.
 
-Es el mismo criterio que ADR-021: un documento cita el hecho, y la cita se
-verifica. Acá haría falta que un escenario pudiera citar el acto que lo aplicó.
+`POST /analysis/scenarios/:id/applied` declara que un escenario se aplicó
+**citando una fila de la bitácora**, no describiendo lo que se hizo. La bitácora
+está encadenada por hash y es append-only, así que el acto citado existió, tiene
+actor y fecha, y no se puede reescribir después para que encaje con el resultado.
+
+**NEXO no lo deduce.** Que un cambio de precios ejecute un escenario lo afirma
+una persona, con motivo, y queda su nombre. Lo que sigue abierto —y no se
+inventa— es si el sistema debería alguna vez deducirlo.
+
+**Acá sí se congela la respuesta**, al revés que en el escenario. No es una
+contradicción: lo que se esperaba el día que se decidió es un hecho histórico, y
+es justamente lo que se pone a prueba. Recalcularlo después contestaría «¿qué
+proyectaría hoy?» y no quedaría nada contra qué medir. *Un pronóstico que se
+actualiza solo nunca se equivoca.*
+
+`GET /analysis/scenarios/:id/result` compara **ritmos mensuales, no totales**: la
+proyección se hizo sobre los meses que la base cubría y desde que se aplicó pasó
+otra cantidad, así que restar los totales compararía dos ventanas distintas. El
+esperado por mes divide por los meses de la base y no por la ventana pedida — un
+error que este mismo diseño tuvo y que encontró el test del loop, con el signo al
+revés: dividir por la ventana informaba que la decisión superaba el pronóstico
+siempre.
+
+Y no dice que la diferencia la haya **causado** la decisión. Atribuírsela
+exigiría que nada más hubiera cambiado en el período, y eso es falso en general.
+
+### Aprender
+
+Lo que falta ahora no es infraestructura: es **evidencia**. Con un caso medido no
+se aprende nada; con veinte, la tasa de desvío por tipo de decisión empieza a
+decir algo. La infraestructura para acumularlos está.
 
 ## 4. Lo que este motor no va a hacer
 

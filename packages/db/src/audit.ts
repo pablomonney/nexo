@@ -10,13 +10,23 @@ import type { Tx } from './tenancy.js';
 
 export type ActorType = 'USER' | 'SYSTEM' | 'AI';
 
-/** Acciones que la base exige acompañar de un motivo (constraint audit_reason_required). */
+/**
+ * Acciones que la base exige acompañar de un motivo.
+ *
+ * Desde la 0091 la regla vive en `audit_actions.requiere_motivo` y la impone un
+ * trigger, no un CHECK con literales. Esta lista es el espejo del lado del
+ * código —para que un `recordAudit` sin motivo se pueda detectar antes de
+ * llegar a la base— y S-20 comprueba que las dos digan lo mismo.
+ */
 export const ACTIONS_REQUIRING_REASON = [
   'ANULAR_ASIENTO',
   'REABRIR_PERIODO',
   'ACTIVAR_REGLA',
   'RECLASIFICAR_APROBADO',
   'CAMBIAR_PLAN_CUENTAS',
+  // Declarar que un escenario se aplicó sin decir por qué sería un vínculo sin
+  // argumento: es lo único que conecta el acto con la predicción.
+  'DECLARAR_ESCENARIO_APLICADO',
 ] as const;
 
 export interface AuditEvent {

@@ -2435,6 +2435,28 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <th>Margen proyectado</th>
   </tr></thead><tbody></tbody></table></div>
   <dl class="kv" id="sen-c-deltas"></dl>
+
+  <h4>Qué se esperaba, y qué pasó</h4>
+  <p class="ayuda">Un escenario es una predicción. Para poder medirla hace falta decir que
+    <strong>se aplicó</strong>, y con qué acto: sin eso, comparar la proyección contra lo que
+    pasó después le atribuiría a la decisión un resultado que pudo venir de cualquier otra
+    cosa. NEXO no lo deduce — lo declarás vos, citando un acto de la bitácora.</p>
+  <div class="fila">
+    <div style="flex:1"><label>Escenario</label><select id="sen-ap-escenario"></select></div>
+    <div style="flex:1"><label>Acto que lo aplicó</label><select id="sen-ap-acto"></select></div>
+    <div><label>Rige desde</label><input id="sen-ap-desde" type="date"></div>
+  </div>
+  <div class="fila">
+    <div style="flex:1"><label>Por qué este acto aplica este escenario</label>
+      <input id="sen-ap-motivo" maxlength="500"></div>
+    <div><label>&nbsp;</label><button id="b-sen-aplicado">Declarar aplicado</button></div>
+    <div><label>&nbsp;</label><button id="b-sen-resultado" class="sec">Ver el resultado</button></div>
+  </div>
+  <p class="ayuda">La fecha es <strong>desde cuándo rige</strong>, no cuándo se firmó: una
+    lista de precios puede firmarse hoy y regir el mes que viene, y medir desde la firma
+    contaría semanas en las que todavía no pasaba nada.</p>
+  <div id="sen-ap-msg"></div>
+  <dl class="kv" id="sen-ap-resultado"></dl>
   <dl class="kv" id="sen-s-resultado"></dl>
   <div id="sen-s-supuestos"></div>
 </section>
@@ -2845,7 +2867,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'caja') listarCaja();
     if (v === 'integraciones') listarIntegraciones();
     if (v === 'analitica') cargarAnalitica();
-    if (v === 'analisis') listarSenales();
+    if (v === 'analisis') { listarSenales(); cargarDeclaracionDeEscenario(); }
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
@@ -8371,6 +8393,85 @@ async function listarEscenarios() {
     cuerpo.appendChild(tr);
   }
 }
+
+/**
+ * El puente entre una decisión y su resultado.
+ *
+ * Los dos selectores se llenan de lo que ya existe —escenarios guardados y
+ * actos de la bitácora—: el acto se **cita**, no se describe. Una descripción se
+ * escribe después para que encaje con el resultado; una fila de la bitácora
+ * está encadenada por hash y no.
+ */
+async function cargarDeclaracionDeEscenario() {
+  const esc = await api('GET', '/analysis/scenarios');
+  const sel = E('sen-ap-escenario');
+  sel.innerHTML = '';
+  for (const e of ((esc.datos && esc.datos.escenarios) || [])) {
+    const o = document.createElement('option');
+    o.value = e.id; o.textContent = e.nombre;
+    sel.appendChild(o);
+  }
+
+  const actos = await api('GET', '/audit?limite=50');
+  const selActo = E('sen-ap-acto');
+  selActo.innerHTML = '';
+  for (const a of ((actos.datos && actos.datos.eventos) || [])) {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = String(a.ocurridoEn).slice(0, 10) + ' · ' + a.accion + ' · ' + a.objetoTipo;
+    selActo.appendChild(o);
+  }
+  if (selActo.options.length === 0) {
+    E('sen-ap-msg').innerHTML =
+      '<div class="aviso">No hay actos en la bitácora para citar todavía.</div>';
+  }
+}
+
+E('b-sen-aplicado').onclick = async () => {
+  const r = await api('POST', '/analysis/scenarios/' + E('sen-ap-escenario').value + '/applied', {
+    auditLogId: E('sen-ap-acto').value,
+    aplicadoDesde: E('sen-ap-desde').value,
+    motivo: E('sen-ap-motivo').value,
+  });
+  decir('sen-ap-msg', r, 'Declarado. La predicción de hoy queda congelada: es contra eso que ' +
+    'se va a medir.');
+};
+
+E('b-sen-resultado').onclick = async () => {
+  const r = await api('GET', '/analysis/scenarios/' + E('sen-ap-escenario').value + '/result');
+  if (!r.ok) return decir('sen-ap-msg', r);
+  const d = r.datos;
+  const kv = E('sen-ap-resultado');
+
+  // Los dos estados que no son una medición se dibujan como lo que son. Un
+  // desvío de cero en una pantalla vacía se leería como «dio justo».
+  if (d.estado !== 'MEDIDO') {
+    kv.innerHTML = fila('Estado', d.estado) + fila('Por qué', d.motivo);
+    E('sen-ap-msg').innerHTML = '';
+    return;
+  }
+
+  kv.innerHTML =
+    fila('Escenario', d.escenario.nombre) +
+    fila('Aplicado desde', d.aplicacion.desde) +
+    fila('Acto citado', d.aplicacion.actoCitado.accion) +
+    fila('Declarado por', d.aplicacion.declaradoPor) +
+    fila('Esperado por mes', d.esperado.porMes) +
+    fila('Real por mes', d.real.porMes) +
+    fila('Meses transcurridos', d.real.mesesTranscurridos) +
+    // El signo importa y el color también: quedarse corto y pasarse no son lo
+    // mismo, y un número suelto no lo dice.
+    '<dt>Diferencia por mes</dt><dd class="mono"><span class="p ' +
+      (Number(d.diferencia.porMes) < 0 ? 'p-ojo' : 'p-bien') + '">' +
+      escapar(d.diferencia.porMes) +
+      (d.desvioPct === null ? '' : '') + '</span></dd>' +
+    fila('Desvío', d.diferencia.desvioPct === null ? 'no se puede calcular' :
+      d.diferencia.desvioPct + ' %');
+
+  E('sen-ap-msg').innerHTML =
+    '<div class="aviso">' + escapar(d.metodologia) + '</div>' +
+    '<div class="aviso">' + escapar(d.alcance) + '</div>';
+};
 
 E('b-sen-comparar').onclick = async () => {
   const ids = [...E('t-sen-esc').querySelectorAll('.marca:checked')].map((c) => c.value);

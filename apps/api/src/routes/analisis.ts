@@ -922,6 +922,348 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
+  /**
+   * Declara que un escenario se aplicó, citando el acto.
+   *
+   * Es el puente que le faltaba al ciclo de decisión. La predicción existía —un
+   * escenario guardado es exactamente eso— y el resultado real lo tiene el ERP;
+   * lo que no había era manera de decir que este escenario llevó a este acto.
+   * Sin eso, comparar el escenario contra lo que pasó después atribuiría a una
+   * decisión un resultado que pudo venir de cualquier otra cosa.
+   *
+   * **NEXO no lo deduce: lo declara una persona.** El acto se cita por su fila
+   * de la bitácora, que está encadenada por hash y no se puede reescribir
+   * después para que encaje con el resultado. Es el mismo criterio del ADR-021.
+   *
+   * Al declarar se **congela la predicción de ese día**. La 0087 decidió lo
+   * contrario para el escenario —se guarda la pregunta, no la respuesta— y ese
+   * argumento sigue en pie; esto es otra cosa: lo que se esperaba cuando se
+   * tomó la decisión es un hecho histórico, y es justamente lo que se pone a
+   * prueba. Un pronóstico que se recalcula solo nunca se equivoca.
+   */
+  app.post('/analysis/scenarios/:escenarioId/applied', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    // Y un permiso de escritura, que lo distingue de guardar un escenario: esto
+    // deja un registro inmutable que después se usa para juzgar una decisión, y
+    // un usuario de solo lectura no debería poder plantar una predicción. Se usa
+    // `analysis:configure` —el que ya tienen ADMINISTRADOR y CONTADOR para
+    // declarar los umbrales— y no uno nuevo: si esto merece permiso propio es
+    // parte de la misma decisión pendiente que la de guardar un escenario
+    // (NEXO_ROADMAP.md), y crear el permiso obligaría a decidir qué rol lo
+    // tiene, que es justamente lo que no se inventa acá.
+    requirePermission(tenant, 'analysis:configure');
+    const auth = requireAuth(request);
+    const { escenarioId } = z.object({ escenarioId: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        /** La fila de la bitácora que registra el acto. No un texto que lo describa. */
+        auditLogId: z.string().uuid(),
+        aplicadoDesde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+        motivo: z.string().min(10).max(500),
+      })
+      .parse(request.body);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const escenario = await tx.query<{
+          meses: number;
+          precio: string;
+          volumen: string;
+          costo: string;
+          nombre: string;
+        }>(
+          `SELECT nombre, meses, variacion_precio::text AS precio,
+                  variacion_volumen::text AS volumen, variacion_costo::text AS costo
+             FROM analysis_scenarios
+            WHERE id = $1 AND company_id = $2`,
+          [escenarioId, tenant.companyId],
+        );
+        const e = escenario.rows[0];
+        if (e === undefined) throw notFound('Escenario no encontrado en esta empresa');
+
+        // El acto tiene que existir y ser de esta empresa. Un id de otra
+        // empresa no llega —el RLS ya lo cortó—, pero un id inventado sí
+        // llegaría hasta la clave foránea, y ahí el error diría «viola una
+        // restricción» en vez de qué pasó.
+        const acto = await tx.query<{ action: string; object_type: string; occurred_at: string }>(
+          `SELECT action, object_type, occurred_at::text
+             FROM audit_logs WHERE id = $1 AND company_id = $2`,
+          [body.auditLogId, tenant.companyId],
+        );
+        if (acto.rowCount === 0) {
+          throw notFound(
+            'Ese acto no está en la bitácora de esta empresa. La aplicación de un escenario ' +
+              'se cita por el acto que la ejecutó, no se describe.',
+          );
+        }
+
+        const resultado = (await simular(tx, tenant.companyId, {
+          meses: e.meses,
+          variacionDePrecio: Number(e.precio),
+          variacionDeVolumen: Number(e.volumen),
+          variacionDeCosto: Number(e.costo),
+        })) as {
+          base: { netoFacturado: string; mesesConDatos: number };
+          resultado: { netoProyectado: string };
+          margen: { proyectado: { margen: string } | null; motivo: string | null };
+        };
+
+        // Sin un mes de datos no hay predicción que poner a prueba. Declarar la
+        // aplicación igual dejaría una fila que promete una medición imposible.
+        if (resultado.base.mesesConDatos < 1) {
+          throw badRequest(
+            'El escenario proyecta sobre una base vacía: la empresa no tiene ningún mes con ' +
+              'ventas. Una predicción sobre nada no se puede medir contra nada.',
+          );
+        }
+
+        const insertado = await tx.query<{ id: string }>(
+          `INSERT INTO scenario_applications
+             (company_id, scenario_id, audit_log_id, aplicado_desde, motivo,
+              base_neto, base_meses, esperado_neto, esperado_margen, motivo_sin_margen,
+              meses, variacion_precio, variacion_volumen, variacion_costo, declarado_por)
+           VALUES ($1,$2,$3,$4::date,$5,$6::numeric,$7,$8::numeric,$9::numeric,$10,
+                   $11,$12::numeric,$13::numeric,$14::numeric,$15)
+           RETURNING id`,
+          [
+            tenant.companyId,
+            escenarioId,
+            body.auditLogId,
+            body.aplicadoDesde,
+            body.motivo,
+            resultado.base.netoFacturado,
+            resultado.base.mesesConDatos,
+            resultado.resultado.netoProyectado,
+            resultado.margen.proyectado?.margen ?? null,
+            resultado.margen.proyectado === null
+              ? (resultado.margen.motivo ?? 'El margen no se pudo proyectar')
+              : null,
+            e.meses,
+            e.precio,
+            e.volumen,
+            e.costo,
+            `user:${auth.user.userId}`,
+          ],
+        );
+
+        await recordAudit(tx, tenant.companyId, {
+          actorType: 'USER',
+          actorId: `user:${auth.user.userId}`,
+          action: 'DECLARAR_ESCENARIO_APLICADO',
+          objectType: 'scenario_applications',
+          objectId: insertado.rows[0]!.id,
+          newValue: {
+            escenario: e.nombre,
+            actoCitado: { id: body.auditLogId, accion: acto.rows[0]!.action },
+            esperadoNeto: resultado.resultado.netoProyectado,
+          },
+          motivo: body.motivo,
+          ip: clientIp(request),
+          userAgent: request.headers['user-agent'] ?? null,
+        });
+
+        reply.code(201);
+        return {
+          id: insertado.rows[0]!.id,
+          escenario: e.nombre,
+          actoCitado: {
+            id: body.auditLogId,
+            accion: acto.rows[0]!.action,
+            objeto: acto.rows[0]!.object_type,
+            ocurridoEn: acto.rows[0]!.occurred_at,
+          },
+          esperado: {
+            base: resultado.base.netoFacturado,
+            baseEnMeses: resultado.base.mesesConDatos,
+            neto: resultado.resultado.netoProyectado,
+            margen: resultado.margen.proyectado?.margen ?? null,
+          },
+          alcance:
+            'La predicción queda congelada: es lo que se esperaba el día que se aplicó, y es ' +
+            'lo que se va a poner a prueba. Esta declaración no afirma que el escenario vaya ' +
+            'a causar lo que pase después.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Qué se esperaba, qué pasó, y cuál fue la diferencia.
+   *
+   * La otra mitad del ciclo. Compara la predicción congelada contra lo que el
+   * ERP registró desde que el escenario se aplicó.
+   *
+   * **Compara ritmos mensuales, no totales.** El escenario proyecta sobre una
+   * ventana de `meses`, y desde que se aplicó pasó otra cantidad de meses:
+   * restar los dos totales compararía una proyección de doce meses contra dos
+   * meses de realidad y daría un desvío enorme que no significa nada.
+   *
+   * **No dice que la diferencia la causó la decisión.** Atribuirla exigiría que
+   * nada más hubiera cambiado en el período, y eso es falso en general.
+   */
+  app.get('/analysis/scenarios/:escenarioId/result', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'analysis:read');
+    requirePermission(tenant, 'report:read');
+    const auth = requireAuth(request);
+    const { escenarioId } = z.object({ escenarioId: z.string().uuid() }).parse(request.params);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const r = await tx.query<{
+          nombre: string;
+          pregunta: string;
+          aplicadoDesde: string;
+          motivo: string;
+          declaradoPor: string;
+          declaradoAt: string;
+          auditLogId: string;
+          accion: string;
+          meses: number;
+          baseNeto: string;
+          baseMeses: number;
+          esperadoNeto: string;
+          esperadoMargen: string | null;
+          motivoSinMargen: string | null;
+          realNeto: string;
+          mesesTranscurridos: string;
+        }>(
+          // Toda la aritmética en `numeric`, del lado de la base: los importes
+          // no pasan por JavaScript ni para restarse (`check:no-float`).
+          `SELECT s.nombre, s.pregunta,
+                  a.aplicado_desde::text        AS "aplicadoDesde",
+                  a.motivo, a.declarado_por     AS "declaradoPor",
+                  a.declarado_at::text          AS "declaradoAt",
+                  a.audit_log_id                AS "auditLogId",
+                  l.action                      AS accion,
+                  a.meses,
+                  a.base_neto::text             AS "baseNeto",
+                  a.base_meses                  AS "baseMeses",
+                  a.esperado_neto::text         AS "esperadoNeto",
+                  a.esperado_margen::text       AS "esperadoMargen",
+                  a.motivo_sin_margen           AS "motivoSinMargen",
+                  coalesce(real.neto, 0)::text  AS "realNeto",
+                  coalesce(real.meses, 0)::text AS "mesesTranscurridos"
+             FROM scenario_applications a
+             JOIN analysis_scenarios s
+               ON s.id = a.scenario_id AND s.company_id = a.company_id
+             JOIN audit_logs l ON l.id = a.audit_log_id
+             LEFT JOIN LATERAL (
+                   SELECT sum(m.neto) AS neto, count(*) AS meses
+                     FROM analytics_operaciones_mensuales m
+                    WHERE m.company_id = a.company_id
+                      AND m.direccion = 'VENTAS'
+                      AND m.mes >= date_trunc('month', a.aplicado_desde)::date
+                  ) real ON true
+            WHERE a.company_id = $1 AND a.scenario_id = $2`,
+          [tenant.companyId, escenarioId],
+        );
+
+        const f = r.rows[0];
+        if (f === undefined) {
+          return {
+            estado: 'SIN_APLICAR',
+            motivo:
+              'Este escenario no está declarado como aplicado. Sin esa declaración, comparar ' +
+              'la proyección contra lo que pasó después le atribuiría a la decisión un ' +
+              'resultado que pudo venir de cualquier otra cosa.',
+          };
+        }
+
+        const transcurridos = Number(f.mesesTranscurridos);
+
+        // Sin un mes completo de datos no hay con qué comparar, y decirlo es
+        // distinto de mostrar un desvío del cien por ciento.
+        if (transcurridos === 0) {
+          return {
+            estado: 'SIN_EVIDENCIA_TODAVIA',
+            escenario: { nombre: f.nombre, pregunta: f.pregunta },
+            aplicacion: {
+              desde: f.aplicadoDesde,
+              motivo: f.motivo,
+              declaradoPor: f.declaradoPor,
+              actoCitado: { id: f.auditLogId, accion: f.accion },
+            },
+            esperado: { neto: f.esperadoNeto, ventanaEnMeses: f.meses },
+            motivo:
+              'Todavía no hay un mes cerrado desde que se aplicó. Comparar contra cero diría ' +
+              'que la decisión falló, y lo que pasa es que no pasó el tiempo.',
+          };
+        }
+
+        // Ritmo mensual esperado contra ritmo mensual real. Los dos salen de
+        // dividir en la base, con la precisión de `numeric`.
+        //
+        // El esperado se divide por **los meses que la base cubría**, no por la
+        // ventana que el escenario pidió mirar. Una empresa con un mes de vida
+        // proyecta sobre un mes aunque el escenario diga doce, y dividir por
+        // doce daría un esperado doce veces más chico que lo real: el sistema
+        // informaría que la decisión superó el pronóstico siempre.
+        const ritmos = await tx.query<{
+          esperadoMensual: string;
+          realMensual: string;
+          diferencia: string;
+          desvioPct: string;
+        }>(
+          `SELECT ($1::numeric / $2::numeric)::numeric(18, 2)      AS "esperadoMensual",
+                  ($3::numeric / $4::numeric)::numeric(18, 2)      AS "realMensual",
+                  (($3::numeric / $4::numeric) - ($1::numeric / $2::numeric))::numeric(18, 2)
+                                                                   AS diferencia,
+                  CASE WHEN $1::numeric = 0 THEN NULL
+                       ELSE ((($3::numeric / $4::numeric) - ($1::numeric / $2::numeric))
+                             / ($1::numeric / $2::numeric) * 100)::numeric(7, 2)
+                  END                                              AS "desvioPct"`,
+          [f.esperadoNeto, f.baseMeses, f.realNeto, transcurridos],
+        );
+        const d = ritmos.rows[0]!;
+
+        return {
+          estado: 'MEDIDO',
+          escenario: { nombre: f.nombre, pregunta: f.pregunta },
+          aplicacion: {
+            desde: f.aplicadoDesde,
+            motivo: f.motivo,
+            declaradoPor: f.declaradoPor,
+            declaradoEl: f.declaradoAt,
+            actoCitado: { id: f.auditLogId, accion: f.accion },
+          },
+          esperado: {
+            base: f.baseNeto,
+            baseEnMeses: f.baseMeses,
+            neto: f.esperadoNeto,
+            ventanaEnMeses: f.meses,
+            porMes: d.esperadoMensual,
+            margen: f.esperadoMargen,
+            motivoSinMargen: f.motivoSinMargen,
+          },
+          real: {
+            neto: f.realNeto,
+            mesesTranscurridos: transcurridos,
+            porMes: d.realMensual,
+          },
+          diferencia: { porMes: d.diferencia, desvioPct: d.desvioPct },
+          metodologia:
+            'Se comparan ritmos mensuales y no totales: la proyección se hizo sobre ' +
+            `${f.baseMeses} mes(es) de base y desde que se aplicó pasaron ${transcurridos}. ` +
+            'Restar los totales compararía dos ventanas distintas y daría un desvío que no ' +
+            'significa nada. El esperado por mes divide la proyección por los meses que la ' +
+            `base cubría (${f.baseMeses}), no por la ventana que el escenario pidió mirar ` +
+            `(${f.meses}). Lo real sale de los comprobantes de VENTAS por mes, fechados por ` +
+            'el comprobante.',
+          alcance:
+            'Esto **no dice** que la diferencia la haya causado la decisión. Atribuírsela ' +
+            'exigiría que nada más hubiera cambiado en el período —el mercado, los costos, la ' +
+            'estacionalidad—, y eso es falso en general. Dice qué se esperaba, qué pasó, y ' +
+            'cuánto se separaron.',
+        };
+      },
+    );
+  });
+
   /** Archiva un escenario, con motivo. No se borra: la comparación en la que aparecía queda. */
   app.post('/analysis/scenarios/:escenarioId/archive', async (request) => {
     const tenant = await requireCompany(request);
