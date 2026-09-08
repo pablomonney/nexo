@@ -72,6 +72,12 @@ const RUTAS_LIMITADAS = new Set([
   '/auth/login',
   '/auth/mfa/verify',
   '/auth/register-first-admin',
+  // El alta autoservicio es la unica ruta que crea usuarios sin que nadie los
+  // autorice. Sin limite, un script llena la tabla de usuarios y la bandeja de
+  // salida en un minuto.
+  '/auth/signup',
+  '/auth/verificar-correo',
+  '/auth/reenviar-verificacion',
 ]);
 
 /**

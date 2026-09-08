@@ -1,4 +1,4 @@
-import { withoutCompany } from '@aai/db';
+import { withoutCompany, type Tx } from '@aai/db';
 import { generateSecret, otpauthUri, verifyTotp } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -13,7 +13,14 @@ import {
   verifyPassword,
 } from '../auth/crypto.js';
 import { requireAuth } from '../http/context.js';
-import { badRequest, invalidCredentials, tooManyRequests, unauthorized } from '../http/errors.js';
+import {
+  badRequest,
+  forbidden,
+  invalidCredentials,
+  tooManyRequests,
+  unauthorized,
+} from '../http/errors.js';
+import { SinProveedorDeCorreo, encolar, type ResultadoDeEnvio } from '../correo/puerto.js';
 
 const loginSchema = z.object({
   email: z.string().email().max(320),
@@ -58,6 +65,17 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       if (user.locked_until !== null && user.locked_until > new Date()) {
         return { kind: 'locked' as const, until: user.locked_until };
+      }
+
+      // La contraseña es correcta y la cuenta está esperando que confirme el
+      // correo. Se lo dice, y no se cuenta como intento fallido: no lo es.
+      //
+      // Decirlo revela que la cuenta existe, y está bien: para llegar acá hubo
+      // que acertar la contraseña. La alternativa —el mismo error genérico—
+      // dejaría a alguien probando su contraseña correcta una y otra vez hasta
+      // bloquearse la cuenta, sin ninguna forma de enterarse de qué falta.
+      if (passwordOk && user.status === 'PENDIENTE') {
+        return { kind: 'pendiente' as const };
       }
 
       if (!passwordOk || user.status !== 'ACTIVE') {
@@ -121,6 +139,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     if (outcome.kind === 'locked') {
       throw tooManyRequests('Cuenta bloqueada temporalmente por intentos fallidos');
     }
+    if (outcome.kind === 'pendiente') {
+      throw forbidden(
+        'La cuenta existe y todavía no confirmaste tu correo. Buscá el mensaje de ' +
+          'verificación, o pedí uno nuevo desde /auth/reenviar-verificacion.',
+      );
+    }
+
     if (outcome.kind === 'invalid') {
       throw invalidCredentials();
     }
@@ -298,5 +323,203 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       throw badRequest('Ya existe al menos un usuario: usá el alta desde el estudio.');
     }
     return { id: created };
+  });
+
+  /**
+   * Alta autoservicio.
+   *
+   * ## Contesta lo mismo exista o no la dirección
+   *
+   * Si contestara «ese correo ya está registrado», cualquiera podría averiguar
+   * quién usa NEXO probando direcciones — que es exactamente lo que el login ya
+   * evita desde S-10. Acá vale lo mismo y es más fácil de olvidar, porque la
+   * respuesta «ya existe» parece un servicio al usuario.
+   *
+   * A cambio, quien ya tiene cuenta y se registra de nuevo recibe un mensaje que
+   * dice «revisá tu correo» y no encuentra nada nuevo. Es el precio, y es más
+   * barato que una lista de clientes.
+   *
+   * ## El usuario nace PENDIENTE
+   *
+   * No entra hasta confirmar. Sin eso, alguien podría registrarse con el correo
+   * de otro y quedarse esperando a que esa persona intente entrar.
+   *
+   * ## Y el correo probablemente no salga
+   *
+   * No hay proveedor contratado: el mensaje queda en la bandeja de salida con
+   * `SIN_PROVEEDOR`. La respuesta **lo dice**, en vez de afirmar que se mandó
+   * algo que no se mandó.
+   */
+  app.post('/auth/signup', async (request) => {
+    const body = z
+      .object({
+        email: z.string().email().max(320),
+        // Mismo mínimo que el resto del sistema. La política de contraseñas es
+        // de longitud y no de "complejidad" cosmética (SECURITY.md §2).
+        password: z.string().min(12).max(1024),
+        fullName: z.string().min(1).max(200),
+      })
+      .parse(request.body);
+
+    const salida = await withoutCompany('system:alta', async (tx) => {
+      const existente = await tx.query<{ id: string }>(
+        'SELECT id FROM users WHERE lower(email) = lower($1)',
+        [body.email],
+      );
+      // Ya existe: no se toca nada y se contesta igual que si no existiera.
+      if (existente.rows[0] !== undefined) return { enviado: null };
+
+      const creado = await tx.query<{ id: string }>(
+        `INSERT INTO users (email, full_name, password_hash, status, created_by)
+         VALUES ($1, $2, $3, 'PENDIENTE', 'autoservicio') RETURNING id`,
+        [body.email, body.fullName, await hashPassword(body.password)],
+      );
+
+      const envio = await emitirVerificacion(
+        tx,
+        creado.rows[0]!.id,
+        body.email,
+        request.ip,
+      );
+      return { enviado: envio.estado };
+    });
+
+    return {
+      // Nunca el id ni el token: el que se registra no necesita ninguno de los
+      // dos, y devolverlos convertiría esta ruta en una forma de verificar
+      // cuentas sin pasar por el correo.
+      estado: 'REGISTRADO',
+      mensaje:
+        'Si la dirección no estaba registrada, te mandamos un mensaje para confirmarla.',
+      correo:
+        salida.enviado === 'ENVIADO'
+          ? 'El mensaje de verificación salió.'
+          : 'ATENCIÓN: no hay proveedor de correo configurado en esta instalación, así que ' +
+            'el mensaje quedó en la bandeja de salida y no llegó a ningún lado. Hasta que se ' +
+            'contrate uno, el alta la completa el operador.',
+    };
+  });
+
+  /**
+   * Confirma la dirección y activa la cuenta.
+   *
+   * El token se compara **por su hash**: lo que hay en la base no sirve para
+   * verificar nada, así que una filtración de la tabla no es una filtración de
+   * cuentas. Es lo mismo que se hace con la sesión desde S-11.
+   */
+  app.post('/auth/verificar-correo', async (request) => {
+    const { token } = z.object({ token: z.string().min(20).max(200) }).parse(request.body);
+
+    const resultado = await withoutCompany('system:alta', async (tx) => {
+      const fila = await tx.query<{ id: string; user_id: string; expira_el: Date }>(
+        `SELECT id, user_id, expira_el FROM email_verifications
+          WHERE token_hash = $1 AND proposito = 'ALTA' AND consumido_el IS NULL`,
+        [hashToken(token)],
+      );
+      const v = fila.rows[0];
+      if (v === undefined) return 'INVALIDO' as const;
+      if (v.expira_el <= new Date()) return 'VENCIDO' as const;
+
+      // Se consume antes de activar. Si el orden fuera al revés y algo fallara
+      // en el medio, el token quedaría vivo sobre una cuenta ya activa.
+      await tx.query('UPDATE email_verifications SET consumido_el = now() WHERE id = $1', [v.id]);
+      await tx.query(
+        `UPDATE users SET status = 'ACTIVE', updated_at = now()
+          WHERE id = $1 AND status = 'PENDIENTE'`,
+        [v.user_id],
+      );
+      return 'ACTIVADA' as const;
+    });
+
+    if (resultado === 'INVALIDO') {
+      // Un solo mensaje para «no existe» y «ya se usó»: distinguirlos diría si
+      // un token fue válido alguna vez.
+      throw badRequest('El enlace no sirve: puede haberse usado ya o no ser el que mandamos.');
+    }
+    if (resultado === 'VENCIDO') {
+      throw badRequest(
+        'El enlace venció. Pedí uno nuevo desde /auth/reenviar-verificacion — el anterior ' +
+          'queda invalidado, para no tener dos vías abiertas hacia la misma cuenta.',
+      );
+    }
+
+    return { estado: 'ACTIVADA', mensaje: 'Listo: ya podés entrar.' };
+  });
+
+  /**
+   * Manda un token nuevo, e invalida el anterior.
+   *
+   * Que el anterior muera no es un detalle: dos tokens vivos duplican la
+   * superficie por la que se puede tomar una cuenta, y el segundo se pide
+   * justamente cuando el primero pudo haber ido a parar a otro lado.
+   */
+  app.post('/auth/reenviar-verificacion', async (request) => {
+    const { email } = z.object({ email: z.string().email().max(320) }).parse(request.body);
+
+    await withoutCompany('system:alta', async (tx) => {
+      const fila = await tx.query<{ id: string; status: string }>(
+        'SELECT id, status FROM users WHERE lower(email) = lower($1)',
+        [email],
+      );
+      const u = fila.rows[0];
+      // Solo tiene sentido para una cuenta pendiente. Si no existe, o ya está
+      // activa, no se hace nada — y se contesta lo mismo.
+      if (u === undefined || u.status !== 'PENDIENTE') return;
+
+      await tx.query(
+        `UPDATE email_verifications SET consumido_el = now()
+          WHERE user_id = $1 AND proposito = 'ALTA' AND consumido_el IS NULL`,
+        [u.id],
+      );
+      await emitirVerificacion(tx, u.id, email, request.ip);
+    });
+
+    return {
+      estado: 'PEDIDO',
+      mensaje: 'Si esa dirección tenía un alta sin confirmar, te mandamos un mensaje nuevo.',
+    };
+  });
+}
+
+/**
+ * Cuánto vive un enlace de verificación.
+ *
+ * Un día. Es un parámetro de seguridad y no una decisión comercial, así que
+ * tiene valor por defecto: más corto echa a quien abre el correo al día
+ * siguiente, más largo deja abierta una vía de entrada a una cuenta durante una
+ * semana en la bandeja de alguien.
+ */
+const HORAS_DE_VIDA_DEL_ENLACE = 24;
+
+/**
+ * Crea el token, lo guarda hasheado y encola el mensaje.
+ *
+ * Devuelve qué pasó con el envío para que quien llama pueda decirlo. **El token
+ * no se devuelve**: sale por el cuerpo del mensaje y por ningún otro lado.
+ */
+async function emitirVerificacion(
+  tx: Tx,
+  userId: string,
+  email: string,
+  ip: string,
+): Promise<ResultadoDeEnvio> {
+  const token = generateSessionToken();
+
+  await tx.query(
+    `INSERT INTO email_verifications
+       (user_id, token_hash, proposito, expira_el, creado_desde)
+     VALUES ($1, $2, 'ALTA', now() + ($3 || ' hours')::interval, $4)`,
+    [userId, hashToken(token), String(HORAS_DE_VIDA_DEL_ENLACE), config.recordIpInAudit ? ip : null],
+  );
+
+  return encolar(tx, new SinProveedorDeCorreo(), {
+    destinatario: email,
+    asunto: 'Confirmá tu dirección para entrar a NEXO',
+    cuerpo:
+      'Para activar tu cuenta, mandá este código a /auth/verificar-correo:\n\n' +
+      `${token}\n\n` +
+      `El enlace vence en ${HORAS_DE_VIDA_DEL_ENLACE} horas. Si no fuiste vos quien se ` +
+      'registró, ignorá este mensaje: la cuenta no se activa sola.',
+    tipo: 'VERIFICACION_DE_ALTA',
   });
 }

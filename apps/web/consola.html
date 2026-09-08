@@ -197,6 +197,42 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
     <div id="mfa-alta-msg"></div>
   </div>
   <div id="login-msg"></div>
+
+  <details class="grupo" id="alta"><summary>No tengo cuenta</summary><div>
+    <h3>Registrarse</h3>
+    <p class="ayuda">El alta crea la cuenta en estado <strong>pendiente</strong>: no entra hasta
+      confirmar la dirección de correo. Sin ese paso, cualquiera podría registrarse con el
+      correo de otro y quedarse esperando a que esa persona intente entrar.</p>
+    <p class="ayuda"><strong>Esta instalación no tiene proveedor de correo</strong>, así que el
+      mensaje de confirmación queda en la bandeja de salida del servidor y no llega a ningún
+      lado. Hasta que se contrate uno, el alta la completa el operador — se dice acá en vez de
+      dejar a alguien esperando un correo que nunca va a salir.</p>
+    <div class="fila">
+      <div><label>Correo</label><input id="alta-email" type="email" autocomplete="email"></div>
+      <div><label>Contraseña (12 o más)</label>
+        <input id="alta-pass" type="password" autocomplete="new-password"></div>
+      <div><label>Nombre y apellido</label><input id="alta-nombre" maxlength="200"></div>
+      <div><label>&nbsp;</label><button id="b-alta">Registrarme</button></div>
+    </div>
+    <div id="alta-msg"></div>
+
+    <h4>Ya tengo el código de confirmación</h4>
+    <div class="fila">
+      <div style="flex:2"><label>Código</label><input id="alta-token" maxlength="200"></div>
+      <div><label>&nbsp;</label><button id="b-alta-verificar" class="sec">Confirmar</button></div>
+    </div>
+    <div id="alta-ver-msg"></div>
+
+    <h4>No me llegó</h4>
+    <div class="fila">
+      <div><label>Correo</label><input id="alta-reenvio-email" type="email"></div>
+      <div><label>&nbsp;</label><button id="b-alta-reenviar" class="sec">Mandar otro</button></div>
+    </div>
+    <p class="ayuda">Pedir uno nuevo <strong>invalida el anterior</strong>: dos códigos vivos
+      duplican la superficie por la que se puede tomar una cuenta, y el segundo se pide
+      justamente cuando el primero pudo haber ido a parar a otro lado.</p>
+    <div id="alta-re-msg"></div>
+  </div></details>
 </section>
 
 <!-- ══ Empresa ════════════════════════════════════════════════════════════ -->
@@ -3092,6 +3128,39 @@ for (const b of document.querySelectorAll('nav button')) {
 }
 
 // ══ 0 · Sesión ════════════════════════════════════════════════════════════
+E('b-alta').onclick = async () => {
+  const r = await api('POST', '/auth/signup', {
+    email: E('alta-email').value.trim(),
+    password: E('alta-pass').value,
+    fullName: E('alta-nombre').value.trim(),
+  });
+  decir('alta-msg', r);
+  if (r.ok) {
+    // El mensaje del servidor dice si el correo salió o quedó en la bandeja. Se
+    // muestra tal cual: la consola no puede saberlo por su cuenta y afirmarlo
+    // sería inventarlo.
+    E('alta-msg').innerHTML += '<div class="aviso">' + escapar(r.datos.correo) + '</div>';
+    E('alta-pass').value = '';
+    E('alta-reenvio-email').value = E('alta-email').value.trim();
+  }
+};
+
+E('b-alta-verificar').onclick = async () => {
+  const r = await api('POST', '/auth/verificar-correo', { token: E('alta-token').value.trim() });
+  decir('alta-ver-msg', r);
+  if (r.ok) {
+    E('alta-token').value = '';
+    E('email').value = E('alta-email').value.trim();
+  }
+};
+
+E('b-alta-reenviar').onclick = async () => {
+  const r = await api('POST', '/auth/reenviar-verificacion', {
+    email: E('alta-reenvio-email').value.trim(),
+  });
+  decir('alta-re-msg', r);
+};
+
 E('b-login').onclick = async () => {
   const login = await api('POST', '/auth/login', { email: E('email').value, password: E('pass').value });
   if (!login.ok) return decir('login-msg', login);

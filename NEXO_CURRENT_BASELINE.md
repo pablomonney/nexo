@@ -197,9 +197,19 @@ clientes**, no el suyo.
 ### NEXO Interface — PARCIAL
 
 35 secciones en una consola técnica de un solo archivo. Está declarado en
-`apps/web/README.md` que **no es la interfaz definitiva**. No hay alta
-autoservicio: `/auth/register-first-admin` da de alta el primer administrador y
-nada más.
+`apps/web/README.md` que **no es la interfaz definitiva**.
+
+**Actualizado el 2026-09-08:** hay **alta autoservicio** (0103). El usuario nace
+`PENDIENTE` y no entra hasta confirmar su correo; el token se guarda hasheado,
+sirve una sola vez, y pedir otro invalida el anterior. Registrarse con una
+dirección que ya existe contesta lo mismo que con una nueva — si dijera «ya está
+registrado», cualquiera podría averiguar quién usa NEXO probando direcciones.
+
+**Y no se completa sola**, porque no hay proveedor de correo: el mensaje queda
+en `email_outbox`, que la aplicación **puede escribir y no puede leer** —el
+cuerpo lleva el token—. Lo lee el operador con `npm run correo:bandeja`. La
+pantalla lo dice con esas palabras en vez de dejar a alguien esperando un correo
+que nunca va a salir.
 
 ---
 
@@ -212,7 +222,7 @@ nada más.
 | Proveedor de modelo de IA | 🟡 **AMARILLO** | Adaptador, reintentos, redacción y tests completos. Falta la credencial |
 | Gestión de secretos / KMS | 🟡 **AMARILLO** | Puerto, aislamiento, referencias, rotación y tests. **No hay gestor externo**, y un secreto por empresa no se puede resolver |
 | Object storage | 🟡 **AMARILLO** | Anda sobre disco local. Sin versionado ni object-lock, y no sirve con varias réplicas |
-| Email | 🔴 **ROJO** | **No existe.** Ni una dependencia, ni un adaptador, ni una plantilla |
+| Email | 🟡 **AMARILLO** | Puerto, bandeja de salida y estados (`SIN_PROVEEDOR` ≠ `FALLIDO`). **Ningún proveedor contratado**: nada sale |
 | Pagos SaaS | 🟡 **AMARILLO** | Intentos, eventos, idempotencia y máquina de estados completos. Sin pasarela contratada |
 | Bancos | 🟡 **AMARILLO** | Importación de extractos y conciliación reales; sin conexión directa a ningún banco |
 | Canales de venta (Shopify, Tiendanube, ML, Woo) | 🟡 **AMARILLO** | Declarados como proveedores con corridas de sincronización; sin adaptador conectado |
@@ -231,7 +241,7 @@ que este repositorio ya venía aplicando.
 | **B-1** Credencial del proveedor de modelo | Contratar y cargar la clave | Intelligence con modelo real |
 | **B-2** Gestor de secretos | Elegir proveedor y contratarlo | ARCA producción multiempresa; §54 |
 | **B-3** Certificado ARCA de producción | Trámite del contribuyente | Emisión fiscal real |
-| **B-4** Proveedor de correo | Elegir y contratar | Alta autoservicio, recuperación de contraseña, cobranza automática |
+| **B-4** Proveedor de correo | Elegir y contratar | Que el alta autoservicio **se complete sola**, recuperación de contraseña, aviso previo a una suspensión |
 | **B-5** Pasarela de pago | Elegir y contratar | Cobrar suscripciones |
 | **B-6** Precios de los planes | **Decisión comercial** | Billing entero |
 | **B-7** Hosting y jurisdicción | Decisión con contrato | Despliegue productivo |
@@ -245,7 +255,7 @@ cobranza el resto de la cadena comercial no se puede probar de punta a punta.
 | | |
 |---|---|
 | ~~**I-1**~~ | ~~Motor de pagos y facturación~~ — **hecho** el 2026-09-08 (0096–0099). Queda conectar la pasarela, que es externo |
-| **I-2** | Alta autoservicio y onboarding |
+| **I-2** | ~~Alta autoservicio~~ — **hecho** el 2026-09-08 (0103). Queda el onboarding completo: empresa, datos fiscales, plan e importación en un flujo guiado |
 | **I-3** | NEXO Corporate y self-management |
 | ~~**I-4**~~ | ~~Métricas SaaS con fórmulas reproducibles~~ — **hecho** el 2026-09-08 (0100). Falta lo que depende de la contabilidad propia: CAC, LTV, margen, runway |
 | ~~**I-5**~~ | ~~Registro de decisión y bucle de aprendizaje~~ — **hecho** el 2026-09-08 (0101). Queda la recomendación automática, que necesita una política de preferencia del estudio |
