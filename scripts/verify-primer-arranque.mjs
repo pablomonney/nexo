@@ -359,12 +359,34 @@ try {
     );
   }
 
-  // ── 9 · Y la consola se sirve ──────────────────────────────────────────────
+  // ── 9 · La página pública y la consola se sirven ───────────────────────────
+  //
+  // La raíz redirigía a la consola hasta B-1. Ahora sirve la página pública, y
+  // este paso lo encontró apenas cambió: es exactamente para eso que un primer
+  // arranque se verifica de punta a punta contra una base vacía.
   const raizHttp = await app.inject({ method: 'GET', url: '/' });
   comprobar(
-    raizHttp.statusCode === 302 && raizHttp.headers.location === '/consola',
-    'la raíz lleva a la consola',
-    `${raizHttp.statusCode} → ${String(raizHttp.headers.location)}`,
+    raizHttp.statusCode === 200 && raizHttp.body.includes('<title>NEXO'),
+    'la raíz sirve la página pública',
+    `${raizHttp.statusCode}`,
+  );
+
+  // Los planes se piden desde el navegador, así que tienen que responder sin
+  // sesión. Sobre una base recién migrada la lista viene vacía —los precios los
+  // declara `npm run comercial:b1`— y eso es correcto: un plan sin precio se
+  // muestra como «a consultar», nunca como gratis.
+  const planes = await app.inject({ method: 'GET', url: '/planes' });
+  comprobar(
+    planes.statusCode === 200 && Array.isArray(planes.json().planes),
+    'el catálogo de planes responde sin sesión',
+    `${planes.statusCode}`,
+  );
+
+  const consolaHttp = await app.inject({ method: 'GET', url: '/consola' });
+  comprobar(
+    consolaHttp.statusCode === 200 && consolaHttp.body.includes('v-login'),
+    'la consola se sirve',
+    `${consolaHttp.statusCode}`,
   );
 } finally {
   await app.close();

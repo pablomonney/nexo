@@ -11,22 +11,23 @@ lo que se hará después— vive en el baseline y en el roadmap.
 
 ## La respuesta corta
 
-**Falta cobrar y falta mandar un correo.** El sistema contable, el fiscal, el
+**Falta cobrar y falta mandar un correo.** (Los precios ya no faltan: se
+decidieron y se declararon el 2026-09-08.) El sistema contable, el fiscal, el
 multiempresa y la auditoría están; el ciclo de facturación está entero salvo la
 pasarela; el registro de decisiones y la detección de alertas están.
 
 Lo que no está es la última milla comercial, y **casi nada de eso es código**:
 
 ```
-     precios          ← una decisión, no cuesta dinero
+     precios          ← DECIDIDO el 2026-09-08
      pasarela         ← contratar
      correo           ← contratar
      certificado ARCA ← trámite del contribuyente
      hosting          ← contratar, con jurisdicción
 ```
 
-Cinco cosas. Dos de ellas —los precios y la elección de proveedores— dependen de
-alguien que decida, no de alguien que programe.
+Los precios ya se decidieron. Quedan cuatro, y **ninguna se resuelve
+escribiendo código**: tres son contratar algo y una es un trámite.
 
 ---
 
@@ -34,7 +35,7 @@ alguien que decida, no de alguien que programe.
 
 | | Qué falta | Quién lo destraba | Qué queda bloqueado detrás |
 |---|---|---|---|
-| **B-1** | **Precios de los planes** | Decisión comercial | Sin precio no se emite un cargo, y sin cargo no hay cobranza ni MRR. Es el más barato de destrabar y el que más traba |
+| ~~**B-1**~~ | ~~Precios de los planes~~ | **DESTRABADO el 2026-09-08** | El fundador los decidió y quedaron declarados con vigencia y motivo. Ver NEXO_COMERCIAL.md §1 |
 | **B-2** | **Pasarela de pago** | Contratar | Solo entra lo que se registra a mano. `intentarCobro` devuelve `SIN_PASARELA` |
 | **B-3** | **Proveedor de correo** | Contratar | El alta autoservicio no se completa sola; no hay recuperación de contraseña ni aviso previo a una suspensión |
 | **B-4** | **Gestor de secretos** | Elegir y contratar | Un secreto **por empresa** no se puede resolver: `env:` se niega y no hay otro backend. Sin esto no hay ARCA de producción multiempresa |
@@ -94,13 +95,13 @@ puede alojarse el almacén.
 
 | | |
 |---|---|
-| Una empresa puede registrarse | 🟡 Se registra; **no se confirma sola** sin correo |
+| Una empresa puede registrarse | 🟡 Se registra y crea su empresa con un plan y su prueba de 14 días en un solo pedido; **no se confirma sola** sin correo |
 | Puede crear su organización | ✅ |
 | Puede crear usuarios | ✅ Con roles, permisos y MFA obligatorio por rol |
 | Puede operar | ✅ Ventas, compras, stock, tesorería, contabilidad, fiscal |
 | Sus datos están aislados | ✅ 118 tablas con RLS forzado, **0** con `company_id` sin RLS, barrido por endpoint |
 | Puede usar los módulos principales | ✅ |
-| Puede contratar un plan | 🟡 Se declara; **sin precio** no se factura |
+| Puede contratar un plan | ✅ Cinco planes con precio declarado, prueba de 14 días sin tarjeta, y la puerta comercial que hace cumplir qué incluye cada uno |
 | Puede pagar | 🔴 Solo por transferencia registrada a mano |
 | Recibe su comprobante | 🔴 Bloqueado por el certificado de producción |
 | Puede cancelar | ✅ Con motivo, y sin volver atrás |
@@ -114,7 +115,7 @@ puede alojarse el almacén.
 | Los tests críticos pasan | ✅ 2.209 tests, 143 archivos, verde |
 | No hay blockers críticos conocidos | 🔴 Los seis de arriba |
 
-**Nueve de diecinueve en verde no significa 47 % de producto.** Las que faltan se
+**Diez de diecinueve en verde no significa 53 % de producto.** Las que faltan se
 concentran en una sola zona —cobrar y avisar— y las que están cubren lo que un
 sistema contable no puede tener mal.
 

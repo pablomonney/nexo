@@ -1,0 +1,359 @@
+<!doctype html>
+<!--
+  La página pública de NEXO.
+
+  ## Ningún precio está escrito acá
+
+  Los planes, los precios y lo que incluye cada uno se piden a `GET /planes` al
+  cargar. Escribirlos en el HTML sería una segunda fuente de verdad sobre el
+  precio, y el día que difiera de la base el cliente vería un número en la
+  página y otro en la factura.
+
+  Si la API no contesta, la tabla dice que no se pudieron cargar en vez de
+  mostrar precios viejos.
+
+  ## Ninguna afirmación que el producto no pueda sostener
+
+  Todo lo que esta página dice que NEXO hace, NEXO lo hace hoy. Lo que está en
+  desarrollo aparece bajo «en qué estamos trabajando», separado y dicho como
+  tal. Es la regla más fácil de romper de todo el repositorio: una landing
+  premia exactamente lo contrario.
+
+  ## Sin recursos externos
+
+  Todo el CSS y el JS están acá. La CSP que la sirve no admite nada de afuera:
+  ni una fuente, ni un pixel de analítica. En una página que va a ver gente que
+  todavía no es cliente, un recurso de un tercero es un tercero mirando quién
+  entra.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEXO — gestión y contabilidad para empresas argentinas</title>
+<meta name="description" content="NEXO integra la operación, la contabilidad y el análisis de una empresa en un solo sistema. Prueba de 14 días sin tarjeta.">
+<style>
+  :root {
+    --tinta: #14201a;
+    --tinta-media: #3d4a43;
+    --tinta-suave: #6b776f;
+    --papel: #fbfcfa;
+    --papel-hondo: #f1f4f0;
+    --linea: #d4ddd4;
+    --linea-fina: #e6ebe5;
+    --verde: #1c6238;
+    --verde-fondo: #e7f2ea;
+    --ambar: #7a5400;
+    --ambar-fondo: #fbf3e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tinta: #e3eae4;
+      --tinta-media: #a8b5ac;
+      --tinta-suave: #7e8c84;
+      --papel: #0f1512;
+      --papel-hondo: #161d19;
+      --linea: #26312b;
+      --linea-fina: #1d2621;
+      --verde: #6cc48d;
+      --verde-fondo: #102217;
+      --ambar: #e0b252;
+      --ambar-fondo: #241d0d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .marco { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+  a { color: var(--verde); }
+
+  header {
+    border-bottom: 1px solid var(--linea);
+    padding: 18px 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .marca { font-weight: 800; letter-spacing: -0.02em; font-size: 1.3rem; }
+  .marca span { color: var(--tinta-suave); font-weight: 500; font-size: 0.8rem; }
+  .btn {
+    display: inline-block; padding: 10px 18px; border-radius: 4px;
+    background: var(--verde); color: var(--papel); text-decoration: none;
+    font-weight: 600; font-size: 0.95rem; border: 1px solid var(--verde);
+  }
+  .btn.sec { background: transparent; color: var(--tinta); border-color: var(--linea); }
+
+  .hero { padding: 64px 0 48px; }
+  h1 {
+    font-size: clamp(2rem, 5.5vw, 3.2rem); line-height: 1.08;
+    letter-spacing: -0.03em; margin: 0 0 18px; max-width: 18ch; text-wrap: balance;
+  }
+  .lead { font-size: 1.18rem; color: var(--tinta-media); max-width: 58ch; margin: 0 0 28px; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .fina { font-size: 0.9rem; color: var(--tinta-suave); }
+
+  section { padding: 48px 0; border-top: 1px solid var(--linea-fina); }
+  h2 { font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -0.02em; margin: 0 0 10px; }
+  h3 { font-size: 1.02rem; margin: 0 0 6px; }
+  p { margin: 0 0 14px; }
+  .sub { color: var(--tinta-media); max-width: 62ch; }
+
+  .rejilla { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-top: 26px; }
+  .caja { border: 1px solid var(--linea); border-radius: 5px; padding: 18px; background: var(--papel-hondo); }
+  .caja p { color: var(--tinta-media); font-size: 0.94rem; margin: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.94rem; }
+  .tabla { overflow-x: auto; border: 1px solid var(--linea); border-radius: 5px; margin-top: 22px; }
+  th { text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+       color: var(--tinta-suave); padding: 11px 14px; border-bottom: 1px solid var(--linea); }
+  td { padding: 14px; border-bottom: 1px solid var(--linea-fina); vertical-align: top; color: var(--tinta-media); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.plan { color: var(--tinta); font-weight: 600; }
+  .precio { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--tinta); font-weight: 600; }
+  .neu { display: inline-block; padding: 2px 8px; border-radius: 3px; background: var(--ambar-fondo);
+         color: var(--ambar); font-size: 0.8rem; }
+
+  details { border: 1px solid var(--linea); border-radius: 5px; padding: 14px 16px; margin-bottom: 10px; background: var(--papel-hondo); }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 12px 0 0; color: var(--tinta-media); }
+
+  .aviso { background: var(--verde-fondo); border: 1px solid var(--linea); border-left: 4px solid var(--verde);
+           border-radius: 4px; padding: 14px 16px; color: var(--tinta-media); }
+  footer { border-top: 1px solid var(--linea); padding: 28px 0 48px; color: var(--tinta-suave); font-size: 0.88rem; }
+  ul.limpia { margin: 10px 0 0; padding-left: 18px; color: var(--tinta-media); }
+  ul.limpia li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<div class="marco">
+  <header>
+    <div class="marca">NEXO <span>gestión y contabilidad</span></div>
+    <a class="btn sec" href="/consola">Entrar</a>
+  </header>
+
+  <div class="hero">
+    <h1>Los datos de tu empresa, convertidos en información para decidir.</h1>
+    <p class="lead">
+      NEXO integra la operación —ventas, compras, stock, tesorería— con la contabilidad y el
+      cumplimiento fiscal argentino en un solo sistema. Lo que cargás una vez, sirve en todos
+      lados: no hay que volver a escribirlo en una planilla.
+    </p>
+    <div class="acciones">
+      <a class="btn" href="/consola">Probar 14 días</a>
+      <span class="fina">Sin tarjeta. Al terminar la prueba no se borra nada.</span>
+    </div>
+  </div>
+
+  <section>
+    <h2>El problema no es que falten datos</h2>
+    <p class="sub">
+      Es que están en cinco lugares. El remito en un talonario, la factura en el sistema del
+      contador, el stock en una planilla, el banco en el homebanking y el margen en la cabeza
+      de alguien. Cada cierre de mes es volver a juntarlos, y cada respuesta llega tarde.
+    </p>
+    <div class="rejilla">
+      <div class="caja">
+        <h3>Se carga una vez</h3>
+        <p>Una venta mueve el stock, la cuenta corriente del cliente, el IVA y el Mayor. No hay
+           que asentarla cuatro veces ni conciliar cuatro versiones.</p>
+      </div>
+      <div class="caja">
+        <h3>Todo tiene rastro</h3>
+        <p>De un saldo se llega al asiento, del asiento al comprobante y del comprobante al
+           documento que lo respalda. La bitácora está encadenada por hash.</p>
+      </div>
+      <div class="caja">
+        <h3>Cada empresa, aislada</h3>
+        <p>El aislamiento entre empresas lo hace la base de datos, no una condición en el
+           código. Un estudio contable puede llevar su cartera sin que se mezcle nada.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Qué hace hoy</h2>
+    <p class="sub">
+      Todo lo de esta lista funciona y está probado. Lo que estamos construyendo está más
+      abajo, separado y dicho como tal.
+    </p>
+    <div class="rejilla">
+      <div class="caja"><h3>Contabilidad</h3><p>Plan de cuentas, asientos, Diario, Mayor, períodos, cierre de ejercicio y estados contables con sus notas.</p></div>
+      <div class="caja"><h3>Fiscal</h3><p>Comprobantes, IVA, subdiarios y libros. Consulta de padrón y constatación de comprobantes contra ARCA.</p></div>
+      <div class="caja"><h3>Ventas y compras</h3><p>Presupuesto, pedido, remito, factura y cobranza. Solicitud, orden, recepción, factura y pago.</p></div>
+      <div class="caja"><h3>Stock</h3><p>Movimientos, depósitos, recuentos y costo promedio ponderado calculado al escribir.</p></div>
+      <div class="caja"><h3>Tesorería</h3><p>Caja, bancos, cheques y conciliación bancaria contra el extracto.</p></div>
+      <div class="caja"><h3>Documentos</h3><p>Ingesta con OCR, extracción de datos, versiones y detección de duplicados.</p></div>
+      <div class="caja"><h3>Análisis</h3><p>Señales con umbrales propios, variación del margen abierta en precio, costo y volumen, y escenarios comparables.</p></div>
+      <div class="caja"><h3>Auditoría</h3><p>Quién hizo qué, cuándo y por qué. Los asientos no se borran: se anulan, y queda el rastro.</p></div>
+    </div>
+  </section>
+
+  <section id="planes">
+    <h2>Planes</h2>
+    <p class="sub">
+      Precios en pesos, por mes, <strong>sin IVA</strong>. La prueba de 14 días es del plan que
+      elijas, completa y sin tarjeta.
+    </p>
+    <div class="tabla">
+      <table>
+        <thead><tr><th>Plan</th><th>Precio</th><th>Incluye</th><th>Topes</th></tr></thead>
+        <tbody id="planes-cuerpo">
+          <tr><td colspan="4" style="color:var(--tinta-suave)">Cargando los planes…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fina" style="margin-top:14px" id="planes-nota"></p>
+  </section>
+
+  <section>
+    <h2>Cómo empieza</h2>
+    <ul class="limpia">
+      <li>Te registrás con tu correo y lo confirmás.</li>
+      <li>Creás tu empresa: razón social, CUIT y cierre de ejercicio.</li>
+      <li>Elegís un plan y arranca la prueba de 14 días. <strong>No se pide tarjeta.</strong></li>
+      <li>Cargás tu plan de cuentas y abrís el ejercicio. Sin un período abierto no se puede
+          asentar nada, y el sistema te lo va a decir hasta que lo hagas.</li>
+      <li>Al terminar la prueba, la suscripción queda suspendida: los datos, la contabilidad y
+          el historial quedan intactos, y el acceso vuelve contratando.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Seguridad</h2>
+    <div class="rejilla">
+      <div class="caja"><h3>Aislamiento en la base</h3><p>Cada tabla con datos de empresa tiene la política puesta en PostgreSQL. La aplicación conecta con un rol que no la puede saltear.</p></div>
+      <div class="caja"><h3>Segundo factor obligatorio</h3><p>Para los roles que tocan contabilidad. Sin él no se entra, aunque la contraseña sea correcta.</p></div>
+      <div class="caja"><h3>Bitácora que no se reescribe</h3><p>Encadenada por hash, con el borrado y la modificación revocados a nivel de base.</p></div>
+      <div class="caja"><h3>Tus datos son tuyos</h3><p>Exportación completa de la empresa cuando quieras. Irte no debería ser un problema técnico.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>En qué estamos trabajando</h2>
+    <div class="aviso">
+      Esto <strong>todavía no está disponible</strong>. Aparece acá porque es más útil saber a
+      dónde va el producto que descubrir después que algo no era lo que parecía.
+    </div>
+    <ul class="limpia" style="margin-top:16px">
+      <li><strong>Emisión de facturas electrónicas.</strong> Hoy NEXO registra y valida
+          comprobantes contra ARCA; emitir con CAE está en desarrollo.</li>
+      <li><strong>Pago con tarjeta.</strong> Por ahora la suscripción se abona por
+          transferencia.</li>
+      <li><strong>Asistente conversacional.</strong> El análisis de hoy es determinístico:
+          calcula sobre tus datos y muestra de dónde sale cada número.</li>
+      <li><strong>Sueldos y RRHH.</strong> No está.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Preguntas</h2>
+    <details>
+      <summary>¿Qué pasa con mis datos si dejo de pagar?</summary>
+      <p>Nada se borra. La suscripción queda suspendida y perdés el acceso, no la información.
+         Cuando contratás de nuevo está todo donde estaba. Y podés exportar tu empresa completa
+         en cualquier momento mientras tengas acceso.</p>
+    </details>
+    <details>
+      <summary>¿Me sirve si ya tengo contador?</summary>
+      <p>Sí, y es el caso más común. Tu contador puede trabajar en NEXO con su propio usuario y
+         su propio rol; hay un plan pensado para estudios que llevan varias empresas.</p>
+    </details>
+    <details>
+      <summary>¿Emite facturas?</summary>
+      <p>Todavía no. NEXO registra los comprobantes que emitís, los valida contra ARCA y arma
+         el IVA y los libros. La emisión con CAE está en desarrollo — lo decimos así porque un
+         sistema que promete emitir y no emite te deja sin facturar el primer día del mes.</p>
+    </details>
+    <details>
+      <summary>¿Necesito instalar algo?</summary>
+      <p>No. Se usa desde el navegador.</p>
+    </details>
+    <details>
+      <summary>¿Puedo probarlo con mis datos reales?</summary>
+      <p>Sí, la prueba es del producto completo. También hay un modo de simulación aislado si
+         preferís ver cómo se comporta antes de cargar nada.</p>
+    </details>
+    <details>
+      <summary>¿Qué pasa si supero el tope de mi plan?</summary>
+      <p>El sistema te avisa y <strong>no te bloquea</strong>. Un sistema contable que se niega
+         a registrar un hecho por una cuestión comercial te deja los libros incompletos, y eso
+         no se arregla pagando después: el hecho ya pasó.</p>
+    </details>
+  </section>
+
+  <footer>
+    <p>
+      NEXO — sistema de gestión y contabilidad para empresas argentinas.
+      <a href="/consola">Entrar</a>
+    </p>
+    <p class="fina">
+      Los precios son netos y no incluyen IVA. Las funcionalidades listadas en «en qué estamos
+      trabajando» no están disponibles.
+    </p>
+  </footer>
+</div>
+
+<script>
+/**
+ * Los planes salen de la API, no del HTML.
+ *
+ * Escribir el precio acá sería una segunda fuente de verdad sobre el precio, y
+ * el día que difiera de la base el cliente vería un número en la página y otro
+ * en la factura.
+ */
+(async function cargarPlanes() {
+  const cuerpo = document.getElementById('planes-cuerpo');
+  const nota = document.getElementById('planes-nota');
+
+  const escapar = (t) =>
+    String(t ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  try {
+    const r = await fetch('/planes', { headers: { accept: 'application/json' } });
+    if (!r.ok) throw new Error('respuesta ' + r.status);
+    const datos = await r.json();
+
+    cuerpo.innerHTML = '';
+    for (const p of datos.planes || []) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="plan">' + escapar(p.nombre) +
+          '<div class="fina" style="font-weight:400;margin-top:4px">' +
+          escapar(p.descripcion || '') + '</div></td>' +
+        // Sin precio declarado NO se muestra «gratis»: se dice que hay que
+        // consultarlo. Mostrar cero regalaría el producto por una fila vacía.
+        '<td class="precio">' + (p.precio
+          ? '$ ' + escapar(Number(p.precio.importe).toLocaleString('es-AR')) +
+            '<div class="fina" style="font-weight:400">por mes + IVA</div>'
+          : '<span class="neu">a consultar</span>') + '</td>' +
+        '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
+        '<td class="fina">' + escapar((p.topes || [])
+          .map((t) => t.recurso.toLowerCase().replace(/_/g, ' ') + ': ' + t.tope)
+          .join(' · ') || 'a convenir') + '</td>';
+      cuerpo.appendChild(tr);
+    }
+
+    if ((datos.planes || []).length === 0) {
+      cuerpo.innerHTML =
+        '<tr><td colspan="4">Todavía no hay planes publicados. Escribinos y lo vemos.</td></tr>';
+    }
+    nota.textContent =
+      'Prueba de ' + (datos.prueba ? datos.prueba.dias : 14) +
+      ' días, sin tarjeta. Los topes miden y avisan: no bloquean.';
+  } catch (e) {
+    // No se muestran precios viejos ni de ejemplo: se dice que no se pudieron
+    // cargar. Un precio equivocado en la página es peor que ninguno.
+    cuerpo.innerHTML =
+      '<tr><td colspan="4">No se pudieron cargar los planes en este momento. ' +
+      'Probá de nuevo en un rato.</td></tr>';
+    nota.textContent = '';
+  }
+})();
+</script>
+</body>
+</html>

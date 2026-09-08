@@ -66,7 +66,9 @@ const STUDIO_SCOPED = new Set([
  *
  * La raíz entró acá al agregarse, y el que la encontró fue este mismo barrido:
  * un `302` no es un `2xx`, pero tampoco es un `>= 400`, y la aserción está
- * escrita —bien— como «todo lo que no se declaró tiene que rechazar».
+ * escrita —bien— como «todo lo que no se declaró tiene que rechazar». Desde B-1
+ * ya no redirige: sirve la página pública, que tampoco lleva datos — los planes
+ * los pide por `GET /planes` desde el navegador.
  *
  * `GET /planes` entró después, y es la única que devuelve datos de la base: el
  * catálogo comercial con sus precios. Es la página de precios — pedir sesión

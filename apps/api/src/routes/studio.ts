@@ -412,13 +412,32 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
    * pide autenticado, y el servidor decide qué puede ver.
    */
   /**
-   * La raíz lleva a la consola.
+   * La raíz es la página pública.
    *
-   * Sin esto, quien levanta NEXO y abre `localhost:3001` recibe un 404 pelado y
-   * tiene que adivinar la ruta. Es una línea y evita el peor primer minuto
-   * posible con el producto.
+   * Antes redirigía a la consola. Dejó de hacerlo cuando el producto pasó a
+   * tener algo que ofrecerle a quien todavía no es cliente: mandar a un
+   * desconocido directo a una pantalla de login es pedirle que se registre para
+   * averiguar qué es esto.
+   *
+   * **No lleva ningún precio escrito.** Los planes se piden a `GET /planes` al
+   * cargar: escribirlos en el HTML sería una segunda fuente de verdad sobre el
+   * precio, y el día que difiera de la base el cliente vería un número en la
+   * página y otro en la factura.
    */
-  app.get('/', async (_request, reply) => reply.redirect('/consola', 302));
+  app.get('/', async (_request, reply) => {
+    const html = await readFile(join(RAIZ_WEB, 'landing.html'), 'utf8');
+    return reply
+      .type('text/html; charset=utf-8')
+      // La misma política que la consola, y acá pesa más: es la página que abre
+      // gente que todavía no es cliente, y un recurso de un tercero es un
+      // tercero mirando quién entra.
+      .header(
+        'content-security-policy',
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+          "connect-src 'self'; img-src 'self' data:; form-action 'none'",
+      )
+      .send(html);
+  });
 
   app.get('/consola', async (_request, reply) => {
     const archivo = join(RAIZ_WEB, 'consola.html');

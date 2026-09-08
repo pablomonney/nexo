@@ -693,14 +693,51 @@ suite('Fronteras del MVP', () => {
       expect(html).not.toMatch(/postgres:|pg\.Client|SELECT .* FROM /i);
     });
 
-    it('la raíz redirige a la consola y no sirve nada por su cuenta', async () => {
-      // La raíz está exenta del barrido de autenticación (`SIN_DATOS`), así que
-      // acá se comprueba que la exención sea cierta: que redirija y no tenga
-      // cuerpo propio. Una exención que no se verifica es un permiso.
+    it('la raíz sirve la página pública y no lleva ningún dato', async () => {
+      // La raíz redirigía a la consola hasta B-1, y su exención del barrido de
+      // autenticación (`SIN_DATOS`) se sostenía en que no tenía cuerpo propio.
+      // Ahora lo tiene, así que la exención necesita otra justificación — y este
+      // test es el que la comprueba. Una exención que no se verifica es un
+      // permiso.
       const r = await app.inject({ method: 'GET', url: '/' });
-      expect(r.statusCode).toBe(302);
-      expect(r.headers['location']).toBe('/consola');
-      expect(r.body).toBe('');
+      expect(r.statusCode).toBe(200);
+      expect(r.body).toContain('<title>NEXO');
+
+      // Lo mismo que se le exige a la consola: nada de credenciales, nada de
+      // identificadores de empresa, y ninguna consulta a la base.
+      expect(r.body).not.toMatch(/postgres:|pg.Client|SELECT .* FROM /iu);
+      expect(r.body).not.toMatch(/password|api[_-]?key|bearer /iu);
+
+      const csp = String(r.headers['content-security-policy']);
+      expect(csp).toContain("default-src 'none'");
+      expect(csp).toContain("connect-src 'self'");
+    });
+
+    it('la página pública no tiene ni un precio escrito', async () => {
+      // Los planes se piden a `GET /planes` desde el navegador. Escribirlos en
+      // el HTML sería una segunda fuente de verdad sobre el precio, y el día que
+      // difiera de la base el cliente vería un número en la página y otro en la
+      // factura.
+      const html = (await app.inject({ method: 'GET', url: '/' })).body;
+      // Un número con forma de importe: dos o tres dígitos, separador de miles,
+      // tres dígitos. Cubre 29.900 y 159.900 sin marcar los `12-31` de las
+      // fechas ni los tamaños de las hojas de estilo.
+      const importes = html.match(/[^\w.,]\d{2,3}[.,]\d{3}(?!\d)/gu) ?? [];
+      expect(
+        importes,
+        'hay un importe escrito en la página pública: tiene que salir de /planes',
+      ).toEqual([]);
+      expect(html).toContain("fetch('/planes'");
+    });
+
+    it('el catálogo de planes se sirve sin sesión y sin datos de ninguna empresa', async () => {
+      const r = await app.inject({ method: 'GET', url: '/planes' });
+      expect(r.statusCode).toBe(200);
+      // Ninguna de las tablas que lee tiene `company_id` —lo comprueba
+      // `planes-vendibles`—, así que no hay nada de nadie que pueda salir por
+      // acá. Lo que sí se verifica es que no devuelva un identificador de
+      // empresa por algún camino inesperado.
+      expect(r.body).not.toMatch(/company_?id/iu);
     });
   });
 });

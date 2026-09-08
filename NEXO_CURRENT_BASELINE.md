@@ -22,7 +22,7 @@ El prompt maestro trae una línea de base histórica. La medición dice otra cos
 | Vistas | 80 | 91 | 95 | **102** |
 | Políticas RLS | 101 | 107 | 111 | **118** |
 | Endpoints | 251 | 274 | 300 | **316** (62 dominios) |
-| Pantallas | 31 | 33 | 35 | **35** secciones `v-*` |
+| Pantallas | 31 | 33 | 35 | **35** secciones `v-*` + landing pública |
 | Archivos de test | 103 | 108 | 134 | **143** |
 | Tests | 1.742 | 1.798 | 2.067 | **2.209** |
 | Objetos estructurales | 369 | 416 | 422 | **435** |
@@ -153,7 +153,7 @@ más entre caja y margen— que es del estudio, no del software. El registro ya
 tiene dónde ponerla, y la calibración va a poder contestar si conviene
 escucharla. Ver [`NEXO_DECISION_ENGINE.md`](NEXO_DECISION_ENGINE.md).
 
-### NEXO Subscriptions y Billing — PARCIAL, con el ciclo cerrado
+### NEXO Subscriptions y Billing — IMPLEMENTADO salvo el cobro
 
 **Actualizado el 2026-09-08.** Lo que faltaba entero —precio, período,
 documento, cobro, cobranza, suspensión— existe y corre. Ver
@@ -169,8 +169,15 @@ documento, cobro, cobranza, suspensión— existe y corre. Ver
 | Anulación | Con motivo. Anular no es declarar incobrable |
 | Eventos de pasarela | Repetido, atrasado, conflicto y desconocido: los cuatro se guardan |
 
-Lo que sigue faltando y **no es código**: los precios, la política, la pasarela,
-el proveedor de correo y la condición de IVA de NEXO.
+**Desde B-1 (2026-09-08):** cinco planes comerciales con su matriz de
+funcionalidades, precios declarados, topes por plan, prueba de 14 días que
+efectivamente vence, alta autoservicio y una puerta comercial que hace cumplir
+qué incluye cada plan — y que **falla abierta** a propósito, porque es comercial
+y no de seguridad.
+
+Lo que sigue faltando y **no es código**: la política de cobranza, la pasarela,
+el proveedor de correo y la condición de IVA de NEXO. Ver
+[`NEXO_COMERCIAL.md`](NEXO_COMERCIAL.md).
 
 ### NEXO Payment Engine — PREPARADO, no conectado
 
