@@ -50,6 +50,7 @@ import { comisionRoutes } from './routes/comisiones.js';
 import { sucursalRoutes } from './routes/sucursales.js';
 import { suscripcionRoutes } from './routes/suscripciones.js';
 import { facturacionRoutes } from './routes/facturacion.js';
+import { registroDeDecisionesRoutes } from './routes/registro-de-decisiones.js';
 import { mapeoContableRoutes } from './routes/mapeo-contable.js';
 import { arranqueRoutes } from './routes/arranque.js';
 import { intelligenceRoutes } from './routes/intelligence.js';
@@ -279,6 +280,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(sucursalRoutes);
   await app.register(suscripcionRoutes);
   await app.register(facturacionRoutes);
+  await app.register(registroDeDecisionesRoutes);
   await app.register(mapeoContableRoutes);
   await app.register(arranqueRoutes);
   await app.register(ordenDePagoRoutes);

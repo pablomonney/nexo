@@ -121,15 +121,22 @@ horizonte y versión de modelo registrados, y copiloto conversacional abierto.
 El proveedor de modelo está 🟡 PREPARADO (sin credencial), así que hoy la
 inteligencia que corre es la determinística.
 
-### NEXO Decision Engine — PARCIAL
+### NEXO Decision Engine — PARCIAL, con el ciclo cerrado salvo recomendar
 
-Existe el circuito: `analysis/simulate`, `scenarios`, `compare`, `applied`,
-`result`, `archive`, con `analysis_scenarios`, `scenario_applications` y
-`accounting_decisions`. Cierra hasta medición.
+**Actualizado el 2026-09-08.** El registro de decisión del §28 existe como
+entidad (0101): problema, evidencia, alternativas, recomendada, elegida,
+aprobación con segunda firma, ejecución, y revisión posterior con veredicto.
 
-Falta el registro de decisión completo del §28 —problema, evidencia,
-alternativas, aprobación, resultado, evaluación posterior— como entidad única, y
-el bucle de aprendizaje del §29.
+El bucle del §29 cierra: decisión → ejecución → resultado → comparación contra
+lo esperado → evaluación → calibración. **Y es auditable a mano**, que es lo que
+el pliego pide: la calibración es un porcentaje sobre revisiones que escribió una
+persona, no un modelo que se ajusta solo.
+
+Lo que falta es **que el sistema recomiende**. Comparar escenarios ya lo hace;
+elegir uno exige una función de preferencia —cuánto riesgo se tolera, qué pesa
+más entre caja y margen— que es del estudio, no del software. El registro ya
+tiene dónde ponerla, y la calibración va a poder contestar si conviene
+escucharla. Ver [`NEXO_DECISION_ENGINE.md`](NEXO_DECISION_ENGINE.md).
 
 ### NEXO Subscriptions y Billing — PARCIAL, con el ciclo cerrado
 
@@ -230,7 +237,7 @@ cobranza el resto de la cadena comercial no se puede probar de punta a punta.
 | **I-2** | Alta autoservicio y onboarding |
 | **I-3** | NEXO Corporate y self-management |
 | ~~**I-4**~~ | ~~Métricas SaaS con fórmulas reproducibles~~ — **hecho** el 2026-09-08 (0100). Falta lo que depende de la contabilidad propia: CAC, LTV, margen, runway |
-| **I-5** | Registro de decisión completo y bucle de aprendizaje |
+| ~~**I-5**~~ | ~~Registro de decisión y bucle de aprendizaje~~ — **hecho** el 2026-09-08 (0101). Queda la recomendación automática, que necesita una política de preferencia del estudio |
 | **I-6** | Anomalías y forecasting como motores propios |
 | **I-7** | Almacén de documentos apto para producción |
 | **I-8** | RRHH |

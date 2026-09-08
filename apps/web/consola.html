@@ -2480,6 +2480,107 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <dl class="kv" id="sen-ap-resultado"></dl>
   <dl class="kv" id="sen-s-resultado"></dl>
   <div id="sen-s-supuestos"></div>
+
+  <h3>Registro de decisiones</h3>
+  <p class="ayuda">Un escenario es una proyección; una <strong>decisión</strong> es qué se
+    resolvió hacer con ella. Acá queda el problema, en qué se basó, qué alternativas se
+    miraron, cuál se eligió y —después— qué pasó.</p>
+  <p class="ayuda">Dos cosas que este registro se niega a aceptar: una decisión
+    <strong>sin evidencia</strong>, que es una opinión, y <strong>una sola alternativa</strong>,
+    que no es haber decidido sino haber ejecutado. Y una que sí acepta y deja escrita: ir
+    <em>en contra</em> de lo que el sistema recomendó, siempre que se diga por qué. Sin eso
+    guardado, nunca se podría saber si conviene escucharlo.</p>
+  <button id="b-dec" class="sec">Ver el registro</button>
+  <div id="dec-msg"></div>
+  <dl class="kv" id="dec-calibracion"></dl>
+  <div class="tabla"><table id="t-dec"><thead><tr>
+    <th>Decisión</th><th>Riesgo</th><th>Estado</th><th>Propuso</th><th>Elegida</th>
+    <th>Recomendada</th><th>Revisiones</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <details class="grupo" id="dec-nueva" hidden><summary>Registrar una decisión</summary><div>
+    <div class="fila">
+      <div style="flex:2"><label>Título</label><input id="dec-n-titulo" maxlength="200"></div>
+      <div><label>Riesgo</label><select id="dec-n-riesgo">
+        <option value="BAJO">Bajo</option><option value="MEDIO" selected>Medio</option>
+        <option value="ALTO">Alto</option><option value="CRITICO">Crítico</option>
+      </select></div>
+    </div>
+    <div class="fila"><div style="flex:1"><label>Qué problema resuelve</label>
+      <textarea id="dec-n-problema" rows="2" maxlength="4000"></textarea></div></div>
+
+    <h4>En qué se basa</h4>
+    <p class="ayuda">Al menos una cita. <strong>Sin evidencia no se registra</strong>: una
+      decisión sin evidencia es una opinión, y una opinión guardada como decisión arruina
+      cualquier medición de aciertos que se haga después.</p>
+    <div class="fila">
+      <div><label>Tipo</label><select id="dec-n-ev-tipo">
+        <option value="SENAL">Señal</option><option value="ESCENARIO">Escenario</option>
+        <option value="COMPROBANTE">Comprobante</option><option value="INFORME">Informe</option>
+        <option value="EXTERNO">Externo</option><option value="OTRO">Otro</option>
+      </select></div>
+      <div style="flex:1"><label>Referencia</label><input id="dec-n-ev-ref" maxlength="200"></div>
+      <div style="flex:2"><label>Qué dice</label><input id="dec-n-ev-resumen" maxlength="500"></div>
+    </div>
+
+    <h4>Alternativas</h4>
+    <p class="ayuda">Al menos dos. Con una sola no se decidió: se ejecutó.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Alternativa A</label><input id="dec-n-a1-nombre" maxlength="120"></div>
+      <div style="flex:2"><label>En qué consiste</label><input id="dec-n-a1-desc" maxlength="1000"></div>
+    </div>
+    <div class="fila">
+      <div style="flex:1"><label>Alternativa B</label><input id="dec-n-a2-nombre" maxlength="120"></div>
+      <div style="flex:2"><label>En qué consiste</label><input id="dec-n-a2-desc" maxlength="1000"></div>
+    </div>
+
+    <h4>Qué se eligió</h4>
+    <div class="fila">
+      <div style="flex:1"><label>Escenario recomendado</label><select id="dec-n-recomendada"></select></div>
+      <div style="flex:1"><label>Escenario elegido</label><select id="dec-n-elegida"></select></div>
+      <div style="flex:1"><label>…o descripción libre</label><input id="dec-n-elegida-texto" maxlength="500"></div>
+    </div>
+    <div class="fila">
+      <div style="flex:2"><label>Por qué esta (obligatorio si difiere de la recomendada)</label>
+        <input id="dec-n-motivo" maxlength="2000"></div>
+      <div><label>&nbsp;</label><button id="b-dec-registrar">Registrar</button></div>
+    </div>
+    <div id="dec-n-msg"></div>
+  </div></details>
+
+  <div id="dec-detalle" hidden>
+    <h4>Decisión <span id="dec-det-titulo"></span></h4>
+    <dl class="kv" id="dec-det-kv"></dl>
+    <div class="tabla"><table id="t-dec-rev"><thead><tr>
+      <th>Ventana</th><th>Veredicto</th><th>Qué se midió</th><th>Comentario</th><th>Revisó</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <details class="grupo" id="dec-revisar" hidden><summary>Revisar</summary><div>
+      <p class="ayuda">Lo que escribas en «qué se midió» queda <strong>congelado</strong>: cuando
+        entren comprobantes atrasados el cálculo de hoy va a dar otra cosa, y esta revisión
+        tiene que seguir diciendo lo que decía.</p>
+      <p class="ayuda"><strong>«No atribuible» no es un fracaso.</strong> Si cambió el mercado o
+        los costos y no se puede separar el efecto de la decisión, ese es el veredicto — y queda
+        afuera del porcentaje de aciertos en vez de contarse como error.</p>
+      <div class="fila">
+        <div><label>Desde</label><input id="dec-r-desde" type="date"></div>
+        <div><label>Hasta</label><input id="dec-r-hasta" type="date"></div>
+        <div><label>Veredicto</label><select id="dec-r-veredicto">
+          <option value="SUPERO">Superó</option><option value="CUMPLIO">Cumplió</option>
+          <option value="NO_CUMPLIO">No cumplió</option>
+          <option value="NO_ATRIBUIBLE">No atribuible</option>
+          <option value="SIN_EVIDENCIA">Sin evidencia</option>
+        </select></div>
+      </div>
+      <div class="fila">
+        <div style="flex:1"><label>Qué se midió (JSON)</label>
+          <input id="dec-r-medicion" value='{"esperadoPorMes":"","realPorMes":""}'></div>
+        <div style="flex:2"><label>Comentario</label><input id="dec-r-comentario" maxlength="2000"></div>
+        <div><label>&nbsp;</label><button id="b-dec-revisar">Registrar la revisión</button></div>
+      </div>
+      <div id="dec-r-msg"></div>
+    </div></details>
+  </div>
 </section>
 
 <!-- ══ Asientos ═══════════════════════════════════════════════════════════ -->
@@ -2954,7 +3055,10 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'caja') listarCaja();
     if (v === 'integraciones') listarIntegraciones();
     if (v === 'analitica') cargarAnalitica();
-    if (v === 'analisis') { listarSenales(); cargarDeclaracionDeEscenario(); }
+    if (v === 'analisis') {
+      listarSenales(); cargarDeclaracionDeEscenario();
+      if (puede('decision:read')) cargarDecisiones();
+    }
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
@@ -9532,6 +9636,203 @@ async function cargarSuscripcion() {
 
 E('b-sub').onclick = () => cargarSuscripcion();
 E('b-fact').onclick = () => cargarFacturacion();
+E('b-dec').onclick = () => cargarDecisiones();
+
+/**
+ * El registro de decisiones y su calibración.
+ *
+ * La calibración es un porcentaje de aciertos sobre revisiones que escribió una
+ * persona: no hay ningún modelo que se ajuste solo. Y las decisiones cuyo
+ * resultado no se pudo atribuir quedan afuera del porcentaje en vez de contarse
+ * como error — castigarlas empujaría a evitar las difíciles de medir.
+ */
+async function cargarDecisiones() {
+  const r = await api('GET', '/decision-records');
+  if (!r.ok) return decir('dec-msg', r);
+  E('dec-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const c = r.datos.calibracion;
+  E('dec-calibracion').innerHTML = c === null
+    ? fila('Calibración', 'todavía no hay decisiones registradas')
+    // «—» y no «0 %»: cero por ciento diría que nunca se acertó, y lo que pasa
+    // es que todavía no se midió.
+    : fila('Aciertos', (c.aciertosPct === null ? '— (sin revisiones medibles)' : c.aciertosPct + ' %')) +
+      fila('Revisadas', c.revisadas) +
+      fila('Cumplieron', c.cumplieron) +
+      fila('No cumplieron', c.noCumplieron) +
+      fila('No medibles (fuera del porcentaje)', c.noMedibles) +
+      fila('Ejecutadas sin revisar', c.ejecutadasSinRevisar) +
+      fila('Se siguió la recomendación', c.siguieronRecomendacion) +
+      fila('Se fue en contra', c.fueronEnContra);
+
+  const cuerpo = E('t-dec').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const d of r.datos.decisiones || []) {
+    const enContra = d.recomendadaId && d.elegidaId && d.recomendadaId !== d.elegidaId;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(d.titulo) + '</td>' +
+      '<td>' + escapar(d.nivelDeRiesgo) + '</td>' +
+      '<td>' + escapar(d.estado) + '</td>' +
+      '<td class="mono">' + escapar(d.propuestaPor) + '</td>' +
+      '<td>' + escapar(d.elegidaNombre || d.elegidaTexto || '—') +
+        (enContra ? ' <span class="p p-neu">en contra</span>' : '') + '</td>' +
+      '<td>' + escapar(d.recomendadaNombre || '—') + '</td>' +
+      '<td class="mono">' + escapar(String(d.revisiones)) + '</td>' +
+      '<td>' + botonesDeDecision(d) + '</td>';
+    for (const b of tr.querySelectorAll('button[data-accion]')) {
+      b.onclick = () => accionDeDecision(d.id, b.dataset.accion, d.titulo);
+    }
+    cuerpo.appendChild(tr);
+  }
+
+  E('dec-nueva').hidden = !puede('decision:write');
+  await cargarEscenariosParaDecision();
+}
+
+/** Qué se puede hacer con una decisión según su estado. */
+function botonesDeDecision(d) {
+  const b = ['<button class="sec" data-accion="ver">Ver</button>'];
+  if (d.estado === 'PROPUESTA' && puede('decision:approve')) {
+    b.push('<button class="sec" data-accion="aprobar">Aprobar</button>');
+  }
+  if (d.estado === 'APROBADA' && puede('decision:approve')) {
+    b.push('<button class="sec" data-accion="ejecutar">Ejecutar</button>');
+  }
+  if (d.estado !== 'EJECUTADA' && d.estado !== 'DESCARTADA' && puede('decision:write')) {
+    b.push('<button class="sec" data-accion="descartar">Descartar</button>');
+  }
+  return b.join(' ');
+}
+
+async function accionDeDecision(id, accion, titulo) {
+  if (accion === 'ver') return verDecision(id, titulo);
+
+  if (accion === 'aprobar') {
+    const r = await api('POST', '/decision-records/' + id + '/aprobar', {});
+    decir('dec-msg', r);
+    return cargarDecisiones();
+  }
+  if (accion === 'ejecutar') {
+    const desde = prompt('¿Desde qué fecha rige? (AAAA-MM-DD)');
+    if (!desde) return undefined;
+    const r = await api('POST', '/decision-records/' + id + '/ejecutar', { desde: desde });
+    decir('dec-msg', r);
+    return cargarDecisiones();
+  }
+  if (accion === 'descartar') {
+    const motivo = prompt('¿Por qué se descarta?');
+    if (!motivo) return undefined;
+    const r = await api('POST', '/decision-records/' + id + '/descartar', { motivo: motivo });
+    decir('dec-msg', r);
+    return cargarDecisiones();
+  }
+  return undefined;
+}
+
+/** El detalle de una decisión y sus revisiones. */
+async function verDecision(id, titulo) {
+  const r = await api('GET', '/decision-records/' + id);
+  if (!r.ok) return decir('dec-msg', r);
+
+  E('dec-detalle').hidden = false;
+  E('dec-det-titulo').textContent = titulo;
+  const d = r.datos.decision;
+  E('dec-det-kv').innerHTML =
+    fila('Problema', d.problema) +
+    fila('Estado', d.estado) +
+    fila('Riesgo', d.nivel_de_riesgo) +
+    fila('Propuso', d.propuesta_por) +
+    fila('Aprobó', d.aprobada_por || 'sin aprobar') +
+    fila('Ejecutada desde', d.ejecutada_el || '—') +
+    fila('Evidencia', (d.evidencia || []).map((e) => e.tipo + ': ' + e.resumen).join(' · ')) +
+    fila('Alternativas', (d.alternativas || []).map((a) => a.nombre).join(' · ')) +
+    (d.motivo ? fila('Por qué esta', d.motivo) : '');
+
+  const cuerpo = E('t-dec-rev').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const v of r.datos.revisiones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(v.ventanaDesde + ' a ' + v.ventanaHasta) + '</td>' +
+      '<td>' + escapar(v.veredicto) +
+        (v.veredicto === 'NO_ATRIBUIBLE' || v.veredicto === 'SIN_EVIDENCIA'
+          ? ' <span class="p p-neu">fuera del %</span>' : '') + '</td>' +
+      '<td class="mono">' + escapar(JSON.stringify(v.medicion)) + '</td>' +
+      '<td>' + escapar(v.comentario) + '</td>' +
+      '<td class="mono">' + escapar(v.revisadoPor) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  E('dec-revisar').hidden = !(d.estado === 'EJECUTADA' && puede('decision:write'));
+  E('b-dec-revisar').dataset.decision = id;
+  return undefined;
+}
+
+/** Los escenarios guardados, para elegir recomendada y elegida. */
+async function cargarEscenariosParaDecision() {
+  const r = await api('GET', '/analysis/scenarios');
+  if (!r.ok) return;
+  for (const sel of [E('dec-n-recomendada'), E('dec-n-elegida')]) {
+    const previo = sel.value;
+    sel.innerHTML = '<option value="">— ninguno —</option>';
+    for (const e of r.datos.escenarios || []) {
+      const o = document.createElement('option');
+      o.value = e.id; o.textContent = e.nombre;
+      sel.appendChild(o);
+    }
+    sel.value = previo;
+  }
+}
+
+E('b-dec-registrar').onclick = async () => {
+  const cuerpo = {
+    titulo: E('dec-n-titulo').value.trim(),
+    problema: E('dec-n-problema').value.trim(),
+    evidencia: [{
+      tipo: E('dec-n-ev-tipo').value,
+      referencia: E('dec-n-ev-ref').value.trim(),
+      resumen: E('dec-n-ev-resumen').value.trim(),
+    }],
+    alternativas: [
+      { nombre: E('dec-n-a1-nombre').value.trim(), descripcion: E('dec-n-a1-desc').value.trim() },
+      { nombre: E('dec-n-a2-nombre').value.trim(), descripcion: E('dec-n-a2-desc').value.trim() },
+    ],
+    nivelDeRiesgo: E('dec-n-riesgo').value,
+    recomendadaId: E('dec-n-recomendada').value || null,
+    elegidaId: E('dec-n-elegida').value || null,
+    elegidaTexto: E('dec-n-elegida-texto').value.trim() || null,
+    motivo: E('dec-n-motivo').value.trim() || null,
+  };
+  const r = await api('POST', '/decision-records', cuerpo);
+  decir('dec-n-msg', r);
+  if (r.ok) {
+    E('dec-n-titulo').value = ''; E('dec-n-problema').value = '';
+    E('dec-n-ev-ref').value = ''; E('dec-n-ev-resumen').value = '';
+    E('dec-n-motivo').value = ''; E('dec-n-elegida-texto').value = '';
+    await cargarDecisiones();
+  }
+};
+
+E('b-dec-revisar').onclick = async () => {
+  const id = E('b-dec-revisar').dataset.decision;
+  let medicion;
+  try {
+    medicion = JSON.parse(E('dec-r-medicion').value);
+  } catch (e) {
+    E('dec-r-msg').innerHTML = '<div class="err">Lo medido tiene que ser un objeto JSON.</div>';
+    return;
+  }
+  const r = await api('POST', '/decision-records/' + id + '/revisar', {
+    ventanaDesde: E('dec-r-desde').value,
+    ventanaHasta: E('dec-r-hasta').value,
+    veredicto: E('dec-r-veredicto').value,
+    medicion: medicion,
+    comentario: E('dec-r-comentario').value.trim(),
+  });
+  decir('dec-r-msg', r);
+  if (r.ok) await cargarDecisiones();
+};
 
 /**
  * La cuenta con NEXO. Solo lectura, y no por falta de botones: la aplicación no

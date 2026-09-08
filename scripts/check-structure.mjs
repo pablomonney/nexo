@@ -142,6 +142,16 @@ const CHECKS = [
     '0096: importe sin moneda o moneda sin periodicidad no es una condición acordada'],
   ['payment_intents', 'payment_intents_fallo_con_detalle',
     '0096: un cobro fallido dice por qué falló'],
+  // 0101 · Registro de decisiones. Los cuatro candados que separan una decisión
+  // de una opinión, y una segunda firma de una firma de trámite.
+  ['decision_records', 'dr_riesgo_alto_con_segunda_firma',
+    '0101: quien propone no aprueba una decisión de riesgo alto o crítico'],
+  ['decision_records', 'dr_desvio_con_motivo',
+    '0101: ir contra la recomendación es legítimo; hacerlo sin argumento, no'],
+  ['decision_records', 'dr_ejecutada_con_eleccion',
+    '0101: ejecutar sin decir qué alternativa se eligió deja un acto sin contenido'],
+  ['decision_records', 'dr_aprobada_firmada',
+    '0101: una decisión aprobada dice quién y cuándo'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -294,6 +304,9 @@ const INDICES = [
   ['cd_una_sucesora', 'Un documento reemplaza como mucho a uno anterior'],
   ['pa_una_por_par', 'Un movimiento no se imputa dos veces al mismo comprobante'],
   ['warehouses_code_unico', 'Un código, un depósito, por empresa'],
+  // 0101 · Es UNIQUE y no CHECK: la segunda revisión de la misma ventana
+  // cambiaría el porcentaje de aciertos sin que hubiera pasado nada nuevo.
+  ['drv_una_por_ventana', 'Una revisión por ventana: revisar dos veces no es medir dos veces'],
   // 0068 · Con dos sesiones abiertas en la misma caja, un movimiento no sabría
   // a cuál pertenece y el arqueo dejaría de significar algo.
   ['cs_una_abierta_por_caja', 'Una sola sesión abierta por caja'],
@@ -468,6 +481,9 @@ const RLS_FORZADO = [
  * encontrar una fuga entre empresas que estaba desde la 0016.
  */
 const VISTAS_INVOKER = [
+  // 0101 · La calibración es por empresa: sin security_invoker mostraría los
+  // aciertos de todas.
+  'decision_calibracion',
   // 0096 · Lo que una empresa ve de su cuenta con NEXO. Sin security_invoker
   // mostraría los cargos de todas.
   'billing_account_status',
