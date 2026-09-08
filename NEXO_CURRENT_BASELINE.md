@@ -37,17 +37,25 @@ discrepancias en el Mayor.
 | Tablas con RLS habilitado | 116 |
 | De ellas, con `FORCE` | **116 — todas** |
 | Tablas con `company_id` sin RLS | **0** |
-| Vistas sin `security_invoker` | 1 — `norm_candidates_pendientes` |
+| Vistas sin `security_invoker` | 6 — `norm_candidates_pendientes` y las cinco `saas_*` |
 | Triggers propios | 174 |
 | Índices | 434 |
 | CHECK constraints | 559 |
 | Claves foráneas | 329 |
 | Funciones | 368 |
 
-**La vista sin `security_invoker` sigue sin ser un hueco.** Lee
-`norm_candidates` y `norm_watch_sources`: normativa, sin `company_id`, sin nada
-de una empresa que pueda filtrarse a otra. Verificado por segunda vez para que
-la próxima auditoría no lo cuente como hallazgo nuevo.
+**Las seis vistas sin `security_invoker` están verificadas, y por motivos
+distintos.**
+
+`norm_candidates_pendientes` lee normativa: sin `company_id`, sin nada de una
+empresa que pueda filtrarse a otra. Verificado por segunda vez para que la
+próxima auditoría no lo cuente como hallazgo nuevo.
+
+Las cinco `saas_*` (0100) **sí** atraviesan a todas las empresas, y es su
+propósito: son las métricas del negocio de NEXO. Lo que las hace seguras no es
+un `security_invoker` que no tienen — es que `aai_app` **no las puede leer**,
+revocado explícitamente y comprobado contra el catálogo por S-30, que además
+verifica que ninguna ruta las nombre.
 
 ## 3. Verificación
 
@@ -149,11 +157,24 @@ estados, y **ninguna columna donde guardar datos de tarjeta**. No hay pasarela
 contratada: `intentarCobro` devuelve `SIN_PASARELA` y el ciclo lo informa en
 vez de callarlo.
 
-### NEXO Corporate y Self-Management — AUSENTE
+### NEXO Corporate y Self-Management — PARCIAL
 
-No existe tenant Corporate, ni CRM propio, ni finanzas propias, ni métricas
-SaaS (MRR, ARR, churn, CAC, LTV), ni costo de operar NEXO. Los módulos `crm_*`
-son el CRM **que NEXO le da a sus clientes**, no el suyo.
+**Actualizado el 2026-09-08.** Existen las **métricas del negocio** —MRR, ARR,
+ARPU, altas, bajas, cobranza— calculadas sobre suscripciones y cargos reales,
+con las fórmulas escritas y reproducibles. Ver
+[`NEXO_CORPORATE.md`](NEXO_CORPORATE.md).
+
+Son las únicas vistas del repositorio **sin `security_invoker`**, porque agregan
+sobre todas las empresas a propósito. Lo que las hace seguras es que `aai_app`
+no las puede leer: revocado, comprobado contra el catálogo, y sin ninguna ruta
+que las nombre.
+
+Lo que **no** hay, y comparte una sola causa: **NEXO no lleva su propia
+contabilidad**. Sin eso no hay CAC, ni LTV, ni costo por cliente, ni margen por
+plan, ni burn, ni runway — y ninguno se puede inventar, porque un CAC inventado
+se ve igual que uno medido. Tampoco hay CRM propio, pipeline, equipo, soporte
+ni tablero ejecutivo. Los módulos `crm_*` son el CRM **que NEXO le da a sus
+clientes**, no el suyo.
 
 ### NEXO Interface — PARCIAL
 
@@ -208,7 +229,7 @@ cobranza el resto de la cadena comercial no se puede probar de punta a punta.
 | ~~**I-1**~~ | ~~Motor de pagos y facturación~~ — **hecho** el 2026-09-08 (0096–0099). Queda conectar la pasarela, que es externo |
 | **I-2** | Alta autoservicio y onboarding |
 | **I-3** | NEXO Corporate y self-management |
-| **I-4** | Métricas SaaS con fórmulas reproducibles |
+| ~~**I-4**~~ | ~~Métricas SaaS con fórmulas reproducibles~~ — **hecho** el 2026-09-08 (0100). Falta lo que depende de la contabilidad propia: CAC, LTV, margen, runway |
 | **I-5** | Registro de decisión completo y bucle de aprendizaje |
 | **I-6** | Anomalías y forecasting como motores propios |
 | **I-7** | Almacén de documentos apto para producción |

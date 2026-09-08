@@ -62,7 +62,8 @@
     "bench:vistas": "node scripts/bench-vistas.mjs",
     "plan:precio": "node scripts/declarar-precio-de-plan.mjs",
     "cobranza:politica": "node scripts/declarar-politica-de-cobranza.mjs",
-    "facturacion:ciclo": "node scripts/facturacion-ciclo.mjs"
+    "facturacion:ciclo": "node scripts/facturacion-ciclo.mjs",
+    "metricas:saas": "node scripts/metricas-saas.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

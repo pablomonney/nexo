@@ -135,6 +135,7 @@ métrica tiene umbral de bloqueo de release.
 | `secretos-fuera-del-log` | S-27 | Que la credencial del proveedor de modelo no llegue a un log, a un error ni a una tabla |
 | `codigo-en-el-repositorio` | S-28 | Que ninguna fuente que el sistema usa esté ignorada por el `.gitignore`: existir en disco y existir en el repositorio no son lo mismo |
 | `solo-lectura-de-verdad` | S-29 | Que lo declarado de solo lectura para la aplicación lo sea en el catálogo de PostgreSQL, y que además se pueda leer |
+| `metricas-del-operador` | S-30 | Que las vistas que agregan sobre todas las empresas —las únicas sin `security_invoker`— no las pueda leer la aplicación, y que ninguna ruta las nombre |
 
 #### S-16, y por qué un barrido también se equivoca
 
