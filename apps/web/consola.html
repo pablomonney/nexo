@@ -44,6 +44,13 @@
   }
 }
 *{box-sizing:border-box}
+/* El atributo `hidden` esconde por la hoja del navegador, que es `display:none`
+   con la especificidad más baja que existe. Cualquier regla de autor que fije
+   `display` le gana — y le ganaba: `nav{display:flex}` dejaba la navegación con
+   los 34 módulos a la vista en la pantalla de ingreso, con el atributo puesto.
+   Lo encontró una auditoría visual, no la lectura: en el DOM decía `hidden`.
+   Esta línea hace que `hidden` signifique lo que dice, para todo el archivo. */
+[hidden]{display:none!important}
 body{margin:0;background:var(--papel);color:var(--tinta);
      font:15px/1.55 "Segoe UI",system-ui,sans-serif}
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem 1rem;

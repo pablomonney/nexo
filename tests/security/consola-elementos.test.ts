@@ -128,6 +128,25 @@ describe('S-15 — la consola escribe en el elemento que cree', () => {
     expect(vistasFantasma, 'VISTAS nombra pantallas que ya no existen').toEqual([]);
   });
 
+  it('el atributo hidden esconde de verdad, y no solo en el DOM', () => {
+    // `hidden` esconde por la hoja del navegador, que es `display:none` con la
+    // especificidad más baja que existe: **cualquier** regla de autor que fije
+    // `display` le gana.
+    //
+    // Y le ganaba. `nav{display:flex}` dejaba la navegación con los 34 módulos
+    // a la vista en la pantalla de ingreso, con el atributo puesto: en el DOM
+    // decía `hidden` y en la pantalla se veía. Lo encontró una auditoría
+    // visual, no la lectura del código — leyendo el HTML todo estaba bien.
+    //
+    // La consola esconde y muestra 150 elementos con este atributo. Sin esta
+    // regla, cada uno depende de que nadie le ponga `display` a su selector.
+    expect(
+      /\[hidden\]\s*\{[^}]*display:\s*none\s*!important/u.test(html),
+      'falta `[hidden]{display:none!important}` en la hoja de estilos: sin eso, ' +
+        'esconder un elemento depende de que ninguna regla le fije display',
+    ).toBe(true);
+  });
+
   it('la lista de excepciones no acumula id que ya existen', () => {
     // Una excepción que sobrevive a su motivo convierte la lista en decoración.
     const existentes = new Set(idsDelHtml(html));
