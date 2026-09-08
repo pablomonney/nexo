@@ -48,6 +48,9 @@ export const ACTIONS_REQUIRING_REASON = [
   // deje de verse. Seis meses despues alguien va a querer saber quien lo decidio.
   'RECONOCER_ALERTA',
   'DESCARTAR_ALERTA',
+  // Vencer una prueba le corta el acceso a alguien. Tiene que poder explicarse
+  // sin reconstruirlo desde las fechas.
+  'VENCER_PRUEBA',
 ] as const;
 
 export interface AuditEvent {

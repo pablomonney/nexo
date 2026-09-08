@@ -131,12 +131,6 @@ const SIN_ESCRITOR = new Map<string, string>([
       'servicio del §32 completo.',
   ],
   [
-    'plan_limits',
-    'Los topes de cada plan de suscripción. El endpoint de planes ya los lee —hoy devuelve la ' +
-      'lista vacía para todos—, y cuánto entra en cada plan es una decisión comercial: la misma ' +
-      'que bloquea el cobro en NEXO_ROADMAP.md §P2.',
-  ],
-  [
     'profit_centers',
     'Centros de beneficio: existen en el esquema desde la 0003 y no tienen ABM, igual que los ' +
       'centros de costo, que se eligen dentro de cada asiento. Lo destraba decidir si el producto ' +

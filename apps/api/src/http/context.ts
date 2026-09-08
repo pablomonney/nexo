@@ -12,6 +12,7 @@ import type { FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { hashToken } from '../auth/crypto.js';
 import { forbidden, HttpError, mfaRequired, unauthorized } from './errors.js';
+import { alcanzaElPlan } from '../planes/alcance.js';
 
 export interface AuthenticatedUser {
   readonly userId: string;
@@ -134,7 +135,7 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
   // Fijar `app.company_id` en la empresa pedida no debilita nada — RLS acota por
   // empresa, no autoriza: si el usuario no tiene rol ahí, la consulta sigue
   // devolviendo vacío y el acceso se rechaza igual.
-  const { permissions, roles } = await withCompany(
+  const { permissions, roles, alcance } = await withCompany(
     { companyId, actorId: `user:${auth.user.userId}` },
     async (tx) => {
       const permissionRows = await tx.query<{ code: string }>(
@@ -150,9 +151,15 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
             AND (ucr.valid_to IS NULL OR ucr.valid_to >= CURRENT_DATE)`,
         [auth.user.userId, companyId],
       );
+      // La puerta comercial se resuelve **en la misma transacción** que los
+      // permisos y los roles. Abrir una segunda para esto agregaría una
+      // conexión y un BEGIN/COMMIT a cada pedido que toca una empresa, que es
+      // el camino más caliente del sistema: la primera versión lo hacía así y
+      // dos suites empezaron a rozar su tiempo límite.
       return {
         permissions: new Set(permissionRows.rows.map((row) => row.code)),
         roles: new Set(roleRows.rows.map((row) => row.code)),
+        alcance: await alcanzaElPlan(tx, companyId, request.url),
       };
     },
   );
@@ -169,6 +176,23 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
       403,
       'MFA_SETUP_REQUIRED',
       'Tu rol exige segundo factor. Configuralo en /auth/mfa/setup antes de continuar.',
+    );
+  }
+
+  // La puerta comercial se **contesta** última, después de resolver que el
+  // usuario tiene acceso y segundo factor. El orden del mensaje importa: a
+  // quien no tiene acceso hay que decirle que no tiene acceso, no que le falta
+  // contratar un módulo — el segundo mensaje le confirmaría que la empresa
+  // existe y que él simplemente no pagó.
+  //
+  // Y falla abierta: ver `planes/alcance.ts`. Esto no aísla nada; eso lo hacen
+  // el RLS y los permisos, que ya corrieron.
+  if (!alcance.permitido) {
+    throw new HttpError(
+      403,
+      'FUERA_DEL_PLAN',
+      `El plan contratado no incluye este módulo (${alcance.feature ?? 'sin identificar'}). ` +
+        'Los datos que ya cargaste siguen estando: lo que falta es el plan, no la información.',
     );
   }
 

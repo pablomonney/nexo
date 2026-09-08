@@ -318,8 +318,11 @@ describe('estados', () => {
     expect(puedeTransicionar('SUSPENDIDA', 'ACTIVA')).toBe(true);
   });
 
-  it('de PRUEBA no se salta a SUSPENDIDA', () => {
-    expect(puedeTransicionar('PRUEBA', 'SUSPENDIDA')).toBe(false);
+  it('una prueba que se vence queda SUSPENDIDA, no CANCELADA', () => {
+    // Cancelar es una decisión del cliente y de ahí no se vuelve. Quien dejó
+    // vencer una prueba no decidió nada: se le acabó el tiempo.
+    expect(puedeTransicionar('PRUEBA', 'SUSPENDIDA')).toBe(true);
+    expect(puedeTransicionar('SUSPENDIDA', 'ACTIVA')).toBe(true);
   });
 
   it('un documento pagado no vuelve a ningún estado anterior', () => {

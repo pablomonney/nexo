@@ -67,8 +67,18 @@ const STUDIO_SCOPED = new Set([
  * La raíz entró acá al agregarse, y el que la encontró fue este mismo barrido:
  * un `302` no es un `2xx`, pero tampoco es un `>= 400`, y la aserción está
  * escrita —bien— como «todo lo que no se declaró tiene que rechazar».
+ *
+ * `GET /planes` entró después, y es la única que devuelve datos de la base: el
+ * catálogo comercial con sus precios. Es la página de precios — pedir sesión
+ * para ver cuánto sale el producto es pedirle a alguien que se registre para
+ * averiguar si le interesa.
+ *
+ * Lo que la hace admisible es que **no lee ninguna tabla con `company_id`**:
+ * `subscription_plans`, `plan_prices`, `plan_features`, `product_features` y
+ * `plan_limits` son del proveedor, no de ninguna empresa. Eso no se sostiene
+ * con esta línea: lo comprueba `tests/security/planes-vendibles.test.ts`.
  */
-const SIN_DATOS = new Set(['GET /consola', 'GET /']);
+const SIN_DATOS = new Set(['GET /consola', 'GET /', 'GET /planes']);
 
 suite('S-1 HTTP — aislamiento sobre todos los endpoints', () => {
   let app: FastifyInstance;

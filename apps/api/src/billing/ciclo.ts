@@ -34,6 +34,7 @@
  */
 
 import { recordAudit, type Tx } from '@aai/db';
+import { vencerPruebas, type InformeDePruebas } from './prueba.js';
 import {
   esAtrasado,
   esRepeticion,
@@ -69,6 +70,7 @@ export interface InformeDeCiclo {
   readonly emitidos: readonly DocumentoEmitido[];
   readonly omitidos: readonly Omision[];
   readonly cobranza: readonly PasoEjecutado[];
+  readonly pruebas: InformeDePruebas;
 }
 
 export interface DocumentoEmitido {
@@ -965,7 +967,12 @@ export async function correrCiclo(
   hoy: CalendarDate,
   actorId: string,
 ): Promise<InformeDeCiclo> {
+  // Las pruebas se vencen **antes** de emitir. Una prueba que venció hoy no
+  // debe recibir un cargo hoy: quien no contrató nada no debe nada, y emitirle
+  // un documento para anularlo después ensucia su historial con un cargo que
+  // nunca correspondió.
+  const pruebas = await vencerPruebas(tx, hoy, actorId);
   const { emitidos, omitidos } = await emitirVencidos(tx, hoy, actorId);
   const cobranza = await avanzarCobranza(tx, hoy, actorId);
-  return { hoy, emitidos, omitidos, cobranza };
+  return { hoy, emitidos, omitidos, cobranza, pruebas };
 }

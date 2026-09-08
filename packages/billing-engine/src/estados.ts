@@ -24,7 +24,11 @@ export type EstadoDeSuscripcion = 'PRUEBA' | 'ACTIVA' | 'SUSPENDIDA' | 'CANCELAD
  * pagando, y ese es el caso normal, no la excepción.
  */
 const SIGUIENTES: Readonly<Record<EstadoDeSuscripcion, readonly EstadoDeSuscripcion[]>> = {
-  PRUEBA: ['ACTIVA', 'CANCELADA'],
+  // `PRUEBA → SUSPENDIDA` es la prueba que se vence sin convertirse. No es
+  // `CANCELADA`, y la diferencia importa: cancelar es una decisión del cliente,
+  // y de CANCELADA no se vuelve. Quien dejó vencer una prueba no decidió nada
+  // —se le acabó el tiempo— y va a poder contratar mañana sin empezar de cero.
+  PRUEBA: ['ACTIVA', 'SUSPENDIDA', 'CANCELADA'],
   ACTIVA: ['SUSPENDIDA', 'CANCELADA'],
   SUSPENDIDA: ['ACTIVA', 'CANCELADA'],
   CANCELADA: [],

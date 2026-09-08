@@ -199,7 +199,7 @@ suite('Suscripciones', () => {
 
     planPyme = (
       await db.query<{ id: string }>(
-        `SELECT id FROM subscription_plans WHERE code = 'PYME'`,
+        `SELECT id FROM subscription_plans WHERE code = 'GESTION'`,
       )
     ).rows[0]!.id;
   }, 60_000);
@@ -235,7 +235,7 @@ suite('Suscripciones', () => {
     expect(columnas).toContain('payment_intents.medio_ultimos4');
   });
 
-  it('los planes vienen sin precio y sin topes declarados, que no es gratis ni ilimitado', async () => {
+  it('los planes vienen con su precio y sus topes declarados', async () => {
     const r = await pedir('GET', '/subscription-plans');
     expect(r.statusCode, r.body).toBe(200);
     const p = r.json<{
@@ -243,25 +243,32 @@ suite('Suscripciones', () => {
       alcance: string;
     }>();
 
-    // Los cinco sembrados tienen que estar. No se compara la lista completa: la
-    // base de pruebas es compartida y otras suites dan de alta planes propios,
-    // así que exigir igualdad exacta haría fallar este test por algo que pasó
-    // en otro archivo.
+    // Los cinco comerciales tienen que estar. No se compara la lista completa:
+    // la base de pruebas es compartida y otras suites dan de alta planes
+    // propios, así que exigir igualdad exacta haría fallar este test por algo
+    // que pasó en otro archivo.
+    //
+    // Los cinco de ejemplo anteriores —GRATUITO, PYME, PROFESIONAL, EMPRESA,
+    // CONTADOR— quedaron DISCONTINUADO en la 0105 y por eso no aparecen: no se
+    // borraron, para que una suscripción histórica siga encontrando su plan.
     const codigos = p.planes.map((x) => x.codigo);
-    for (const sembrado of ['GRATUITO', 'PYME', 'PROFESIONAL', 'EMPRESA', 'CONTADOR']) {
-      expect(codigos).toContain(sembrado);
+    const comerciales = ['CONTABLE', 'GESTION', 'ESTUDIO', 'EMPRESA_B1', 'COMPLETO'];
+    for (const plan of comerciales) {
+      expect(codigos).toContain(plan);
     }
 
-    const sembrados = p.planes.filter((x) =>
-      ['GRATUITO', 'PYME', 'PROFESIONAL', 'EMPRESA', 'CONTADOR'].includes(x.codigo),
-    );
-    // Ni topes ni precios: cuántos usuarios entran en el plan Pyme y cuánto sale
-    // son decisiones comerciales, y ponerles un número las tomaría por quien
-    // corresponde. Un arreglo vacío es «nadie lo declaró», no «ilimitado» ni
-    // «gratis».
+    // Los precios y los topes NO vienen de la migración: los declara
+    // `npm run comercial:b1`, con vigencia y motivo. Que estén cargados en la
+    // base de pruebas es parte del sembrado, igual que las normas.
+    //
+    // Lo que este test defiende sigue siendo lo mismo que antes de que
+    // existieran: la diferencia entre «declarado» y «vacío». Un arreglo vacío
+    // seguiría significando «nadie lo declaró» y no «gratis» ni «ilimitado» —
+    // el `alcance` lo dice, y por eso se comprueba igual.
+    const sembrados = p.planes.filter((x) => comerciales.includes(x.codigo));
     for (const plan of sembrados) {
-      expect(plan.topes).toHaveLength(0);
-      expect(plan.precios).toHaveLength(0);
+      expect(plan.topes.length, `${plan.codigo} sin topes declarados`).toBeGreaterThan(0);
+      expect(plan.precios.length, `${plan.codigo} sin precio declarado`).toBeGreaterThan(0);
     }
     expect(p.alcance).toContain('no es gratis');
   });
@@ -284,12 +291,12 @@ suite('Suscripciones', () => {
 
   it('el uso se cuenta en el momento: no hay contadores guardados', async () => {
     expect(
-      (await pedir('POST', '/subscription', { plan: 'PYME', vigenciaDesde: haceDias(10) }))
+      (await pedir('POST', '/subscription', { plan: 'GESTION', vigenciaDesde: haceDias(10) }))
         .statusCode,
     ).toBe(201);
 
     const s = await ver();
-    expect(s.plan!.codigo).toBe('PYME');
+    expect(s.plan!.codigo).toBe('GESTION');
 
     const comprobantes = s.recursos.find((x) => x.recurso === 'COMPROBANTES_MES')!;
     expect(comprobantes.uso, 'la venta de recién ya está contada').toBe(1);
@@ -314,25 +321,42 @@ suite('Suscripciones', () => {
   });
 
   it('un tope sin declarar no es «ilimitado»', async () => {
-    const s = await ver();
-    for (const r of s.recursos) {
-      expect(r.tope).toBeNull();
-      expect(r.estado, 'nadie escribió el tope: no es «dentro del tope»')
-        .toBe('SIN_TOPE_DECLARADO');
-    }
+    // Desde B-1 los planes vienen con sus topes sembrados, así que para ejercer
+    // esta propiedad hay que sacar uno. Se elige INTEGRACIONES porque ninguna
+    // otra suite afirma nada sobre él, y se repone al final.
+    await db.query(
+      `DELETE FROM plan_limits WHERE plan_id = $1 AND recurso = 'INTEGRACIONES'`,
+      [planPyme],
+    );
 
-    // Y sin topes declarados la bandeja no llama exceso a nada.
+    const s = await ver();
+    const sinDeclarar = s.recursos.find((x) => x.recurso === 'INTEGRACIONES');
+    expect(sinDeclarar?.tope).toBeNull();
+    expect(sinDeclarar?.estado, 'nadie escribió el tope: no es «dentro del tope»')
+      .toBe('SIN_TOPE_DECLARADO');
+
+    // Y no se lo llama exceso: no hay contra qué compararlo.
     const items = (await pedir('GET', '/work-queue?entidad=company_subscriptions&limite=200'))
-      .json<{ items: { rama: string }[] }>().items;
-    expect(items.some((i) => i.rama === 'PLAN_EXCEDIDO')).toBe(false);
+      .json<{ items: { rama: string; evidenciaFaltante: string[] | null }[] }>().items;
+    const exceso = items.find((i) => i.rama === 'PLAN_EXCEDIDO');
+    expect(exceso?.evidenciaFaltante ?? []).not.toContain('INTEGRACIONES');
+
+    await db.query(
+      `INSERT INTO plan_limits (plan_id, recurso, tope, declarado_por)
+       VALUES ($1, 'INTEGRACIONES', 2, 'hipotesis-b1')
+       ON CONFLICT (plan_id, recurso) DO NOTHING`,
+      [planPyme],
+    );
   });
 
   it('excedido el tope declarado, avisa y no bloquea', async () => {
     // La empresa declara su propio tope: un comprobante por mes, que ya está
     // superado por las dos ventas de antes.
+    // El plan ya trae su tope sembrado, así que se lo baja a uno en vez de
+    // insertarlo. Se repone al final: la base de pruebas es compartida.
     await db.query(
-      `INSERT INTO plan_limits (plan_id, recurso, tope, declarado_por)
-       VALUES ($1, 'COMPROBANTES_MES', 1, 'test')`,
+      `UPDATE plan_limits SET tope = 1, declarado_por = 'test'
+        WHERE plan_id = $1 AND recurso = 'COMPROBANTES_MES'`,
       [planPyme],
     );
 
@@ -355,12 +379,16 @@ suite('Suscripciones', () => {
     await venta();
     expect((await ver()).recursos.find((x) => x.recurso === 'COMPROBANTES_MES')!.uso).toBe(3);
 
-    await db.query(`DELETE FROM plan_limits WHERE plan_id = $1`, [planPyme]);
+    await db.query(
+      `UPDATE plan_limits SET tope = 1500, declarado_por = 'hipotesis-b1'
+        WHERE plan_id = $1 AND recurso = 'COMPROBANTES_MES'`,
+      [planPyme],
+    );
   });
 
   it('dos planes vigentes a la vez no se aceptan', async () => {
     const r = await pedir('POST', '/subscription', {
-      plan: 'PROFESIONAL', vigenciaDesde: hoy,
+      plan: 'COMPLETO', vigenciaDesde: hoy,
     });
     // Con dos, el tope aplicable saldría por orden de carga.
     expect(r.statusCode).toBe(409);

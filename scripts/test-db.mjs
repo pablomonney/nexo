@@ -125,6 +125,13 @@ if (invocadoDirectamente) {
     // `--reset` dejaría la base sin la regla y la suite que la ejercita fallaría
     // por un motivo que no tiene nada que ver con lo que prueba.
     ['reglas contables (DRAFT)', ['scripts/cargar-reglas-contables.mjs', '--aplicar']],
+    // Los precios y los topes de B-1. Van acá y no en una migración porque un
+    // precio cambia y una migración no; y van en la base de tests porque hay
+    // suites que comprueban que el catálogo devuelva 29.900 y no un null.
+    //
+    // Sin esto, un `--reset` dejaría los planes sin precio y esas suites
+    // fallarían por algo que no tiene nada que ver con lo que prueban.
+    ['precios y topes (B-1)', ['scripts/sembrar-comercial-b1.mjs', '--aplicar']],
   ]) {
     const r = spawnSync(process.execPath, argumentos, { cwd: RAIZ, env: entorno, stdio: 'pipe' });
     if (r.status !== 0) {

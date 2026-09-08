@@ -232,6 +232,36 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
       duplican la superficie por la que se puede tomar una cuenta, y el segundo se pide
       justamente cuando el primero pudo haber ido a parar a otro lado.</p>
     <div id="alta-re-msg"></div>
+
+    <h4>Ya confirmé: crear mi empresa</h4>
+    <p class="ayuda">Esto crea el estudio, la empresa, tu rol de administrador y la prueba de
+      14 días, todo junto. Van juntos a propósito: partirlo en cuatro pedidos dejaría a alguien
+      con un estudio y sin empresa si se le corta la conexión en el medio.</p>
+    <p class="ayuda"><strong>No se pide tarjeta.</strong> Al terminar la prueba la suscripción
+      queda suspendida: los datos, la contabilidad y el historial quedan intactos, y el acceso
+      vuelve contratando.</p>
+    <button id="b-planes" class="sec">Ver los planes</button>
+    <div class="tabla"><table id="t-planes"><thead><tr>
+      <th>Plan</th><th>Precio</th><th>Incluye</th><th>Topes</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="fila">
+      <div style="flex:1"><label>Nombre del estudio</label><input id="on-estudio" maxlength="200"></div>
+      <div style="flex:1"><label>Razón social</label><input id="on-razon" maxlength="200"></div>
+      <div><label>CUIT (11 dígitos)</label><input id="on-cuit" maxlength="11" inputmode="numeric"></div>
+    </div>
+    <div class="fila">
+      <div><label>Tipo</label><select id="on-tipo">
+        <option>SA</option><option>SRL</option><option>SAS</option>
+        <option>UNIPERSONAL</option><option>ASOCIACION</option><option>COOPERATIVA</option>
+        <option>OTRO</option>
+      </select></div>
+      <div><label>Jurisdicción</label><input id="on-jurisdiccion" value="AR-C" maxlength="10"></div>
+      <div><label>Organismo</label><input id="on-organismo" maxlength="40" placeholder="IGJ"></div>
+      <div><label>Cierre (MM-DD)</label><input id="on-cierre" value="12-31" maxlength="5"></div>
+      <div><label>Plan</label><select id="on-plan"></select></div>
+      <div><label>&nbsp;</label><button id="b-onboarding">Crear y empezar la prueba</button></div>
+    </div>
+    <div id="on-msg"></div>
   </div></details>
 </section>
 
@@ -251,6 +281,7 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 <!-- ══ Inicio ═════════════════════════════════════════════════════════════ -->
 <section id="v-inicio" hidden>
   <h2>Inicio</h2>
+  <div id="prueba-aviso"></div>
   <p class="ayuda">Tres cuentas de hechos, no indicadores compuestos: qué requiere
     atención, en qué período estás parado, y qué vence.</p>
   <div id="inicio-resumen"></div>
@@ -3089,7 +3120,7 @@ for (const b of document.querySelectorAll('nav button')) {
   b.onclick = () => {
     const v = b.dataset.vista;
     ir(v, [b.textContent]);
-    if (v === 'inicio') cargarInicio();
+    if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
     if (v === 'inteligencia') cargarInteligencia();
     if (v === 'bandeja') bandeja();
     if (v === 'documentos') listarDocumentos();
@@ -3153,6 +3184,87 @@ E('b-alta-verificar').onclick = async () => {
     E('email').value = E('alta-email').value.trim();
   }
 };
+
+/**
+ * El catálogo comercial. Se pide **sin sesión**: es la página de precios, y
+ * pedir login para ver cuánto sale el producto es pedirle a alguien que se
+ * registre para averiguar si le interesa.
+ */
+async function cargarPlanes() {
+  const r = await api('GET', '/planes');
+  if (!r.ok) return decir('on-msg', r);
+
+  const cuerpo = E('t-planes').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  const sel = E('on-plan');
+  sel.innerHTML = '';
+
+  for (const p of r.datos.planes || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><strong>' + escapar(p.nombre) + '</strong><br><span class="ayuda">' +
+        escapar(p.descripcion || '') + '</span></td>' +
+      // «sin precio declarado» y no «gratis»: la diferencia es la que evita
+      // regalar el producto por una fila que nadie cargó.
+      '<td class="mono">' + (p.precio
+        ? escapar(p.precio.moneda + ' ' + p.precio.importe) +
+          (p.precio.incluyeImpuestos ? '' : ' + IVA') + ' / mes'
+        : '<span class="p p-neu">sin precio declarado</span>') + '</td>' +
+      '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
+      '<td class="mono">' + escapar((p.topes || [])
+        .map((t) => t.recurso.toLowerCase() + ': ' + t.tope).join(' · ') || 'sin declarar') + '</td>';
+    cuerpo.appendChild(tr);
+
+    const o = document.createElement('option');
+    o.value = p.code; o.textContent = p.nombre;
+    sel.appendChild(o);
+  }
+
+  E('on-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+}
+
+E('b-planes').onclick = () => cargarPlanes();
+
+E('b-onboarding').onclick = async () => {
+  const r = await api('POST', '/onboarding/empresa', {
+    estudio: E('on-estudio').value.trim(),
+    razonSocial: E('on-razon').value.trim(),
+    cuit: E('on-cuit').value.trim(),
+    tipoEntidad: E('on-tipo').value,
+    jurisdiccion: E('on-jurisdiccion').value.trim(),
+    organismo: E('on-organismo').value.trim() || undefined,
+    cierreEjercicio: E('on-cierre').value.trim(),
+    plan: E('on-plan').value,
+  });
+  decir('on-msg', r);
+  if (r.ok) {
+    E('on-msg').innerHTML +=
+      '<div class="aviso">' + escapar(r.datos.siguiente) +
+      (r.datos.prueba ? ' Tu prueba corre hasta el ' + escapar(r.datos.prueba.hasta) + '.' : '') +
+      '</div>';
+  }
+};
+
+/**
+ * El estado de la prueba, arriba de Inicio.
+ *
+ * Se muestra siempre que la empresa esté en prueba, no solo cuando está por
+ * vencer: enterarse el último día de que había un plazo es la peor forma de
+ * enterarse.
+ */
+async function cargarPrueba() {
+  const r = await api('GET', '/onboarding/prueba');
+  if (!r.ok || !r.datos.enPrueba) { E('prueba-aviso').innerHTML = ''; return; }
+
+  const d = r.datos;
+  const clase = d.situacion === 'VENCIDA' ? 'err' : (d.situacion === 'POR_VENCER' ? 'aviso' : 'aviso');
+  E('prueba-aviso').innerHTML =
+    '<div class="' + clase + '"><strong>Prueba de ' + escapar(d.plan) + '</strong> — ' +
+    (d.situacion === 'VENCIDA'
+      ? 'terminó el ' + escapar(d.termina) + '.'
+      : 'quedan ' + escapar(String(d.diasRestantes)) + ' día(s), hasta el ' + escapar(d.termina) + '.') +
+    ' ' + escapar(d.alcance) + '</div>';
+}
 
 E('b-alta-reenviar').onclick = async () => {
   const r = await api('POST', '/auth/reenviar-verificacion', {

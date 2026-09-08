@@ -55,6 +55,14 @@ const FUERA_DE_LA_EMPRESA = new Set([
   'POST /organizations/:organizationId/companies',
   'POST /organizations/:organizationId/users',
   'POST /companies/:companyId/roles',
+  // El alta autoservicio: crea un estudio y una empresa **nuevos**, del que
+  // llama. No hay rol de empresa que la gobierne porque todavía no hay empresa.
+  //
+  // Que un usuario de solo lectura de la empresa X pueda darse de alta su
+  // propio estudio no es una escalada: no toca nada de X, y lo que crea es
+  // suyo. Lo que sí la gobierna está adentro de la ruta —se niega si el que
+  // llama ya administra un estudio— y se prueba en `prueba-y-planes`.
+  'POST /onboarding/empresa',
 ]);
 
 /**
