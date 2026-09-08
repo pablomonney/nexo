@@ -50,14 +50,14 @@ const suite = hasDatabase ? describe : describe.skip;
  * trabajo. Ninguna dice "todavía no": dicen qué falta y de quién depende.
  */
 const SIN_ESCRITOR = new Map<string, string>([
-  [
-    'alerts',
-    'Deuda registrada (NEXO_ROADMAP.md): tabla sin escritores, deliberadamente fuera de la ' +
-      'bandeja, que se arma como unión de vistas por dominio y no de filas que alguien inserta.',
-  ],
+  // `alerts` salió de esta lista el 2026-09-08: la escribe el detector (0102).
+  // Lo que faltaba no era la tabla — era la distinción entre una señal, que dice
+  // qué es cierto ahora, y una alerta, que dice desde cuándo y quién la miró.
   [
     'audit_findings',
-    'Igual que `alerts`: los hallazgos se derivan de vistas, no se guardan. Deuda registrada.',
+    'Los hallazgos se derivan de vistas y no se guardan. Deuda registrada. Cerrarla es la ' +
+      'misma distinción que cerró `alerts`: un hallazgo derivado no tiene dónde anotar que ' +
+      'alguien lo revisó y decidió que no importaba.',
   ],
   [
     'arca_access_tickets',

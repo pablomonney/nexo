@@ -44,6 +44,10 @@ export const ACTIONS_REQUIRING_REASON = [
   // Descartar una decision propuesta: sin motivo, el registro dice que alguien
   // penso el problema y no dice por que no se hizo nada.
   'DESCARTAR_DECISION',
+  // Reconocer o descartar una alerta es lo que hace que un problema detectado
+  // deje de verse. Seis meses despues alguien va a querer saber quien lo decidio.
+  'RECONOCER_ALERTA',
+  'DESCARTAR_ALERTA',
 ] as const;
 
 export interface AuditEvent {

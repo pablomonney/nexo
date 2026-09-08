@@ -116,10 +116,21 @@ empresa, rechazos, revisiones, preguntas con catálogo cerrado, panorama,
 señales de análisis, umbrales con sugerencia, flujo de fondos, proyección de
 cobranzas, riesgos, linaje.
 
-Lo que **no** hay: detección de anomalías como motor propio, forecasting con
-horizonte y versión de modelo registrados, y copiloto conversacional abierto.
-El proveedor de modelo está 🟡 PREPARADO (sin credencial), así que hoy la
-inteligencia que corre es la determinística.
+**Actualizado el 2026-09-08:** hay **detección persistente**. Las señales ya
+eran una vista determinística; lo que faltaba era la distinción entre una señal
+—qué es cierto ahora— y una alerta —desde cuándo cruzó el umbral y quién la
+miró—. El detector (0102) abre una alerta por sujeto, no una por corrida,
+la cierra sola cuando el problema se corrige, y **no abre ninguna sin umbral
+declarado**: `null` no es «no supera».
+
+Cerró de paso tres piezas construidas y desconectadas desde la 0028: la tabla
+`alerts` y los permisos `alert:read` y `alert:acknowledge`, que no gobernaban
+ninguna ruta.
+
+Lo que **no** hay: forecasting con horizonte y versión de modelo registrados, y
+copiloto conversacional abierto. El proveedor de modelo está 🟡 PREPARADO (sin
+credencial), así que hoy la inteligencia que corre es la determinística — y eso
+incluye la detección: cada alerta trae la cuenta exacta para rehacerla a mano.
 
 ### NEXO Decision Engine — PARCIAL, con el ciclo cerrado salvo recomendar
 
@@ -238,7 +249,7 @@ cobranza el resto de la cadena comercial no se puede probar de punta a punta.
 | **I-3** | NEXO Corporate y self-management |
 | ~~**I-4**~~ | ~~Métricas SaaS con fórmulas reproducibles~~ — **hecho** el 2026-09-08 (0100). Falta lo que depende de la contabilidad propia: CAC, LTV, margen, runway |
 | ~~**I-5**~~ | ~~Registro de decisión y bucle de aprendizaje~~ — **hecho** el 2026-09-08 (0101). Queda la recomendación automática, que necesita una política de preferencia del estudio |
-| **I-6** | Anomalías y forecasting como motores propios |
+| **I-6** | ~~Anomalías~~ — **hecho** el 2026-09-08 (0102): detección persistente con alertas. Queda el forecasting con horizonte y modelo registrados |
 | **I-7** | Almacén de documentos apto para producción |
 | **I-8** | RRHH |
 
@@ -253,7 +264,7 @@ cobranza el resto de la cadena comercial no se puede probar de punta a punta.
 | Documentos sobre disco local: sin versionado, sin object-lock, incompatible con varias réplicas | IMPORTANTE |
 | Base de desarrollo sin datos de negocio: el conteo de filas va sin ejercitar | MENOR |
 | 17 estados muertos en los CHECK, clasificados y no removidos | MENOR |
-| `alerts` y `audit_findings` sin escritores | MENOR |
+| `audit_findings` sin escritor. `alerts` salió de esta lista el 2026-09-08 | MENOR |
 | Dos series `S-*` que se pisan (TESTING_STRATEGY §2.7) | MENOR |
 | `norm_candidates_pendientes` sin `security_invoker` — verificado inofensivo, queda por coherencia | MENOR |
 

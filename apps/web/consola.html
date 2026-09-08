@@ -2481,6 +2481,28 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <dl class="kv" id="sen-s-resultado"></dl>
   <div id="sen-s-supuestos"></div>
 
+  <h3>Alertas</h3>
+  <p class="ayuda">Una señal dice <strong>qué es cierto ahora</strong>; una alerta dice
+    <strong>desde cuándo</strong>. Una señal que cruzó el umbral hoy y otra que lo cruzó hace
+    tres semanas se ven iguales en la lista de señales, y la segunda es un problema que nadie
+    miró.</p>
+  <p class="ayuda">Cada alerta trae la cuenta exacta para rehacerla a mano. Una alerta que
+    dijera «margen bajo» sin decir contra qué ni cómo se calculó sería una afirmación sin
+    evidencia, y eso <strong>entrena a ignorarlas</strong>.</p>
+  <p class="ayuda"><strong>Reconocer no es resolver.</strong> Reconocer es «la vi y la dejo
+    abierta a propósito». Resolver lo hace el detector solo, cuando la señal deja de cruzar el
+    umbral. Descartar es «esto no es un problema» y exige motivo. Ninguna borra la alerta:
+    cuánto duró un problema no está en ningún otro lado.</p>
+  <div class="fila">
+    <div><label>&nbsp;</label><button id="b-ale" class="sec">Ver las alertas</button></div>
+    <div><label>&nbsp;</label><button id="b-ale-detectar">Detectar ahora</button></div>
+  </div>
+  <div id="ale-msg"></div>
+  <div class="tabla"><table id="t-ale"><thead><tr>
+    <th>Gravedad</th><th>Tipo</th><th>Sujeto</th><th>Valor</th><th>Umbral</th>
+    <th>Desde</th><th>Estado</th><th>Cómo se calculó</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
   <h3>Registro de decisiones</h3>
   <p class="ayuda">Un escenario es una proyección; una <strong>decisión</strong> es qué se
     resolvió hacer con ella. Acá queda el problema, en qué se basó, qué alternativas se
@@ -3057,6 +3079,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'analitica') cargarAnalitica();
     if (v === 'analisis') {
       listarSenales(); cargarDeclaracionDeEscenario();
+      if (puede('alert:read')) cargarAlertas();
       if (puede('decision:read')) cargarDecisiones();
     }
     if (v === 'asientos') listarAsientos();
@@ -9637,6 +9660,63 @@ async function cargarSuscripcion() {
 E('b-sub').onclick = () => cargarSuscripcion();
 E('b-fact').onclick = () => cargarFacturacion();
 E('b-dec').onclick = () => cargarDecisiones();
+E('b-ale').onclick = () => cargarAlertas();
+E('b-ale-detectar').onclick = async () => {
+  const r = await api('POST', '/analysis/alerts/detectar', {});
+  decir('ale-msg', r);
+  if (r.ok) await cargarAlertas();
+};
+
+/** Las alertas de la empresa, abiertas primero. */
+async function cargarAlertas() {
+  const r = await api('GET', '/analysis/alerts');
+  if (!r.ok) return decir('ale-msg', r);
+  E('ale-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-ale').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const a of r.datos.alertas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(a.gravedad) + '</td>' +
+      '<td>' + escapar(a.tipo) + '</td>' +
+      '<td>' + escapar(a.sujeto || '—') + '</td>' +
+      '<td class="mono">' + escapar((a.valor || '—') + ' ' + (a.unidad || '')) + '</td>' +
+      '<td class="mono">' + escapar(a.umbral || '—') + '</td>' +
+      '<td class="mono">' + escapar(String(a.detectadaEl || '').slice(0, 10)) + '</td>' +
+      '<td>' + escapar(a.estado) + (a.motivo ? ' — ' + escapar(a.motivo) : '') + '</td>' +
+      '<td>' + escapar(a.metodologia || '—') + '</td>' +
+      '<td>' + (a.estado === 'ABIERTA' || a.estado === 'RECONOCIDA'
+        ? '<button class="sec" data-ale="reconocer">Reconocer</button> ' +
+          '<button class="sec" data-ale="descartar">Descartar</button>'
+        : '') + '</td>';
+    for (const b of tr.querySelectorAll('button[data-ale]')) {
+      b.onclick = () => juzgarAlerta(a.id, b.dataset.ale);
+    }
+    cuerpo.appendChild(tr);
+  }
+}
+
+/**
+ * Reconocer o descartar una alerta.
+ *
+ * Las dos rutas se escriben **completas y literales**, aunque salga una línea
+ * más larga: el barrido S-25 busca la forma de cada ruta en el texto de la
+ * consola, y una URL armada con la acción interpolada aparece como
+ * `/analysis/alerts/<var>/<var>` — que no es ninguna ruta registrada. La
+ * pantalla andaría igual y las dos rutas figurarían como capacidades sin puerta.
+ */
+async function juzgarAlerta(id, accion) {
+  const motivo = prompt(accion === 'reconocer'
+    ? '¿Por qué la dejás abierta?'
+    : '¿Por qué no es un problema?');
+  if (!motivo) return;
+  const r = accion === 'reconocer'
+    ? await api('POST', '/analysis/alerts/' + id + '/reconocer', { motivo: motivo })
+    : await api('POST', '/analysis/alerts/' + id + '/descartar', { motivo: motivo });
+  decir('ale-msg', r);
+  if (r.ok) await cargarAlertas();
+}
 
 /**
  * El registro de decisiones y su calibración.
