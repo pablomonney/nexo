@@ -1,7 +1,11 @@
 # NEXO_ROADMAP
 
-**Recalculado:** 2026-09-02, después de medir. El censo está en
-`NEXO_EVOLUTION_BASELINE.md`; esto es lo que sigue y por qué en ese orden.
+**Recalculado:** 2026-09-02, después de medir.
+
+> **2026-09-08 — leer antes que esto.** El censo vigente es
+> [`NEXO_CURRENT_BASELINE.md`](NEXO_CURRENT_BASELINE.md) y lo que impide salir
+> está clasificado en [`NEXO_RELEASE_READINESS.md`](NEXO_RELEASE_READINESS.md).
+> Este archivo conserva el orden con que se llegó hasta acá.
 
 Regla de este archivo: **cada línea dice qué la destraba**. Una prioridad sin eso
 es una lista de deseos.

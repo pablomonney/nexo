@@ -1,7 +1,7 @@
 # NEXO_CURRENT_BASELINE
 
 **Medido:** 2026-09-08, contra el árbol de trabajo y la base de desarrollo.
-**Última actualización:** 2026-09-08, después de cerrar el bloque de facturación.
+**Última actualización:** 2026-09-08, después de cerrar los cinco bloques de la §9.
 **Método:** catálogo de PostgreSQL, `routeTable` que Fastify arma al registrar
 las rutas, `npm run verify` completo y `npm run audit:estructura`. Ningún número
 salió de la documentación anterior.
@@ -15,17 +15,19 @@ Este archivo es el censo vigente. `NEXO_EVOLUTION_BASELINE.md` es la foto del
 
 El prompt maestro trae una línea de base histórica. La medición dice otra cosa:
 
-| | Prompt | 2026-09-02 | Auditoría | **Hoy** |
+| | Prompt | 2026-09-02 | Al auditar | **Hoy** |
 |---|---|---|---|---|
-| Migraciones | 78 | 86 | 95 | **99** |
-| Tablas | 133 | 139 | 145 | **153** |
-| Vistas | 80 | 91 | 95 | **96** |
-| Políticas RLS | 101 | 107 | 111 | **116** |
-| Endpoints | 251 | 274 | 300 | **302** (61 dominios) |
+| Migraciones | 78 | 86 | 95 | **104** |
+| Tablas | 133 | 139 | 145 | **157** |
+| Vistas | 80 | 91 | 95 | **102** |
+| Políticas RLS | 101 | 107 | 111 | **118** |
+| Endpoints | 251 | 274 | 300 | **316** (62 dominios) |
 | Pantallas | 31 | 33 | 35 | **35** secciones `v-*` |
-| Archivos de test | 103 | 108 | 134 | **138** |
-| Tests | 1.742 | 1.798 | 2.067 | **2.154** |
-| Objetos estructurales | 369 | 416 | 422 | **429** |
+| Archivos de test | 103 | 108 | 134 | **143** |
+| Tests | 1.742 | 1.798 | 2.067 | **2.209** |
+| Objetos estructurales | 369 | 416 | 422 | **435** |
+| Permisos | — | — | 97 | **101** |
+| Acciones auditadas | — | — | 139 | **155** |
 
 Sin cambio y verificado de nuevo: **0** tablas con `company_id` sin RLS, **0**
 discrepancias en el Mayor.
@@ -34,14 +36,16 @@ discrepancias en el Mayor.
 
 | | |
 |---|---|
-| Tablas con RLS habilitado | 116 |
-| De ellas, con `FORCE` | **116 — todas** |
+| Tablas con RLS habilitado | 118 |
+| De ellas, con `FORCE` | **118 — todas** |
 | Tablas con `company_id` sin RLS | **0** |
 | Vistas sin `security_invoker` | 6 — `norm_candidates_pendientes` y las cinco `saas_*` |
+| Permisos | 101 |
+| Acciones auditadas | 155 |
 | Triggers propios | 174 |
-| Índices | 434 |
-| CHECK constraints | 559 |
-| Claves foráneas | 329 |
+| Índices | 448 |
+| CHECK constraints | 587 |
+| Claves foráneas | 335 |
 | Funciones | 368 |
 
 **Las seis vistas sin `security_invoker` están verificadas, y por motivos
@@ -60,9 +64,9 @@ verifica que ninguna ruta las nombre.
 ## 3. Verificación
 
 ```
-npm run verify   →   138 archivos · 2.154 tests · verde
-lint:arch        →   0 violaciones (249 módulos, 857 dependencias)
-audit:estructura →   429/429 objetos presentes
+npm run verify   →   143 archivos · 2.209 tests · verde
+lint:arch        →   0 violaciones (253 módulos, 873 dependencias)
+audit:estructura →   435/435 objetos presentes
 cobertura        →   ≥ 89 % líneas, con umbral propio de 95 % en cada motor
 ```
 
@@ -298,21 +302,23 @@ hacerlo» y «un contador puede hacerlo sin ayuda» es hoy la brecha más ancha.
 
 ---
 
-## 9. Orden de trabajo que sale de esta medición
+## 9. Qué se hizo con esta medición, y qué queda
 
-No el del prompt tal cual: el del prompt **filtrado por lo que ya está hecho**.
+El orden de trabajo que salía de la auditoría se ejecutó de punta a punta el
+2026-09-08. Lo hecho, en orden:
 
-1. **Billing / Subscriptions** — es el bloque grande que falta entero y el que
-   convierte el sistema en un producto que se puede vender. Se construye
-   completo y se deja BLOQUEADO en el borde externo (pasarela, correo, precios).
-2. **Corporate y Self-Management** — NEXO como cliente de NEXO. Depende de 1.
-3. **Métricas SaaS** — dependen de 1 y 2: sin suscripciones con importe no hay
-   MRR que calcular, y calcularlo sobre nada daría cero, que **no** es «no se
-   puede afirmar».
-4. **Decision record y bucle de aprendizaje** — cierra lo que Fase B dejó
-   abierto.
-5. **Anomalías y previsión** — sobre datos que para entonces existan.
-6. **Onboarding y UX comercial** — al final, sobre funcionalidad terminada.
+| | |
+|---|---|
+| 1 | **Facturación** (0096–0099): precio, período, documento, cobro, cobranza, suspensión, prorrateo, anulación, eventos de pasarela |
+| 2 | **Métricas del negocio** (0100): MRR, ARR, ARPU, altas, bajas, cobranza |
+| 3 | **Registro de decisiones** (0101): problema, evidencia, alternativas, aprobación con segunda firma, revisión y calibración |
+| 4 | **Alertas** (0102): detección persistente, una por sujeto, que se cierra sola |
+| 5 | **Alta autoservicio** (0103–0104): con verificación de correo y bandeja de salida |
 
-Lo primero es 1, y dentro de 1 lo primero es lo que no depende de ningún
-proveedor: **el modelo de facturación de NEXO**.
+Lo que queda está clasificado por lo que impide, no por lo que falta:
+[`NEXO_RELEASE_READINESS.md`](NEXO_RELEASE_READINESS.md).
+
+**La conclusión de la vuelta entera:** ninguno de los seis bloqueos que impiden
+cobrarle a la primera empresa se resuelve escribiendo código. Cuatro son
+contratar algo, uno es un trámite del contribuyente y **el que más traba es
+decidir los precios**, que no cuesta dinero.
