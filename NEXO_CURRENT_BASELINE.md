@@ -17,17 +17,17 @@ El prompt maestro trae una línea de base histórica. La medición dice otra cos
 
 | | Prompt | 2026-09-02 | Al auditar | **Hoy** |
 |---|---|---|---|---|
-| Migraciones | 78 | 86 | 95 | **104** |
-| Tablas | 133 | 139 | 145 | **157** |
-| Vistas | 80 | 91 | 95 | **102** |
+| Migraciones | 78 | 86 | 95 | **107** |
+| Tablas | 133 | 139 | 145 | **159** |
+| Vistas | 80 | 91 | 95 | **104** |
 | Políticas RLS | 101 | 107 | 111 | **118** |
-| Endpoints | 251 | 274 | 300 | **316** (62 dominios) |
+| Endpoints | 251 | 274 | 300 | **319** (63 dominios) |
 | Pantallas | 31 | 33 | 35 | **35** secciones `v-*` + landing pública |
-| Archivos de test | 103 | 108 | 134 | **143** |
-| Tests | 1.742 | 1.798 | 2.067 | **2.209** |
+| Archivos de test | 103 | 108 | 134 | **145** |
+| Tests | 1.742 | 1.798 | 2.067 | **2.237** |
 | Objetos estructurales | 369 | 416 | 422 | **435** |
 | Permisos | — | — | 97 | **101** |
-| Acciones auditadas | — | — | 139 | **155** |
+| Acciones auditadas | — | — | 139 | **158** |
 
 Sin cambio y verificado de nuevo: **0** tablas con `company_id` sin RLS, **0**
 discrepancias en el Mayor.
@@ -64,8 +64,8 @@ verifica que ninguna ruta las nombre.
 ## 3. Verificación
 
 ```
-npm run verify   →   143 archivos · 2.209 tests · verde
-lint:arch        →   0 violaciones (253 módulos, 873 dependencias)
+npm run verify   →   145 archivos · 2.237 tests · verde
+lint:arch        →   0 violaciones (256 módulos, 888 dependencias)
 audit:estructura →   435/435 objetos presentes
 cobertura        →   ≥ 89 % líneas, con umbral propio de 95 % en cada motor
 ```
