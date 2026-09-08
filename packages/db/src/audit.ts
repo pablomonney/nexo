@@ -30,6 +30,11 @@ export const ACTIONS_REQUIRING_REASON = [
   // Un cupo es una traba: sin motivo, seis meses despues nadie sabe por que
   // esta puesta ni si sigue teniendo sentido.
   'DECLARAR_CUPO_DE_IA',
+  // Una credencial que cambio sin explicacion, seis meses despues, es una
+  // pregunta sin respuesta en una auditoria.
+  'DECLARAR_REFERENCIA_DE_SECRETO',
+  'ROTAR_REFERENCIA_DE_SECRETO',
+  'REVOCAR_REFERENCIA_DE_SECRETO',
 ] as const;
 
 export interface AuditEvent {

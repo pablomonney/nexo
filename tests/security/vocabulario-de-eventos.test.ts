@@ -104,18 +104,49 @@ suite('S-20 — el vocabulario de la bitácora', () => {
     for (const archivo of await archivosDe(API)) {
       const lineas = (await readFile(archivo, 'utf8')).split('\n');
       for (const [i, linea] of lineas.entries()) {
-        const m = /\b(action|accion):\s*'([^']+)'/u.exec(linea);
+        // Se lee **todo lo que sigue a `action:`**, no el primer literal.
+        //
+        // La versión anterior buscaba `action: 'LITERAL'` y se perdía la forma
+        // que elige entre dos:
+        //
+        //     action: version === 1 ? 'DECLARAR_…' : 'ROTAR_…',
+        //
+        // Ahí hay dos acciones del vocabulario y el barrido no veía ninguna. Es
+        // el mismo agujero que ya tuvo con `accion:` y con los triggers SQL:
+        // el instrumento ciego a una forma de escritura, no el código sin ella.
+        const m = /\b(action|accion):\s*(.+)$/u.exec(linea);
         if (m === null) continue;
-        const accion = m[2]!;
-        encontradas.add(accion);
-        if (m[1] === 'action') porCamino.typescript += 1;
-        else porCamino.tablaDeAcciones += 1;
 
+        // De un ternario interesan los **resultados**, no la condición. La
+        // primera versión de esta ampliación se llevó puesto `AJUSTE`:
+        //
+        //     action: datos.origenTipo === 'AJUSTE' ? 'AJUSTAR_STOCK' : '…'
+        //                                 ↑ eso no es una acción
+        //
+        // Todo lo que está antes del `?` es la pregunta; lo que sigue son las
+        // respuestas, y las respuestas son las acciones.
+        const tail = m[2]!;
+        const corte = tail.indexOf('?');
+        const donde = corte === -1 ? tail : tail.slice(corte + 1);
+
+        const literales = [...donde.matchAll(/'([A-Z][A-Z0-9_]*[A-Z0-9])'/gu)].map((x) => x[1]!);
+        if (literales.length === 0) continue;
+
+        for (const accion of literales) {
+          encontradas.add(accion);
+          if (m[1] === 'action') porCamino.typescript += 1;
+          else porCamino.tablaDeAcciones += 1;
+        }
         // El `motivo` viaja en el mismo objeto que la acción. Se mira una
         // ventana en vez de parsear TypeScript: alcanza para lo que se defiende
         // y no trae un parser al barrido.
+        //
+        // Cuando una línea nombra dos acciones —el ternario—, las dos comparten
+        // la misma ventana, que es correcto: es el mismo `recordAudit`.
         const ventana = lineas.slice(Math.max(0, i - 12), i + 14).join('\n');
-        conMotivo.set(accion, (conMotivo.get(accion) ?? false) || /motivo:/u.test(ventana));
+        for (const accion of literales) {
+          conMotivo.set(accion, (conMotivo.get(accion) ?? false) || /motivo:/u.test(ventana));
+        }
       }
     }
 

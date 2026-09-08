@@ -33,6 +33,7 @@ import {
   NullLLMProvider,
   type LLMProvider,
 } from '@aai/ai-engine';
+import { EnvSecretProvider, type SecretProvider, type SecretRef } from '@aai/secrets';
 import { config } from '../config.js';
 
 export type EstadoDelProveedor = 'DESHABILITADO' | 'SIMULADO' | 'PREPARADO' | 'CONFIGURADO';
@@ -42,7 +43,8 @@ export const PROVEEDORES_CONOCIDOS = ['none', 'mock', 'http'] as const;
 
 export interface ConfiguracionDeIa {
   readonly provider: string;
-  readonly apiKey: string | null;
+  /** La referencia al secreto, no el secreto: `env:AI_API_KEY`, `kms:<arn>`. */
+  readonly apiKeyRef: string | null;
   readonly modelId: string | null;
   readonly baseUrl: string | null;
   readonly timeoutMs: number;
@@ -57,7 +59,7 @@ export interface ConfiguracionDeIa {
  */
 export function faltantesDeHttp(ia: ConfiguracionDeIa): string[] {
   const faltan: string[] = [];
-  if (ia.apiKey === null || ia.apiKey === '') faltan.push('AI_API_KEY');
+  if (ia.apiKeyRef === null || ia.apiKeyRef === '') faltan.push('AI_API_KEY');
   if (ia.modelId === null || ia.modelId === '') faltan.push('AI_MODEL_ID');
   if (ia.baseUrl === null || ia.baseUrl === '') faltan.push('AI_BASE_URL');
   return faltan;
@@ -90,7 +92,10 @@ export function verificarProveedor(ia: ConfiguracionDeIa): string | null {
  * `SIN_PROVEEDOR` con su motivo. La diferencia con el bug anterior es que nadie
  * afirma que hay un modelo.
  */
-export function crearProveedor(ia: ConfiguracionDeIa = config.ai): LLMProvider {
+export function crearProveedor(
+  ia: ConfiguracionDeIa = config.ai,
+  secretos: SecretProvider = new EnvSecretProvider(),
+): LLMProvider {
   const error = verificarProveedor(ia);
   if (error !== null) throw new Error(error);
 
@@ -105,13 +110,45 @@ export function crearProveedor(ia: ConfiguracionDeIa = config.ai): LLMProvider {
     case 'CONFIGURADO':
       return new HttpLLMProvider({
         baseUrl: ia.baseUrl!,
-        apiKey: ia.apiKey!,
+        // La credencial se resuelve **por llamada**, no acá. Este objeto puede
+        // vivir tanto como el proceso; el secreto vive el tiempo de la llamada.
+        //
+        // El proveedor de modelo es del despliegue, no de una empresa: la
+        // referencia no lleva `companyId`. El día que una empresa traiga su
+        // propia clave, lo único que cambia es de dónde sale la referencia.
+        apiKey: async () => (await secretos.get(refDeLaClave(ia.apiKeyRef!))).valor,
         modelId: ia.modelId!,
         providerId: 'http',
         timeoutMs: ia.timeoutMs,
         maxRetries: ia.maxRetries,
       });
   }
+}
+
+/**
+ * De la referencia configurada a la identidad del secreto.
+ *
+ * `env:AI_API_KEY` es la forma normal y la que sale de `AI_API_KEY`. El nombre
+ * de la variable viaja en el `name` porque es lo que el `EnvSecretProvider`
+ * necesita para encontrarla.
+ *
+ * Una referencia con otro prefijo —`kms:`— también se acepta acá: quien la
+ * resuelva es el gestor que corresponda, y este archivo no tiene por qué saber
+ * cuál. Es todo el punto de la abstracción.
+ */
+export function refDeLaClave(referencia: string): SecretRef {
+  const corte = referencia.indexOf(':');
+  if (corte === -1) {
+    // Sin prefijo se asume el entorno: es lo que había antes de que las
+    // referencias existieran, y romper esa configuración al actualizar sería
+    // gratuito.
+    return { companyId: null, scope: 'env', name: referencia };
+  }
+  const prefijo = referencia.slice(0, corte);
+  const resto = referencia.slice(corte + 1);
+  return prefijo === 'env'
+    ? { companyId: null, scope: 'env', name: resto }
+    : { companyId: null, scope: 'ai', name: 'api-key' };
 }
 
 /**

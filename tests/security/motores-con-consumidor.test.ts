@@ -59,6 +59,16 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
  */
 const SIN_CONSUMIDOR = new Map<string, string>([
   [
+    'InMemorySecretProvider',
+    'Es un **doble de test**, y este barrido no cuenta los tests como consumidores — con ' +
+      'razón, porque un motor probado y no usado es justamente el defecto que persigue. Pero ' +
+      'esta clase no tiene otro consumidor posible: se niega a construirse en producción, y ' +
+      'existe para que los tests de secretos no necesiten una base ni una nube. La ' +
+      'alternativa sería que cada test escribiera su propio falso, y el cuarto quedaría ' +
+      'distinto sin que nadie lo note. Se va el día que haya un gestor de secretos real: ahí ' +
+      'el doble de test pasa a ser el de ese gestor.',
+  ],
+  [
     'permiteIntentar',
     'Dice que un relevamiento VENCIDO o NO_RELEVADO no frena el intento; ' +
       '`DbCapabilityStore` de la API falla cerrado. Las dos políticas están escritas y son ' +

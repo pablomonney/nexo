@@ -193,7 +193,7 @@ consejo profesional— en vez de con la pregunta más parecida.
 
 | | Qué falta | Qué lo destraba |
 |---|---|---|
-| KMS | El cliente que pide SECURITY.md §5 | Elegir proveedor de KMS: **decisión** |
+| KMS | 🟡 El puerto, el aislamiento, las referencias, la rotación y los tests ya están. Falta **el gestor** | Elegir proveedor y contratarlo: **decisión + cuenta**. El código queda del otro lado de la interfaz — ver DESPLIEGUE.md §4.1 |
 | ARCA producción | Certificado y credenciales reales | Trámite del cliente |
 | Alta autoservicio | Verificación por correo | Proveedor de correo |
 | Cobro de la suscripción | Pasarela | Credenciales y decisión de precios |
@@ -306,7 +306,8 @@ no del sistema.
 
 | | Gravedad |
 |---|---|
-| KMS ausente: sin él no hay producción con ARCA real | IMPORTANTE |
+| KMS ausente: sin él no hay producción con ARCA real. Un secreto **por empresa** no se puede resolver: `env:` se niega a hacerlo y no hay otro backend | IMPORTANTE |
+| Dos módulos deciden lo contrario sobre la misma amenaza: `arca/credential-store.ts` se niega a usar una KEK del entorno en producción y `auth/crypto.ts` la exige. Unificarlo es parte de conectar el gestor | IMPORTANTE |
 | 17 estados muertos en los CHECK, clasificados y no removidos | MENOR |
 | `alerts` y `audit_findings` sin escritores | MENOR |
 | Dos series `S-*` que se pisan (documentado en TESTING_STRATEGY §2.7) | MENOR |

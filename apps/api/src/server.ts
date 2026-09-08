@@ -26,6 +26,7 @@ import { comprobanteRoutes } from './routes/comprobantes.js';
 import { vatRoutes } from './routes/vat.js';
 import { periodRoutes } from './routes/periods.js';
 import { predictionRoutes } from './routes/predictions.js';
+import { secretRoutes } from './routes/secretos.js';
 import { studioRoutes } from './routes/studio.js';
 import { workQueueRoutes } from './routes/work-queue.js';
 import { auditRoutes } from './routes/audit.js';
@@ -286,6 +287,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
+  await app.register(secretRoutes);
   await app.register(journalEntryRoutes);
   await app.register(decisionRoutes);
   await app.register(comprobanteRoutes);

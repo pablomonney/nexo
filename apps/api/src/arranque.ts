@@ -43,6 +43,7 @@ import {
   faltantesDeHttp,
   type ConfiguracionDeIa,
 } from './ai/proveedor.js';
+import { modoDeSecretos } from './secrets/fabrica.js';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -211,6 +212,7 @@ export function modoDeIa(ia: ConfiguracionDeIa): ModoDeOperacion {
 export function modosDeOperacion(config: {
   readonly arca: { readonly environment: string };
   readonly ai: ConfiguracionDeIa;
+  readonly secrets: { readonly provider: string };
   readonly documents: { readonly ocrEngine: string };
   readonly isProduction: boolean;
 }): ModoDeOperacion[] {
@@ -222,6 +224,7 @@ export function modosDeOperacion(config: {
     },
     { nombre: 'OCR', valor: config.documents.ocrEngine, real: config.documents.ocrEngine !== 'none' && config.documents.ocrEngine !== 'mock' },
     modoDeIa(config.ai),
+    modoDeSecretos(config.secrets.provider),
     { nombre: 'entorno', valor: config.isProduction ? 'production' : 'development', real: true },
   ];
 }

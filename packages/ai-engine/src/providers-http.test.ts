@@ -79,7 +79,7 @@ function proveedor(opciones: {
   const esperas: number[] = [];
   const p = new HttpLLMProvider({
     baseUrl: 'https://proveedor.invalido/v1/completions',
-    apiKey: CLAVE,
+    apiKey: async () => CLAVE,
     modelId: 'modelo-x',
     providerId: 'http',
     timeoutMs: opciones.timeoutMs ?? 5_000,
@@ -364,7 +364,7 @@ describe('El dialecto — dónde queda el vendor', () => {
     ]);
     const p = new HttpLLMProvider({
       baseUrl: 'https://otro.invalido',
-      apiKey: CLAVE,
+      apiKey: async () => CLAVE,
       modelId: 'm',
       providerId: 'http',
       timeoutMs: 1_000,

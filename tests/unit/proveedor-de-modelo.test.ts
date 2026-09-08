@@ -27,7 +27,7 @@ import {
 
 const BASE: ConfiguracionDeIa = {
   provider: 'none',
-  apiKey: null,
+  apiKeyRef: null,
   modelId: null,
   baseUrl: null,
   timeoutMs: 30_000,
@@ -37,7 +37,7 @@ const BASE: ConfiguracionDeIa = {
 const COMPLETA: ConfiguracionDeIa = {
   ...BASE,
   provider: 'http',
-  apiKey: 'una-clave',
+  apiKeyRef: 'env:AI_API_KEY',
   modelId: 'modelo-x',
   baseUrl: 'https://proveedor.invalido/v1',
 };
@@ -89,7 +89,7 @@ describe('Los cuatro estados', () => {
   });
 
   it('http al que le falta una sola cosa sigue siendo PREPARADO, y nombra esa', () => {
-    const sinClave = { ...COMPLETA, apiKey: null };
+    const sinClave = { ...COMPLETA, apiKeyRef: null };
     expect(estadoDelProveedor(sinClave)).toBe('PREPARADO');
     expect(faltantesDeHttp(sinClave)).toEqual(['AI_API_KEY']);
   });
@@ -97,7 +97,7 @@ describe('Los cuatro estados', () => {
   it('http PREPARADO devuelve el proveedor deshabilitado, y nadie afirma otra cosa', () => {
     // No es un fallback silencioso: el arranque ya dijo qué falta y la
     // respuesta de la API contesta `SIN_PROVEEDOR` con su motivo.
-    expect(crearProveedor({ ...COMPLETA, apiKey: null }).id).toBe('none');
+    expect(crearProveedor({ ...COMPLETA, apiKeyRef: null }).id).toBe('none');
   });
 
   it('http completo es CONFIGURADO y devuelve el adaptador HTTP', () => {
@@ -107,7 +107,7 @@ describe('Los cuatro estados', () => {
 
   it('una cadena vacía cuenta como ausente', () => {
     // `AI_API_KEY=` en un `.env` da la cadena vacía, no `undefined`.
-    expect(estadoDelProveedor({ ...COMPLETA, apiKey: '' })).toBe('PREPARADO');
+    expect(estadoDelProveedor({ ...COMPLETA, apiKeyRef: '' })).toBe('PREPARADO');
   });
 });
 
@@ -141,8 +141,15 @@ describe('El banner del arranque dice el estado real', () => {
     expect(modo.detalle).toContain('no prueba una conexión');
   });
 
-  it('el banner nunca imprime la credencial', () => {
+  it('la configuración no tiene dónde guardar la credencial', () => {
+    // Es más fuerte que «el banner no la imprime»: desde la 0095 `config.ai`
+    // guarda **la referencia** —`env:AI_API_KEY`— y el material lo resuelve el
+    // gestor de secretos por llamada. No hay campo donde el secreto entre, así
+    // que no hay forma de que salga en un banner, en un error o en un volcado.
+    expect(Object.keys(COMPLETA)).not.toContain('apiKey');
+    expect(COMPLETA.apiKeyRef).toBe('env:AI_API_KEY');
+
     const modo = modoDeIa(COMPLETA);
-    expect(JSON.stringify(modo)).not.toContain('una-clave');
+    expect(JSON.stringify(modo)).not.toContain('AI_API_KEY');
   });
 });

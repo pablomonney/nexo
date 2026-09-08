@@ -133,6 +133,7 @@ métrica tiene umbral de bloqueo de release.
 | `contrato-erp-inteligencia` | S-26 | Que Intelligence consulte vistas y no tablas del ERP: una métrica calculada sobre la tabla queda encerrada en la respuesta y decide su significado ahí |
 | `inyeccion-en-datos` | S-4 | Que un documento con instrucciones adentro no cambie la clasificación: la defensa es el enum cerrado y la validación, no el prompt |
 | `secretos-fuera-del-log` | S-27 | Que la credencial del proveedor de modelo no llegue a un log, a un error ni a una tabla |
+| `codigo-en-el-repositorio` | S-28 | Que ninguna fuente que el sistema usa esté ignorada por el `.gitignore`: existir en disco y existir en el repositorio no son lo mismo |
 
 #### S-16, y por qué un barrido también se equivoca
 
@@ -227,6 +228,63 @@ donde cada uno copió el estilo de su vecino. Ninguna estaba mal escrita; el
 conjunto sí. Es la materia prima de todo lo que se construya encima —métricas,
 detección, agentes—: un vocabulario con dos formas obliga a cada consulta a
 conocer las dos, y la tercera que aparezca no la va a conocer nadie.
+
+#### S-27, y por qué un barrido de logs no alcanza para los secretos
+
+S-27 lee archivos: comprueba que el logger declare `redact`, que el adaptador
+HTTP no arme sus errores con el cuerpo del proveedor y que la credencial no se
+imprima en el arranque. Es un control de **configuración**, y por eso es fuerte:
+prueba la regla y no un caso.
+
+Pero mira el código, y hay dos cosas que el código no dice. Que la base **no
+tenga dónde** guardar un valor lo dice el esquema, y que una empresa no vea el
+secreto de otra lo dice el motor de base con el rol de la aplicación puesto. Por
+eso el control se apoya en tres archivos y no en uno:
+
+| Archivo | Qué sostiene |
+|---|---|
+| `tests/security/secretos-fuera-del-log.test.ts` | S-27: la credencial no llega a un log, a un error ni a una tabla |
+| `packages/secrets/src/secrets.test.ts` | El puerto: redacción de URLs y de prosa, y que `ErrorDeSecreto` no pueda construirse con el valor |
+| `tests/integration/secretos.test.ts` | Que `secret_refs` no tenga **ninguna columna** donde poner material —comprobado contra `information_schema`, no contra una lista escrita a mano— y que la empresa A no vea las referencias de la B |
+
+El de integración corre bajo `asCompany()`, que hace `SET LOCAL ROLE aai_app`.
+Sin eso la conexión de test es la dueña de la tabla, el `FORCE ROW LEVEL
+SECURITY` no se ejerce y **el test pasa sin haber probado nada**. Pasó: la
+primera versión de ese test daba verde con la política borrada. Lleva además un
+control positivo —«con su empresa en contexto, A sí las ve»— porque un test de
+aislamiento que solo comprueba ausencia también da verde cuando la consulta no
+devuelve nada por un motivo equivocado.
+
+Se verificó con seis mutaciones, cada una revertida después: aflojar la política
+de RLS, agregar una columna `valor`, sacar la redacción del log, devolver la
+referencia completa por la API, sacar el permiso `secret:manage` y ordenar las
+versiones al revés. Las seis fallaron. La quinta **no falló al principio**, y
+eso fue el hallazgo: el test que la cubría mandaba el pedido sin contexto de
+empresa, así que el 400 que recibía venía de eso y no del permiso. Un test que
+falla por el motivo equivocado da verde por el motivo equivocado.
+
+#### S-28: verde, testeado, y fuera del repositorio
+
+El paquete `@aai/secrets` estuvo escrito, importado, con cobertura 100% y con el
+verify entero en verde **sin estar versionado**. La regla `secrets/` del
+`.gitignore` —puesta para que nadie commitee material de credenciales, que es
+correcto— no estaba anclada, así que coincidía con cualquier carpeta llamada así
+a cualquier profundidad y se llevó el paquete entero y `apps/api/src/secrets`.
+
+Nada de lo que había podía verlo. El typecheck compila desde el disco, vitest
+carga desde el disco, dependency-cruiser cruza el grafo desde el disco. El único
+que sabía era `git status`, y estaba callándose por diseño.
+
+El arreglo es una barra (`/secrets/`). El control es que nadie lo vuelva a
+romper: S-28 le pregunta a git qué archivos de `apps`, `packages`, `tests`,
+`scripts` e `infrastructure` está ignorando, y falla si alguno es fuente.
+
+Su propia primera versión falló la mutación, y de la forma más instructiva: sin
+acotar la consulta, la salida traía `node_modules` entero, git moría con
+`ENOBUFS`, un `catch` genérico lo traducía a «acá no hay repositorio» y el test
+daba **verde con la regla rota**. Un control que se salta solo cuando falla
+ocupa el lugar del que sí funcionaría. Ahora el único fallo que lo saltea es
+«esto no es un repositorio»; cualquier otro se propaga.
 
 ### 2.8 Tests de regresión
 

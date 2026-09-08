@@ -45,6 +45,7 @@
  * el costo también. Cero sería una afirmación.
  */
 
+import { redactarTexto, taparValor } from '@aai/secrets';
 import type { LLMProvider, Message, UsoDelModelo } from './contracts.js';
 
 /**
@@ -182,7 +183,18 @@ function leerUso(valor: unknown): UsoDelModelo | null {
 
 export interface OpcionesHttp {
   readonly baseUrl: string;
-  readonly apiKey: string;
+  /**
+   * Cómo conseguir la credencial, **en el momento de usarla**.
+   *
+   * Es una función y no una cadena a propósito. Un adaptador que recibe la
+   * clave en el constructor la tiene en memoria del proceso mientras el objeto
+   * viva, y ese objeto puede vivir tanto como el servidor. Pedirla por llamada
+   * la deja en memoria el tiempo de la llamada y nada más.
+   *
+   * Y es lo que permite que la credencial venga de un gestor de secretos sin
+   * que este archivo sepa que existe: la función la resuelve quien la arma.
+   */
+  readonly apiKey: () => Promise<string>;
   readonly modelId: string;
   /** El nombre con el que este proveedor queda registrado en `ai_predictions`. */
   readonly providerId: string;
@@ -266,6 +278,12 @@ export class HttpLLMProvider implements LLMProvider {
     const controlador = new AbortController();
     const reloj = setTimeout(() => controlador.abort(), this.#opciones.timeoutMs);
 
+    // Se pide acá y no en el constructor: la credencial vive el tiempo de la
+    // llamada. Si el gestor de secretos no la tiene, el error es suyo y sube
+    // tal cual — este adaptador no lo traduce a «el proveedor está caído»,
+    // porque no es lo mismo y llevan a acciones opuestas.
+    const credencial = await this.#opciones.apiKey();
+
     let respuesta;
     try {
       respuesta = await this.#fetch(this.#opciones.baseUrl, {
@@ -274,7 +292,7 @@ export class HttpLLMProvider implements LLMProvider {
           'content-type': 'application/json',
           // La única vez que la credencial aparece. No se guarda en ningún
           // campo del objeto, no se loguea, y no viaja en ningún error.
-          authorization: `Bearer ${this.#opciones.apiKey}`,
+          authorization: `Bearer ${credencial}`,
         },
         body: cuerpo,
         signal: controlador.signal,
@@ -288,10 +306,19 @@ export class HttpLLMProvider implements LLMProvider {
           intento,
         );
       }
-      // El mensaje del error de red se descarta a propósito: puede traer la URL
-      // completa, y una URL de proveedor con la clave en la query —que existe—
-      // terminaría en la bitácora.
-      throw new ErrorDeProveedor('RED', 'no se pudo llegar al proveedor', intento);
+
+      // El mensaje de un error de red trae la URL completa, y hay proveedores
+      // que aceptan la clave en la query: sin limpiarlo, esa URL termina en la
+      // bitácora. La versión anterior lo descartaba entero, que era seguro y
+      // dejaba sin diagnóstico —«no se pudo llegar» no dice si fue DNS, si fue
+      // la conexión o si fue el certificado—.
+      //
+      // Se limpia dos veces y por dos motivos distintos: `taparValor` saca la
+      // credencial concreta esté donde esté, y `redactarTexto` saca cualquier
+      // parámetro que **parezca** un secreto en cualquier URL del mensaje,
+      // incluida una de un proveedor cuyo nombre de parámetro no conocemos.
+      const crudo = (error as { message?: string }).message ?? 'sin detalle';
+      throw new ErrorDeProveedor('RED', redactarTexto(taparValor(crudo, credencial)), intento);
     } finally {
       clearTimeout(reloj);
     }

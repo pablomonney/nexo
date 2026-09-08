@@ -49,9 +49,11 @@ describe('S-27 — los secretos no llegan al log', () => {
     // código HTTP.
     expect(http).toContain('El cuerpo de la respuesta **no se lee acá**');
 
-    // Y el mensaje de un error de red puede traer la URL, que en algunos
-    // proveedores lleva la clave en la query.
-    expect(http).toContain('no se pudo llegar al proveedor');
+    // El mensaje de un error de red sí se conserva —descartarlo dejaba sin
+    // diagnóstico— pero pasa por las dos limpiezas antes de propagarse:
+    // `taparValor` saca la credencial concreta y `redactarTexto` saca cualquier
+    // parámetro que parezca un secreto en cualquier URL del mensaje.
+    expect(http).toContain('redactarTexto(taparValor(');
   });
 
   it('la credencial no se persiste en ninguna tabla de IA', async () => {

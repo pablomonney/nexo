@@ -12,7 +12,13 @@ coverage/
 *.pfx
 *.crt
 certs/
-secrets/
+# Material de secretos, en la raíz. Anclado con la barra de adelante **a
+# propósito**: sin ella, `secrets/` coincide con cualquier carpeta llamada así a
+# cualquier profundidad, y se comió el paquete `packages/secrets` y
+# `apps/api/src/secrets` enteros sin decir nada. Un .gitignore no avisa cuando
+# ignora de más: el código estaba escrito, testeado y verde, y no estaba en el
+# repositorio.
+/secrets/
 .DS_Store
 Thumbs.db
 *.log

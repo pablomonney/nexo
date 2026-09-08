@@ -78,8 +78,67 @@ A por cada endpoint. Falla el build si alguno responde 200.
 | Claves de proveedor LLM/OCR | Gestor de secretos, rotación programada |
 | Credenciales de base | Rotación automática, sin usuario superusuario en la app |
 
+### Estado: 🟡 PREPARADO — no 🟢 CONECTADO
+
+La tabla de arriba dice **cómo tiene que ser**. Esto dice **dónde está hoy**, y
+la diferencia importa: un documento que describe el objetivo como si fuera el
+estado es la forma más común de que una auditoría dé verde sobre nada.
+
+| | |
+|---|---|
+| 🟡 **PREPARADO** | La abstracción existe, el aislamiento por empresa está, las referencias se guardan sin el valor, los logs redactan, hay rotación y hay tests. |
+| 🔴 **CONECTADO** | **No hay ningún gestor de secretos externo.** Ninguna referencia `kms:` se puede resolver. |
+
+**Lo que NEXO guarda es la referencia, no el valor.** `secret_refs` no tiene
+columna donde poner material — no es una regla que alguien pueda olvidarse de
+aplicar, es que no existe el lugar, y un test lo comprueba contra el esquema.
+Rotar es declarar la versión siguiente; la anterior queda `SUPERSEDIDO` y sigue
+resolviéndose hasta que se la revoque, que es lo que permite comprobar la nueva
+antes de apagar la vieja.
+
+**Un secreto por empresa no se puede resolver todavía**, y es el bloqueo real:
+
+- `env:` sirve para los del despliegue. Se **niega** a resolver uno por empresa:
+  obligaría a reiniciar el proceso para dar de alta un cliente y dejaría las
+  credenciales de todas en el mismo lugar.
+- `db:` no tiene almacén genérico **a propósito**. Guardar material por empresa
+  con una KEK del entorno sería el mismo sobre aparente en un lugar más: la
+  llave vive junto al ciphertext.
+- `kms:` es el que corresponde, y no hay ninguno conectado.
+
+El único material por empresa que existe hoy —la clave privada de ARCA— vive en
+la tabla de su módulo, con su propio sobre y **su propia negativa a abrirse en
+producción**. Unificarlo bajo el puerto es una migración que necesita antes la
+decisión de qué gestor se usa.
+
+**Una incoherencia que quedó a la vista y sigue abierta.** Dos módulos protegen
+material equivalente contra la misma amenaza y decidieron lo contrario:
+`arca/credential-store.ts` se niega a usar una KEK del entorno en producción, y
+`auth/crypto.ts` —el secreto TOTP— la **exige**. Las dos decisiones no pueden
+ser correctas. Unificarlas es parte de conectar el gestor, y hacerlo antes
+significaría o aflojar la de ARCA o romper el MFA de quien ya lo tiene
+configurado.
+
+### De 🟡 a 🟢
+
+```
+conectar un gestor real  →  probar  →  rotar  →  auditar  →  🟢 CONECTADO
+```
+
+Lo que falta es **una cuenta y una credencial de infraestructura**, no
+arquitectura: conectar un gestor es escribir un adaptador que implemente
+`SecretProvider`, del otro lado de la interfaz. El dominio no puede nombrar a
+ningún proveedor de nube y el lint de arquitectura lo impone
+(`secretos-sin-vendor`, `dominio-sin-sdk-de-nube`).
+
 Reglas operativas:
-- Prohibido loguear payloads con claves, tickets o CUIT+clave.
+- Prohibido loguear payloads con claves, tickets o CUIT+clave. El logger redacta
+  por camino (`authorization`, `cookie`, `apiKey`) y las URLs se limpian por
+  contenido antes de propagarse: una excepción de red trae la URL completa, y
+  hay proveedores que aceptan la clave en la query.
+- **Administrar un secreto y usar la integración que lo necesita son dos
+  permisos distintos.** `secret:manage` es solo de ADMINISTRADOR; quien emite un
+  comprobante usa el certificado de ARCA sin poder tocarlo.
 - Escaneo de secretos en pre-commit y en CI.
 - El estudio debe poder revocar el acceso de una empresa y que el sistema quede sin capacidad
   técnica de operar en su nombre, verificablemente.

@@ -18,6 +18,7 @@ import { origenEnv } from './cargar-env.js';
 import { closePool, initPool } from '@aai/db';
 import { modosDeOperacion, verificarEsquema } from './arranque.js';
 import { verificarProveedor } from './ai/proveedor.js';
+import { crearProveedorDeSecretos, verificarGestor } from './secrets/fabrica.js';
 import { config } from './config.js';
 import { buildServer } from './server.js';
 
@@ -28,6 +29,33 @@ initPool(config.databaseUrl);
 const proveedorInvalido = verificarProveedor(config.ai);
 if (proveedorInvalido !== null) {
   console.error(`NEXO no arranca:\n\n  ✘ ${proveedorInvalido}\n`);
+  await closePool();
+  process.exit(1);
+}
+
+// Igual que con el proveedor de modelo: un gestor de secretos desconocido
+// arrancaria sin secretos, y cada integracion fallaria por separado con un
+// mensaje que se lee como «falta configurar esto» en vez de «el nombre del
+// gestor esta mal escrito».
+const gestorInvalido = verificarGestor(config.secrets.provider);
+if (gestorInvalido !== null) {
+  console.error(`NEXO no arranca:
+
+  ✘ ${gestorInvalido}
+`);
+  await closePool();
+  process.exit(1);
+}
+
+// Y se construye una vez acá: si el gestor está nombrado pero no implementado,
+// que falle al arrancar y no en la primera operación que lo necesite.
+try {
+  crearProveedorDeSecretos('system:arranque');
+} catch (error) {
+  console.error(`NEXO no arranca:
+
+  ✘ ${(error as Error).message}
+`);
   await closePool();
   process.exit(1);
 }

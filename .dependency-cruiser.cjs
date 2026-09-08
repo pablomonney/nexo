@@ -21,6 +21,20 @@ const CLIENTE_DE_BASE =
 
 const CLIENTE_DE_RED = '^node_modules/(axios|node-fetch|undici|got|superagent)';
 
+/**
+ * Los SDK de las nubes, para que ningún paquete de dominio los alcance.
+ *
+ * La lista nombra proveedores concretos —es el único lugar del repositorio
+ * donde eso pasa— y es a propósito: para prohibirlos hay que poder nombrarlos.
+ * No es cerrada; se agrega el que aparezca. Que esté incompleta no la vuelve
+ * inútil: el día que alguien instale uno que falte, el barrido de estructura
+ * no lo va a ver y la revisión sí, y ahí se suma.
+ */
+const SDK_DE_NUBE =
+  '^node_modules/(@aws-sdk|aws-sdk|@azure/keyvault|@azure/identity|' +
+  '@google-cloud/secret-manager|@google-cloud/kms|node-vault|hashi-vault-js|' +
+  '@1password|@doppler)';
+
 // Los agentes reciben contexto ya resuelto; no consultan al organismo por su
 // cuenta. Si lo hicieran, saltearían la bitácora de consultas y el modelo de
 // capacidades por empresa.
@@ -44,6 +58,26 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/ai-engine' },
       to: { path: `${MOTOR_CONTABLE}|${CLIENTE_DE_BASE}|${CLIENTE_ARCA}|${MOTOR_DOCUMENTAL}` },
+    },
+    {
+      name: 'secretos-sin-vendor',
+      comment:
+        'El puerto de secretos no puede conocer un proveedor concreto. Si `@aai/secrets` ' +
+        'importara el SDK de una nube, cambiar de gestor pasaría a ser reescribir el puerto, ' +
+        'y el dominio quedaría atado a esa nube. Conectar uno es escribir un adaptador que ' +
+        'implemente `SecretProvider`, del otro lado de la interfaz — ver SECURITY.md §5.',
+      severity: 'error',
+      from: { path: '^packages/secrets' },
+      to: { path: SDK_DE_NUBE },
+    },
+    {
+      name: 'dominio-sin-sdk-de-nube',
+      comment:
+        'Ningún paquete de dominio puede importar el SDK de una nube. El vendor vive en un ' +
+        'adaptador de `apps/`, detrás del puerto que corresponda.',
+      severity: 'error',
+      from: { path: '^packages/' },
+      to: { path: SDK_DE_NUBE },
     },
     {
       name: 'motor-normativo-independiente-de-ia',

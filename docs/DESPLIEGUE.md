@@ -88,10 +88,36 @@ migración de este repositorio renombra ni borra una columna en uso.
 |---|---|
 | **Proveedor de hosting** | Tiene costo, contrato y jurisdicción. La jurisdicción no es un detalle: los datos son contabilidad de terceros. |
 | **Terminación TLS** | Depende del proveedor. La aplicación **no** termina TLS y corre con `trustProxy: false`, así que el proxy que la exponga tiene que ser confiable y no reenviar cabeceras de identidad. |
-| **Gestor de secretos** | `MFA_ENCRYPTION_KEY` y las credenciales de ARCA no pueden vivir en un `.env` de producción. Cuál gestor es una decisión de infraestructura. |
+| **Gestor de secretos** | `MFA_ENCRYPTION_KEY` y las credenciales de ARCA no pueden vivir en un `.env` de producción. Cuál gestor es una decisión de infraestructura — **la única que falta**: el código ya está del otro lado de la interfaz (ver §4.1). |
 | **Programación de copias** | Los scripts existen y nadie los agenda. Cada cuánto y cuánto se retiene es una decisión con costo y con obligación legal de conservación detrás. |
 | **Destino de los logs** | Hoy salen por la salida estándar, que es lo correcto para un contenedor. A dónde van después lo decide el proveedor. |
 | **Escalado horizontal** | La aplicación guarda dos cosas en memoria y las dos son por proceso: los contadores de métricas y la ventana del límite de intentos. Con varias réplicas, el recolector tiene que sumar las primeras, y el límite efectivo de la segunda se multiplica por la cantidad de réplicas. Contarlo en la base agregaría una escritura por intento fallido en el camino más caliente del sistema, así que la decisión es del tamaño del despliegue. |
+
+### 4.1 · Secretos: qué hay que hacer el día que se elija el gestor
+
+Lo que falta es **una cuenta y una credencial de infraestructura**, no
+arquitectura. El sistema ya guarda la referencia y no el valor: `secret_refs`
+no tiene columna donde poner material, y `SECRETS_PROVIDER=kms` **hace fallar el
+arranque a propósito**, con el motivo escrito, en vez de degradar en silencio a
+`env`.
+
+Conectar uno son cuatro pasos, y ninguno toca el dominio:
+
+1. Escribir un adaptador en `apps/api/src/secrets/` que implemente
+   `SecretProvider` (dos métodos: `get` y `existe`). El SDK del proveedor vive
+   ahí y **solo ahí**: el lint de arquitectura impide que un paquete de
+   `packages/` lo importe.
+2. Devolverlo desde `crearProveedorDeSecretos` para el nombre `kms`, en lugar
+   del error que hoy tira.
+3. Cargar el material en el gestor y declarar la referencia por
+   `POST /companies/current/secrets` con el prefijo `kms:`. **Las filas
+   existentes no se migran**: cambia el prefijo de la referencia, no la tabla.
+4. Rotar una vez y comprobar en la bitácora que quedó
+   `ROTAR_REFERENCIA_DE_SECRETO` sin el valor.
+
+Hasta el paso 1, `env:` resuelve los secretos del despliegue y **se niega** a
+resolver uno por empresa. Es el bloqueo real: sin gestor no hay ARCA de
+producción para varias empresas. Ver SECURITY.md §5.
 
 ## 5 · Lo que hay que mirar antes de la primera empresa real
 

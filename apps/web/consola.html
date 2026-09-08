@@ -2712,6 +2712,40 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
   <div id="cfg-msg"></div>
   <div id="cfg-salida"></div>
 
+  <h3>Secretos de integraciones</h3>
+  <p class="ayuda">Acá <strong>no hay ningún secreto</strong>. NEXO guarda <em>dónde está</em>
+    cada credencial —una variable de entorno, una ruta de un gestor externo— y no su valor:
+    no hay columna en la base donde ponerlo. Esta pantalla no puede mostrar una clave porque
+    el servidor no la tiene para mandar.</p>
+  <p class="ayuda">Rotar es <strong>declarar la versión siguiente</strong>. La anterior queda
+    supersedida y sigue existiendo hasta que se la revoque: esa ventana es la que permite
+    comprobar la credencial nueva antes de apagar la vieja. Revocar tampoco borra — un
+    secreto revocado sigue siendo la respuesta a «con qué se firmó esto en marzo».</p>
+  <button id="b-sec-listar" class="sec">Ver los secretos declarados</button>
+  <div id="sec-msg"></div>
+  <div class="tabla"><table id="t-sec"><thead><tr>
+    <th>Integración</th><th>Secreto</th><th>Versión</th><th>Dónde está</th>
+    <th>Estado</th><th>Declaró</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="sec-declarar" hidden>
+    <h4>Declarar o rotar</h4>
+    <p class="ayuda">La referencia empieza por el backend: <span class="mono">env:MI_VARIABLE</span>
+      para una variable del proceso, <span class="mono">kms:&lt;ruta&gt;</span> para un gestor
+      externo. <strong>No pegues la credencial acá</strong>: este campo viaja al servidor y
+      se guarda tal cual, así que lo que se escriba queda escrito. Va la referencia.</p>
+    <div class="fila">
+      <div><label>Integración</label><input id="sec-scope" placeholder="arca" maxlength="30"></div>
+      <div><label>Secreto</label><input id="sec-name" placeholder="clave-privada" maxlength="60"></div>
+      <div style="flex:1"><label>Referencia</label>
+        <input id="sec-ref" placeholder="kms:proyecto/arca/clave" maxlength="500"></div>
+    </div>
+    <div class="fila">
+      <div style="flex:1"><label>Por qué</label><input id="sec-motivo" maxlength="500"></div>
+      <div><label>&nbsp;</label><button id="b-sec-guardar">Declarar</button></div>
+    </div>
+  </div>
+
   <h3>Mapeo contable</h3>
   <p class="ayuda">A qué cuenta va cada cosa. Es lo que permite que el sistema
     <strong>proponga</strong> el asiento de un comprobante en vez de que se escriba entero a
@@ -9727,6 +9761,71 @@ async function cargarConfig() {
   }
 }
 E('b-cfg').onclick = () => cargarConfig();
+
+/**
+ * Los secretos declarados. Metadata, nunca material.
+ *
+ * No hay forma de que esta función muestre una credencial: el endpoint no la
+ * devuelve porque la base no la guarda. La columna «dónde está» dice el backend
+ * —`env`, `kms`— y no la referencia completa: un ARN dice de más sobre la
+ * infraestructura y no aporta a ninguna decisión que se tome acá.
+ */
+E('b-sec-listar').onclick = async () => {
+  const r = await api('GET', '/companies/current/secrets');
+  if (!r.ok) return decir('sec-msg', r);
+
+  E('sec-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sec-declarar').hidden = !puede('secret:manage');
+
+  const cuerpo = E('t-sec').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const s of r.datos.secretos || []) {
+    const tr = document.createElement('tr');
+    // El estado se dibuja como pastilla y no como texto: «revocado» y «activo»
+    // llevan a acciones opuestas, y en una lista larga un texto se pasa por alto.
+    const clase = s.estado === 'ACTIVO' ? 'p-bien' : s.estado === 'REVOCADO' ? 'p-mal' : 'p-neu';
+    tr.innerHTML =
+      '<td class="mono">' + escapar(s.scope) + '</td>' +
+      '<td class="mono">' + escapar(s.name) + '</td>' +
+      '<td class="mono">' + escapar(s.version) + '</td>' +
+      '<td><span class="p p-neu">' + escapar(s.backend) + '</span></td>' +
+      '<td><span class="p ' + clase + '">' + escapar(s.estado) + '</span></td>' +
+      '<td class="mono">' + escapar(s.creadoPor) + '</td>' +
+      '<td>' + (s.estado === 'ACTIVO' && puede('secret:manage')
+        ? '<span class="clic">revocar</span>' : '') + '</td>';
+
+    const clic = tr.querySelector('.clic');
+    if (clic) {
+      clic.onclick = async () => {
+        const motivo = E('sec-motivo').value.trim();
+        const a = await api('POST', '/companies/current/secrets/revoke', {
+          scope: s.scope,
+          name: s.name,
+          motivo: motivo.length >= 5 ? motivo : 'Esta credencial ya no se usa.',
+        });
+        decir('sec-msg', a, 'Revocado. No se borró: la bitácora sigue pudiendo citarlo.');
+        if (a.ok) E('b-sec-listar').click();
+      };
+    }
+    cuerpo.appendChild(tr);
+  }
+};
+
+E('b-sec-guardar').onclick = async () => {
+  const r = await api('POST', '/companies/current/secrets', {
+    scope: E('sec-scope').value.trim(),
+    name: E('sec-name').value.trim(),
+    referencia: E('sec-ref').value.trim(),
+    motivo: E('sec-motivo').value,
+  });
+  decir('sec-msg', r, 'Referencia declarada. Se guardó dónde está el secreto, no su valor.');
+  if (r.ok) {
+    // El campo se limpia enseguida: si alguien pegó una credencial ahí por
+    // error, no se queda a la vista de quien pase por la pantalla.
+    E('sec-ref').value = '';
+    E('b-sec-listar').click();
+  }
+};
 
 </script>
 </body>

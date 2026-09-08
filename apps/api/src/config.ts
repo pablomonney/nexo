@@ -124,7 +124,23 @@ export const config = {
      * `null` con `provider=http` es un estado legítimo y nombrado: **preparado,
      * no conectado**. El arranque lo dice con esas palabras.
      */
-    apiKey: process.env.AI_API_KEY ?? null,
+    /**
+     * **La referencia, no la clave.**
+     *
+     * `AI_API_KEY` sigue funcionando como antes y es el caso normal: se
+     * traduce a la referencia `env:AI_API_KEY`, que es exactamente lo que es.
+     * Lo que cambió es que la configuración ya no **es** el secreto: es dónde
+     * está, y quien lo resuelve es el gestor de secretos, por llamada.
+     *
+     * `AI_API_KEY_REF` permite apuntar a otro lado —`kms:<arn>`— sin tocar
+     * código, que es lo que hace que conectar un gestor externo no sea un
+     * cambio de la aplicación.
+     */
+    apiKeyRef:
+      process.env.AI_API_KEY_REF ??
+      (process.env.AI_API_KEY !== undefined && process.env.AI_API_KEY !== ''
+        ? 'env:AI_API_KEY'
+        : null),
 
     /** El modelo. Es del proveedor, así que no hay valor por defecto sensato. */
     modelId: process.env.AI_MODEL_ID ?? null,
@@ -152,6 +168,24 @@ export const config = {
      * gasto lo gobierna el cupo diario por empresa, que la empresa declara.
      */
     preguntasPorMinuto: Number(process.env.AI_PREGUNTAS_POR_MINUTO ?? 20),
+  },
+
+  secrets: {
+    /**
+     * De dónde salen los secretos de las integraciones.
+     *
+     *   `none`  sin gestor. **Es un modo de operación**: el ERP funciona entero
+     *           y las integraciones que necesitan credencial lo dicen.
+     *   `env`   del entorno para los del despliegue, y de la referencia
+     *           declarada para los de una empresa. El modo normal hoy.
+     *   `kms`   un gestor externo. **Todavía no hay ninguno conectado**, y
+     *           pedirlo hace fallar el arranque en vez de degradar a `env`.
+     *
+     * Un valor desconocido tampoco arranca, por lo mismo que `AI_PROVIDER`: un
+     * sistema que dice tener un gestor de secretos y no lo tiene es peor que
+     * uno que dice que no.
+     */
+    provider: process.env.SECRETS_PROVIDER ?? 'env',
   },
 
   /** Registrar la IP en la bitácora queda sujeto a evaluación legal (§21). */

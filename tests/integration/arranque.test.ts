@@ -22,6 +22,23 @@ import { DATABASE_URL, hasDatabase } from './helpers/db.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 
+/**
+ * La IA apagada, con la forma completa que `modosDeOperacion` necesita.
+ *
+ * Desde que la credencial es una **referencia** y no un valor, la configuración
+ * de IA tiene seis campos y no uno. Se declara acá una vez: repetirla en cada
+ * caso haría que agregar un campo obligara a tocar cinco fixtures, y el sexto
+ * quedaría distinto sin que nadie lo note.
+ */
+const IA_APAGADA = {
+  provider: 'none',
+  apiKeyRef: null,
+  modelId: null,
+  baseUrl: null,
+  timeoutMs: 30_000,
+  maxRetries: 2,
+} as const;
+
 suite('Arranque del servidor', () => {
   beforeAll(() => {
     initPool(DATABASE_URL);
@@ -69,7 +86,8 @@ suite('Arranque del servidor', () => {
   it('marca como no reales los modos simulados o apagados', () => {
     const modos = modosDeOperacion({
       arca: { environment: 'mock' },
-      ai: { provider: 'none' },
+      ai: IA_APAGADA,
+      secrets: { provider: 'env' },
       documents: { ocrEngine: 'mock' },
       isProduction: false,
     });
@@ -85,7 +103,8 @@ suite('Arranque del servidor', () => {
     // tienen validez fiscal, pero la respuesta la da ARCA y no este código.
     const modos = modosDeOperacion({
       arca: { environment: 'homologacion' },
-      ai: { provider: 'none' },
+      ai: IA_APAGADA,
+      secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: false,
     });
@@ -99,7 +118,8 @@ suite('Arranque del servidor', () => {
     // cargada en desarrollo sigue sirviendo.
     const modos = modosDeOperacion({
       arca: { environment: 'mock' },
-      ai: { provider: 'none' },
+      ai: IA_APAGADA,
+      secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: true,
     });

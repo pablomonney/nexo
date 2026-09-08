@@ -36,6 +36,10 @@
     "./ai/cupo": {
       "types": "./dist/ai/cupo.d.ts",
       "default": "./dist/ai/cupo.js"
+    },
+    "./secrets/proveedor": {
+      "types": "./dist/secrets/proveedor.d.ts",
+      "default": "./dist/secrets/proveedor.js"
     }
   },
   "dependencies": {
@@ -54,7 +58,8 @@
     "@aai/bank-engine": "0.1.0",
     "@aai/financial-statements": "0.1.0",
     "@aai/arca": "0.1.0",
-    "@aai/audit-engine": "0.1.0"
+    "@aai/audit-engine": "0.1.0",
+    "@aai/secrets": "0.1.0"
   },
   "scripts": {
     "build": "tsc --build",
