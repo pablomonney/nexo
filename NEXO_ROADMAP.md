@@ -195,8 +195,8 @@ consejo profesional— en vez de con la pregunta más parecida.
 |---|---|---|
 | KMS | 🟡 El puerto, el aislamiento, las referencias, la rotación y los tests ya están. Falta **el gestor** | Elegir proveedor y contratarlo: **decisión + cuenta**. El código queda del otro lado de la interfaz — ver DESPLIEGUE.md §4.1 |
 | ARCA producción | Certificado y credenciales reales | Trámite del cliente |
-| Alta autoservicio | Verificación por correo | Proveedor de correo |
-| Cobro de la suscripción | Pasarela | Credenciales y decisión de precios |
+| Alta autoservicio | Verificación por correo | Proveedor de correo. El mismo que hace falta para el aviso previo a una suspensión |
+| Cobro de la suscripción | 🟡 El ciclo entero está: precio, período, documento, cobro, cobranza, suspensión y prorrateo. Falta **la pasarela y los precios** | Contratar una pasarela y **decidir los precios**. Lo segundo no cuesta dinero, cuesta decidir, y es lo que más traba — ver NEXO_BILLING.md §10 |
 | Web comercial | — | Que haya un flujo honesto de «probar NEXO» |
 
 Ninguno de los cinco se resuelve escribiendo código.

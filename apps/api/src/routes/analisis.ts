@@ -827,7 +827,8 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
                   variacion_costo::text   AS costo,
                   status
              FROM analysis_scenarios
-            WHERE company_id = $1 AND id = ANY($2::uuid[])`,
+            WHERE company_id = $1 AND id = ANY($2::uuid[])
+            ORDER BY array_position($2::uuid[], id)`,
           [tenant.companyId, query.ids],
         );
 
@@ -881,6 +882,13 @@ export async function analisisRoutes(app: FastifyInstance): Promise<void> {
         // `check:no-float` prohíbe, y acá el resultado se muestra como cifra.
         const contra = [];
         if (baseComparable) {
+          // El primero de la lista es el punto de referencia, y **es el primero
+          // que pidió quien llama**: el `ORDER BY array_position` de arriba lo
+          // garantiza. Sin él la consulta devolvía las filas en el orden en que
+          // PostgreSQL las encontraba, así que el signo de la diferencia
+          // dependía del orden físico de la tabla. Lo encontró el test cuando
+          // ese orden cambió: la misma comparación pasó de +1425 a −1425 sin que
+          // cambiara ningún escenario.
           const primero = escenarios[0]!;
           for (const otro of escenarios.slice(1)) {
             const delta = await tx.query<{ neto: string; margen: string | null }>(

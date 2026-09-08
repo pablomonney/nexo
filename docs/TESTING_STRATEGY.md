@@ -134,6 +134,7 @@ métrica tiene umbral de bloqueo de release.
 | `inyeccion-en-datos` | S-4 | Que un documento con instrucciones adentro no cambie la clasificación: la defensa es el enum cerrado y la validación, no el prompt |
 | `secretos-fuera-del-log` | S-27 | Que la credencial del proveedor de modelo no llegue a un log, a un error ni a una tabla |
 | `codigo-en-el-repositorio` | S-28 | Que ninguna fuente que el sistema usa esté ignorada por el `.gitignore`: existir en disco y existir en el repositorio no son lo mismo |
+| `solo-lectura-de-verdad` | S-29 | Que lo declarado de solo lectura para la aplicación lo sea en el catálogo de PostgreSQL, y que además se pueda leer |
 
 #### S-16, y por qué un barrido también se equivoca
 
@@ -285,6 +286,36 @@ acotar la consulta, la salida traía `node_modules` entero, git moría con
 daba **verde con la regla rota**. Un control que se salta solo cuando falla
 ocupa el lugar del que sí funcionaría. Ahora el único fallo que lo saltea es
 «esto no es un repositorio»; cualquier otro se propaga.
+
+#### S-29: un GRANT no quita nada
+
+La 0009 pone `ALTER DEFAULT PRIVILEGES … GRANT SELECT, INSERT, UPDATE`, así que
+**toda tabla nueva nace escribible por `aai_app`**. Quien crea una que la
+aplicación no debe escribir pone `GRANT SELECT ON …`, que se lee como si
+concediera solo eso, y no quita nada.
+
+Tres veces:
+
+| | Lo encontró |
+|---|---|
+| 0086 | Un 500 al recalcular el promedio ponderado |
+| 0096 | Este test: tres archivos afirmaban «solo SELECT» sobre las tablas de facturación mientras `aai_app` podía emitirse cargos |
+| 0097 | Este test otra vez: la corrección se olvidó de la vista y de `payment_events` |
+
+Que la corrección de un olvido tenga su propio olvido es el argumento: una lista
+escrita a mano falla exactamente así. S-29 no es una lista de lo que hay que
+revocar — es la comparación entre lo declarado y `information_schema`.
+
+Lleva un control positivo que importa tanto como el negativo: **también exige
+que se puedan leer**. Sin él, el archivo daría verde con `REVOKE ALL` sobre
+todo, y la consola quedaría mostrando pantallas en blanco sin un solo error en
+el log.
+
+Se verificó con una mutación —volver a conceder `INSERT, UPDATE` sobre
+`billing_documents`— y falló por dos lados: S-29 y el test de integración que
+intenta el `UPDATE` prohibido. El `INSERT` prohibido siguió fallando aun con el
+privilegio devuelto, porque RLS no tiene política de escritura: son dos capas
+independientes y se vio actuar a las dos.
 
 ### 2.8 Tests de regresión
 

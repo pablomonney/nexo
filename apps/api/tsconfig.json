@@ -46,6 +46,9 @@
     },
     {
       "path": "../../packages/audit-engine"
+    },
+    {
+      "path": "../../packages/billing-engine"
     }
   ]
 }

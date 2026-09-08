@@ -2681,9 +2681,41 @@ pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wr
 
   <h3>Planes disponibles</h3>
   <div class="tabla"><table id="t-sub-planes"><thead><tr>
-    <th>Código</th><th>Plan</th><th>Descripción</th><th>Topes declarados</th>
+    <th>Código</th><th>Plan</th><th>Descripción</th><th>Precio declarado</th><th>Topes declarados</th>
   </tr></thead><tbody></tbody></table></div>
   <div id="sub-planes-alcance" class="ayuda"></div>
+
+  <h3>Cuenta con NEXO</h3>
+  <p class="ayuda">Lo que NEXO le cobra a esta empresa. Esta pantalla <strong>solo lee</strong>:
+    no hay forma de emitirse un cargo ni de marcarlo pagado desde acá, y no es que falte el
+    botón — la aplicación no tiene permiso de escritura sobre estas tablas. Emite el ciclo de
+    facturación, que corre del lado del operador.</p>
+  <p class="ayuda">Estos documentos <strong>no son comprobantes fiscales</strong>: no llevan CAE
+    y no entran en ningún Libro IVA. Los impuestos en «—» significan que no se discriminaron,
+    <em>no</em> que sean cero.</p>
+  <button id="b-fact" class="sec">Ver la cuenta</button>
+  <div id="fact-msg"></div>
+  <dl class="kv" id="fact-adeudado"></dl>
+  <div class="tabla"><table id="t-fact"><thead><tr>
+    <th>Número</th><th>Período</th><th>Estado</th><th>Importe</th><th>Impuestos</th>
+    <th>Emitido</th><th>Pagado</th><th>Atraso</th><th>Intentos fallidos</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="fact-detalle" hidden>
+    <h4>Detalle del cargo <span id="fact-det-numero" class="mono"></span></h4>
+    <p class="ayuda">Acá está por qué el cargo quedó como quedó: qué se cobró, qué intentos
+      hubo y qué pasos de cobranza se ejecutaron. Un intento fallido con su motivo es lo que
+      explica una suspensión sin tener que reconstruirla.</p>
+    <div class="tabla"><table id="t-fact-lineas"><thead><tr>
+      <th>#</th><th>Concepto</th><th>Cantidad</th><th>Precio unitario</th><th>Importe</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="tabla"><table id="t-fact-intentos"><thead><tr>
+      <th>Proveedor</th><th>Estado</th><th>Importe</th><th>Medio</th><th>Detalle</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="tabla"><table id="t-fact-cobranza"><thead><tr>
+      <th>Paso</th><th>Programado</th><th>Resultado</th><th>Detalle</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
 
   <details class="grupo" id="sub-declarar" hidden><summary>Declarar el plan</summary><div>
     <div class="fila">
@@ -2927,7 +2959,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
     if (v === 'auditoria') { listarAuditoria(); cargarPeriodosParaVariacion(); }
-    if (v === 'suscripcion') cargarSuscripcion();
+    if (v === 'suscripcion') { cargarSuscripcion(); if (puede('billing:read')) cargarFacturacion(); }
     if (v === 'config') cargarConfig();
   };
 }
@@ -9431,6 +9463,13 @@ async function cargarSuscripcion() {
         '<td class="mono">' + escapar(p.codigo) + '</td>' +
         '<td>' + escapar(p.nombre) + '</td>' +
         '<td>' + escapar(p.descripcion || '—') + '</td>' +
+        // Un plan sin precio no es gratis: es un plan cuyo precio nadie declaró.
+        // La misma distinción que con los topes, y confundirla regala el producto.
+        '<td class="mono">' + ((p.precios || []).length === 0
+          ? '<span class="p p-neu">sin declarar</span>'
+          : escapar(p.precios.map((x) => x.moneda + ' ' + x.importe + '/' +
+              (x.periodicidad === 'MENSUAL' ? 'mes' : 'año') +
+              (x.incluyeImpuestos ? ' (con imp.)' : ' (sin imp.)')).join(' · '))) + '</td>' +
         // Un plan sin topes no es «ilimitado»: es un plan cuyos topes nadie
         // declaró todavía, y decirlo así evita prometer lo que no se acordó.
         '<td class="mono">' + (p.topes.length === 0
@@ -9492,6 +9531,97 @@ async function cargarSuscripcion() {
 }
 
 E('b-sub').onclick = () => cargarSuscripcion();
+E('b-fact').onclick = () => cargarFacturacion();
+
+/**
+ * La cuenta con NEXO. Solo lectura, y no por falta de botones: la aplicación no
+ * tiene INSERT ni UPDATE sobre estas tablas.
+ */
+async function cargarFacturacion() {
+  const r = await api('GET', '/companies/current/billing');
+  if (!r.ok) return decir('fact-msg', r);
+  E('fact-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+
+  // Lo adeudado va por moneda y nunca sumado: un total que mezcla monedas no
+  // significa nada y se ve igual que uno que sí.
+  E('fact-adeudado').innerHTML = (r.datos.adeudado || []).length === 0
+    ? fila('Adeudado', 'nada pendiente')
+    : r.datos.adeudado.map((a) => fila('Adeudado ' + a.moneda, a.importe)).join('');
+
+  const cuerpo = E('t-fact').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const d of r.datos.documentos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(d.numero) + '</td>' +
+      '<td class="mono">' + (d.periodo === null ? '—' : escapar(d.periodo.desde + ' a ' + d.periodo.hasta)) + '</td>' +
+      '<td>' + escapar(d.estado) + '</td>' +
+      '<td class="mono">' + escapar(d.moneda + ' ' + d.importe) + '</td>' +
+      // «—» y no «0,00»: null es que no se discriminaron los impuestos, no que
+      // sean cero. Mostrar cero afirmaría algo que el sistema no sabe.
+      '<td class="mono">' + (d.impuestos === null ? '—' : escapar(d.impuestos)) + '</td>' +
+      '<td class="mono">' + escapar(d.emitidoEl || '—') + '</td>' +
+      '<td class="mono">' + escapar(d.pagadoEl || '—') + '</td>' +
+      '<td class="mono">' + (d.diasDeAtraso === null ? '—' : escapar(String(d.diasDeAtraso) + ' d')) + '</td>' +
+      '<td class="mono">' + escapar(String(d.intentosFallidos)) + '</td>' +
+      '<td><button class="sec" data-doc="' + escapar(d.id) + '">Ver</button></td>';
+    tr.querySelector('button').onclick = () => verCargo(d.id, d.numero);
+    cuerpo.appendChild(tr);
+  }
+}
+
+/**
+ * El detalle de un cargo.
+ *
+ * No trae la referencia externa del proveedor de pagos ni el identificador del
+ * medio: son datos de la integración, no de la cuenta. Los últimos cuatro
+ * dígitos sí, que es lo que le sirve al cliente para reconocer con qué pagó.
+ */
+async function verCargo(id, numero) {
+  const r = await api('GET', '/companies/current/billing/' + id);
+  if (!r.ok) return decir('fact-msg', r);
+
+  E('fact-detalle').hidden = false;
+  E('fact-det-numero').textContent = numero;
+
+  const lineas = E('t-fact-lineas').querySelector('tbody');
+  lineas.innerHTML = '';
+  for (const l of r.datos.lineas || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(String(l.orden)) + '</td>' +
+      '<td>' + escapar(l.concepto) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(l.precio_unitario) + '</td>' +
+      '<td class="mono">' + escapar(l.importe) + '</td>';
+    lineas.appendChild(tr);
+  }
+
+  const intentos = E('t-fact-intentos').querySelector('tbody');
+  intentos.innerHTML = '';
+  for (const i of r.datos.intentos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(i.proveedor) + '</td>' +
+      '<td>' + escapar(i.estado) + '</td>' +
+      '<td class="mono">' + escapar(i.moneda + ' ' + i.importe) + '</td>' +
+      '<td class="mono">' + (i.medio_ultimos4 ? '•••• ' + escapar(i.medio_ultimos4) : '—') + '</td>' +
+      '<td>' + escapar(i.detalle_error || '—') + '</td>';
+    intentos.appendChild(tr);
+  }
+
+  const cobranza = E('t-fact-cobranza').querySelector('tbody');
+  cobranza.innerHTML = '';
+  for (const c of r.datos.cobranza || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(c.tipo + (c.numero ? ' #' + c.numero : '')) + '</td>' +
+      '<td class="mono">' + escapar(c.programado_para) + '</td>' +
+      '<td>' + escapar(c.resultado) + '</td>' +
+      '<td>' + escapar(c.detalle || '—') + '</td>';
+    cobranza.appendChild(tr);
+  }
+}
 
 E('b-sub-declarar').onclick = async () => {
   const cuerpo = {

@@ -59,7 +59,10 @@
     "verify:arranque": "node scripts/verify-primer-arranque.mjs",
     "ci": "node scripts/pipeline.mjs",
     "ci:desde-cero": "node scripts/pipeline.mjs --desde-cero",
-    "bench:vistas": "node scripts/bench-vistas.mjs"
+    "bench:vistas": "node scripts/bench-vistas.mjs",
+    "plan:precio": "node scripts/declarar-precio-de-plan.mjs",
+    "cobranza:politica": "node scripts/declarar-politica-de-cobranza.mjs",
+    "facturacion:ciclo": "node scripts/facturacion-ciclo.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

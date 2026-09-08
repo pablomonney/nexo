@@ -992,6 +992,13 @@ suite('Valuación de existencias', () => {
     // `check:no-float` prohíbe.
     expect(v.comparacion).toHaveLength(1);
     expect(Number(v.comparacion[0]!.diferenciaDeNeto)).toBeGreaterThan(0);
+    // La referencia es el PRIMERO que se pidió, no el que la base devuelva
+    // primero. Sin `ORDER BY array_position`, el signo de la diferencia dependía
+    // del orden físico de la tabla: la misma comparación dio +1425 y −1425 en
+    // dos corridas sin que cambiara ningún escenario.
+    expect(v.escenarios[0]!.nombre).toContain('Conservador');
+    expect(v.comparacion[0]!.contra).toContain('Conservador');
+    expect(v.comparacion[0]!.escenario).toContain('Agresivo');
     expect(v.alcance).toContain('no dice cuál conviene');
 
     // Con ventanas distintas cada uno proyecta sobre otra cosa, y la respuesta

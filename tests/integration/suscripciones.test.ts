@@ -210,42 +210,60 @@ suite('Suscripciones', () => {
     await closePool();
   });
 
-  it('el esquema no tiene precios ni datos de tarjeta', async () => {
+  it('el esquema no tiene dónde guardar datos de tarjeta', async () => {
+    // Este test decía antes «ni precios ni datos de tarjeta», y la primera mitad
+    // dejó de ser cierta con la 0096: ahora hay dónde **declarar** un precio, en
+    // `plan_prices`, y dónde guardar lo **acordado** con cada empresa. Lo que no
+    // cambió —ni puede cambiar— es que no exista lugar para un medio de pago.
     const columnas = (
       await db.query<{ table_name: string; column_name: string }>(
         `SELECT table_name, column_name FROM information_schema.columns
-          WHERE table_name IN ('subscription_plans', 'plan_limits', 'company_subscriptions')`,
+          WHERE table_name IN ('subscription_plans', 'plan_limits', 'company_subscriptions',
+                               'plan_prices', 'billing_documents', 'payment_intents')`,
       )
     ).rows.map((c) => `${c.table_name}.${c.column_name}`);
 
-    // El precio es una decisión comercial sin tomar (§15). Los datos de tarjeta
-    // no se guardan nunca (§13 de la definición SaaS).
-    for (const prohibida of [
-      'precio', 'importe', 'monto', 'moneda', 'tarjeta', 'card', 'cvv', 'vencimiento_tarjeta',
-    ]) {
+    for (const prohibida of ['tarjeta', 'card', 'cvv', 'cvc', 'titular', 'pan_', '_pan']) {
       expect(
         columnas.filter((c) => c.includes(prohibida)),
         `ninguna columna con «${prohibida}»`,
       ).toHaveLength(0);
     }
+
+    // Lo único que se guarda de un medio de pago son los cuatro dígitos que el
+    // propio proveedor informa, para que el cliente reconozca con qué pagó.
+    expect(columnas).toContain('payment_intents.medio_ultimos4');
   });
 
-  it('los planes se listan sin precios, y sin topes no son «ilimitados»', async () => {
+  it('los planes vienen sin precio y sin topes declarados, que no es gratis ni ilimitado', async () => {
     const r = await pedir('GET', '/subscription-plans');
     expect(r.statusCode, r.body).toBe(200);
     const p = r.json<{
-      planes: { codigo: string; topes: unknown[] }[];
+      planes: { codigo: string; topes: unknown[]; precios: unknown[] }[];
       alcance: string;
     }>();
 
-    expect(p.planes.map((x) => x.codigo)).toEqual([
-      'GRATUITO', 'PYME', 'PROFESIONAL', 'EMPRESA', 'CONTADOR',
-    ]);
-    // Ningún tope sembrado: cuántos usuarios entran en el plan Pyme es una
-    // decisión comercial, y ponerle un número la tomaría por quien corresponde.
-    for (const plan of p.planes) expect(plan.topes).toHaveLength(0);
-    expect(p.alcance).toContain('no está');
-    expect(JSON.stringify(p.planes)).not.toContain('precio');
+    // Los cinco sembrados tienen que estar. No se compara la lista completa: la
+    // base de pruebas es compartida y otras suites dan de alta planes propios,
+    // así que exigir igualdad exacta haría fallar este test por algo que pasó
+    // en otro archivo.
+    const codigos = p.planes.map((x) => x.codigo);
+    for (const sembrado of ['GRATUITO', 'PYME', 'PROFESIONAL', 'EMPRESA', 'CONTADOR']) {
+      expect(codigos).toContain(sembrado);
+    }
+
+    const sembrados = p.planes.filter((x) =>
+      ['GRATUITO', 'PYME', 'PROFESIONAL', 'EMPRESA', 'CONTADOR'].includes(x.codigo),
+    );
+    // Ni topes ni precios: cuántos usuarios entran en el plan Pyme y cuánto sale
+    // son decisiones comerciales, y ponerles un número las tomaría por quien
+    // corresponde. Un arreglo vacío es «nadie lo declaró», no «ilimitado» ni
+    // «gratis».
+    for (const plan of sembrados) {
+      expect(plan.topes).toHaveLength(0);
+      expect(plan.precios).toHaveLength(0);
+    }
+    expect(p.alcance).toContain('no es gratis');
   });
 
   it('una empresa sin plan aparece en la bandeja y no se le impide operar', async () => {

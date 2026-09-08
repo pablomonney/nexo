@@ -26,6 +26,9 @@
       "path": "./packages/bank-engine"
     },
     {
+      "path": "./packages/billing-engine"
+    },
+    {
       "path": "./packages/accounting-engine"
     },
     {

@@ -72,3 +72,32 @@ export function addDays(value: CalendarDate, days: number): CalendarDate {
   const shifted = new Date(utc + days * 86_400_000);
   return calendarDate(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
 }
+
+/**
+ * Suma meses recortando al último día del mes destino.
+ *
+ * El 31 de enero más un mes es el 28 de febrero, no el 3 de marzo. La
+ * aritmética nativa de `Date` hace lo segundo —desborda al mes siguiente— y eso
+ * en una suscripción mensual significa que quien contrata un 31 se saltea
+ * febrero y termina facturado dos veces en marzo.
+ *
+ * El recorte es asimétrico y no se recupera: quien empieza el 31 de enero pasa
+ * a cobrarse el 28, y de ahí en adelante los 28. Es la convención habitual y la
+ * única que no exige guardar aparte el «día original de contratación»; si algún
+ * día hiciera falta preservarlo, el lugar es la suscripción, no esta función.
+ */
+export function addMonths(value: CalendarDate, months: number): CalendarDate {
+  const total = (yearOf(value) - 1) * 12 + (monthOf(value) - 1) + months;
+  // Meses en un calendario, no centavos: la división es exacta sobre enteros
+  // chicos y el resultado es un número de año. no-float-check: allow
+  const year = Math.floor(total / 12) + 1;
+  const month = (total % 12) + 1;
+  return calendarDate(year, month, Math.min(dayOf(value), daysInMonth(year, month)));
+}
+
+/** Días de diferencia entre dos fechas: `hasta - desde`. Negativo si va al revés. */
+export function daysBetween(desde: CalendarDate, hasta: CalendarDate): number {
+  const a = Date.UTC(yearOf(desde), monthOf(desde) - 1, dayOf(desde));
+  const b = Date.UTC(yearOf(hasta), monthOf(hasta) - 1, dayOf(hasta));
+  return Math.round((b - a) / 86_400_000);
+}

@@ -1,13 +1,17 @@
 /**
  * Suscripciones del propio NEXO.
  *
- * ## Sin precios y sin datos de tarjeta
+ * ## Los precios se declaran; acá no se inventan
  *
- * No hay ningún importe acá: el precio de cada plan es una decisión comercial
- * que no está tomada, y devolver un número de ejemplo haría que un tablero
- * mostrara facturación inventada. Y no hay medio de pago: cobrar es tarea de un
- * proveedor externo, y lo único que este sistema podría guardar alguna vez es
- * un identificador opaco suyo.
+ * Desde la 0096 hay dónde declarar el precio de un plan, y esta ruta lo devuelve
+ * **si alguien lo declaró**. Mientras no, el arreglo viene vacío, que es «nadie
+ * declaró el precio» y no «gratis»: la misma distinción que entre un tope sin
+ * declarar y un plan ilimitado, y confundirlas regala el producto.
+ *
+ * Sigue sin haber medio de pago acá: cobrar es tarea de un proveedor externo, y
+ * lo único que este sistema guarda de un cobro es el identificador opaco que ese
+ * proveedor devuelve. Lo que se le cobró a la empresa vive en
+ * `routes/facturacion.ts`, y **solo se lee**.
  *
  * ## El límite avisa, no bloquea
  *
@@ -62,7 +66,23 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
                     (SELECT json_agg(json_build_object('recurso', l.recurso, 'tope', l.tope)
                                      ORDER BY l.recurso)
                        FROM plan_limits l WHERE l.plan_id = p.id),
-                    '[]'::json)                     AS topes
+                    '[]'::json)                     AS topes,
+                  -- Los precios vigentes hoy, si alguien los declaró. Un arreglo
+                  -- vacío es «nadie declaró el precio de este plan», no «gratis»:
+                  -- la diferencia es la misma que entre un tope sin declarar y un
+                  -- plan ilimitado, y confundirlas regala el producto.
+                  coalesce(
+                    (SELECT json_agg(json_build_object(
+                              'periodicidad', pr.periodicidad,
+                              'moneda', pr.moneda,
+                              'importe', pr.importe::text,
+                              'incluyeImpuestos', pr.incluye_impuestos)
+                                     ORDER BY pr.periodicidad, pr.moneda)
+                       FROM plan_prices pr
+                      WHERE pr.plan_id = p.id
+                        AND pr.vigente_desde <= CURRENT_DATE
+                        AND (pr.vigente_hasta IS NULL OR pr.vigente_hasta > CURRENT_DATE)),
+                    '[]'::json)                     AS precios
              FROM subscription_plans p
             ORDER BY p.orden`,
         );
@@ -70,10 +90,9 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
         return {
           planes: r.rows,
           alcance:
-            'Sin precios: el precio de cada plan es una decisión comercial que **no está ' +
-            'tomada**, y devolver un número de ejemplo haría que un tablero mostrara ' +
-            'facturación inventada. Un plan sin topes no es «ilimitado»: es un plan cuyos ' +
-            'topes nadie declaró todavía.',
+            'Un plan sin precios no es gratis: es un plan cuyo precio nadie declaró, y ' +
+            'lo mismo vale para los topes. Devolver cero en cualquiera de los dos casos ' +
+            'haría que un tablero mostrara facturación inventada o un plan ilimitado.',
         };
       },
     );

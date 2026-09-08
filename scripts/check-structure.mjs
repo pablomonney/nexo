@@ -128,6 +128,20 @@ const CHECKS = [
   ['purchase_requests', 'pr_convertida_con_orden', '0085: convertida si y solo si hay orden de compra'],
   ['purchase_requests', 'pr_resuelta_firmada', '0085: quien resolvió una solicitud queda escrito'],
   ['analysis_scenarios', 'sc_algo_cambia', '0087: un escenario sin variación es la base, no un escenario'],
+  // 0096 · Facturación. Los cuatro candados que separan un documento de cobro de
+  // una factura, y una política de cobranza ejecutable de una imposible.
+  ['billing_documents', 'billing_documents_fiscal_con_cae',
+    '0096: un comprobante fiscal sin CAE no es un comprobante fiscal'],
+  ['billing_documents', 'billing_documents_anulado_con_motivo',
+    '0096: anular un cargo exige decir por qué'],
+  ['collection_policies', 'collection_policies_gracia_despues_del_ultimo_reintento',
+    '0096: suspender antes del último reintento lo dejaría corriendo sobre una suscripción ya suspendida'],
+  ['collection_policies', 'collection_policies_aviso_antes_de_suspender',
+    '0096: avisar después de suspender no es avisar'],
+  ['company_subscriptions', 'company_subscriptions_condiciones_completas',
+    '0096: importe sin moneda o moneda sin periodicidad no es una condición acordada'],
+  ['payment_intents', 'payment_intents_fallo_con_detalle',
+    '0096: un cobro fallido dice por qué falló'],
 ];
 
 /** Triggers que hacen valer un invariante en la escritura. */
@@ -454,6 +468,9 @@ const RLS_FORZADO = [
  * encontrar una fuga entre empresas que estaba desde la 0016.
  */
 const VISTAS_INVOKER = [
+  // 0096 · Lo que una empresa ve de su cuenta con NEXO. Sin security_invoker
+  // mostraría los cargos de todas.
+  'billing_account_status',
   'ledger_trace', 'trial_balance', 'bank_trace', 'note_trace', 'statement_trace',
   'documents_pendientes', 'predictions_pendientes', 'company_arca_credentials_public',
   'statement_package',

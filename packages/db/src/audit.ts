@@ -35,6 +35,12 @@ export const ACTIONS_REQUIRING_REASON = [
   'DECLARAR_REFERENCIA_DE_SECRETO',
   'ROTAR_REFERENCIA_DE_SECRETO',
   'REVOCAR_REFERENCIA_DE_SECRETO',
+  // Anular dice "esto no debio emitirse". Sin motivo, seis meses despues nadie
+  // sabe si fue un error de carga o una decision comercial.
+  'ANULAR_DOCUMENTO_DE_COBRO',
+  // Cortarle el acceso a una empresa es la consecuencia mas grave del ciclo.
+  // Tiene que poder explicarse sin reconstruirla desde los intentos de pago.
+  'SUSPENDER_POR_FALTA_DE_PAGO',
 ] as const;
 
 export interface AuditEvent {

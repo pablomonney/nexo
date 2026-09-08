@@ -1,5 +1,9 @@
 # NEXO_EVOLUTION_BASELINE
 
+> **Foto del 2026-09-02. Superada por [`NEXO_CURRENT_BASELINE.md`](NEXO_CURRENT_BASELINE.md).**
+> Se conserva porque el valor de un censo viejo es poder comparar, no describir
+> el presente. Donde los dos difieran, manda el actual.
+
 **Medido:** 2026-09-02, contra el árbol de trabajo y la base de desarrollo.
 **Método:** consultas al catálogo de PostgreSQL, inventario de rutas que arma
 Fastify al registrarlas, y `npm run verify` completo. No se copió ningún número
