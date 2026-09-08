@@ -33,105 +33,169 @@
 <title>NEXO — gestión y contabilidad para empresas argentinas</title>
 <meta name="description" content="NEXO integra la operación, la contabilidad y el análisis de una empresa en un solo sistema. Prueba de 14 días sin tarjeta.">
 <style>
-  :root {
-    --tinta: #14201a;
-    --tinta-media: #3d4a43;
-    --tinta-suave: #6b776f;
-    --papel: #fbfcfa;
-    --papel-hondo: #f1f4f0;
-    --linea: #d4ddd4;
-    --linea-fina: #e6ebe5;
-    --verde: #1c6238;
-    --verde-fondo: #e7f2ea;
-    --ambar: #7a5400;
-    --ambar-fondo: #fbf3e2;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --tinta: #e3eae4;
-      --tinta-media: #a8b5ac;
-      --tinta-suave: #7e8c84;
-      --papel: #0f1512;
-      --papel-hondo: #161d19;
-      --linea: #26312b;
-      --linea-fina: #1d2621;
-      --verde: #6cc48d;
-      --verde-fondo: #102217;
-      --ambar: #e0b252;
-      --ambar-fondo: #241d0d;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--papel);
-    color: var(--tinta);
-    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .marco { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
-  a { color: var(--verde); }
+/* ═══════════════════════════════════════════════════════════════════════════
+   La página pública usa el mismo sistema de diseño que la consola, con una
+   diferencia deliberada: **acá va siempre en oscuro**.
 
-  header {
-    border-bottom: 1px solid var(--linea);
-    padding: 18px 0;
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  }
-  .marca { font-weight: 800; letter-spacing: -0.02em; font-size: 1.3rem; }
-  .marca span { color: var(--tinta-suave); font-weight: 500; font-size: 0.8rem; }
-  .btn {
-    display: inline-block; padding: 10px 18px; border-radius: 4px;
-    background: var(--verde); color: var(--papel); text-decoration: none;
-    font-weight: 600; font-size: 0.95rem; border: 1px solid var(--verde);
-  }
-  .btn.sec { background: transparent; color: var(--tinta); border-color: var(--linea); }
+   Es el lenguaje de la marca —letra luminosa sobre negro, la barra de cian a
+   verde agua— y esta es la única pantalla donde NEXO habla antes de que nadie
+   inicie sesión. La aplicación tiene los dos temas porque alguien trabaja ocho
+   horas adentro; una página que se lee en dos minutos no los necesita.
 
-  .hero { padding: 64px 0 48px; }
-  h1 {
-    font-size: clamp(2rem, 5.5vw, 3.2rem); line-height: 1.08;
-    letter-spacing: -0.03em; margin: 0 0 18px; max-width: 18ch; text-wrap: balance;
-  }
-  .lead { font-size: 1.18rem; color: var(--tinta-media); max-width: 58ch; margin: 0 0 28px; }
-  .acciones { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .fina { font-size: 0.9rem; color: var(--tinta-suave); }
+   Y el resplandor vive acá. En una tabla de comprobantes sería ruido encima
+   del dato.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
 
-  section { padding: 48px 0; border-top: 1px solid var(--linea-fina); }
-  h2 { font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -0.02em; margin: 0 0 10px; }
-  h3 { font-size: 1.02rem; margin: 0 0 6px; }
-  p { margin: 0 0 14px; }
-  .sub { color: var(--tinta-media); max-width: 62ch; }
+  --cian:    #12C8E6;
+  --cian-cl: #5FE3F2;
+  --aqua:    #A8F5E2;
 
-  .rejilla { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-top: 26px; }
-  .caja { border: 1px solid var(--linea); border-radius: 5px; padding: 18px; background: var(--papel-hondo); }
-  .caja p { color: var(--tinta-media); font-size: 0.94rem; margin: 0; }
+  --acento:     #3ED9EC;
+  --acento-cl:  #0C2A31;
+  --acento-txt: #06181C;
 
-  table { width: 100%; border-collapse: collapse; font-size: 0.94rem; }
-  .tabla { overflow-x: auto; border: 1px solid var(--linea); border-radius: 5px; margin-top: 22px; }
-  th { text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
-       color: var(--tinta-suave); padding: 11px 14px; border-bottom: 1px solid var(--linea); }
-  td { padding: 14px; border-bottom: 1px solid var(--linea-fina); vertical-align: top; color: var(--tinta-media); }
-  tbody tr:last-child td { border-bottom: none; }
-  td.plan { color: var(--tinta); font-weight: 600; }
-  .precio { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--tinta); font-weight: 600; }
-  .neu { display: inline-block; padding: 2px 8px; border-radius: 3px; background: var(--ambar-fondo);
-         color: var(--ambar); font-size: 0.8rem; }
+  --papel: #070B0D;
+  --alto:  #0E1417;
+  --alto2: #141C20;
+  --hund:  #0A1013;
+  --linea: #1E282D;
+  --linea2:#2A363C;
 
-  details { border: 1px solid var(--linea); border-radius: 5px; padding: 14px 16px; margin-bottom: 10px; background: var(--papel-hondo); }
-  summary { cursor: pointer; font-weight: 600; }
-  details p { margin: 12px 0 0; color: var(--tinta-media); }
+  --tinta:  #E8F0F2;
+  --tinta2: #A9B8BD;
+  --tinta3: #74858B;
 
-  .aviso { background: var(--verde-fondo); border: 1px solid var(--linea); border-left: 4px solid var(--verde);
-           border-radius: 4px; padding: 14px 16px; color: var(--tinta-media); }
-  footer { border-top: 1px solid var(--linea); padding: 28px 0 48px; color: var(--tinta-suave); font-size: 0.88rem; }
-  ul.limpia { margin: 10px 0 0; padding-left: 18px; color: var(--tinta-media); }
-  ul.limpia li { margin-bottom: 6px; }
+  --ojo: #F2C14E; --ojo-bg: #241D0A;
+
+  --r1: 4px; --r2: 6px; --r3: 10px; --rp: 999px;
+  --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 24px; --e6: 32px;
+  --e7: 48px; --e8: 64px;
+
+  --mono: "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font: 16px/1.6 var(--ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+.marco { max-width: 1040px; margin: 0 auto; padding: 0 var(--e5); }
+a { color: var(--acento); }
+a:focus-visible, .btn:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; border-radius: var(--r1); }
+
+header {
+  border-bottom: 1px solid var(--linea);
+  padding: var(--e4) 0;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--e4);
+}
+.marca { display: flex; align-items: center; gap: var(--e2); }
+.marca svg { display: block; }
+.marca .tag { color: var(--tinta3); font-size: .8rem; }
+
+.btn {
+  display: inline-block; padding: 11px 20px; border-radius: var(--r1);
+  background: var(--acento); color: var(--acento-txt); text-decoration: none;
+  font-weight: 600; font-size: .95rem; border: 1px solid var(--acento);
+}
+.btn.sec { background: transparent; color: var(--tinta); border-color: var(--linea2); }
+.btn.sec:hover { border-color: var(--acento); color: var(--acento); }
+
+/* ── El primer golpe de vista ─────────────────────────────────────────────
+   El resplandor detrás de la marca es el mismo recurso del letrero, en grande.
+   Es la única vez que aparece en toda la experiencia. */
+.hero { padding: var(--e8) 0 var(--e7); position: relative; }
+.hero::before {
+  /* Sin desbordar a los costados: un `inset` negativo en horizontal ensancha
+     el documento tres píxeles y aparece una barra de desplazamiento lateral en
+     una página que no la necesita. La difusión la da el propio degradado. */
+  content: ""; position: absolute; inset: -20% 0 20% 0; z-index: -1;
+  background: radial-gradient(75% 65% at 28% 35%, rgb(18 200 230 / 11%) 0%, transparent 72%);
+  pointer-events: none;
+}
+h1 {
+  font-size: clamp(2.1rem, 5.5vw, 3.4rem); line-height: 1.06;
+  letter-spacing: -0.03em; margin: 0 0 var(--e4); max-width: 19ch; text-wrap: balance;
+}
+.lead { font-size: 1.15rem; color: var(--tinta2); max-width: 58ch; margin: 0 0 var(--e5); }
+.acciones { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: center; }
+.fina { font-size: .9rem; color: var(--tinta3); }
+
+section { padding: var(--e7) 0; border-top: 1px solid var(--linea); }
+h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); letter-spacing: -0.022em; margin: 0 0 var(--e2); }
+h3 { font-size: 1rem; margin: 0 0 var(--e1); }
+p { margin: 0 0 var(--e3); }
+.sub { color: var(--tinta2); max-width: 62ch; }
+
+.rejilla { display: grid; gap: var(--e4); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: var(--e5); }
+.caja { border: 1px solid var(--linea); border-radius: var(--r3); padding: var(--e4); background: var(--alto); }
+.caja p { color: var(--tinta2); font-size: .93rem; margin: 0; }
+
+table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+.tabla { overflow-x: auto; border: 1px solid var(--linea); border-radius: var(--r3); margin-top: var(--e5); background: var(--alto); }
+th { text-align: left; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+     color: var(--tinta3); padding: var(--e3) var(--e4); border-bottom: 1px solid var(--linea2); }
+td { padding: var(--e4); border-bottom: 1px solid var(--linea); vertical-align: top; color: var(--tinta2); }
+tbody tr:last-child td { border-bottom: none; }
+td.plan { color: var(--tinta); font-weight: 600; }
+.precio { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+          color: var(--tinta); font-weight: 600; }
+.neu { display: inline-block; padding: 2px 9px; border-radius: var(--rp);
+       background: var(--ojo-bg); color: var(--ojo); font-size: .78rem; border: 1px solid currentColor; }
+
+details { border: 1px solid var(--linea); border-radius: var(--r3); padding: var(--e3) var(--e4);
+          margin-bottom: var(--e2); background: var(--alto); }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: var(--r1); }
+details p { margin: var(--e3) 0 0; color: var(--tinta2); }
+
+.aviso { background: var(--ojo-bg); border: 1px solid var(--linea); border-left: 3px solid var(--ojo);
+         border-radius: 0 var(--r1) var(--r1) 0; padding: var(--e3) var(--e4); color: var(--tinta2); }
+
+footer { border-top: 1px solid var(--linea); padding: var(--e6) 0 var(--e8);
+         color: var(--tinta3); font-size: .89rem; }
+ul.limpia { margin: var(--e3) 0 0; padding-left: var(--e4); color: var(--tinta2); }
+ul.limpia li { margin-bottom: var(--e1); }
+
+@media (max-width: 620px) {
+  body { font-size: 15px; }
+  .marco { padding: 0 var(--e4); }
+  .hero { padding: var(--e6) 0 var(--e5); }
+  section { padding: var(--e6) 0; }
+}
 </style>
 </head>
 <body>
 
 <div class="marco">
   <header>
-    <div class="marca">NEXO <span>gestión y contabilidad</span></div>
+    <div class="marca">
+      <svg width="96" height="34" viewBox="0 0 108 38" role="img" aria-label="NEXO">
+        <defs>
+          <linearGradient id="barra" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--cian)"/>
+            <stop offset="55%" stop-color="var(--cian-cl)"/>
+            <stop offset="100%" stop-color="var(--aqua)"/>
+          </linearGradient>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="butt" stroke-linejoin="miter">
+          <path d="M1 25 V1 L19 25 V1"/>
+          <path d="M45 1 H29 V25 H45 M29 13 H41"/>
+          <path d="M55 1 L73 25 M73 1 L55 25"/>
+          <circle cx="95" cy="13" r="12"/>
+        </g>
+        <rect x="1" y="31" width="106" height="3.4" rx="1.7" fill="url(#barra)"/>
+      </svg>
+      <span class="tag">gestión y contabilidad</span>
+    </div>
     <a class="btn sec" href="/consola">Entrar</a>
   </header>
 

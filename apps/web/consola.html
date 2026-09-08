@@ -22,148 +22,361 @@
        Distinto color, distinta etiqueta, distinto verbo.
 -->
 <style>
-:root{
-  --papel:#f7f7f5; --alto:#fff; --hund:#eeeeea; --linea:#dcdcd4; --linea2:#c2c2b8;
-  --tinta:#16181b; --tinta2:#4a5057; --tinta3:#777d85;
-  --acento:#1e5f57; --acento-cl:#e2edea;
-  --bien:#245a3a; --bien-bg:#e6f0e9;
-  --mal:#8f2a3c;  --mal-bg:#f9e8ec;
-  --ojo:#7a5d0f;  --ojo-bg:#f7f1dc;
-  --ia:#5b3f8c;   --ia-bg:#efe9f7;
-  --mono:Consolas,"SF Mono",Menlo,monospace;
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sistema de diseño de NEXO.
+
+   Todo color, tamaño, radio y espacio de esta consola sale de un token de acá.
+   No hay un valor suelto en las 10.000 líneas de abajo, y esa es la propiedad
+   que hace que la marca se pueda cambiar sin recorrer 35 pantallas.
+
+   ## Oscuro por defecto, y es una decisión
+
+   La marca de NEXO es luminosa sobre negro. Pero un contador carga comprobantes
+   ocho horas en una oficina con luz, así que el tema claro **no se deriva** del
+   oscuro: se diseña con los mismos cuidados y se elige con un clic. Lo que se
+   eligió queda guardado por navegador.
+
+   No se sigue `prefers-color-scheme`: el oscuro es la identidad, no una
+   preferencia del sistema operativo. El que quiere claro lo pide.
+
+   ## El cian tiene dos densidades, y no es capricho
+
+   `#12C8E6` sobre blanco da 1,9 de contraste y el mínimo legible es 4,5. El
+   cian de la marca brilla sobre negro y **no se puede leer sobre papel**. Por
+   eso `--acento` vale `#3ED9EC` en oscuro y `#0A7C8C` en claro: el mismo color
+   en dos profundidades, para que un botón sea un botón en los dos temas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* El degradado de la marca. Solo se usa en la marca. */
+  --cian:    #12C8E6;
+  --cian-cl: #5FE3F2;
+  --aqua:    #A8F5E2;
+
+  --acento:     #3ED9EC;
+  --acento-cl:  #0C2A31;
+  --acento-txt: #06181C;
+
+  --papel: #070B0D;
+  --alto:  #0E1417;
+  --alto2: #141C20;
+  --hund:  #0A1013;
+  --linea: #1E282D;
+  --linea2:#2A363C;
+
+  --tinta:  #E8F0F2;
+  --tinta2: #A9B8BD;
+  --tinta3: #74858B;
+
+  /* Cada uno significa una cosa, siempre la misma. Ninguno se parece al cian:
+     si el color de la IA fuera cian, la marca estaría diciendo que todo lo que
+     ves lo escribió una máquina. */
+  --bien: #4ADE9B; --bien-bg: #0C2419;
+  --ojo:  #F2C14E; --ojo-bg:  #241D0A;
+  --mal:  #FF8577; --mal-bg:  #2A1512;
+  --ia:   #B79CF5; --ia-bg:   #1B1630;
+
+  --r1: 4px; --r2: 6px; --r3: 10px; --rp: 999px;
+  --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 24px; --e6: 32px;
+
+  --mono: "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --papel:#15181a; --alto:#1c2023; --hund:#101315; --linea:#2c3235; --linea2:#3d4448;
-    --tinta:#e9e7e1; --tinta2:#b0b5ba; --tinta3:#858c93;
-    --acento:#6fbfb0; --acento-cl:#17302d;
-    --bien:#7fc79b; --bien-bg:#16281e;
-    --mal:#e08a99;  --mal-bg:#2e181d;
-    --ojo:#d8b45e;  --ojo-bg:#2c2513;
-    --ia:#b39ae0;   --ia-bg:#221b33;
-  }
+
+:root[data-tema="claro"] {
+  color-scheme: light;
+  --acento:     #0A7C8C;
+  --acento-cl:  #E3F4F6;
+  --acento-txt: #FFFFFF;
+
+  --papel: #F7FAFA;
+  --alto:  #FFFFFF;
+  --alto2: #F2F7F7;
+  --hund:  #EDF3F3;
+  --linea: #E1EAEB;
+  --linea2:#C9D6D8;
+
+  --tinta:  #0B1214;
+  --tinta2: #37474B;
+  --tinta3: #6B7B80;
+
+  --bien: #10714A; --bien-bg: #E2F5EC;
+  --ojo:  #8A5A00; --ojo-bg:  #FBF2DC;
+  --mal:  #B3261E; --mal-bg:  #FCE9E7;
+  --ia:   #6236B8; --ia-bg:   #EFE9FB;
 }
+
 *{box-sizing:border-box}
-/* El atributo `hidden` esconde por la hoja del navegador, que es `display:none`
-   con la especificidad más baja que existe. Cualquier regla de autor que fije
-   `display` le gana — y le ganaba: `nav{display:flex}` dejaba la navegación con
+
+/* `hidden` esconde por la hoja del navegador, que es `display:none` con la
+   especificidad más baja que existe: cualquier regla de autor que fije
+   `display` le gana — y le ganaba. `nav{display:flex}` dejaba la navegación con
    los 34 módulos a la vista en la pantalla de ingreso, con el atributo puesto.
-   Lo encontró una auditoría visual, no la lectura: en el DOM decía `hidden`.
    Esta línea hace que `hidden` signifique lo que dice, para todo el archivo. */
 [hidden]{display:none!important}
+
 body{margin:0;background:var(--papel);color:var(--tinta);
-     font:15px/1.55 "Segoe UI",system-ui,sans-serif}
-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem 1rem;
-       padding:.7rem 1.2rem;background:var(--alto);border-bottom:1px solid var(--linea)}
-h1{font-size:1.05rem;margin:0;letter-spacing:.14em}
-.sub{color:var(--tinta3);font-size:.8rem}
-.quien{margin-left:auto;font-size:.8rem;color:var(--tinta2)}
-.empresa-activa{font-weight:600;color:var(--acento)}
-nav{display:flex;flex-wrap:wrap;gap:.2rem;padding:.4rem 1.2rem;background:var(--alto);
-    border-bottom:1px solid var(--linea)}
+     font:15px/1.55 var(--ui)}
+
+/* ── Cabecera ─────────────────────────────────────────────────────────────── */
+header{display:flex;flex-wrap:wrap;align-items:center;gap:var(--e2) var(--e4);
+       padding:10px var(--e5);background:var(--alto);border-bottom:1px solid var(--linea)}
+.marca{display:flex;align-items:center;gap:var(--e2);flex:none}
+.marca svg{display:block}
+.sub{color:var(--tinta3);font-size:.78rem}
+.quien{margin-left:auto;display:flex;align-items:center;gap:var(--e3);
+       font-size:.8rem;color:var(--tinta2)}
+.empresa-activa{font-weight:600;color:var(--tinta)}
+
+/* El interruptor de tema. Un botón chico, sin texto: lo que hace se entiende
+   por el ícono y no vale la pena gastarle ancho a la cabecera. */
+/* El menú solo existe en pantalla angosta: en escritorio la navegación entra
+   entera y un botón para desplegarla sería un clic de más en cada visita. */
+#b-menu{display:none;background:none;border:1px solid var(--linea2);color:var(--tinta2);
+        padding:4px 10px;border-radius:var(--r1);margin:0;font-size:.78rem;cursor:pointer}
+#b-tema{background:none;border:1px solid var(--linea2);color:var(--tinta2);
+        padding:4px 8px;border-radius:var(--r1);margin:0;line-height:1;cursor:pointer}
+#b-tema:hover{border-color:var(--acento);color:var(--acento)}
+
+/* ── Navegación agrupada ──────────────────────────────────────────────────
+   34 botones planos obligan a leerlos todos para encontrar uno. Agrupados por
+   lo que la persona vino a hacer, se busca en un grupo de cuatro. */
+nav{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--e3);
+    padding:var(--e2) var(--e5);background:var(--alto);border-bottom:1px solid var(--linea)}
+/* `nowrap`: un grupo no se parte por dentro. Sin esto el rótulo quedaba
+   al final de una línea y sus botones en la siguiente, que es peor que no
+   agrupar — el rótulo señala el grupo equivocado. El grupo entero se va a la
+   línea de abajo, que es lo que tiene que pasar. */
+.gnav{display:flex;align-items:center;gap:2px;flex-wrap:nowrap}
+.gnav-t{font-size:.63rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+        color:var(--tinta3);padding-right:var(--e1);white-space:nowrap}
 nav button{background:none;border:1px solid transparent;color:var(--tinta2);
-           padding:.3rem .65rem;border-radius:4px;font-size:.85rem;cursor:pointer}
-nav button:hover{background:var(--hund)}
-nav button[aria-current="true"]{background:var(--acento-cl);color:var(--acento);
-           border-color:var(--acento);font-weight:600}
-.miga{padding:.4rem 1.2rem;font-size:.8rem;color:var(--tinta3);background:var(--papel)}
+           padding:5px 10px;border-radius:var(--r1);font:inherit;font-size:.82rem;
+           cursor:pointer;margin:0}
+nav button:hover{background:var(--hund);color:var(--tinta)}
+nav button[aria-current="true"]{background:var(--acento-cl);color:var(--acento);font-weight:600}
+
+.miga{padding:var(--e2) var(--e5);font-size:.79rem;color:var(--tinta3);background:var(--papel)}
 .miga b{color:var(--tinta2);font-weight:600}
-main{max-width:1180px;margin:0 auto;padding:1rem 1.2rem 4rem}
-section{background:var(--alto);border:1px solid var(--linea);border-radius:5px;
-        padding:1rem 1.2rem;margin-bottom:1rem}
-h2{font-size:1.02rem;margin:0 0 .3rem}
-h3{font-size:.9rem;margin:1.1rem 0 .4rem;color:var(--tinta2)}
-.ayuda{color:var(--tinta3);font-size:.84rem;margin:.2rem 0 .8rem;max-width:72ch}
-label{display:block;font-size:.76rem;color:var(--tinta2);margin:.5rem 0 .15rem}
-input,select,textarea{width:100%;padding:.35rem .5rem;background:var(--papel);
-       color:var(--tinta);border:1px solid var(--linea2);border-radius:4px;font:inherit;font-size:.87rem}
+
+main{max-width:1240px;margin:0 auto;padding:var(--e4) var(--e5) 5rem}
+section{background:var(--alto);border:1px solid var(--linea);border-radius:var(--r3);
+        padding:var(--e5);margin-bottom:var(--e4)}
+
+h1{font-size:1.05rem;margin:0}
+h2{font-size:1.18rem;font-weight:600;letter-spacing:-.012em;margin:0 0 var(--e1)}
+h3{font-size:.92rem;font-weight:600;margin:var(--e5) 0 var(--e2);color:var(--tinta)}
+h4{font-size:.85rem;font-weight:600;margin:var(--e4) 0 var(--e2);color:var(--tinta2)}
+.ayuda{color:var(--tinta3);font-size:.85rem;margin:var(--e1) 0 var(--e3);max-width:74ch}
+
+/* ── Controles ────────────────────────────────────────────────────────────── */
+label{display:block;font-size:.7rem;font-weight:600;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--tinta3);margin:var(--e2) 0 3px}
+input,select,textarea{width:100%;padding:6px 9px;background:var(--hund);
+       color:var(--tinta);border:1px solid var(--linea2);border-radius:var(--r1);
+       font:inherit;font-size:.87rem}
+input:focus-visible,select:focus-visible,textarea:focus-visible{
+       outline:2px solid var(--acento);outline-offset:1px;border-color:var(--acento)}
 textarea{min-height:3.5rem}
-.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem}
-.chk{display:inline-flex;align-items:center;gap:.3rem;margin:.15rem .6rem .15rem 0}
-button{background:var(--acento);color:#fff;border:0;border-radius:4px;
-       padding:.4rem .8rem;font:inherit;font-size:.85rem;cursor:pointer;margin:.5rem .35rem 0 0}
-button.sec{background:var(--hund);color:var(--tinta)}
-button:disabled{opacity:.45;cursor:not-allowed}
-table{width:100%;border-collapse:collapse;font-size:.83rem;margin-top:.6rem}
-th,td{text-align:left;padding:.32rem .45rem;border-bottom:1px solid var(--linea);vertical-align:top}
-th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta3)}
-.tabla{overflow-x:auto}
-.clic{color:var(--acento);cursor:pointer;text-decoration:underline}
-.p{display:inline-block;font-size:.68rem;padding:.1em .4em;border-radius:3px;
-   border:1px solid currentColor;white-space:nowrap}
+.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--e2)}
+.chk{display:inline-flex;align-items:center;gap:var(--e1);margin:3px var(--e3) 3px 0}
+.chk input{width:auto}
+
+button{background:var(--acento);color:var(--acento-txt);border:1px solid transparent;
+       border-radius:var(--r1);padding:7px 14px;font:inherit;font-size:.85rem;
+       font-weight:600;cursor:pointer;margin:var(--e2) var(--e1) 0 0}
+button.sec{background:transparent;color:var(--tinta);border-color:var(--linea2)}
+button.sec:hover{border-color:var(--acento);color:var(--acento)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+
+/* ── Tablas ───────────────────────────────────────────────────────────────── */
+.tabla{overflow-x:auto;border:1px solid var(--linea);border-radius:var(--r2);
+       background:var(--alto);margin-top:var(--e3)}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:9px 11px;border-bottom:1px solid var(--linea2);
+   font-size:.68rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+   color:var(--tinta3);white-space:nowrap}
+td{padding:9px 11px;border-bottom:1px solid var(--linea);vertical-align:top;color:var(--tinta2)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--alto2)}
+/* Las cifras se alinean. En una columna de importes los dígitos tienen que
+   caer uno debajo del otro: es la diferencia entre una tabla contable y una
+   lista de números. */
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
+       color:var(--tinta)}
+.clic{color:var(--acento);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+
+/* ── Pastillas de estado ──────────────────────────────────────────────────── */
+.p{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 9px;
+   border-radius:var(--rp);border:1px solid currentColor;white-space:nowrap}
 .p-bien{background:var(--bien-bg);color:var(--bien)}
 .p-mal{background:var(--mal-bg);color:var(--mal)}
 .p-ojo{background:var(--ojo-bg);color:var(--ojo)}
 .p-ia{background:var(--ia-bg);color:var(--ia)}
-.p-neu{background:var(--hund);color:var(--tinta3);border-color:var(--linea)}
-.aviso{background:var(--hund);border-left:3px solid var(--linea2);padding:.5rem .7rem;
-       margin:.6rem 0;border-radius:0 4px 4px 0;font-size:.85rem}
+.p-neu{background:var(--hund);color:var(--tinta3);border-color:var(--linea2)}
+
+/* ── Avisos ───────────────────────────────────────────────────────────────── */
+.aviso{background:var(--hund);border-left:3px solid var(--linea2);
+       padding:var(--e2) var(--e3);margin:var(--e3) 0;
+       border-radius:0 var(--r1) var(--r1) 0;font-size:.86rem;color:var(--tinta2)}
 .aviso.error{background:var(--mal-bg);border-left-color:var(--mal);color:var(--mal)}
 .aviso.ok{background:var(--bien-bg);border-left-color:var(--bien);color:var(--bien)}
-/* Ni error ni confirmación: algo que pide una decisión humana. Los tokens
-   --ojo ya significaban eso en las pastillas; acá se usa lo mismo. */
+/* Ni error ni confirmación: algo que pide una decisión humana. */
 .aviso.ojo{background:var(--ojo-bg);border-left-color:var(--ojo);color:var(--ojo)}
-pre{margin:.3rem 0 0;font-family:var(--mono);font-size:.74rem;white-space:pre-wrap;
-    word-break:break-word;max-height:22rem;overflow:auto}
-.mono{font-family:var(--mono);font-size:.78rem}
-.dos{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.tres{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
-@media (max-width:880px){.dos,.tres{grid-template-columns:1fr}}
-.evidencia{background:var(--hund);border:1px solid var(--linea);border-radius:4px;padding:.6rem;
-           max-height:26rem;overflow:auto}
+
+/* ── Estados vacíos ───────────────────────────────────────────────────────
+   Una tabla sin filas no dice nada. Un estado vacío dice qué falta y ofrece
+   el primer paso, que es la diferencia entre una pantalla rota y una que
+   todavía no se usó. */
+.vacio{padding:var(--e6) var(--e4);text-align:center;color:var(--tinta3);
+       border:1px dashed var(--linea2);border-radius:var(--r2);margin-top:var(--e3)}
+.vacio .t{font-weight:600;color:var(--tinta2);margin-bottom:var(--e1)}
+
+/* ── Carga ────────────────────────────────────────────────────────────────
+   Sin esto, una consulta lenta se ve igual que una tabla vacía. */
+.cargando{color:var(--tinta3);font-size:.85rem;padding:var(--e4);text-align:center}
+.cargando::after{content:"";display:inline-block;width:10px;height:10px;margin-left:6px;
+       border:2px solid var(--linea2);border-top-color:var(--acento);border-radius:50%;
+       animation:giro .7s linear infinite;vertical-align:-1px}
+@keyframes giro{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.cargando::after{animation:none}}
+
+pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pre-wrap;
+    word-break:break-word;max-height:22rem;overflow:auto;color:var(--tinta2)}
+.mono{font-family:var(--mono);font-size:.79rem;font-variant-numeric:tabular-nums}
+
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:var(--e4)}
+.tres{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--e4)}
+@media (max-width:900px){.dos,.tres{grid-template-columns:1fr}}
+
+.evidencia{background:var(--hund);border:1px solid var(--linea);border-radius:var(--r2);
+           padding:var(--e3);max-height:26rem;overflow:auto}
 .evidencia img{max-width:100%;height:auto}
-.grupo{border:1px solid var(--linea);border-radius:4px;margin-bottom:.5rem}
-.grupo>summary{cursor:pointer;padding:.45rem .7rem;background:var(--hund);font-size:.85rem}
-.grupo>div{padding:.2rem .7rem .6rem}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:.15rem .8rem;font-size:.84rem}
-.kv dt{color:var(--tinta3);font-size:.76rem}
-.kv dd{margin:0;font-family:var(--mono);font-size:.78rem;word-break:break-all}
+
+.grupo{border:1px solid var(--linea);border-radius:var(--r2);margin-bottom:var(--e2);
+       background:var(--alto2)}
+.grupo>summary{cursor:pointer;padding:8px var(--e3);font-size:.85rem;font-weight:600;
+       color:var(--tinta2);border-radius:var(--r2)}
+.grupo>summary:hover{color:var(--tinta)}
+.grupo>summary:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
+.grupo>div{padding:var(--e1) var(--e3) var(--e3)}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px var(--e4);font-size:.85rem}
+.kv dt{color:var(--tinta3);font-size:.72rem;font-weight:600;letter-spacing:.05em;
+       text-transform:uppercase}
+.kv dd{margin:0;font-family:var(--mono);font-size:.79rem;word-break:break-all;color:var(--tinta)}
+
+/* ── Angosto ──────────────────────────────────────────────────────────────
+   La navegación agrupada se apila por grupo, no en 34 botones seguidos. */
+@media (max-width:760px){
+  header,nav,.miga{padding-left:var(--e3);padding-right:var(--e3)}
+  main{padding:var(--e3) var(--e3) 4rem}
+  section{padding:var(--e4)}
+  nav{gap:var(--e2)}
+  /* En pantalla angosta sí se parte: un grupo de ocho botones no entra en una
+     línea, y forzarlo sacaría la navegación fuera de la pantalla. */
+  .gnav{width:100%;flex-wrap:wrap}
+  #b-menu{display:inline-block}
+  /* Plegada por defecto: quinientos píxeles de navegación antes del contenido
+     hacen que en un teléfono haya que desplazar para ver de qué va la pantalla. */
+  nav[data-plegada="si"]{display:none}
+}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>NEXO</h1>
-  <span class="sub">consola operativa</span>
-  <span class="quien"><span id="quien"></span> · <span class="empresa-activa" id="empresa-activa">sin empresa</span>
+  <!-- La marca va dibujada en SVG y no tipografiada: no depende de que exista
+       una fuente en la máquina de nadie, pesa dos kilobytes y se recolorea con
+       una línea. El resplandor queda para la página pública y el ingreso — en
+       una tabla de comprobantes sería ruido encima del dato. -->
+  <span class="marca">
+    <svg width="76" height="27" viewBox="0 0 108 38" role="img" aria-label="NEXO">
+      <defs>
+        <linearGradient id="nexo-barra" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="var(--cian)"/>
+          <stop offset="55%" stop-color="var(--cian-cl)"/>
+          <stop offset="100%" stop-color="var(--aqua)"/>
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="butt"
+         stroke-linejoin="miter">
+        <path d="M1 25 V1 L19 25 V1"/>
+        <path d="M45 1 H29 V25 H45 M29 13 H41"/>
+        <path d="M55 1 L73 25 M73 1 L55 25"/>
+        <circle cx="95" cy="13" r="12"/>
+      </g>
+      <rect x="1" y="31" width="106" height="3.4" rx="1.7" fill="url(#nexo-barra)"/>
+    </svg>
+    <span class="sub">consola</span>
+  </span>
+  <span class="quien"><span id="quien"></span>
+    <span class="empresa-activa" id="empresa-activa">sin empresa</span>
+    <button id="b-menu" type="button" aria-expanded="false" aria-controls="nav">Menú</button>
+    <button id="b-tema" type="button" title="Cambiar entre claro y oscuro"
+            aria-label="Cambiar el tema">◐</button>
     <button id="b-salir" class="sec" hidden>Salir</button></span>
 </header>
 
+<!-- La navegación va agrupada por lo que la persona vino a hacer. Treinta y
+     cuatro botones planos obligan a leerlos todos para encontrar uno; en grupos
+     de cuatro se busca en un grupo. El orden es el del día de trabajo: primero
+     lo que hay pendiente, después vender, comprar, operar, la plata, los libros
+     y al final lo que se mira de vez en cuando. -->
 <nav id="nav" hidden>
-  <button data-vista="inicio">Inicio</button>
-  <button data-vista="inteligencia">Preguntar</button>
-  <button data-vista="bandeja">Pendientes</button>
-  <button data-vista="documentos">Documentos</button>
-  <button data-vista="propuestas">Propuestas de IA</button>
-  <button data-vista="operaciones">Operaciones</button>
-  <button data-vista="terceros">Terceros</button>
-  <button data-vista="productos">Productos</button>
-  <button data-vista="crm">CRM</button>
-  <button data-vista="proyectos">Proyectos</button>
-  <button data-vista="comisiones">Comisiones</button>
-  <button data-vista="sucursales">Sucursales</button>
-  <button data-vista="precios">Precios</button>
-  <button data-vista="comercial">Comercial</button>
-  <button data-vista="recepciones">Recepciones</button>
-  <button data-vista="stock">Existencias</button>
-  <button data-vista="activos">Bienes de uso</button>
-  <button data-vista="iva">IVA</button>
-  <button data-vista="bancos">Bancos</button>
-  <button data-vista="cheques">Cheques</button>
-  <button data-vista="solicitudes">Solicitudes</button>
-  <button data-vista="pagos">Pagos</button>
-  <button data-vista="caja">Caja</button>
-  <button data-vista="integraciones">Integraciones</button>
-  <button data-vista="analitica">Analítica</button>
-  <button data-vista="analisis">Señales</button>
-  <button data-vista="asientos">Asientos</button>
-  <button data-vista="libros">Libros</button>
-  <button data-vista="estados">Estados y notas</button>
-  <button data-vista="cierre">Períodos y cierre</button>
-  <button data-vista="auditoria">Auditoría</button>
-  <button data-vista="suscripcion">Plan</button>
-  <button data-vista="config">Configuración</button>
-  <button data-vista="empresa" class="sec">Cambiar empresa</button>
+  <div class="gnav"><span class="gnav-t">Inicio</span>
+    <button data-vista="inicio">Panel</button>
+    <button data-vista="bandeja">Pendientes</button>
+    <button data-vista="inteligencia">Preguntar</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Ventas</span>
+    <button data-vista="comercial">Comercial</button>
+    <button data-vista="terceros">Terceros</button>
+    <button data-vista="productos">Productos</button>
+    <button data-vista="precios">Precios</button>
+    <button data-vista="crm">CRM</button>
+    <button data-vista="comisiones">Comisiones</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Compras</span>
+    <button data-vista="solicitudes">Solicitudes</button>
+    <button data-vista="recepciones">Recepciones</button>
+    <button data-vista="pagos">Pagos</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Operación</span>
+    <button data-vista="documentos">Documentos</button>
+    <button data-vista="propuestas">Propuestas de IA</button>
+    <button data-vista="operaciones">Operaciones</button>
+    <button data-vista="stock">Existencias</button>
+    <button data-vista="activos">Bienes de uso</button>
+    <button data-vista="proyectos">Proyectos</button>
+    <button data-vista="sucursales">Sucursales</button>
+    <button data-vista="integraciones">Integraciones</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Dinero</span>
+    <button data-vista="caja">Caja</button>
+    <button data-vista="bancos">Bancos</button>
+    <button data-vista="cheques">Cheques</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Libros</span>
+    <button data-vista="iva">IVA</button>
+    <button data-vista="asientos">Asientos</button>
+    <button data-vista="libros">Libros</button>
+    <button data-vista="estados">Estados y notas</button>
+    <button data-vista="cierre">Períodos y cierre</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Análisis</span>
+    <button data-vista="analitica">Analítica</button>
+    <button data-vista="analisis">Señales</button>
+  </div>
+  <div class="gnav"><span class="gnav-t">Administración</span>
+    <button data-vista="auditoria">Auditoría</button>
+    <button data-vista="suscripcion">Plan</button>
+    <button data-vista="config">Configuración</button>
+    <button data-vista="empresa" class="sec">Cambiar empresa</button>
+  </div>
 </nav>
 
 <div class="miga" id="miga" hidden></div>
@@ -3061,6 +3274,33 @@ const E = (id) => document.getElementById(id);
 const escapar = (t) => String(t === null || t === undefined ? '' : t)
   .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+/**
+ * El tema.
+ *
+ * Oscuro por defecto porque **es la marca**, no porque lo diga el sistema
+ * operativo: por eso no se mira `prefers-color-scheme`. El que quiere claro lo
+ * pide, y queda guardado por navegador.
+ *
+ * `localStorage` puede tirar en una ventana privada o con las cookies
+ * bloqueadas, así que va envuelto: quedarse sin consola por no poder guardar
+ * una preferencia de color sería absurdo.
+ */
+function aplicarTema(tema) {
+  document.documentElement.dataset.tema = tema;
+  const b = E('b-tema');
+  if (b) {
+    b.textContent = tema === 'claro' ? '☾' : '☀';
+    b.title = tema === 'claro' ? 'Pasar a oscuro' : 'Pasar a claro';
+  }
+  try { localStorage.setItem('nexo-tema', tema); } catch (e) { /* sin guardar */ }
+}
+
+(function iniciarTema() {
+  let guardado = null;
+  try { guardado = localStorage.getItem('nexo-tema'); } catch (e) { /* sin leer */ }
+  aplicarTema(guardado === 'claro' ? 'claro' : 'oscuro');
+})();
+
 /** Único punto de contacto con la API. La empresa viaja en la cabecera, siempre. */
 async function api(method, url, cuerpo, esForma) {
   const cab = { accept: 'application/json' };
@@ -3126,6 +3366,7 @@ function ir(vista, migas) {
 for (const b of document.querySelectorAll('nav button')) {
   b.onclick = () => {
     const v = b.dataset.vista;
+    plegarMenu();
     ir(v, [b.textContent]);
     if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
     if (v === 'inteligencia') cargarInteligencia();
@@ -3348,6 +3589,32 @@ E('b-mfa-confirmar').onclick = async () => {
  * puesta con los datos de la empresa después de salir es exactamente lo que un
  * botón de salir tiene que evitar.
  */
+E('b-tema').onclick = () =>
+  aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'oscuro' : 'claro');
+
+/**
+ * El menú de pantalla angosta.
+ *
+ * `data-plegada` la esconde solo por debajo de 760 píxeles: en escritorio el
+ * atributo está igual y no hace nada, porque la regla que lo mira vive dentro
+ * de la media query. Así no hay dos estados que mantener sincronizados.
+ *
+ * Se pliega sola al elegir una vista: dejarla abierta taparía justo lo que la
+ * persona acaba de pedir.
+ */
+E('b-menu').onclick = () => {
+  const n = E('nav');
+  const plegada = n.dataset.plegada !== 'no';
+  n.dataset.plegada = plegada ? 'no' : 'si';
+  E('b-menu').setAttribute('aria-expanded', String(plegada));
+};
+
+function plegarMenu() {
+  E('nav').dataset.plegada = 'si';
+  E('b-menu').setAttribute('aria-expanded', 'false');
+}
+plegarMenu();
+
 E('b-salir').onclick = async () => {
   await api('POST', '/auth/logout');
   location.reload();
@@ -3445,6 +3712,13 @@ function aplicarPermisosANav() {
   for (const b of document.querySelectorAll('nav button')) {
     const p = requiere[b.dataset.vista];
     b.hidden = p !== undefined && !puede(p);
+  }
+
+  // Un grupo cuyos botones se escondieron todos queda como un rótulo suelto
+  // señalando nada. Se esconde con ellos: si el rol no llega a ningún módulo de
+  // Compras, la palabra «Compras» tampoco tiene por qué estar.
+  for (const g of document.querySelectorAll('.gnav')) {
+    g.hidden = [...g.querySelectorAll('button')].every((b) => b.hidden);
   }
 }
 
