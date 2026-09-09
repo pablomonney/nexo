@@ -5,7 +5,7 @@
  * habilitado cada CUIT. Se diseña para degradar sin romper."* Este archivo es esa
  * frase hecha código, y todo él gira alrededor de una distinción:
  *
- *     NO ESTÁ DELEGADO  ≠  NO SE PUDO AVERIGUAR
+ *     NO ESTÁ DELEGADO  ≠  NO SE PUDO AVERIGUAR  ≠  NO SE PREGUNTÓ
  *
  * Un servicio que el contribuyente no delegó al certificado es un hecho estable:
  * hasta que alguien vaya al portal y lo delegue, no va a funcionar. Un servicio
@@ -21,6 +21,18 @@
  * relevamiento de hace seis meses no es evidencia sobre hoy — las delegaciones se
  * revocan, los certificados vencen. Pasado el plazo, la respuesta no es "no
  * habilitado" sino `VENCIDO`, que es otra cosa: hay que volver a preguntar.
+ *
+ * La tercera la agregó la auditoría del 2026-09-09, y es la que faltaba: **un
+ * error nuestro tampoco dice nada sobre las delegaciones del CUIT.** El archivo
+ * ya separaba «rechazo» de «caída del organismo», pero `NO_DELEGADO` era el
+ * cajón de lo que sobraba, y ahí caía cualquier excepción que no fuera de red
+ * —incluido un TypeError ocurrido antes de abrir el socket—. El relevamiento
+ * informó los cuatro servicios como no delegados sin haberle preguntado nada a
+ * ARCA, y contradijo un TA real que está anotado en `soap/wsaa.ts`.
+ *
+ * La forma del defecto, otra vez: la distinción estaba escrita, pero uno de los
+ * dos lados era el caso por omisión, y todo lo no previsto se volvía una
+ * afirmación. Ahora afirmar requiere `respondioElOrganismo`.
  */
 
 import type { ArcaEnvironment, ServiceName } from './environment.js';
@@ -66,7 +78,46 @@ export interface IntentoDeLogin {
   /** `true` si el fallo fue de red o de disponibilidad, no de autorización. */
   readonly fallaDeTransporte: boolean;
   readonly sinCredencial: boolean;
+  /**
+   * `true` solo si el intento **llegó a hablar con WSAA**.
+   *
+   * El campo es obligatorio y no tiene valor por defecto a propósito. Es la
+   * tercera categoría que a este módulo le faltaba: no es «no está delegado» ni
+   * «el organismo no contestó», es **no se preguntó nada**, porque el error
+   * ocurrió de este lado.
+   *
+   * Pasó de verdad. `scripts/arca-capabilities.mjs` armaba el certificado sin
+   * `notAfter`, `login` reventaba con un TypeError en su primera línea —antes de
+   * abrir el socket— y el `catch` mandaba ese mensaje acá. Como no era de red,
+   * caía en el último `return` y salía `NO_DELEGADO` con fecha de verificación:
+   * una afirmación sobre las delegaciones del contribuyente construida a partir
+   * de un error nuestro, lista para guardarse en la tabla.
+   *
+   * Que sea un campo y no una heurística sobre el texto del mensaje es
+   * deliberado: el que hace la llamada sabe si hubo respuesta HTTP, y adivinarlo
+   * leyendo el error es cómo se llegó hasta acá.
+   */
+  readonly respondioElOrganismo: boolean;
+  /**
+   * El `faultcode` que devolvió WSAA, cuando devolvió uno.
+   *
+   * Hace falta porque no todos los rechazos son negativas. `coe.alreadyAuthenticated`
+   * significa «ya hay un ticket vivo para ese CUIT y ese servicio», y WSAA no
+   * emite un ticket para un servicio que el contribuyente no delegó: es
+   * evidencia **a favor** de la habilitación, llegada en forma de error.
+   */
+  readonly codigoDeFalla: string | null;
 }
+
+/**
+ * El rechazo que en realidad confirma la habilitación.
+ *
+ * WSAA entrega un solo ticket por (CUIT, servicio) y no emite otro mientras el
+ * primero viva. Correr el relevamiento dos veces seguidas —o correrlo después de
+ * que la aplicación pidiera un ticket— devuelve esto. Leerlo como «no delegado»
+ * sería exactamente al revés de lo que pasó.
+ */
+const YA_AUTENTICADO = 'coe.alreadyAuthenticated';
 
 /**
  * Clasifica un intento de login en un estado de habilitación.
@@ -104,6 +155,30 @@ export function clasificarIntento(intento: IntentoDeLogin, ahora: string): Habil
       estado: 'HABILITADO',
       verificadoEl: ahora,
       detalle: 'WSAA emitió ticket de acceso para este servicio.',
+    };
+  }
+
+  if (intento.codigoDeFalla !== null && intento.codigoDeFalla.endsWith(YA_AUTENTICADO)) {
+    return {
+      service: intento.service,
+      estado: 'HABILITADO',
+      verificadoEl: ahora,
+      detalle:
+        'WSAA contestó que ya hay un ticket vivo para este CUIT y este servicio. No emite ' +
+        'tickets para servicios sin delegar, así que la delegación existía cuando se emitió ' +
+        'el que sigue vigente.',
+    };
+  }
+
+  // Un fallo que nunca llegó al organismo no habilita a decir nada sobre las
+  // delegaciones del contribuyente. `NO_DELEGADO` es una afirmación, y una
+  // afirmación necesita que alguien la haya contestado.
+  if (!intento.respondioElOrganismo) {
+    return {
+      service: intento.service,
+      estado: 'NO_VERIFICABLE',
+      verificadoEl: null,
+      detalle: `El intento falló antes de llegar a WSAA (${intento.respuesta ?? 'sin detalle'}). No se preguntó nada: esto es un problema de este lado, no una delegación faltante.`,
     };
   }
 

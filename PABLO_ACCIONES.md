@@ -10,27 +10,17 @@ resuelvo yo dentro del repositorio.
 
 ## P0 — bloquean V1
 
-### 1 · Aprobar la identidad visual
+### ~~1 · Aprobar la identidad visual~~ — RESUELTA
 
-| | |
-|---|---|
-| **Acción** | Mirar la propuesta de logo, paleta y tipografía que voy a preparar, y aprobarla o pedir cambios |
-| **Motivo** | Todo el sistema de diseño se construye encima. Si se aprueba después de aplicarla, se rehace |
-| **Bloquea V1** | Sí |
-| **Costo** | $0 si la hago yo. Un diseñador de marca: **PRECIO A CONFIRMAR** |
-| **Qué tenés que decidir** | Si querés que la proponga yo o contratás a alguien. Y si tenés alguna preferencia de tono: sobrio/institucional, moderno/tecnológico, cálido/cercano |
-| **Desbloquea** | El design system y el rediseño entero |
+Aprobada el 2026-09-08: oscuro, luminoso, cian. La marca va dibujada en SVG, el
+sistema de tokens está aplicado en la consola y en la página pública, y el
+resplandor queda reservado a lo público. No hace falta un diseñador de marca
+para V1.
 
-### 2 · Decidir el alcance de V1
+### ~~2 · Decidir el alcance de V1~~ — RESUELTA
 
-| | |
-|---|---|
-| **Acción** | Elegir una de las tres opciones de `NEXO_V1_CIERRE.md` §4 |
-| **Motivo** | Define si V1 son semanas o meses. No la puedo tomar yo |
-| **Bloquea V1** | Sí — es lo primero |
-| **Costo** | $0 |
-| **Qué tenés que decidir** | (a) las 35 pantallas a calidad de producto, (b) el núcleo de 15 a calidad de producto y el resto consistente, o (c) vender solo Contable y Gestión en V1 |
-| **Desbloquea** | Que yo pueda empezar y que el trabajo tenga final |
+Elegida la opción (a): **las 35 pantallas a calidad de producto**. Es el camino
+largo y tiene final. Todo lo que sigue en este archivo se lee con ese alcance.
 
 ### 3 · Contratar proveedor de correo
 
@@ -115,6 +105,21 @@ resuelvo yo dentro del repositorio.
 
 ## P1 — importantes, no bloquean V1
 
+### 9-bis · Delegar en ARCA los tres servicios que faltan (homologación)
+
+| | |
+|---|---|
+| **Acción** | En **WSASS** (homologación), asociar el certificado `CN=SistemaContable` a `wscdc`, `ws_sr_padron_a13` y `ws_sr_padron_a100`. Es el mismo trámite que ya hiciste para `wsfe` |
+| **Motivo** | Medido contra ARCA el 2026-09-09: `wsfe` **HABILITADO**; los otros tres devuelven `coe.notAuthorized` — «Computador no autorizado a acceder al servicio». No es un problema del código ni del certificado |
+| **Bloquea V1** | No. El sistema degrada declarando el hallazgo: sin WSCDC la validación fiscal queda en `NO_CONSULTADO` y cae en revisión individual; sin padrón no se verifica la condición del emisor frente al IVA |
+| **Costo** | **$0.** No se contrata nada: es un trámite en el portal, y el certificado que ya tenés vence el 2028-08-25 |
+| **Qué tenés que decidir** | Nada. Es hacerlo |
+| **Desbloquea** | Que la constatación de comprobantes y el padrón pasen de degradados a verificados |
+
+> El relevamiento venía informando los cuatro servicios como `NO_DELEGADO` sin
+> haberle preguntado nada a ARCA — dos defectos del script encadenados. Los
+> números de arriba son los primeros medidos de verdad.
+
 ### 10 · Condición de IVA de NEXO
 
 | | |
@@ -167,11 +172,12 @@ resuelvo yo dentro del repositorio.
 
 ## Resumen: lo mínimo para que yo pueda terminar
 
-Si solo hacés cuatro cosas, que sean:
+Las dos primeras de esta lista ya están: elegiste el alcance (§2) y aprobaste la
+identidad (§1). De lo que queda, si solo hacés tres cosas, que sean:
 
-1. **Decidir el alcance de V1** (§2) — es lo primero y no cuesta nada
-2. **Aprobar la identidad visual** (§1) — todo se construye encima
-3. **Correo** (§3) — cierra el alta
-4. **Hosting con jurisdicción** (§5) — sin eso no hay producción
+1. **Correo** (§3) — cierra el alta sin intervención manual
+2. **Hosting con jurisdicción** (§5) — sin eso no hay producción
+3. **Delegar los tres servicios de ARCA** (§9-bis) — cuesta $0 y saca la
+   validación fiscal del modo degradado
 
-Con esas cuatro, todo lo demás que bloquea V1 es trabajo mío.
+Con esas tres, todo lo demás que bloquea V1 es trabajo mío.

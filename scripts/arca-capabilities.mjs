@@ -25,11 +25,13 @@ import pg from 'pg';
 
 import {
   SERVICIOS_DEL_PRODUCTO,
+  certificadoDesdePem,
   clasificarIntento,
+  endpointsFor,
   esPersistible,
   resumirRelevamiento,
 } from '../packages/arca/dist/index.js';
-import { WsaaAuthenticator } from '../packages/arca/dist/soap/wsaa.js';
+import { WsaaAuthenticator, WsaaFaultError } from '../packages/arca/dist/soap/wsaa.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 if (existsSync(join(HERE, '..', '.env'))) {
@@ -68,14 +70,27 @@ console.log(`Ambiente: ${environment}`);
 console.log(`CUIT: ${cuit}`);
 console.log('');
 
-const certificate = {
+// La fecha de vencimiento sale del propio certificado y no de acá. Cuando este
+// objeto se armaba a mano le faltaba `notAfter`, `login` reventaba en su primera
+// línea antes de abrir el socket, y el `catch` de abajo informaba los cuatro
+// servicios como NO_DELEGADO sin haberle preguntado nada a ARCA.
+const certificate = certificadoDesdePem({
+  companyId: companyId ?? `relevamiento ${cuit}`,
   cuit,
-  environment,
   certificatePem: await readFile(certPath, 'utf8'),
   privateKeyPem: await readFile(keyPath, 'utf8'),
-};
+});
 
-const authenticator = new WsaaAuthenticator({ environment });
+// `WsaaOptions` pide `endpoint`, no `environment`. El script pasaba
+// `{ environment }` —que no es un campo de esa interfaz— así que el
+// authenticator quedaba sin endpoint y `fetch(undefined)` fallaba con
+// «Failed to parse URL from undefined». Nunca llegó a preguntarle nada a ARCA.
+//
+// El defecto estuvo tapado por el otro: como todo error que no fuera de red
+// salía clasificado NO_DELEGADO, el informe mostraba cuatro respuestas
+// plausibles y nadie tenía motivo para mirar. Se destapó recién cuando
+// `NO_VERIFICABLE` empezó a decir «esto es un problema de este lado».
+const authenticator = new WsaaAuthenticator({ endpoint: endpointsFor(environment).wsaa });
 const ahora = new Date().toISOString();
 const habilitaciones = [];
 
@@ -84,21 +99,34 @@ for (const service of SERVICIOS_DEL_PRODUCTO) {
   let intento;
   try {
     await authenticator.login(certificate, service);
-    intento = { service, ok: true, respuesta: null, fallaDeTransporte: false, sinCredencial: false };
+    intento = {
+      service,
+      ok: true,
+      respuesta: null,
+      fallaDeTransporte: false,
+      sinCredencial: false,
+      respondioElOrganismo: true,
+      codigoDeFalla: null,
+    };
   } catch (error) {
     const mensaje = error instanceof Error ? error.message : String(error);
     // La distinción que sostiene todo el módulo. Un error de red, un timeout o
     // un 5xx son problemas de disponibilidad; un rechazo de WSAA es una
     // afirmación sobre la delegación.
-    const fallaDeTransporte = /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket|network|5\d\d/i.test(
-      mensaje,
-    );
+    const fallaDeTransporte =
+      /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket|network|5\d\d/i.test(mensaje);
+    // Y la tercera, que faltaba: solo `WsaaFaultError` prueba que hubo respuesta
+    // del organismo. Cualquier otra excepción ocurrió de este lado, y de este
+    // lado no se puede saber qué delegó el contribuyente.
+    const falla = error instanceof WsaaFaultError ? error : null;
     intento = {
       service,
       ok: false,
       respuesta: mensaje.slice(0, 200),
       fallaDeTransporte,
       sinCredencial: false,
+      respondioElOrganismo: falla !== null,
+      codigoDeFalla: falla?.code ?? null,
     };
   }
 

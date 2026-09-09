@@ -25,9 +25,116 @@ function intento(overrides: Partial<IntentoDeLogin> = {}): IntentoDeLogin {
     respuesta: null,
     fallaDeTransporte: false,
     sinCredencial: false,
+    // Por omisión el intento habló con ARCA: es el caso normal, y así los tests
+    // de rechazo de abajo siguen probando lo que dicen probar. El caso contrario
+    // —que es el que produjo el falso negativo— se pide explícitamente.
+    respondioElOrganismo: true,
+    codigoDeFalla: null,
     ...overrides,
   };
 }
+
+describe('un error nuestro tampoco se registra como falta de habilitación', () => {
+  /**
+   * El caso que la auditoría del 2026-09-09 encontró vivo.
+   *
+   * `scripts/arca-capabilities.mjs` armaba el certificado sin `notAfter`, y la
+   * primera línea de `login` es `certificate.notAfter.getTime()`. Reventaba con
+   * un TypeError **antes de abrir el socket**; el mensaje no se parecía a un
+   * error de red, así que caía en el último `return` y salía `NO_DELEGADO` con
+   * fecha de verificación. El informe declaró los cuatro servicios no delegados
+   * sin haber preguntado nada, y contradijo un ticket real que está anotado con
+   * fecha en `soap/wsaa.ts`.
+   */
+  it('una excepción que nunca llegó a WSAA da NO_VERIFICABLE, no NO_DELEGADO', () => {
+    const resultado = clasificarIntento(
+      intento({
+        ok: false,
+        respondioElOrganismo: false,
+        respuesta: "Cannot read properties of undefined (reading 'getTime')",
+      }),
+      AHORA,
+    );
+
+    expect(resultado.estado).toBe('NO_VERIFICABLE');
+    expect(resultado.verificadoEl).toBeNull();
+    expect(resultado.detalle).toMatch(/antes de llegar a WSAA/);
+  });
+
+  it('y por lo tanto no se puede escribir: no queda como negativa en la tabla', () => {
+    const resultado = clasificarIntento(
+      intento({ ok: false, respondioElOrganismo: false, respuesta: 'TypeError' }),
+      AHORA,
+    );
+
+    expect(esPersistible(resultado.estado)).toBe(false);
+  });
+
+  it('afirmar requiere que el organismo haya contestado', () => {
+    // El mismo intento, con lo único que cambia siendo si hubo respuesta.
+    const sinRespuesta = clasificarIntento(
+      intento({ ok: false, respuesta: 'ns1:cms.bad', respondioElOrganismo: false }),
+      AHORA,
+    );
+    const conRespuesta = clasificarIntento(
+      intento({ ok: false, respuesta: 'ns1:cms.bad', respondioElOrganismo: true }),
+      AHORA,
+    );
+
+    expect(sinRespuesta.estado).toBe('NO_VERIFICABLE');
+    expect(conRespuesta.estado).toBe('NO_DELEGADO');
+  });
+});
+
+describe('el rechazo que confirma la habilitación', () => {
+  /**
+   * WSAA entrega un solo ticket por CUIT y servicio, y no emite otro mientras el
+   * primero viva. Correr el relevamiento dos veces seguidas devuelve
+   * `coe.alreadyAuthenticated` — y leerlo como negativa es exactamente al revés
+   * de lo que pasó: para que exista ese ticket, el servicio tuvo que estar
+   * delegado.
+   */
+  it('coe.alreadyAuthenticated es HABILITADO, no NO_DELEGADO', () => {
+    const resultado = clasificarIntento(
+      intento({
+        ok: false,
+        respondioElOrganismo: true,
+        codigoDeFalla: 'ns1:coe.alreadyAuthenticated',
+        respuesta: 'WSAA rechazó el login [ns1:coe.alreadyAuthenticated]',
+      }),
+      AHORA,
+    );
+
+    expect(resultado.estado).toBe('HABILITADO');
+    expect(resultado.verificadoEl).toBe(AHORA);
+    expect(resultado.detalle).toMatch(/ya hay un ticket vivo/);
+  });
+
+  it('el prefijo de namespace lo elige el servidor y no cambia la lectura', () => {
+    // `ns1:` puede ser otro mañana; lo que identifica al código es el final.
+    for (const code of ['coe.alreadyAuthenticated', 'ns1:coe.alreadyAuthenticated']) {
+      expect(
+        clasificarIntento(
+          intento({ ok: false, respondioElOrganismo: true, codigoDeFalla: code }),
+          AHORA,
+        ).estado,
+      ).toBe('HABILITADO');
+    }
+  });
+
+  it('coe.notAuthorized sigue siendo NO_DELEGADO: ese sí es la negativa', () => {
+    const resultado = clasificarIntento(
+      intento({
+        ok: false,
+        respondioElOrganismo: true,
+        codigoDeFalla: 'ns1:coe.notAuthorized',
+      }),
+      AHORA,
+    );
+
+    expect(resultado.estado).toBe('NO_DELEGADO');
+  });
+});
 
 describe('una caída del organismo no se registra como falta de habilitación', () => {
   it('un fallo de transporte da NO_VERIFICABLE, sin fecha', () => {

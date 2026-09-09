@@ -46,6 +46,7 @@ const { endpointsFor, SERVICE_NAMES } = await import('../packages/arca/dist/envi
 const { SoapArcaClient } = await import('../packages/arca/dist/soap/soap-client.js');
 const { WsaaAuthenticator, loginConCache } = await import('../packages/arca/dist/soap/wsaa.js');
 const { TicketCacheFs } = await import('../packages/arca/dist/ticket-cache-fs.js');
+const { certificadoDesdePem } = await import('../packages/arca/dist/credentials.js');
 const { contarDeDondeSalio, directorioDeTickets } = await import('./cache-de-tickets.mjs');
 
 const endpoints = endpointsFor(environment);
@@ -92,16 +93,24 @@ if (certPath === undefined || keyPath === undefined || cuit === undefined) {
 
 let certificate;
 try {
-  certificate = {
+  // El vencimiento sale del certificado. Antes decía
+  // `notAfter: new Date(Date.now() + 86_400_000)` —veinticuatro horas
+  // inventadas—, lo que dejaba sin efecto el control de `login`: un certificado
+  // vencido pasaba el chequeo y se iba a estrellar contra WSAA, y ese rechazo se
+  // lee igual que un servicio sin delegar. Un diagnóstico que fabrica uno de sus
+  // datos de entrada diagnostica otra cosa.
+  certificate = certificadoDesdePem({
     companyId: 'check',
     cuit,
     certificatePem: await readFile(certPath, 'utf8'),
     privateKeyPem: await readFile(keyPath, 'utf8'),
-    notAfter: new Date(Date.now() + 86_400_000),
-  };
-  ok('Certificado y clave leídos');
+  });
+  ok(`Certificado y clave leídos (vence ${certificate.notAfter.toISOString().slice(0, 10)})`);
 } catch (error) {
-  fail('No se pudieron leer los archivos', error instanceof Error ? error.message : String(error));
+  fail(
+    'No se pudo leer el certificado',
+    error instanceof Error ? error.message : String(error),
+  );
   process.exit(1);
 }
 

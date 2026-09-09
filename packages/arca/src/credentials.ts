@@ -10,6 +10,7 @@
  * Ver `docs/api/arca-onboarding.md` para el trámite.
  */
 
+import forge from 'node-forge';
 import type { ServiceName } from './environment.js';
 
 /**
@@ -101,4 +102,77 @@ export class AllEnabledCapabilityStore implements CapabilityStore {
   async isEnabled(): Promise<boolean> {
     return true;
   }
+}
+
+/**
+ * Arma un `CompanyCertificate` leyendo del PEM lo que el PEM ya dice.
+ *
+ * Existe por un error que costó una afirmación falsa sobre el organismo.
+ * `scripts/arca-capabilities.mjs` construía el certificado a mano:
+ *
+ *     const certificate = { cuit, environment, certificatePem, privateKeyPem };
+ *
+ * Le faltaba `notAfter`. La primera línea de `WsaaAuthenticator.login` es
+ * `certificate.notAfter.getTime()`, así que reventaba con un TypeError **antes
+ * de abrir el socket** — y el `catch` de arriba clasificaba ese error como
+ * «WSAA rechazó el servicio: el contribuyente tiene que delegarlo». El informe
+ * decía `NO_DELEGADO` de los cuatro servicios sin haberle preguntado nada a
+ * ARCA, y decía `wsfe` no delegado cuando la cabecera de `soap/wsaa.ts` tiene
+ * anotado el día que `wsfe` devolvió un TA real.
+ *
+ * El script era `.mjs`, así que `tsc` nunca miró ese objeto. La corrección de
+ * fondo no es agregarle el campo que falta: es que **no haya un objeto que
+ * armar a mano**. La fecha de vencimiento no es un dato que el que llama tenga
+ * que saber — está adentro del certificado, firmada.
+ *
+ * @throws si el PEM no parsea, o si el CUIT que se pide no es el del
+ * certificado: firmar un TRA con el certificado de otro contribuyente produce
+ * un rechazo de WSAA que se lee igual que una delegación faltante, y es otra
+ * cosa.
+ */
+export function certificadoDesdePem(datos: {
+  readonly companyId: string;
+  readonly cuit: string;
+  readonly certificatePem: string;
+  readonly privateKeyPem: string;
+}): CompanyCertificate {
+  let cert: forge.pki.Certificate;
+  try {
+    cert = forge.pki.certificateFromPem(datos.certificatePem);
+  } catch (error) {
+    const motivo = error instanceof Error ? error.message : String(error);
+    throw new Error(`El certificado de ${datos.companyId} no es un X.509 en PEM válido: ${motivo}`);
+  }
+
+  const delCertificado = cuitDelSujeto(cert);
+  if (delCertificado !== null && delCertificado !== datos.cuit) {
+    throw new Error(
+      `El certificado es del CUIT ${delCertificado} y se pidió operar como ${datos.cuit}. ` +
+        'Firmar un TRA con el certificado de otro contribuyente lo rechaza WSAA, y ese ' +
+        'rechazo se lee igual que un servicio sin delegar.',
+    );
+  }
+
+  return {
+    companyId: datos.companyId,
+    cuit: datos.cuit,
+    certificatePem: datos.certificatePem,
+    privateKeyPem: datos.privateKeyPem,
+    notAfter: cert.validity.notAfter,
+  };
+}
+
+/**
+ * El CUIT que ARCA pone en el sujeto del certificado, como `serialNumber`.
+ *
+ * Devuelve `null` —no una cadena vacía ni el CUIT pedido— cuando el atributo no
+ * está: significa «no se puede afirmar de quién es este certificado», y con eso
+ * no se rechaza nada. Un certificado emitido por otra autoridad puede no traerlo.
+ */
+function cuitDelSujeto(cert: forge.pki.Certificate): string | null {
+  const atributo = cert.subject.getField({ name: 'serialNumber' }) as { value?: unknown } | null;
+  const valor = typeof atributo?.value === 'string' ? atributo.value : null;
+  if (valor === null) return null;
+  const numero = /(\d{11})/.exec(valor);
+  return numero?.[1] ?? null;
 }
