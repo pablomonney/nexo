@@ -257,6 +257,80 @@ suite('S-2 — autenticación y segundo factor', () => {
     expect(allowed.statusCode).toBe(200);
   });
 
+  /**
+   * El caso que la auditoría del 2026-09-09 encontró abriendo la consola.
+   *
+   * `decryptSecret` tira cuando el secreto guardado no abre con la clave que
+   * hay: después de rotar `MFA_ENCRYPTION_KEY`, con la fila corrupta, o —fuera
+   * de producción— en cada reinicio, porque la clave es efímera a propósito.
+   *
+   * Salía como 500 sin manejar, y lo grave no era el estado: la excepción
+   * cortaba antes de llegar al código de recuperación, que existe **exactamente**
+   * para cuando no se puede generar un TOTP. Quedaba inalcanzable justo en el
+   * caso que vino a cubrir, y alguien con la clave rotada no tenía forma de
+   * entrar.
+   */
+  it('si el secreto guardado no se puede descifrar, el código de recuperación sigue sirviendo', async () => {
+    const email = `clave-rotada-${stamp}@estudio.test`;
+    const { hash: argonHash } = await import('@node-rs/argon2');
+    await raw.query('INSERT INTO users (email, full_name, password_hash) VALUES ($1, $2, $3)', [
+      email,
+      'Clave rotada',
+      await argonHash(PASSWORD, {
+        algorithm: 2,
+        memoryCost: 19_456,
+        timeCost: 2,
+        parallelism: 1,
+      }),
+    ]);
+
+    const token = (await login(email)).json<{ token: string }>().token;
+    const setup = await app.inject({
+      method: 'POST',
+      url: '/auth/mfa/setup',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const { secret, recoveryCodes } = setup.json<{ secret: string; recoveryCodes: string[] }>();
+    await app.inject({
+      method: 'POST',
+      url: '/auth/mfa/confirm',
+      payload: { code: totp(secret, Date.now()) },
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    // Se simula la clave rotada dejando el ciphertext con el formato correcto
+    // y contenido que no abre. No hace falta tocar la configuración del proceso:
+    // lo que se prueba es qué pasa cuando el dato no se puede descifrar.
+    await raw.query(
+      `UPDATE users SET mfa_secret_encrypted = 'v1.AAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAA.AAAAAAAA'
+        WHERE email = $1`,
+      [email],
+    );
+
+    const sesion = (await login(email)).json<{ token: string }>().token;
+
+    // Un TOTP ya no puede andar —el secreto no se puede leer— y eso es 401, no 500.
+    const conTotp = await app.inject({
+      method: 'POST',
+      url: '/auth/mfa/verify',
+      payload: { code: totp(secret, Date.now()) },
+      headers: { authorization: `Bearer ${sesion}` },
+    });
+    expect(conTotp.statusCode, conTotp.body).toBe(401);
+
+    // Y la salida de emergencia sigue abierta, que es lo que importa.
+    const conRecuperacion = await app.inject({
+      method: 'POST',
+      url: '/auth/mfa/verify',
+      payload: { code: recoveryCodes[0] },
+      headers: { authorization: `Bearer ${sesion}` },
+    });
+    expect(
+      conRecuperacion.statusCode,
+      'con el secreto ilegible, el código de recuperación es la única forma de entrar',
+    ).toBe(200);
+  });
+
   it('un código de recuperación sirve una sola vez', async () => {
     const email = `recovery-${stamp}@estudio.test`;
     const { hash: argonHash } = await import('@node-rs/argon2');

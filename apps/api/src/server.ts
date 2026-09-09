@@ -258,6 +258,27 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
       });
     }
 
+    /**
+     * Los errores que Fastify genera **antes** de llegar al handler —cuerpo
+     * vacío con `content-type: application/json`, JSON mal formado, cuerpo
+     * demasiado grande— traen su propio `statusCode` en el rango 4xx. Se
+     * contestaban 500 y se anotaban como «error no controlado».
+     *
+     * Importa por dos motivos, y ninguno es cosmético. Al cliente se le decía
+     * que el problema era del servidor cuando el pedido estaba mal armado, así
+     * que no tenía nada que corregir. Y al operador se le llenaba el log de
+     * errores 50 con pedidos malformados: la tasa de 500 es lo que se mira para
+     * saber si el sistema está sano, y un cliente roto la subía sola.
+     */
+    const declarado = (error as { statusCode?: number }).statusCode;
+    if (typeof declarado === 'number' && declarado >= 400 && declarado < 500) {
+      request.log.warn({ err: error }, 'pedido rechazado antes del handler');
+      return reply.code(declarado).send({
+        error: (error as { code?: string }).code ?? 'BAD_REQUEST',
+        message: error.message,
+      });
+    }
+
     // Nunca se filtra el detalle interno al cliente: un mensaje de PostgreSQL
     // puede revelar nombres de tablas, constraints y hasta datos de la fila.
     request.log.error({ err: error }, 'error no controlado');

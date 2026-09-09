@@ -395,27 +395,6 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   </div>
   <button id="b-login">Ingresar</button>
 
-  <div id="mfa-alta" hidden>
-    <h3>Configurar el segundo factor</h3>
-    <p class="ayuda">Tu rol lo exige, y hasta que esté configurado la API no deja llegar a los
-      datos de ninguna empresa. Se hace una sola vez.</p>
-    <button id="b-mfa-setup" class="sec">Generar el secreto</button>
-    <div id="mfa-secreto" hidden>
-      <p class="ayuda"><strong>Esta es la única vez que estos valores salen del servidor en
-        claro.</strong> Cargá el secreto en tu aplicación de códigos y guardá los de
-        recuperación en otro lado: cada uno sirve una sola vez, y son la forma de entrar si
-        perdés el teléfono.</p>
-      <dl class="kv" id="mfa-kv"></dl>
-      <h4>Códigos de recuperación</h4>
-      <div class="mono" id="mfa-recuperacion"></div>
-      <div class="fila">
-        <div><label>Código de la aplicación (6 dígitos)</label>
-          <input id="mfa-confirmar-codigo" inputmode="numeric" maxlength="6"></div>
-        <div><label>&nbsp;</label><button id="b-mfa-confirmar">Confirmar</button></div>
-      </div>
-    </div>
-    <div id="mfa-alta-msg"></div>
-  </div>
   <div id="login-msg"></div>
 
   <details class="grupo" id="alta"><summary>No tengo cuenta</summary><div>
@@ -453,36 +432,83 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       justamente cuando el primero pudo haber ido a parar a otro lado.</p>
     <div id="alta-re-msg"></div>
 
-    <h4>Ya confirmé: crear mi empresa</h4>
-    <p class="ayuda">Esto crea el estudio, la empresa, tu rol de administrador y la prueba de
-      14 días, todo junto. Van juntos a propósito: partirlo en cuatro pedidos dejaría a alguien
-      con un estudio y sin empresa si se le corta la conexión en el medio.</p>
-    <p class="ayuda"><strong>No se pide tarjeta.</strong> Al terminar la prueba la suscripción
-      queda suspendida: los datos, la contabilidad y el historial quedan intactos, y el acceso
-      vuelve contratando.</p>
-    <button id="b-planes" class="sec">Ver los planes</button>
-    <div class="tabla"><table id="t-planes"><thead><tr>
-      <th>Plan</th><th>Precio</th><th>Incluye</th><th>Topes</th>
-    </tr></thead><tbody></tbody></table></div>
-    <div class="fila">
-      <div style="flex:1"><label>Nombre del estudio</label><input id="on-estudio" maxlength="200"></div>
-      <div style="flex:1"><label>Razón social</label><input id="on-razon" maxlength="200"></div>
-      <div><label>CUIT (11 dígitos)</label><input id="on-cuit" maxlength="11" inputmode="numeric"></div>
-    </div>
-    <div class="fila">
-      <div><label>Tipo</label><select id="on-tipo">
-        <option>SA</option><option>SRL</option><option>SAS</option>
-        <option>UNIPERSONAL</option><option>ASOCIACION</option><option>COOPERATIVA</option>
-        <option>OTRO</option>
-      </select></div>
-      <div><label>Jurisdicción</label><input id="on-jurisdiccion" value="AR-C" maxlength="10"></div>
-      <div><label>Organismo</label><input id="on-organismo" maxlength="40" placeholder="IGJ"></div>
-      <div><label>Cierre (MM-DD)</label><input id="on-cierre" value="12-31" maxlength="5"></div>
-      <div><label>Plan</label><select id="on-plan"></select></div>
-      <div><label>&nbsp;</label><button id="b-onboarding">Crear y empezar la prueba</button></div>
-    </div>
-    <div id="on-msg"></div>
+    <p class="ayuda">Cuando confirmes, entrá con tu correo y tu contraseña: la pantalla
+      siguiente es la de crear tu empresa.</p>
   </div></details>
+</section>
+
+<!-- ══ Segundo factor ═════════════════════════════════════════════════════
+     Vivía adentro de `v-login`, y por eso servía en un solo camino. El rol que
+     crea el alta de empresa **también** exige segundo factor, así que el recién
+     llegado terminaba su alta contra un 403 crudo que le decía «configuralo en
+     /auth/mfa/setup»: una ruta de la API, en la pantalla, como instrucción.
+
+     Es literalmente el defecto que S-25 encontró el 2026-09-03 —«la consola no
+     tenía dónde configurarlo»— arreglado en el ingreso y recreado en el alta.
+     Una pantalla que hace falta en dos caminos no puede vivir dentro de uno. -->
+<section id="v-mfa" hidden>
+  <h2>Configurar el segundo factor</h2>
+  <p class="ayuda">Tu rol lo exige, y hasta que esté configurado la API no deja llegar a los
+    datos de ninguna empresa. Se hace una sola vez.</p>
+  <button id="b-mfa-setup" class="sec">Generar el secreto</button>
+  <div id="mfa-secreto" hidden>
+    <p class="ayuda"><strong>Esta es la única vez que estos valores salen del servidor en
+      claro.</strong> Cargá el secreto en tu aplicación de códigos y guardá los de
+      recuperación en otro lado: cada uno sirve una sola vez, y son la forma de entrar si
+      perdés el teléfono.</p>
+    <dl class="kv" id="mfa-kv"></dl>
+    <h4>Códigos de recuperación</h4>
+    <div class="mono" id="mfa-recuperacion"></div>
+    <div class="fila">
+      <div><label>Código de la aplicación (6 dígitos)</label>
+        <input id="mfa-confirmar-codigo" inputmode="numeric" maxlength="6"></div>
+      <div><label>&nbsp;</label><button id="b-mfa-confirmar">Confirmar</button></div>
+    </div>
+  </div>
+  <div id="mfa-alta-msg"></div>
+</section>
+
+<!-- ══ Crear mi empresa ═══════════════════════════════════════════════════
+     Vive acá y no dentro de «No tengo cuenta» por una razón que costó cara: el
+     alta de empresa **exige sesión** —crea el estudio a nombre del actor—, así
+     que dentro de la pantalla de ingreso estaba en el único lugar donde no
+     podía funcionar. Sin sesión contestaba 401; con sesión, `ir()` esconde
+     `v-login` y el botón dejaba de existir para el usuario. El endpoint andaba
+     y tenía tests; lo que no había era camino.
+
+     Es la misma forma que ya apareció tres veces en este repositorio: la pieza
+     está, la regla está escrita, y nadie recorrió el trayecto entre las dos.
+     Por eso el control S-33 lo camina entero. -->
+<section id="v-alta-empresa" hidden>
+  <h2>Crear mi empresa</h2>
+  <p class="ayuda">Esto crea el estudio, la empresa, tu rol de administrador y la prueba de
+    14 días, todo junto. Van juntos a propósito: partirlo en cuatro pedidos dejaría a alguien
+    con un estudio y sin empresa si se le corta la conexión en el medio.</p>
+  <p class="ayuda"><strong>No se pide tarjeta.</strong> Al terminar la prueba la suscripción
+    queda suspendida: los datos, la contabilidad y el historial quedan intactos, y el acceso
+    vuelve contratando.</p>
+  <button id="b-planes" class="sec">Ver los planes</button>
+  <div class="tabla"><table id="t-planes"><thead><tr>
+    <th>Plan</th><th>Precio</th><th>Incluye</th><th>Topes</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div class="fila">
+    <div style="flex:1"><label>Nombre del estudio</label><input id="on-estudio" maxlength="200"></div>
+    <div style="flex:1"><label>Razón social</label><input id="on-razon" maxlength="200"></div>
+    <div><label>CUIT (11 dígitos)</label><input id="on-cuit" maxlength="11" inputmode="numeric"></div>
+  </div>
+  <div class="fila">
+    <div><label>Tipo</label><select id="on-tipo">
+      <option>SA</option><option>SRL</option><option>SAS</option>
+      <option>UNIPERSONAL</option><option>ASOCIACION</option><option>COOPERATIVA</option>
+      <option>OTRO</option>
+    </select></div>
+    <div><label>Jurisdicción</label><input id="on-jurisdiccion" value="AR-C" maxlength="10"></div>
+    <div><label>Organismo</label><input id="on-organismo" maxlength="40" placeholder="IGJ"></div>
+    <div><label>Cierre (MM-DD)</label><input id="on-cierre" value="12-31" maxlength="5"></div>
+    <div><label>Plan</label><select id="on-plan"></select></div>
+    <div><label>&nbsp;</label><button id="b-onboarding">Crear y empezar la prueba</button></div>
+  </div>
+  <div id="on-msg"></div>
 </section>
 
 <!-- ══ Empresa ════════════════════════════════════════════════════════════ -->
@@ -3250,7 +3276,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 // ── Estado de la sesión de trabajo ────────────────────────────────────────
 // Nada de esto se persiste: al recargar, la consola vuelve a preguntar.
 const estado = {
-  empresa: null, empresas: [], permisos: [], roles: [],
+  empresa: null, empresas: [], permisos: [], roles: [], fueraDelPlan: [],
   vista: 'login', migas: [],
   documento: null, campos: [], tt: null, operacion: null, asiento: null,
   tercero: null, comercial: null, comercialBorrador: [],
@@ -3341,7 +3367,7 @@ const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
-const VISTAS = ['login','empresa','inicio','inteligencia','bandeja','documentos','propuestas','operaciones',
+const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','bandeja','documentos','propuestas','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
@@ -3356,7 +3382,7 @@ function ir(vista, migas) {
     b.setAttribute('aria-current', String(b.dataset.vista === vista));
   }
   const caja = E('miga');
-  caja.hidden = vista === 'login';
+  caja.hidden = vista === 'login' || vista === 'alta-empresa' || vista === 'mfa';
   const empresa = (estado.empresas.find((c) => c.id === estado.empresa) || {}).legalName;
   const partes = [empresa || 'sin empresa'].concat(migas || []);
   caja.innerHTML = partes.map((p, i) =>
@@ -3484,13 +3510,18 @@ E('b-onboarding').onclick = async () => {
     cierreEjercicio: E('on-cierre').value.trim(),
     plan: E('on-plan').value,
   });
-  decir('on-msg', r);
-  if (r.ok) {
-    E('on-msg').innerHTML +=
-      '<div class="aviso">' + escapar(r.datos.siguiente) +
-      (r.datos.prueba ? ' Tu prueba corre hasta el ' + escapar(r.datos.prueba.hasta) + '.' : '') +
-      '</div>';
-  }
+  if (!r.ok) return decir('on-msg', r);
+
+  // Creada la empresa, el alta termina acá: se recarga la cartera, aparece el
+  // menú y se entra. Dejar a la persona mirando el mismo formulario con un
+  // mensaje de éxito la obligaría a adivinar cuál es el paso siguiente, que es
+  // justo lo que este arreglo vino a sacar.
+  E('on-msg').innerHTML =
+    '<div class="aviso ok"><strong>' + escapar(r.datos.siguiente) + '</strong>' +
+    (r.datos.prueba ? ' Tu prueba corre hasta el ' + escapar(r.datos.prueba.hasta) + '.' : '') +
+    '</div>';
+
+  await continuarSegunCartera('on-msg');
 };
 
 /**
@@ -3534,23 +3565,64 @@ E('b-login').onclick = async () => {
   if (!yo.ok) return decir('login-msg', yo);
   E('quien').textContent = (yo.datos.user && yo.datos.user.email) || '';
 
+  E('b-salir').hidden = false;
+  await continuarSegunCartera('login-msg');
+};
+
+/**
+ * A dónde va alguien que acaba de autenticarse.
+ *
+ * Está en una función porque hay **dos** caminos que llegan hasta acá —entrar y
+ * terminar el alta de la empresa— y cada vez que la decisión se escribió dos
+ * veces, una de las dos se quedó vieja. La primera versión de esto vivía solo
+ * en el ingreso; el alta reprodujo, una por una, las tres paradas que ya
+ * estaban resueltas: el segundo factor sin pantalla, la cartera vacía sin
+ * salida, y el menú completo sobre una sesión que no llega a ningún dato.
+ */
+async function continuarSegunCartera(destinoDelMensaje) {
   const empresas = await api('GET', '/companies');
+
   // Un rol que exige segundo factor no llega a los datos de ninguna empresa
   // hasta configurarlo, y hasta 2026-09-03 la consola no tenía dónde hacerlo:
   // un CONTADOR —el usuario principal de un sistema contable— quedaba afuera
   // con un 403 y ninguna salida. Lo encontró S-25.
   if (!empresas.ok && empresas.datos && empresas.datos.error === 'MFA_SETUP_REQUIRED') {
-    E('mfa-alta').hidden = false;
-    E('login-msg').innerHTML = '<div class="aviso">' + escapar(empresas.datos.message) + '</div>';
+    // No se repite el mensaje del servidor: dice «configuralo en
+    // /auth/mfa/setup», que era la única instrucción posible cuando no había
+    // pantalla. Ahora la pantalla es esta, y mostrar una ruta de la API al lado
+    // del botón que la llama sobra.
+    E('nav').hidden = true;
+    limpiar('mfa-alta-msg');
+    ir('mfa');
     return;
   }
-  if (!empresas.ok) return decir('login-msg', empresas);
+  if (!empresas.ok) return decir(destinoDelMensaje, empresas);
+
   estado.empresas = empresas.datos.companies || [];
   pintarEmpresas();
+
+  // Quien recién se dio de alta no tiene ninguna empresa, y hasta hoy caía en
+  // la lista de empresas —vacía— con los treinta y cuatro botones del menú
+  // puestos. Todos terminaban en 403, y el Panel llegaba a mostrar «Sin
+  // pendientes» en verde con tres 403 atrás: un error contado como buena
+  // noticia. Va derecho a crear su empresa, y el menú aparece cuando hay una.
+  if (estado.empresas.length === 0) {
+    E('nav').hidden = true;
+    await cargarPlanes();
+    ir('alta-empresa');
+    return;
+  }
+
   E('nav').hidden = false;
-  E('b-salir').hidden = false;
+  const primera = estado.empresas[0];
+  if (estado.empresas.length === 1 && primera !== undefined) {
+    // Con una sola empresa, pedirle que la elija de una lista de una es hacerle
+    // dar un paso para confirmar lo único posible.
+    await usarEmpresa(primera.id);
+    return;
+  }
   ir('empresa', ['Empresa']);
-};
+}
 
 /**
  * Alta del segundo factor.
@@ -3571,11 +3643,11 @@ E('b-mfa-setup').onclick = async () => {
 E('b-mfa-confirmar').onclick = async () => {
   const r = await api('POST', '/auth/mfa/confirm', { code: E('mfa-confirmar-codigo').value.trim() });
   if (!r.ok) return decir('mfa-alta-msg', r);
-  E('mfa-alta-msg').innerHTML =
-    '<div class="aviso ok">Segundo factor configurado. Volvé a ingresar con el código.</div>';
+  E('mfa-alta-msg').innerHTML = '<div class="aviso ok">Segundo factor configurado.</div>';
   E('mfa-secreto').hidden = true;
-  E('mfa-alta').hidden = true;
-  E('pass').value = '';
+  // La sesión ya vale: confirmar el segundo factor la habilita, no la reemplaza.
+  // Mandar a reingresar era pedirle a alguien que rehaga lo que acaba de hacer.
+  await continuarSegunCartera('mfa-alta-msg');
 };
 
 /**
@@ -3624,8 +3696,13 @@ function pintarEmpresas() {
   const cuerpo = E('t-empresas').querySelector('tbody');
   cuerpo.innerHTML = '';
   if (estado.empresas.length === 0) {
+    // Un vacío que no ofrece la salida es un callejón. La única acción posible
+    // desde acá es crear la primera empresa, así que está acá.
     E('empresa-msg').innerHTML =
-      '<div class="aviso">No tenés ninguna empresa asignada todavía.</div>';
+      '<div class="aviso">No tenés ninguna empresa asignada todavía. ' +
+      '<span class="clic" id="ir-al-alta">Crear mi empresa</span></div>';
+    const enlace = E('ir-al-alta');
+    if (enlace) enlace.onclick = async () => { await cargarPlanes(); ir('alta-empresa'); };
     return;
   }
   for (const c of estado.empresas) {
@@ -3654,6 +3731,7 @@ async function usarEmpresa(id) {
   if (!c.ok) return decir('empresa-msg', c);
   estado.permisos = c.datos.permissions || [];
   estado.roles = c.datos.roles || [];
+  estado.fueraDelPlan = c.datos.fueraDelPlan || [];
 
   const elegida = estado.empresas.find((x) => x.id === id);
   E('empresa-activa').textContent = elegida ? elegida.legalName + ' · ' + elegida.cuit : '—';
@@ -3682,6 +3760,10 @@ async function usarEmpresa(id) {
 
   ir('inicio', ['Inicio']);
   cargarInicio();
+  // El aviso de la prueba se carga acá y no solo al tocar «Panel»: el momento
+  // en que más importa saber que hay un plazo es el primero, y hasta ahora
+  // recién aparecía si la persona volvía a entrar a Inicio desde el menú.
+  cargarPrueba();
 }
 
 /**
@@ -3709,9 +3791,36 @@ function aplicarPermisosANav() {
     auditoria: 'audit:read', config: 'company:read',
     suscripcion: 'subscription:read',
   };
+  /**
+   * El otro motivo por el que el backend dice que no.
+   *
+   * Esta pantalla filtraba por permiso y no por plan, y las dos cosas terminan
+   * en 403. Medido el 2026-09-09 contra los planes cargados: un cliente de NEXO
+   * Contable —el de entrada— veía los treinta y cuatro botones y **veintitrés de
+   * los cuarenta dominios le contestaban 403**, con el JSON del error en
+   * pantalla. El de Estudio, veintidós.
+   *
+   * Es la misma regla de arriba aplicada a la otra puerta. El dominio es el
+   * primer segmento de la ruta, igual que en `alcanzaElPlan`: la lista de lo
+   * excluido la manda el servidor, así que acá solo hace falta saber a qué
+   * dominio pertenece cada pantalla.
+   */
+  const dominioDe = {
+    inteligencia: 'intelligence', propuestas: 'predictions', analisis: 'analysis',
+    analitica: 'analytics', comercial: 'comercial', comisiones: 'comisiones',
+    crm: 'crm', integraciones: 'integraciones', productos: 'products',
+    precios: 'precios', proyectos: 'proyectos', stock: 'stock',
+    recuentos: 'recuentos', activos: 'activos', sucursales: 'sucursales',
+    caja: 'caja', bancos: 'banks', cheques: 'cheques',
+    solicitudes: 'solicitudes-de-compra', recepciones: 'recepciones',
+    pagos: 'ordenes-de-pago',
+  };
+  const fuera = estado.fueraDelPlan || [];
+
   for (const b of document.querySelectorAll('nav button')) {
     const p = requiere[b.dataset.vista];
-    b.hidden = p !== undefined && !puede(p);
+    const d = dominioDe[b.dataset.vista];
+    b.hidden = (p !== undefined && !puede(p)) || (d !== undefined && fuera.indexOf(d) !== -1);
   }
 
   // Un grupo cuyos botones se escondieron todos queda como un rótulo suelto
@@ -3725,9 +3834,17 @@ function aplicarPermisosANav() {
 // ══ 1 · Inicio ════════════════════════════════════════════════════════════
 async function cargarInicio() {
   const wq = await api('GET', '/work-queue?limite=1');
+  // Una consulta que falló no es cero pendientes. Sin esta guarda, `datos`
+  // venía indefinido, `resumen` quedaba en `{}`, el total daba 0 y la pantalla
+  // decía «Sin pendientes» en verde: la peor lectura posible de un error,
+  // porque tranquiliza. Es la regla del proyecto sobre `null` —«no se puede
+  // afirmar» nunca es cero— aplicada donde se ve.
   const resumen = (wq.datos && wq.datos.resumen) || {};
   const total = Object.keys(resumen).reduce((a, k) => a + resumen[k], 0);
-  E('inicio-resumen').innerHTML = total === 0
+  E('inicio-resumen').innerHTML = !wq.ok
+    ? '<div class="aviso error"><strong>No se pudo consultar lo pendiente</strong> (' +
+      wq.status + '). No quiere decir que no haya nada: quiere decir que no se sabe.</div>'
+    : total === 0
     ? '<div class="aviso ok">Sin pendientes.</div>'
     : '<div class="aviso"><strong>' + total + ' pendientes</strong><br>' +
       Object.keys(resumen).sort().map((k) =>
@@ -3745,13 +3862,23 @@ async function cargarInicio() {
       (p) => p.estado !== 'COMPLETO' && p.estado !== 'NO_APLICA');
     E('inicio-arranque').hidden = faltan.length === 0;
 
+    // El veredicto nombraba los pasos por su código —PLAN_DE_CUENTAS,
+    // EJERCICIO, PERIODO_ABIERTO—, que es lo primero que lee un cliente nuevo.
+    // El título en castellano ya viene en la misma respuesta; no hacía falta
+    // más que usarlo.
+    const tituloDelPaso = {};
+    for (const p of arr.datos.pasos || []) tituloDelPaso[p.paso] = p.titulo;
+    const enCastellano = (arr.datos.bloqueantesPendientes || [])
+      .map((c) => (tituloDelPaso[c] || c).toLowerCase());
+    const enumerar = (xs) => xs.length <= 1 ? (xs[0] || '')
+      : xs.slice(0, -1).join(', ') + ' y ' + xs[xs.length - 1];
+
     E('arranque-veredicto').innerHTML = arr.datos.puedeOperar
       ? '<div class="aviso ok"><strong>NEXO está listo para operar.</strong>' +
         (arr.datos.afectado.length === 0 ? ''
           : ' Todavía hay funcionalidades sin habilitar: ' +
             escapar(arr.datos.afectado.join(', ')) + '.') + '</div>'
-      : '<div class="aviso"><strong>Todavía falta completar ' +
-        escapar(arr.datos.bloqueantesPendientes.join(', ')) +
+      : '<div class="aviso"><strong>Todavía falta ' + escapar(enumerar(enCastellano)) +
         '.</strong> Hasta entonces no se puede registrar nada.</div>';
 
     const cuerpo = E('t-arranque').querySelector('tbody');

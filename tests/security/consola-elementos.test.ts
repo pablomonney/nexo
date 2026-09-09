@@ -103,7 +103,7 @@ describe('S-15 — la consola escribe en el elemento que cree', () => {
    * Y un botón sin sección deja la pantalla en blanco.
    */
   it('cada botón del menú tiene su pantalla, y cada pantalla su lugar en VISTAS', () => {
-    const botones = [...html.matchAll(/data-vista="([a-z]+)"/g)].map((m) => m[1]!);
+    const botones = [...html.matchAll(/data-vista="([a-z-]+)"/g)].map((m) => m[1]!);
     const secciones = idsDelHtml(html)
       .filter((id) => id.startsWith('v-'))
       .map((id) => id.slice(2));
@@ -112,10 +112,22 @@ describe('S-15 — la consola escribe en el elemento que cree', () => {
     const sinPantalla = botones.filter((v) => !secciones.includes(v));
     expect(sinPantalla, 'Botones del menú que no tienen sección').toEqual([]);
 
-    // `login` es la única sin botón: se entra por el flujo de sesión, no por el
-    // menú —que ni siquiera está visible sin sesión—.
-    const sinBoton = secciones.filter((v) => !botones.includes(v) && v !== 'login');
-    expect(sinBoton, 'Pantallas a las que no se llega desde el menú').toEqual([]);
+    // Las tres del arranque no tienen botón, y no pueden tenerlo: el menú ni
+    // siquiera está visible mientras se recorren. Se llega por el flujo de
+    // sesión, y ese recorrido lo camina S-33 entero.
+    const SIN_BOTON: Readonly<Record<string, string>> = {
+      login: 'Se entra por el flujo de sesión; el menú no está visible todavía',
+      mfa: 'Aparece cuando el rol exige segundo factor, antes de llegar a ninguna empresa',
+      'alta-empresa': 'Es el paso de quien todavía no tiene ninguna empresa que elegir',
+    };
+    const sinBoton = secciones.filter(
+      (v) => !botones.includes(v) && SIN_BOTON[v] === undefined,
+    );
+    expect(
+      sinBoton,
+      'Pantallas a las que no se llega desde el menú. Si es una parada del arranque, ' +
+        'declarala arriba con el motivo; si no, le falta el botón',
+    ).toEqual([]);
 
     const fueraDeVistas = secciones.filter((v) => !vistas.includes(v));
     expect(
@@ -165,7 +177,7 @@ function listaDeVistas(html: string): string[] {
   const desde = html.indexOf('const VISTAS = [');
   const hasta = html.indexOf('];', desde);
   if (desde === -1 || hasta === -1) return [];
-  return [...html.slice(desde, hasta).matchAll(/'([a-z]+)'/g)].map((m) => m[1]!);
+  return [...html.slice(desde, hasta).matchAll(/'([a-z-]+)'/g)].map((m) => m[1]!);
 }
 
 /** Los `id` que el código pide, por `E('...')` o por `getElementById('...')`. */

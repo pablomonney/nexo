@@ -16,6 +16,7 @@ import {
   ROLES_REQUIRING_MFA,
 } from '../http/context.js';
 import { conflict, forbidden, HttpError } from '../http/errors.js';
+import { funcionalidadesDe, mapaDeDominios } from '../planes/alcance.js';
 
 const ENTITY_TYPES = [
   'SA', 'SA_299', 'SRL', 'SAS', 'SOCIEDAD_SIMPLE', 'ASOC_CIVIL', 'FUNDACION',
@@ -279,7 +280,26 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  /** Datos de la empresa activa. El id sale de la cabecera, nunca del cuerpo. */
+  /**
+   * Datos de la empresa activa. El id sale de la cabecera, nunca del cuerpo.
+   *
+   * Devuelve además **qué dominios quedan fuera del plan contratado**, y eso no
+   * es un adorno: la consola escondía los módulos por permiso y no por plan, así
+   * que un cliente de NEXO Contable —el plan de entrada— veía los treinta y
+   * cuatro botones del menú y **veintitrés de los cuarenta dominios le
+   * contestaban 403**. La pantalla mostraba el JSON del error crudo.
+   *
+   * La consola ya tenía escrita la regla: «un botón que termina en 403 le enseña
+   * a la persona que el sistema falla al azar. Si el backend va a decir que no,
+   * la consola no pregunta». Estaba aplicada a los permisos y no al plan, que es
+   * el otro motivo por el que el backend dice que no.
+   *
+   * Se calcula acá, con la misma función que usa la puerta —`alcanzaElPlan`—,
+   * para que no haya dos formas de contestar la misma pregunta y se puedan
+   * separar. Y se manda la lista de lo excluido, no la de lo incluido: un
+   * dominio que ninguna funcionalidad cubre no lo puede excluir ningún plan, y
+   * mandar lo incluido obligaría a la consola a conocer esa distinción.
+   */
   app.get('/companies/current', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'company:read');
@@ -300,11 +320,25 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
             ORDER BY valid_from DESC LIMIT 1`,
           [tenant.companyId],
         );
+        const mapa = await mapaDeDominios(tx);
+        const contratadas = await funcionalidadesDe(tx, tenant.companyId);
+        // `null` es «no hay suscripción con plan», que la puerta deja pasar
+        // entera. Devolver todos los dominios como excluidos ahí dejaría la
+        // consola sin menú por no tener nada que decir.
+        const fueraDelPlan =
+          contratadas === null
+            ? []
+            : [...mapa.entries()]
+                .filter(([, feature]) => !contratadas.has(feature))
+                .map(([dominio]) => dominio)
+                .sort();
+
         return {
           company: company.rows[0] ?? null,
           reportingFramework: framework.rows[0] ?? null,
           roles: [...tenant.roles],
           permissions: [...tenant.permissions].sort(),
+          fueraDelPlan,
         };
       },
     );

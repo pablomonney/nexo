@@ -29,6 +29,39 @@ const loginSchema = z.object({
 
 const codeSchema = z.object({ code: z.string().min(6).max(14) });
 
+/**
+ * El secreto TOTP guardado, o `null` si no se puede abrir.
+ *
+ * `decryptSecret` tira cuando el ciphertext no abre con la clave que hay:
+ * después de rotar `MFA_ENCRYPTION_KEY`, con la fila corrupta, o —fuera de
+ * producción— en cada reinicio, porque ahí la clave es efímera a propósito.
+ *
+ * Eso salía como **500 sin manejar**, y lo peor no era el código de estado: la
+ * excepción cortaba el flujo antes del `UPDATE mfa_recovery_codes` de abajo,
+ * así que el código de recuperación —que existe exactamente para cuando no se
+ * puede generar un TOTP— quedaba inalcanzable justo en el caso que vino a
+ * cubrir. Alguien con su clave rotada no tenía ninguna forma de entrar.
+ *
+ * Se devuelve `null` y se sigue. Al que llama se le contesta lo mismo que a un
+ * código equivocado —no hay oráculo que distinga «clave mal» de «código mal»—,
+ * pero en el log queda la causa real, que es una emergencia de operación y no
+ * un intento fallido más. Es el mismo criterio que ya tenía `verifyPassword`
+ * para un hash corrupto, aplicado donde faltaba.
+ */
+function secretoTotpDe(cifrado: string, log: { warn: (o: object, m: string) => void }): string | null {
+  try {
+    return decryptSecret(cifrado);
+  } catch (error) {
+    log.warn(
+      { err: error instanceof Error ? error.message : String(error) },
+      'no se pudo descifrar el secreto TOTP: la clave de cifrado no corresponde al dato ' +
+        'guardado. Fuera de producción es esperable tras reiniciar (clave efímera); en ' +
+        'producción significa que MFA_ENCRYPTION_KEY cambió y hay que restaurarla',
+    );
+    return null;
+  }
+}
+
 interface UserRow {
   id: string;
   email: string;
@@ -179,7 +212,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const encrypted = found.rows[0]?.mfa_secret_encrypted;
       if (encrypted == null) return false;
 
-      if (verifyTotp(decryptSecret(encrypted), code, Date.now())) {
+      const secreto = secretoTotpDe(encrypted, request.log);
+      if (secreto !== null && verifyTotp(secreto, code, Date.now())) {
         await tx.query('UPDATE sessions SET mfa_satisfied = true WHERE id = $1', [session.id]);
         return true;
       }
@@ -246,7 +280,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       );
       const encrypted = found.rows[0]?.mfa_secret_encrypted;
       if (encrypted == null) return false;
-      if (!verifyTotp(decryptSecret(encrypted), code, Date.now())) return false;
+      const secreto = secretoTotpDe(encrypted, request.log);
+      if (secreto === null) return false;
+      if (!verifyTotp(secreto, code, Date.now())) return false;
 
       await tx.query(
         'UPDATE users SET mfa_enabled = true, mfa_confirmed_at = now() WHERE id = $1',
