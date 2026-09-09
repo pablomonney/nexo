@@ -727,7 +727,15 @@ suite('Fronteras del MVP', () => {
         importes,
         'hay un importe escrito en la página pública: tiene que salir de /planes',
       ).toEqual([]);
-      expect(html).toContain("fetch('/planes'");
+
+      // De dónde salen los precios es configurable desde el 2026-09-09, para
+      // poder publicar la landing en un hosting estático leyendo una copia
+      // congelada (`scripts/construir-landing.mjs`). Lo que no cambia es que
+      // **servida por la API, los precios los da la API**: por eso se comprueba
+      // el valor de la cabecera y el respaldo del `fetch`, y no un literal que
+      // se rompía con solo hacer configurable el endpoint.
+      expect(html).toContain('<meta name="nexo-planes" content="/planes">');
+      expect(html).toMatch(/fetch\(\s*ajuste\('nexo-planes'\)\s*\|\|\s*'\/planes'/u);
     });
 
     it('el catálogo de planes se sirve sin sesión y sin datos de ninguna empresa', async () => {

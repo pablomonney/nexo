@@ -32,6 +32,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NEXO — gestión y contabilidad para empresas argentinas</title>
 <meta name="description" content="NEXO integra la operación, la contabilidad y el análisis de una empresa en un solo sistema. Prueba de 14 días sin tarjeta.">
+
+<!--
+  Cómo se está sirviendo esta página. Lo lee el script del final.
+
+  `app` — la sirve la API: los planes salen de `GET /planes` en vivo y los
+          botones llevan a la consola, que existe.
+  `presentacion` — la sirve un hosting estático, sin API detrás. Los planes
+          salen de una copia hecha en el momento del despliegue y los botones
+          **no prometen una prueba que no se puede empezar**.
+
+  `nexo-planes` es de dónde salen los precios y `nexo-contacto` a dónde va el
+  botón cuando no hay consola. Los tres los reescribe `scripts/construir-landing.mjs`
+  al armar el despliegue estático; en el repositorio quedan siempre en el valor
+  del modo `app`, que es el que corre en desarrollo.
+-->
+<meta name="nexo-modo" content="app">
+<meta name="nexo-planes" content="/planes">
+<meta name="nexo-contacto" content="">
+<meta name="nexo-precios-al" content="">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    La página pública usa el mismo sistema de diseño que la consola, con una
@@ -129,6 +148,19 @@ h1 {
 .acciones { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: center; }
 .fina { font-size: .9rem; color: var(--tinta3); }
 
+/* El aviso de que esto es una presentación y no el producto abierto.
+   Va con el color de «prestá atención», no con el de error: no está roto,
+   está cerrado. */
+.presentacion {
+  margin-top: var(--e5);
+  padding: var(--e3) var(--e4);
+  background: var(--ojo-bg);
+  border: 1px solid var(--ojo);
+  border-radius: var(--r2);
+  color: var(--ojo);
+  font-size: .92rem;
+}
+
 section { padding: var(--e7) 0; border-top: 1px solid var(--linea); }
 h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); letter-spacing: -0.022em; margin: 0 0 var(--e2); }
 h3 { font-size: 1rem; margin: 0 0 var(--e1); }
@@ -196,8 +228,16 @@ ul.limpia li { margin-bottom: var(--e1); }
       </svg>
       <span class="tag">gestión y contabilidad</span>
     </div>
-    <a class="btn sec" href="/consola">Entrar</a>
+    <a class="btn sec" href="/consola" data-cta="entrar">Entrar</a>
   </header>
+
+  <!-- Solo en modo `presentacion`. Decirlo arriba y no en letra chica: quien
+       llega tiene que saber en el primer segundo que todavía no puede entrar,
+       antes de buscar el botón que no está. -->
+  <div id="aviso-presentacion" class="presentacion" hidden>
+    Todavía no abrimos el alta al público. Esta página cuenta qué hace NEXO y
+    cuánto cuesta; el acceso se habilita cuando esté listo.
+  </div>
 
   <div class="hero">
     <h1>Los datos de tu empresa, convertidos en información para decidir.</h1>
@@ -207,7 +247,7 @@ ul.limpia li { margin-bottom: var(--e1); }
       lados: no hay que volver a escribirlo en una planilla.
     </p>
     <div class="acciones">
-      <a class="btn" href="/consola">Probar 14 días</a>
+      <a class="btn" href="/consola" data-cta="prueba">Probar 14 días</a>
       <span class="fina">Sin tarjeta. Al terminar la prueba no se borra nada.</span>
     </div>
   </div>
@@ -352,7 +392,7 @@ ul.limpia li { margin-bottom: var(--e1); }
   <footer>
     <p>
       NEXO — sistema de gestión y contabilidad para empresas argentinas.
-      <a href="/consola">Entrar</a>
+      <a href="/consola" data-cta="entrar">Entrar</a>
     </p>
     <p class="fina">
       Los precios son netos y no incluyen IVA. Las funcionalidades listadas en «en qué estamos
@@ -362,12 +402,57 @@ ul.limpia li { margin-bottom: var(--e1); }
 </div>
 
 <script>
+/** Lo que declara la cabecera sobre cómo se está sirviendo esta página. */
+const ajuste = (nombre) =>
+  (document.querySelector('meta[name="' + nombre + '"]') || {}).content || '';
+
+/**
+ * Los botones no prometen lo que hoy no se puede cumplir.
+ *
+ * En modo `presentacion` no hay consola detrás: los tres enlaces a `/consola`
+ * darían 404. Un botón que dice «Probar 14 días» y lleva a una página que no
+ * existe es peor que no tener botón — le enseña al que llega que el sistema no
+ * funciona, justo en el primer minuto.
+ *
+ * Con dirección de contacto declarada, el botón invita a escribir. Sin ella se
+ * convierte en texto: **no se inventa una casilla**.
+ */
+(function ajustarBotones() {
+  if (ajuste('nexo-modo') !== 'presentacion') return;
+
+  const contacto = ajuste('nexo-contacto');
+  for (const a of document.querySelectorAll('[data-cta]')) {
+    const esPrueba = a.dataset.cta === 'prueba';
+    if (contacto === '') {
+      // El botón principal se convierte en la explicación; los demás se van.
+      // Dejarlos como texto vacío pondría un hueco en la cabecera donde antes
+      // había algo, que se lee como que falta cargar.
+      if (!esPrueba) { a.remove(); continue; }
+      const texto = document.createElement('span');
+      texto.className = 'fina';
+      texto.textContent = 'Todavía no abrimos el alta al público.';
+      a.replaceWith(texto);
+      continue;
+    }
+    a.setAttribute('href', contacto);
+    a.textContent = esPrueba ? 'Escribinos' : 'Contacto';
+  }
+
+  const aviso = document.getElementById('aviso-presentacion');
+  if (aviso !== null) aviso.hidden = false;
+})();
+
 /**
  * Los planes salen de la API, no del HTML.
  *
  * Escribir el precio acá sería una segunda fuente de verdad sobre el precio, y
  * el día que difiera de la base el cliente vería un número en la página y otro
  * en la factura.
+ *
+ * En modo `presentacion` no hay API a la que preguntar, así que se lee una
+ * copia que `construir-landing.mjs` saca **de la misma base** al armar el
+ * despliegue. Sigue habiendo una sola fuente; lo que cambia es que la copia
+ * tiene fecha, y la fecha se muestra.
  */
 (async function cargarPlanes() {
   const cuerpo = document.getElementById('planes-cuerpo');
@@ -391,7 +476,7 @@ ul.limpia li { margin-bottom: var(--e1); }
   })[recurso] ?? recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
 
   try {
-    const r = await fetch('/planes', { headers: { accept: 'application/json' } });
+    const r = await fetch(ajuste('nexo-planes') || '/planes', { headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error('respuesta ' + r.status);
     const datos = await r.json();
 
@@ -419,9 +504,11 @@ ul.limpia li { margin-bottom: var(--e1); }
       cuerpo.innerHTML =
         '<tr><td colspan="4">Todavía no hay planes publicados. Escribinos y lo vemos.</td></tr>';
     }
+    const alDia = ajuste('nexo-precios-al');
     nota.textContent =
       'Prueba de ' + (datos.prueba ? datos.prueba.dias : 14) +
-      ' días, sin tarjeta. Los topes miden y avisan: no bloquean.';
+      ' días, sin tarjeta. Los topes miden y avisan: no bloquean.' +
+      (alDia === '' ? '' : ' Precios vigentes al ' + alDia + '.');
   } catch (e) {
     // No se muestran precios viejos ni de ejemplo: se dice que no se pudieron
     // cargar. Un precio equivocado en la página es peor que ninguno.
