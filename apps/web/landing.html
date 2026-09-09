@@ -377,6 +377,19 @@ ul.limpia li { margin-bottom: var(--e1); }
     String(t ?? '').replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+  // Un tope dicho como se lo diría una persona. Esta es la página de precios:
+  // el que la lee está decidiendo cuánto pagar, y `comprobantes_mes: 300` no es
+  // una frase. La lista está duplicada con la de la consola a propósito — son
+  // dos páginas sin build ni módulos compartidos, y un archivo común entre las
+  // dos costaría más de lo que ahorra.
+  const nombreDelTope = (recurso, tope) => ({
+    COMPROBANTES_MES: tope + ' comprobantes por mes',
+    DOCUMENTOS_MES: tope + ' documentos por mes',
+    EMPRESAS: tope + (Number(tope) === 1 ? ' empresa' : ' empresas'),
+    INTEGRACIONES: tope + (Number(tope) === 1 ? ' integración' : ' integraciones'),
+    USUARIOS: tope + (Number(tope) === 1 ? ' usuario' : ' usuarios'),
+  })[recurso] ?? recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
+
   try {
     const r = await fetch('/planes', { headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error('respuesta ' + r.status);
@@ -397,7 +410,7 @@ ul.limpia li { margin-bottom: var(--e1); }
           : '<span class="neu">a consultar</span>') + '</td>' +
         '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
         '<td class="fina">' + escapar((p.topes || [])
-          .map((t) => t.recurso.toLowerCase().replace(/_/g, ' ') + ': ' + t.tope)
+          .map((t) => nombreDelTope(t.recurso, t.tope))
           .join(' · ') || 'a convenir') + '</td>';
       cuerpo.appendChild(tr);
     }

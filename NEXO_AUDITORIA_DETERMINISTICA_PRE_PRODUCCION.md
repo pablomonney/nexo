@@ -31,7 +31,7 @@ NEXO está **mejor de lo que decían las auditorías anteriores en el motor, y p
 de lo que decían en el producto**.
 
 El núcleo —contabilidad, aislamiento multiempresa, trazabilidad, facturación—
-resistió el examen adversarial. Los 2.270 tests pasan **sobre una base
+resistió el examen adversarial. Los 2.285 tests pasan **sobre una base
 reconstruida desde cero** —lo que no es un detalle, ver H-8—, el libro cuadra
 contra movimientos reales, la cadena de auditoría detecta una entrada
 adulterada, y no hay una sola tabla con `company_id` sin RLS forzado.
@@ -65,7 +65,7 @@ instalación nueva —es decir, la única que va a existir en producción— no 
 tiene, y ahí la operación fallaba. Detalle en §8.
 
 **Veredicto anticipado (el detalle está en §31): 🟡 CASI.** Lo que falta para
-vender no es motor: es terminar la productización de las pantallas que faltan y tres
+vender no es motor: es terminar tres pantallas y tres
 decisiones de Pablo que no cuestan casi nada. Ver §22: **hoy no hay que pagar
 prácticamente nada.**
 
@@ -104,7 +104,7 @@ con las herramientas del repositorio.
 | Módulos de rutas HTTP | 52 |
 | Registros de endpoint | ~284 |
 | Migraciones SQL | 110 |
-| Suites de integración | 84 |
+| Suites de integración | 86 |
 | Controles de la serie S-* | **33** |
 | Consola (una sola página) | ~10.970 líneas |
 | Pantallas de la consola | **37** (34 con botón + 3 del arranque) |
@@ -115,7 +115,7 @@ con las herramientas del repositorio.
 ```
 typecheck            sin errores
 lint                 sin errores
-lint:arch            0 violaciones (257 módulos, 893 dependencias)
+lint:arch            0 violaciones (258 módulos, 895 dependencias)
 check:no-float       sin hallazgos
 norms:verify         archivo normativo íntegro
 verify:arranque      primer arranque completo sobre base vacía
@@ -138,7 +138,7 @@ dominio más la API y la web.
 
 La separación que sostiene todo lo demás —**la IA no puede alcanzar el motor
 contable** (ADR-001)— está impuesta por `dependency-cruiser`, no por acuerdo:
-257 módulos recorridos, **0 violaciones**. Se verificó ejecutándolo, no leyendo
+258 módulos recorridos, **0 violaciones**. Se verificó ejecutándolo, no leyendo
 la configuración.
 
 Las decisiones que gobiernan el diseño y que se comprobaron vigentes:
@@ -625,19 +625,13 @@ Lo que se corrigió en esta auditoría, ya verificado en pantalla:
 
 Lo que **falta** (§24 lo detalla):
 
-- Las respuestas de la API se muestran como **JSON crudo** en varias pantallas,
-  incluida la de alta. Un error de validación se ve como
-  `400 { "error": "VALIDATION_ERROR", "details": [...] }`.
-- La tabla de planes muestra los topes como `comprobantes_mes: 300 · empresas: 1
-  · integraciones: 1 · usuarios: 3`.
-- El cuerpo del correo de confirmación dice «mandá este código a
-  `/auth/verificar-correo`»: una instrucción de programador en un mensaje para
-  una persona. Importa cuando se contrate el proveedor de correo.
-- Estados vacíos y de carga, pantalla por pantalla.
+- **Estados de carga:** una pantalla que tarda no dice que está trabajando.
+- Los identificadores crudos que quedan en Configuración.
+- El rediseño del panel de inicio.
 
-## Clasificación de las 35 pantallas
+## Clasificación de las 37 pantallas
 
-**Método:** se creó una empresa nueva con plan **Completo** —para que las 35
+**Método:** se creó una empresa nueva con plan **Completo** —para que todas
 fueran alcanzables— y se abrió **cada una**, midiendo en el DOM: errores
 visibles, filas cargadas, estado vacío presente, y texto que llega al cliente.
 
@@ -678,11 +672,11 @@ ejercicio y el marco contable) aunque esté escrito con identificadores.
 | Analítica | 🟢 | — |
 | Señales | 🟢 | — |
 | Auditoría | 🟢 | — |
-| Plan (suscripción) | 🟡 | Los topes se muestran como `comprobantes_mes: 300` |
+| Plan (suscripción) | 🟢 | Topes en castellano hoy |
 | Configuración | 🟡 | Permisos y pasos faltantes con identificadores crudos |
 | Cambiar empresa | 🟢 | Salida al alta agregada hoy |
-| **Ingresar** | 🟡 | Respuestas de la API como JSON crudo |
-| **Crear mi empresa** (nueva) | 🟡 | Errores de validación como JSON crudo |
+| **Ingresar** | 🟢 | Respuestas legibles hoy |
+| **Crear mi empresa** (nueva) | 🟢 | Errores de validación legibles hoy |
 | **Segundo factor** (nueva) | 🟢 | — |
 
 **Nota sobre el conteo:** el menú tiene 34 botones, hay 37 secciones. Las tres
@@ -705,10 +699,48 @@ cuando se recorren. Dos de las tres **son nuevas de esta auditoría** (§11, H-3
   Control en S-15, en las dos direcciones — que no quede ningún texto escapado
   crudo, y que el orden escapar→convertir no se invierta.
 
+- **El volcado de JSON dejó de ser lo primero que se lee.** Una sola función
+  —`decir()`— dibuja todas las respuestas de la API en las 37 pantallas, y
+  volcaba el objeto entero. En la pantalla de crear la empresa, un CUIT con el
+  dígito mal se leía:
+
+  ```
+  400
+  { "error": "VALIDATION_ERROR", "message": "Datos inválidos",
+    "details": [ { "path": "cuit", "message": "El dígito verificador…" } ] }
+  ```
+
+  El mensaje que servía estaba a tres llaves de distancia. Verificado hoy en esa
+  misma pantalla, con el mismo CUIT:
+
+  > **Datos inválidos**
+  > · estudio: Tiene que tener al menos 2 caracteres
+  > · cuit: El dígito verificador del CUIT no cierra
+  > ▸ Ver el detalle técnico
+
+  **No se perdió nada: cambió el orden.** El volcado sigue a un clic, para quien
+  lo necesite y para pegarlo en un reporte. El principio que ya estaba escrito
+  —«los errores de la API explican qué corregir, así que no se traducen a un
+  algo salió mal»— no se tocó: se cumplió mejor.
+
+- **Los errores de validación están en castellano.** Casi todos los esquemas
+  traen su mensaje escrito, pero **el caso que nadie escribió** salía con el
+  texto por defecto de zod: `roles: Required`, en la pantalla, en inglés. Un
+  mapa de errores en un solo lugar lo resuelve para toda la API, y **los
+  mensajes escritos a mano ganan**: eso último tiene control positivo propio,
+  porque una traducción que se llevara puestos los mensajes buenos sería peor
+  que el problema.
+
+- **Los topes de los planes se leen.** Eran `comprobantes_mes: 300 · empresas: 1
+  · integraciones: 1 · usuarios: 3` en la pantalla de precios —la que mira
+  alguien que está por elegir cuánto pagar—. Ahora: **«300 comprobantes por mes
+  · 1 empresa · 1 integración · 3 usuarios»**, con el singular y el plural donde
+  corresponde. Verificado en la página pública y en la consola.
+
 ### Lo que sigue faltando
 
-Está en §24. Lo resumido: **JSON crudo en las respuestas**, topes de plan e
-identificadores en castellano, y el rediseño del panel de inicio.
+Está en §24. Lo resumido: **estados de carga**, los identificadores crudos que
+quedan en Configuración, y el rediseño del panel de inicio.
 
 ---
 
@@ -836,8 +868,8 @@ lento» de «me lo imaginé».
 Al cierre de esta auditoría:
 
 ```
-Test Files   149 passed (149)
-Tests        2.270 passed (2270)
+Test Files   151 passed (151)
+Tests        2.285 passed (2285)
 ```
 
 Controles de la serie S-*: **33** (S-32 y S-33 son nuevos de esta auditoría).
@@ -983,23 +1015,28 @@ Precios: **A CONFIRMAR.** No invento números.
 Todo esto es trabajo mío y **ninguno depende de un pago**:
 
 1. **Terminar de productizar las pantallas.** Están clasificadas (§11) y las
-   🟢 son **31 de 37**. Lo que falta es lo marcado 🟡: estados de carga, y que
-   ninguna muestre JSON crudo.
-2. **Sacar el JSON crudo de la interfaz.** Empezando por el alta, que es la
-   primera pantalla que ve un cliente: un error de validación se ve hoy como
-   `400 { "error": "VALIDATION_ERROR", "details": [...] }`.
-3. **Los topes de plan en castellano**, no `comprobantes_mes: 300`.
-4. **El cuerpo de los correos**, escrito para una persona: hoy dice «mandá este
-   código a `/auth/verificar-correo`».
-5. **Rediseñar el panel de inicio** como entrada real al trabajo del día.
-6. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
-7. **Restaurar un backup en una base vacía** y verificar que la contabilidad
+   🟢 son **34 de 37**. Las tres que quedan: estados de carga —una pantalla que
+   tarda no dice que está trabajando—, los identificadores crudos que quedan en
+   Configuración, y el panel de inicio.
+2. **Rediseñar el panel de inicio** como entrada real al trabajo del día.
+3. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
+4. **Restaurar un backup en una base vacía** y verificar que la contabilidad
    cuadre después. Los scripts existen; la restauración no se probó nunca.
-8. **Seguir abriendo el producto.** Ocho hallazgos, y los cinco más caros
+5. **Seguir abriendo el producto.** Ocho hallazgos, y los cinco más caros
    salieron de abrir pantallas y reconstruir la base, no de leer código.
 
 **Ya hechos durante esta auditoría:** clasificar las 37 pantallas, correr los
-benchmarks, y los ocho hallazgos con sus controles.
+benchmarks, los ocho hallazgos con sus controles, y la primera tanda de
+productización:
+
+| | |
+|---|---|
+| Respuestas de la API | De volcado de JSON a frase, con el detalle plegado |
+| Errores de validación | En castellano, sin pisar los mensajes escritos a mano |
+| Topes de los planes | «300 comprobantes por mes · 1 empresa», no `comprobantes_mes: 300` |
+| Estados vacíos | Cuatro pantallas que eran una tabla con encabezados y nada |
+| Énfasis de la API | Se dibuja como énfasis, no como asteriscos |
+| Textos con rutas de la API | El correo de alta y tres mensajes de error, reescritos para una persona |
 
 ---
 
@@ -1092,7 +1129,8 @@ preferencia para las recomendaciones; periodicidad anual.
 
 Se puede salir a producción cuando **todo** esto sea cierto:
 
-1. Las 35 pantallas están productizadas y ninguna muestra JSON crudo.
+1. Las 37 pantallas están productizadas: **34 lo están hoy**; faltan estados de
+   carga, los identificadores de Configuración y el panel de inicio.
 2. Correo, hosting y pasarela contratados y verificados con un cobro de prueba.
 3. El alta autoservicio corre de punta a punta con correo real. *(La parte
    técnica ya está: S-33.)*
@@ -1114,21 +1152,30 @@ El producto no, y el trabajo que falta es en su enorme mayoría **trabajo que se
 puede hacer sin pagar un solo peso**.
 
 **Lo que cambió hoy:** NEXO tenía un paso cruzado entre empresas que permitía
-borrar contabilidad ajena, un relevamiento fiscal que afirmaba sin preguntar, un
-alta autoservicio que no llegaba al final, y un plan de entrada donde más de la
-mitad de los botones fallaban. Nada de eso lo había visto ninguna auditoría
-anterior. Los cuatro están cerrados, verificados y con control que los detecta si
-vuelven.
+borrar contabilidad ajena; un relevamiento fiscal que afirmaba sin preguntar; un
+alta autoservicio que no llegaba al final; un plan de entrada donde más de la
+mitad de los botones fallaban; y **una operación —ajustar stock— que estaba rota
+en toda instalación nueva mientras la verificación daba verde**. Nada de eso
+figuraba en ninguna auditoría anterior. Los ocho están cerrados, verificados, y
+con un control que los detecta si vuelven — cada uno observado fallando.
 
-**Por qué no es 🟢:** porque no puede serlo mientras las 35 pantallas no estén a
-calidad de producto, y porque el flujo comercial normal todavía necesita un
-proveedor de correo para completarse solo. Las dos condiciones son tuyas, §48.
+**Por qué no es 🟢:** por dos motivos, y los dos son condiciones tuyas del §48.
+Quedan tres pantallas sin llegar a calidad de producto (§11), y **el flujo
+comercial normal todavía necesita un proveedor de correo para completarse solo**.
+La parte técnica de ese flujo ya está y se camina entera en S-33; lo que falta es
+que el correo salga de la bandeja del servidor.
 
 **Por qué no es 🟠 ni 🔴:** porque no hay ningún blocker técnico sin camino
 conocido. Todo lo que falta está identificado, acotado y en manos de alguien.
 
 **La respuesta a tu pregunta —cuánto de lo que falta se puede hacer antes de
-gastar un peso—:** casi todo. Los tres servicios a contratar (correo, hosting,
-pasarela) hacen falta **al final**, para vender. Todo lo demás —las pantallas, la
-productización, el OCR local si se decide, los benchmarks— se hace antes, y es la
-mayor parte del trabajo.
+gastar un peso—:** casi todo, y hoy quedó menos que ayer. Los tres servicios a
+contratar (correo, hosting, pasarela) hacen falta **al final**, para vender. Lo
+que sigue en mi lista —tres pantallas, el panel de inicio, el OCR local si se
+decide, y una restauración de backup probada— no necesita un solo peso.
+
+**Y una cosa que no estaba en la pregunta pero es la más importante que aprendí
+hoy:** los cinco hallazgos más caros no salieron de leer código. Salieron de
+**abrir el producto y de reconstruir la base**. Las once auditorías anteriores
+leyeron; esta ejecutó. Si hay una sola cosa que cambiar en cómo se verifica NEXO
+de acá en adelante, es esa.

@@ -174,8 +174,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     if (outcome.kind === 'pendiente') {
       throw forbidden(
+        // Sin la ruta de la API: el mensaje lo lee alguien que está mirando la
+        // pantalla de ingreso, y ahí el botón se llama «No me llegó».
         'La cuenta existe y todavía no confirmaste tu correo. Buscá el mensaje de ' +
-          'verificación, o pedí uno nuevo desde /auth/reenviar-verificacion.',
+          'verificación, y si no aparece pedí uno nuevo con «No me llegó».',
       );
     }
 
@@ -474,7 +476,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     if (resultado === 'VENCIDO') {
       throw badRequest(
-        'El enlace venció. Pedí uno nuevo desde /auth/reenviar-verificacion — el anterior ' +
+        'El código venció. Pedí uno nuevo con «No me llegó» — el anterior ' +
           'queda invalidado, para no tener dos vías abiertas hacia la misma cuenta.',
       );
     }
@@ -551,10 +553,17 @@ async function emitirVerificacion(
   return encolar(tx, new SinProveedorDeCorreo(), {
     destinatario: email,
     asunto: 'Confirmá tu dirección para entrar a NEXO',
+    // Escrito para la persona que lo recibe, no para quien programó el
+    // endpoint. Decía «mandá este código a /auth/verificar-correo»: una ruta de
+    // la API, como instrucción, a alguien que se acaba de registrar y no sabe
+    // qué es una ruta. Lo encontró la auditoría del 2026-09-09 leyendo la
+    // bandeja de salida.
     cuerpo:
-      'Para activar tu cuenta, mandá este código a /auth/verificar-correo:\n\n' +
+      'Hola,\n\n' +
+      'Te estás dando de alta en NEXO. Para terminar, copiá este código y pegalo ' +
+      'en la pantalla de ingreso, donde dice «Ya tengo el código de confirmación»:\n\n' +
       `${token}\n\n` +
-      `El enlace vence en ${HORAS_DE_VIDA_DEL_ENLACE} horas. Si no fuiste vos quien se ` +
+      `El código vence en ${HORAS_DE_VIDA_DEL_ENLACE} horas. Si no fuiste vos quien se ` +
       'registró, ignorá este mensaje: la cuenta no se activa sola.',
     tipo: 'VERIFICACION_DE_ALTA',
   });

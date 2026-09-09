@@ -140,7 +140,7 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(
           403,
           'MFA_SETUP_REQUIRED',
-          'Tu rol exige segundo factor. Configuralo en /auth/mfa/setup antes de continuar.',
+          'Tu rol exige segundo factor. Hay que configurarlo antes de entrar a los datos de una empresa.',
         );
       }
 

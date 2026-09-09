@@ -227,6 +227,22 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 /* Ni error ni confirmación: algo que pide una decisión humana. */
 .aviso.ojo{background:var(--ojo-bg);border-left-color:var(--ojo);color:var(--ojo)}
 
+/* El volcado de la respuesta, plegado.
+   No se borra: se corre de lugar. La frase que dice qué corregir va primero y
+   esto queda a un clic, para quien lo necesite y para pegarlo en un reporte. */
+.tecnico{margin-top:var(--e2)}
+.tecnico>summary{cursor:pointer;font-size:.8rem;color:inherit;opacity:.75;
+                 list-style:none;user-select:none}
+.tecnico>summary::-webkit-details-marker{display:none}
+.tecnico>summary::before{content:"▸ ";font-size:.75em}
+.tecnico[open]>summary::before{content:"▾ "}
+.tecnico>summary:hover{opacity:1}
+.tecnico>summary:focus-visible{outline:2px solid var(--acento);outline-offset:2px;
+                               border-radius:var(--r1)}
+.tecnico pre{margin:var(--e2) 0 0}
+.aviso ul.limpia{margin:var(--e2) 0 0;padding-left:var(--e4)}
+.aviso ul.limpia li{margin-bottom:2px}
+
 /* ── Estados vacíos ───────────────────────────────────────────────────────
    Una tabla sin filas no dice nada. Un estado vacío dice qué falta y ofrece
    el primer paso, que es la diferencia entre una pantalla rota y una que
@@ -3366,24 +3382,84 @@ async function api(method, url, cuerpo, esForma) {
 }
 
 /**
- * Muestra la respuesta tal cual.
+ * Muestra la respuesta.
  *
- * Los errores de la API explican qué corregir —es una de las cosas que más
- * cuidado tiene— así que se muestran enteros en vez de traducirse a un
- * «algo salió mal».
+ * El principio de siempre y no se toca: **los errores de la API explican qué
+ * corregir** —es una de las cosas que más cuidado tiene— así que no se
+ * traducen a un «algo salió mal».
+ *
+ * Lo que cambió el 2026-09-09 es el envoltorio. Esta función volcaba el JSON
+ * entero, y en la pantalla de crear la empresa —la primera que ve un cliente—
+ * un CUIT con el dígito mal se leía así:
+ *
+ *     400
+ *     { "error": "VALIDATION_ERROR", "message": "Datos inválidos",
+ *       "details": [ { "path": "cuit", "message": "El dígito verificador…" } ] }
+ *
+ * El mensaje que servía estaba adentro, a tres llaves de distancia. Ahora sale
+ * la frase, después los renglones de validación uno por uno, y el volcado queda
+ * plegado en «Ver el detalle técnico»: **no se pierde nada, cambia el orden**.
  */
 function decir(destino, resultado, exito) {
   const caja = E(destino);
   if (!caja) return;
+  const d = resultado.datos;
+
+  // El detalle completo no se pierde: se pliega. Sigue estando a un clic para
+  // quien lo necesite —y para pegarlo en un reporte— sin ser lo primero que
+  // lee alguien que solo quiere saber qué corregir.
+  const tecnico = d === null || d === undefined ? ''
+    : '<details class="tecnico"><summary>Ver el detalle técnico</summary>' +
+      '<pre>' + escapar(JSON.stringify(d, null, 2)) + '</pre></details>';
+
   if (resultado.ok) {
+    // Si la respuesta trae una frase escrita para una persona, esa es la
+    // respuesta. `siguiente` es la del alta: dice qué hacer ahora.
+    const frase = (d && (d.mensaje || d.siguiente)) || '';
     caja.innerHTML = '<div class="aviso ok"><strong>' + escapar(exito || 'Listo') + '</strong>' +
-      (resultado.datos ? '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre>' : '') +
-      '</div>';
-  } else {
-    caja.innerHTML = '<div class="aviso error"><strong>' + resultado.status + '</strong>' +
-      '<pre>' + escapar(JSON.stringify(resultado.datos, null, 2)) + '</pre></div>';
+      (frase ? ' ' + conEnfasis(frase) : '') + tecnico + '</div>';
+    return;
   }
+
+  // Un error de validación trae un renglón por campo. Enumerarlos es lo que
+  // convierte «Datos inválidos» en algo accionable, y es exactamente lo que el
+  // volcado de JSON escondía adentro de una llave.
+  const detalles = (d && Array.isArray(d.details) ? d.details : [])
+    .map((x) => '<li>' + (x.path ? '<span class="mono">' + escapar(x.path) + '</span>: ' : '') +
+      escapar(x.message || '') + '</li>')
+    .join('');
+
+  caja.innerHTML = '<div class="aviso error"><strong>' +
+    escapar((d && d.message) || 'No se pudo completar la operación') + '</strong>' +
+    (detalles ? '<ul class="limpia">' + detalles + '</ul>' : '') +
+    tecnico + '</div>';
 }
+/**
+ * Un tope, dicho como se lo diría una persona.
+ *
+ * La tabla de planes —la que mira alguien que está por elegir cuánto pagar—
+ * mostraba `comprobantes_mes: 300 · empresas: 1 · integraciones: 1 ·
+ * usuarios: 3`. Son los identificadores de `plan_limits`, en monoespaciada, en
+ * la pantalla de precios.
+ *
+ * La traducción vive acá y no en la base a propósito: el identificador es lo que
+ * el código compara, y cambiarlo por una frase legible obligaría a cambiar la
+ * comparación cada vez que alguien mejore la redacción. Un recurso que no esté
+ * en esta lista se muestra con el nombre que tiene, en minúsculas: peor que la
+ * frase, mejor que nada, y no oculta que existe.
+ */
+const NOMBRE_DEL_RECURSO = {
+  COMPROBANTES_MES: (n) => n + ' comprobantes por mes',
+  DOCUMENTOS_MES: (n) => n + ' documentos por mes',
+  EMPRESAS: (n) => n + (Number(n) === 1 ? ' empresa' : ' empresas'),
+  INTEGRACIONES: (n) => n + (Number(n) === 1 ? ' integración' : ' integraciones'),
+  USUARIOS: (n) => n + (Number(n) === 1 ? ' usuario' : ' usuarios'),
+};
+const nombreDelTope = (recurso, tope) => {
+  const f = NOMBRE_DEL_RECURSO[recurso];
+  return f ? f(tope) : recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
+};
+
 const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
@@ -3506,8 +3582,8 @@ async function cargarPlanes() {
           (p.precio.incluyeImpuestos ? '' : ' + IVA') + ' / mes'
         : '<span class="p p-neu">sin precio declarado</span>') + '</td>' +
       '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
-      '<td class="mono">' + escapar((p.topes || [])
-        .map((t) => t.recurso.toLowerCase() + ': ' + t.tope).join(' · ') || 'sin declarar') + '</td>';
+      '<td>' + escapar((p.topes || [])
+        .map((t) => nombreDelTope(t.recurso, t.tope)).join(' · ') || 'sin declarar') + '</td>';
     cuerpo.appendChild(tr);
 
     const o = document.createElement('option');
@@ -10229,9 +10305,9 @@ async function cargarSuscripcion() {
               (x.incluyeImpuestos ? ' (con imp.)' : ' (sin imp.)')).join(' · '))) + '</td>' +
         // Un plan sin topes no es «ilimitado»: es un plan cuyos topes nadie
         // declaró todavía, y decirlo así evita prometer lo que no se acordó.
-        '<td class="mono">' + (p.topes.length === 0
+        '<td>' + (p.topes.length === 0
           ? '<span class="p p-neu">sin declarar</span>'
-          : escapar(p.topes.map((t) => t.recurso + ': ' + t.tope).join(' · '))) + '</td>';
+          : escapar(p.topes.map((t) => nombreDelTope(t.recurso, t.tope)).join(' · '))) + '</td>';
       cuerpo.appendChild(tr);
 
       if (p.status === 'DISPONIBLE') {

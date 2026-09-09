@@ -5,6 +5,7 @@ import { ZodError } from 'zod';
 import { config } from './config.js';
 import { HttpError, tooManyRequests } from './http/errors.js';
 import { attachContext } from './http/context.js';
+import { ponerZodEnCastellano } from './http/zod-en-castellano.js';
 import { contarFallo, puedeIntentar } from './http/limite-de-intentos.js';
 // La comparación en tiempo constante ya existe: duplicarla habría dejado dos
 // implementaciones de lo mismo, y la segunda sin los tests de la primera.
@@ -113,6 +114,11 @@ declare module 'fastify' {
 }
 
 export async function buildServer(options: { logger?: boolean } = {}): Promise<FastifyInstance> {
+  // Antes de registrar una sola ruta: los esquemas se evalúan cuando llega el
+  // pedido, pero el mapa por defecto es global y conviene que esté puesto desde
+  // el principio y en un solo lugar.
+  ponerZodEnCastellano();
+
   const app = Fastify({
     logger:
       options.logger === true
