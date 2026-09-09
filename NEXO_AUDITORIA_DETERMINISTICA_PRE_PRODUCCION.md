@@ -66,9 +66,9 @@ instalación nueva —es decir, la única que va a existir en producción— no 
 tiene, y ahí la operación fallaba. Detalle en §8.
 
 **Veredicto anticipado (el detalle está en §31): 🟡 CASI.** Lo que falta para
-vender no es motor: es terminar dos pantallas y tres
-decisiones de Pablo que no cuestan casi nada. Ver §22: **hoy no hay que pagar
-prácticamente nada.**
+vender ya no es trabajo de producto: son **tres contrataciones** —correo,
+hosting y pasarela— y una decisión sobre el OCR. Ver §22: **de todo lo demás,
+hoy no hay que pagar nada.**
 
 ---
 
@@ -626,7 +626,6 @@ Lo que se corrigió en esta auditoría, ya verificado en pantalla:
 
 Lo que **falta** (§24 lo detalla):
 
-- El rediseño del **panel de inicio**, que sigue siendo una lista de tablas.
 - **Propuestas de IA**, que sin proveedor de modelo no tiene nada que revisar.
 
 ## Clasificación de las 37 pantallas
@@ -641,8 +640,8 @@ ejercicio y el marco contable) aunque esté escrito con identificadores.
 
 | Pantalla | Estado | Qué le falta |
 |---|---|---|
-| Panel (inicio) | 🟡 | Rediseñarlo como entrada al día, no como lista de tablas |
-| Pendientes (bandeja) | 🟢 | — |
+| Panel (inicio) | 🟢 | Rediseñado hoy como entrada al día |
+| Pendientes (bandeja) | 🟢 | Categorías en castellano hoy |
 | Preguntar (inteligencia) | 🟢 | Degrada honesto: «Sin proveedor de modelo» |
 | Comercial | 🟢 | — |
 | Terceros | 🟢 | — |
@@ -765,11 +764,29 @@ identidad, en claro y en oscuro.
 
 # 13. Dashboard
 
-**FUNCIONAL, NO PRODUCTIZADO.** Tres cuentas de hechos, no indicadores
-compuestos. Tras el arreglo de H-4 ya no miente cuando no puede consultar.
+**PRODUCTIZADO HOY.** Era tres tablas una debajo de la otra y una cuenta cruda
+—«2 pendientes BLOQUEADO 2»—, que obligaba a leerlas enteras para saber por
+dónde empezar.
 
-Sigue pendiente lo que ya estaba anotado: rediseñarlo como una entrada real al
-trabajo del día, no como una lista de tablas.
+Ahora contesta tres preguntas en el orden en que se hacen:
+
+1. **«¿Qué tengo que hacer?»** Un titular que distingue lo que *impide
+   registrar* de lo que *espera revisión* —no es lo mismo tener nueve cosas para
+   mirar que una que bloquea el libro—, y una tarjeta por categoría. **Se
+   clickean**: abren la bandeja ya filtrada, que es el paso que antes había que
+   dar a mano.
+2. **«¿Dónde estoy parado?»** El período que contiene la fecha de hoy, arriba y
+   en una frase: *«Estás trabajando en el período 9, abierto hasta el
+   2026-09-30»*. Era la última fila de una tabla de doce. Los doce siguen abajo,
+   plegados, para el día que la pregunta sí sea esa.
+3. **«¿Qué me falta configurar?»** La puesta en marcha, que ya estaba, con el
+   veredicto en castellano.
+
+**Lo que no cambió, porque es la decisión de fondo:** siguen siendo cuentas de
+hechos, no indicadores compuestos. No hay un número de salud ni un puntaje. Cada
+cifra es «cuántas cosas hay de esto», y cada una lleva a donde se resuelven.
+
+Tras el arreglo de H-4 tampoco miente cuando no puede consultar.
 
 ---
 
@@ -1015,14 +1032,13 @@ Precios: **A CONFIRMAR.** No invento números.
 Todo esto es trabajo mío y **ninguno depende de un pago**:
 
 1. **Terminar de productizar las pantallas.** Están clasificadas (§11) y las
-   🟢 son **35 de 37**. Quedan dos: el **panel de inicio**, que hay que rediseñar
-   como entrada al día, y **Propuestas de IA**, que sin proveedor de modelo no
-   tiene nada que revisar (§15).
-2. **Rediseñar el panel de inicio** como entrada real al trabajo del día.
-3. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
-4. **Restaurar un backup en una base vacía** y verificar que la contabilidad
+   🟢 son **36 de 37**. Queda una: **Propuestas de IA**, que sin proveedor de
+   modelo no tiene nada que revisar, y eso depende de una decisión (§26) más
+   que de trabajo.
+2. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
+3. **Restaurar un backup en una base vacía** y verificar que la contabilidad
    cuadre después. Los scripts existen; la restauración no se probó nunca.
-5. **Seguir abriendo el producto.** Nueve hallazgos, y los cinco más caros
+4. **Seguir abriendo el producto.** Nueve hallazgos, y los cinco más caros
    salieron de abrir pantallas y reconstruir la base, no de leer código.
 
 **Ya hechos durante esta auditoría:** clasificar las 37 pantallas, correr los
@@ -1040,6 +1056,7 @@ productización:
 | Estados de carga | Una barra en `api()` —el único punto de contacto— que aparece a los 250 ms y cuenta pedidos en vuelo |
 | Configuración | El rol adelante y los 75 códigos de permiso plegados; lo que falta declarar, en castellano |
 | CUIT repetido | 409 con qué hacer, en vez de «Error interno» (H-9) |
+| Panel de inicio | Rediseñado como entrada al día: un titular, tarjetas que llevan a la bandeja filtrada, y el período de hoy arriba |
 
 ---
 
@@ -1132,8 +1149,8 @@ preferencia para las recomendaciones; periodicidad anual.
 
 Se puede salir a producción cuando **todo** esto sea cierto:
 
-1. Las 37 pantallas están productizadas: **35 lo están hoy**; falta el panel de
-   inicio, y Propuestas de IA depende de una decisión (§26).
+1. Las 37 pantallas están productizadas: **36 lo están hoy**; Propuestas de IA
+   depende de una decisión (§26).
 2. Correo, hosting y pasarela contratados y verificados con un cobro de prueba.
 3. El alta autoservicio corre de punta a punta con correo real. *(La parte
    técnica ya está: S-33.)*
@@ -1162,20 +1179,29 @@ en toda instalación nueva mientras la verificación daba verde**. Nada de eso
 figuraba en ninguna auditoría anterior. Los nueve están cerrados, verificados, y
 con un control que los detecta si vuelven — cada uno observado fallando.
 
-**Por qué no es 🟢:** por dos motivos, y los dos son condiciones tuyas del §48.
-Quedan dos pantallas sin llegar a calidad de producto (§11), y **el flujo
-comercial normal todavía necesita un proveedor de correo para completarse solo**.
-La parte técnica de ese flujo ya está y se camina entera en S-33; lo que falta es
-que el correo salga de la bandeja del servidor.
+**Por qué no es 🟢:** por una sola razón, y es una condición tuya del §48. **El
+flujo comercial normal todavía necesita un proveedor de correo para completarse
+solo.** La parte técnica ya está y se camina entera en S-33 —registro,
+confirmación, ingreso, segundo factor, empresa creada, consola operando, en una
+sesión y sin que nadie toque la base—; lo único que falta es que el mensaje
+salga de la bandeja del servidor.
+
+De las 37 pantallas, 36 están a calidad de producto. La que queda —Propuestas de
+IA— no tiene nada que revisar mientras no haya proveedor de modelo, y eso es una
+decisión (§26), no trabajo pendiente.
 
 **Por qué no es 🟠 ni 🔴:** porque no hay ningún blocker técnico sin camino
 conocido. Todo lo que falta está identificado, acotado y en manos de alguien.
 
 **La respuesta a tu pregunta —cuánto de lo que falta se puede hacer antes de
-gastar un peso—:** casi todo, y hoy quedó menos que ayer. Los tres servicios a
-contratar (correo, hosting, pasarela) hacen falta **al final**, para vender. Lo
-que sigue en mi lista —tres pantallas, el panel de inicio, el OCR local si se
-decide, y una restauración de backup probada— no necesita un solo peso.
+gastar un peso—:** casi todo, y hoy quedó hecho. Los tres servicios a contratar
+(correo, hosting, pasarela) hacen falta **al final**, para vender. Lo que sigue
+en mi lista —el OCR local si se decide, y una restauración de backup probada— no
+necesita un solo peso.
+
+Dicho de la forma más corta que se puede: **el trabajo de producto que se podía
+hacer sin pagar, se hizo. Lo que queda antes de vender son tres facturas y un
+trámite gratis en ARCA.**
 
 **Y una cosa que no estaba en la pregunta pero es la más importante que aprendí
 hoy:** los cinco hallazgos más caros no salieron de leer código. Salieron de

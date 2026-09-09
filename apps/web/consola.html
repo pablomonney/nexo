@@ -235,6 +235,32 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
   #cargando::after{animation:none;width:100%;background:var(--acento);opacity:.6}
 }
 
+/* ── Las tarjetas de Inicio ───────────────────────────────────────────────
+   Un número grande y qué es, nada más. Son botones porque **hacen** algo:
+   abren la bandeja ya filtrada por esa categoría. Que se vea que se pueden
+   apretar no es adorno — es la diferencia entre un tablero y una entrada al
+   trabajo del día.
+
+   `grid` con `auto-fit` y no un número fijo de columnas: hay entre una y siete
+   categorías según la empresa, y ninguna disposición fija se ve bien con las
+   dos puntas. */
+.tarjetas{display:grid;gap:var(--e2);margin:var(--e3) 0;
+          grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.tarjeta{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+         padding:var(--e3);text-align:left;cursor:pointer;
+         background:var(--alto);border:1px solid var(--linea);border-radius:var(--r2);
+         color:var(--tinta2);font:inherit}
+.tarjeta:hover{border-color:var(--acento);background:var(--hund)}
+.tarjeta:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.tarjeta-n{font-size:1.6rem;font-weight:600;line-height:1.1;color:var(--tinta);
+           font-variant-numeric:tabular-nums}
+/* Lo que impide registrar se ve distinto: es la única categoría que no es
+   «algo para hacer» sino «algo que no te deja hacer». */
+.tarjeta-n.urge{color:var(--ojo)}
+.tarjeta-t{font-size:.82rem}
+/* El período en el que cae hoy, dentro de la tabla de los doce. */
+tr.aqui td{background:var(--acento-cl)}
+
 /* ── Avisos ───────────────────────────────────────────────────────────────── */
 .aviso{background:var(--hund);border-left:3px solid var(--linea2);
        padding:var(--e2) var(--e3);margin:var(--e3) 0;
@@ -562,12 +588,25 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 </section>
 
 <!-- ══ Inicio ═════════════════════════════════════════════════════════════ -->
+<!-- ══ Inicio ═════════════════════════════════════════════════════════════
+     La entrada al día de trabajo, no un tablero.
+
+     Era tres tablas una debajo de la otra y una cuenta cruda —«2 pendientes
+     BLOQUEADO 2»—, que obligaba a leerlas enteras para saber por dónde
+     empezar. Ahora contesta tres preguntas en el orden en que se hacen: qué
+     tengo que hacer, dónde estoy parado, y qué me falta configurar.
+
+     Lo que **no** cambió, porque es la decisión de fondo: son cuentas de
+     hechos, no indicadores compuestos. No hay un número de salud ni un puntaje.
+     Cada cifra es «cuántas cosas hay de esto», y cada una lleva a la pantalla
+     donde se resuelven. -->
 <section id="v-inicio" hidden>
   <h2>Inicio</h2>
   <div id="prueba-aviso"></div>
-  <p class="ayuda">Tres cuentas de hechos, no indicadores compuestos: qué requiere
-    atención, en qué período estás parado, y qué vence.</p>
-  <div id="inicio-resumen"></div>
+
+  <div id="inicio-titular"></div>
+  <div id="inicio-resumen" class="tarjetas"></div>
+  <div id="inicio-periodo"></div>
 
   <div id="inicio-arranque" hidden>
     <h3>Puesta en marcha</h3>
@@ -584,10 +623,12 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     </tr></thead><tbody></tbody></table></div>
   </div>
 
-  <h3>Períodos del ejercicio</h3>
-  <div class="tabla"><table id="t-inicio-periodos"><thead><tr>
-    <th>Período</th><th>Desde</th><th>Hasta</th><th>Estado</th>
-  </tr></thead><tbody></tbody></table></div>
+  <details class="grupo" id="inicio-periodos-grupo">
+    <summary>Todos los períodos del ejercicio</summary>
+    <div class="tabla"><table id="t-inicio-periodos"><thead><tr>
+      <th>Período</th><th>Desde</th><th>Hasta</th><th>Estado</th>
+    </tr></thead><tbody></tbody></table></div>
+  </details>
   <div id="inicio-msg"></div>
 </section>
 
@@ -3544,6 +3585,31 @@ const FALTA_EN_CASTELLANO = {
 const faltaEnCastellano = (codigo) =>
   FALTA_EN_CASTELLANO[codigo] ?? codigo.toLowerCase().replace(/_/g, ' ');
 
+/**
+ * Las categorías de la bandeja, dichas y ordenadas.
+ *
+ * El nombre: `REQUIERE_FUENTE_EXTERNA` es preciso y no es una frase. La
+ * pantalla de inicio mostraba estos códigos tal cual, en pastillas.
+ *
+ * El orden: no es alfabético. Es **por lo que urge**, que es la pregunta que
+ * alguien se hace al abrir la pantalla. Lo que impide registrar va primero;
+ * lo que depende de un tercero va último, porque no se destraba solo.
+ */
+const CATEGORIAS_DE_LA_BANDEJA = {
+  BLOQUEADO: { orden: 1, nombre: 'impiden registrar' },
+  REQUIERE_CORRECCION: { orden: 2, nombre: 'para corregir' },
+  REQUIERE_APROBACION: { orden: 3, nombre: 'esperan aprobación' },
+  REQUIERE_REVISION: { orden: 4, nombre: 'para revisar' },
+  REQUIERE_DECLARACION: { orden: 5, nombre: 'hay que declarar' },
+  REQUIERE_EVIDENCIA: { orden: 6, nombre: 'les falta respaldo' },
+  REQUIERE_FUENTE_EXTERNA: { orden: 7, nombre: 'esperan a un tercero' },
+};
+const ORDEN_DE_CATEGORIA = Object.fromEntries(
+  Object.entries(CATEGORIAS_DE_LA_BANDEJA).map(([k, v]) => [k, v.orden]),
+);
+const nombreDeCategoria = (codigo) =>
+  (CATEGORIAS_DE_LA_BANDEJA[codigo] || {}).nombre ?? codigo.toLowerCase().replace(/_/g, ' ');
+
 const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
@@ -4022,14 +4088,54 @@ async function cargarInicio() {
   // afirmar» nunca es cero— aplicada donde se ve.
   const resumen = (wq.datos && wq.datos.resumen) || {};
   const total = Object.keys(resumen).reduce((a, k) => a + resumen[k], 0);
-  E('inicio-resumen').innerHTML = !wq.ok
-    ? '<div class="aviso error"><strong>No se pudo consultar lo pendiente</strong> (' +
-      wq.status + '). No quiere decir que no haya nada: quiere decir que no se sabe.</div>'
-    : total === 0
-    ? '<div class="aviso ok">Sin pendientes.</div>'
-    : '<div class="aviso"><strong>' + total + ' pendientes</strong><br>' +
-      Object.keys(resumen).sort().map((k) =>
-        '<span class="p p-ojo">' + escapar(k) + ' ' + resumen[k] + '</span>').join(' ') + '</div>';
+
+  if (!wq.ok) {
+    E('inicio-titular').innerHTML =
+      '<div class="aviso error"><strong>No se pudo consultar lo pendiente</strong> (' +
+      wq.status + '). No quiere decir que no haya nada: quiere decir que no se sabe.</div>';
+    E('inicio-resumen').innerHTML = '';
+  } else if (total === 0) {
+    E('inicio-titular').innerHTML =
+      '<div class="aviso ok"><strong>No hay nada esperándote.</strong> Todo lo cargado está ' +
+      'resuelto o en su lugar.</div>';
+    E('inicio-resumen').innerHTML = '';
+  } else {
+    // El titular dice de cuánto se trata y, sobre todo, si algo **impide
+    // trabajar**: no es lo mismo tener nueve cosas para revisar que tener una
+    // que bloquea el registro.
+    const bloqueados = resumen.BLOQUEADO || 0;
+    E('inicio-titular').innerHTML =
+      '<div class="' + (bloqueados > 0 ? 'aviso ojo' : 'aviso') + '"><strong>' +
+      (bloqueados > 0
+        ? bloqueados + (bloqueados === 1 ? ' cosa impide' : ' cosas impiden') + ' registrar'
+        : total + (total === 1 ? ' cosa espera' : ' cosas esperan') + ' por vos') +
+      '.</strong> ' +
+      (bloqueados > 0 && total > bloqueados
+        ? 'Y ' + (total - bloqueados) + ' más para revisar cuando se destrabe. '
+        : '') +
+      'Cada número lleva a la pantalla donde se resuelve.</div>';
+
+    // Una tarjeta por categoría, en castellano y ordenadas por lo que más
+    // urge. Se clickean: abren la bandeja ya filtrada, que es el paso que
+    // antes había que dar a mano.
+    E('inicio-resumen').innerHTML = Object.keys(resumen)
+      .sort((a, b) => (ORDEN_DE_CATEGORIA[a] ?? 99) - (ORDEN_DE_CATEGORIA[b] ?? 99))
+      .map((k) =>
+        '<button class="tarjeta" data-categoria="' + escapar(k) + '">' +
+        '<span class="tarjeta-n' + (k === 'BLOQUEADO' ? ' urge' : '') + '">' + resumen[k] +
+        '</span><span class="tarjeta-t">' + escapar(nombreDeCategoria(k)) + '</span></button>')
+      .join('');
+
+    for (const b of E('inicio-resumen').querySelectorAll('.tarjeta')) {
+      b.onclick = () => {
+        E('wq-cat').value = b.dataset.categoria;
+        E('wq-disp').value = '';
+        E('wq-bloq').value = '';
+        ir('bandeja', ['Pendientes', nombreDeCategoria(b.dataset.categoria)]);
+        bandeja();
+      };
+    }
+  }
 
   // La puesta en marcha se muestra mientras falte algo. Una empresa que ya
   // opera con todo lo bloqueante resuelto no la ve: sería tratarla como nueva
@@ -4088,12 +4194,45 @@ async function cargarInicio() {
     }
   }
 
-  if (!puede('period:read')) { limpiar('t-inicio-periodos'); return; }
+  if (!puede('period:read')) {
+    limpiar('t-inicio-periodos');
+    limpiar('inicio-periodo');
+    E('inicio-periodos-grupo').hidden = true;
+    return;
+  }
   const per = await api('GET', '/periods');
+  const periodos = (per.datos && per.datos.periods) || [];
+
+  /**
+   * «Dónde estoy parado» era la última fila de una tabla de doce.
+   *
+   * La pregunta que se hace alguien al entrar no es «cómo están los doce
+   * períodos»: es «¿puedo registrar lo de hoy?». La respuesta es el período que
+   * contiene la fecha de hoy, y ahora está arriba y en una frase. Los doce
+   * siguen abajo, plegados, para el día que la pregunta sí sea esa.
+   */
+  const hoy = new Date().toISOString().slice(0, 10);
+  const actual = periodos.find((p) => p.startDate <= hoy && hoy <= p.endDate);
+
+  E('inicio-periodo').innerHTML = periodos.length === 0
+    ? ''
+    : actual === undefined
+    ? '<div class="aviso ojo"><strong>Hoy no cae en ningún período.</strong> El ejercicio ' +
+      'cargado no cubre esta fecha, así que no se puede registrar nada con fecha de hoy.</div>'
+    : '<div class="' + (actual.status === 'ABIERTO' ? 'aviso ok' : 'aviso ojo') + '">' +
+      (actual.status === 'ABIERTO'
+        ? '<strong>Estás trabajando en el período ' + escapar(actual.number) + '</strong>, ' +
+          'abierto hasta el ' + escapar(actual.endDate) + '.'
+        : '<strong>El período ' + escapar(actual.number) + ' está ' +
+          escapar(actual.status.toLowerCase()) + '.</strong> No se puede registrar con fecha ' +
+          'de hoy hasta que se reabra.') + '</div>';
+
+  E('inicio-periodos-grupo').hidden = periodos.length === 0;
   const cuerpo = E('t-inicio-periodos').querySelector('tbody');
   cuerpo.innerHTML = '';
-  for (const p of ((per.datos && per.datos.periods) || [])) {
+  for (const p of periodos) {
     const tr = document.createElement('tr');
+    if (actual !== undefined && p.number === actual.number) tr.className = 'aqui';
     tr.innerHTML = '<td>' + escapar(p.number) + '</td>' +
       '<td class="mono">' + escapar(p.startDate) + '</td>' +
       '<td class="mono">' + escapar(p.endDate) + '</td>' +
@@ -4338,10 +4477,14 @@ async function bandeja(cursor) {
   limpiar('wq-msg');
 
   const resumen = r.datos.resumen || {};
+  // Mismo vocabulario que Inicio, y el mismo orden por lo que urge: son la
+  // misma cuenta mirada dos veces, y si se nombraran distinto parecerían dos.
   E('wq-resumen').innerHTML = Object.keys(resumen).length === 0
     ? '<div class="aviso ok">Sin pendientes con estos filtros.</div>'
-    : '<div class="aviso">' + Object.keys(resumen).sort().map((k) =>
-        '<span class="p p-ojo">' + escapar(k) + ' ' + resumen[k] + '</span>').join(' ') + '</div>';
+    : '<div class="aviso">' + Object.keys(resumen)
+        .sort((a, b) => (ORDEN_DE_CATEGORIA[a] ?? 99) - (ORDEN_DE_CATEGORIA[b] ?? 99))
+        .map((k) => '<span class="p ' + (k === 'BLOQUEADO' ? 'p-mal' : 'p-ojo') + '">' +
+          resumen[k] + ' ' + escapar(nombreDeCategoria(k)) + '</span>').join(' ') + '</div>';
 
   if (!cursor) E('wq-lista').innerHTML = '';
   // Agrupada por entidad: doscientos comprobantes producen seiscientos ítems, y
