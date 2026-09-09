@@ -42,7 +42,9 @@ import { fileURLToPath } from 'node:url';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
 const ORIGEN = join(RAIZ, 'apps', 'web', 'landing.html');
-const DESTINO = join(RAIZ, 'var', 'landing');
+// El nombre de la carpeta es el nombre del proyecto en el hosting, y por lo
+// tanto parte del URL que se va a mostrar. "landing" no dice de quién es.
+const DESTINO = join(RAIZ, 'var', 'nexo');
 
 try {
   process.loadEnvFile(join(RAIZ, '.env'));
@@ -166,4 +168,4 @@ console.log(
 console.log('\nPara publicarla:');
 console.log(`  cd "${DESTINO}"`);
 console.log('  npx vercel login      # una vez, con tu cuenta');
-console.log('  npx vercel --prod');
+console.log('  npx vercel --prod --yes');
