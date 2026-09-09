@@ -31,16 +31,18 @@ NEXO está **mejor de lo que decían las auditorías anteriores en el motor, y p
 de lo que decían en el producto**.
 
 El núcleo —contabilidad, aislamiento multiempresa, trazabilidad, facturación—
-resistió el examen adversarial. Los 2.267 tests pasan, el libro cuadra contra
-movimientos reales, la cadena de auditoría detecta una entrada adulterada, y no
-hay una sola tabla con `company_id` sin RLS forzado.
+resistió el examen adversarial. Los 2.270 tests pasan **sobre una base
+reconstruida desde cero** —lo que no es un detalle, ver H-8—, el libro cuadra
+contra movimientos reales, la cadena de auditoría detecta una entrada
+adulterada, y no hay una sola tabla con `company_id` sin RLS forzado.
 
 Lo que no resistió fue **el camino del cliente**. Esta auditoría fue la primera
 en abrir el navegador y recorrer el alta de punta a punta como lo haría alguien
 que llega a pagar. Estaba **cortada en tres lugares distintos**, y ningún test lo
 veía porque todos los endpoints funcionaban por separado.
 
-Los siete hallazgos nuevos, ninguno detectado por las once auditorías previas:
+Los ocho hallazgos nuevos. Ninguno figura en las auditorías anteriores de este
+repositorio, y siete de los ocho no los podía ver ningún test que existiera:
 
 | # | Hallazgo | Gravedad | Estado |
 |---|---|---|---|
@@ -51,12 +53,19 @@ Los siete hallazgos nuevos, ninguno detectado por las once auditorías previas:
 | **H-5** | Un cliente del plan de entrada veía **23 de 40 dominios contestando 403** | Bloqueante comercial | Cerrado |
 | **H-6** | Un secreto TOTP ilegible dejaba **inalcanzable el código de recuperación** | Alto | Cerrado |
 | **H-7** | Errores 4xx del framework se contestaban y registraban como **500** | Medio | Cerrado |
+| **H-8** | **Ajustar stock devolvía 500 en toda instalación nueva**, y la verificación daba verde porque corría contra una base arrastrada | **Crítico** | Cerrado (0110, S-20) |
 
 Todos están corregidos, con control automático que los detecta si vuelven, y
 **cada control fue observado fallando** antes de darlo por bueno.
 
+**H-8 merece leerse aparte**, porque no es un defecto del stock: es un defecto
+del método. La verificación completa daba verde contra una base de pruebas
+arrastrada de hace meses que tenía una fila que **ninguna migración crea**. Una
+instalación nueva —es decir, la única que va a existir en producción— no la
+tiene, y ahí la operación fallaba. Detalle en §8.
+
 **Veredicto anticipado (el detalle está en §31): 🟡 CASI.** Lo que falta para
-vender no es motor: es terminar la productización de las 35 pantallas y tres
+vender no es motor: es terminar la productización de las pantallas que faltan y tres
 decisiones de Pablo que no cuestan casi nada. Ver §22: **hoy no hay que pagar
 prácticamente nada.**
 
@@ -71,7 +80,7 @@ con las herramientas del repositorio.
 
 | Objeto | Cantidad |
 |---|---|
-| Migraciones aplicadas | **109** |
+| Migraciones aplicadas | **110** |
 | Tablas | 159 |
 | Vistas | 104 |
 | Índices | 450 |
@@ -85,7 +94,7 @@ con las herramientas del repositorio.
 | Restricciones UNIQUE | 109 |
 | Permisos | 101 |
 | Roles | 6 |
-| Acciones auditadas | 158 |
+| Acciones auditadas | 159 |
 
 ## Código
 
@@ -94,10 +103,11 @@ con las herramientas del repositorio.
 | Archivos TypeScript (sin `dist`) | 228 |
 | Módulos de rutas HTTP | 52 |
 | Registros de endpoint | ~284 |
-| Migraciones SQL | 109 |
+| Migraciones SQL | 110 |
 | Suites de integración | 84 |
 | Controles de la serie S-* | **33** |
-| Consola (una sola página) | 10.932 líneas |
+| Consola (una sola página) | ~10.970 líneas |
+| Pantallas de la consola | **37** (34 con botón + 3 del arranque) |
 | Página pública | 423 líneas |
 
 ## Verificación completa (`npm run verify`)
@@ -313,11 +323,42 @@ protección entra al barrido solo.
 
 # 7. ERP
 
-**Estado: FUNCIONAL e INTEGRADO. La productización es lo que falta.**
+**Estado: FUNCIONAL, INTEGRADO y ACCESIBLE. La productización es lo que falta.**
 
-Los módulos existen, se ejecutan y están cubiertos por 84 suites de integración.
-El detalle pantalla por pantalla está en §11, que es donde vive el trabajo
-pendiente.
+Cada módulo se abrió en el navegador con una empresa nueva (§11) y tiene suite de
+integración propia.
+
+| Módulo | Rutas | Suite de integración | Pantalla |
+|---|---|---|---|
+| **Ventas** | `comercial`, `comprobantes`, `precios` | `ciclo-comercial`, `cadena-de-ventas` | 🟢 |
+| **Compras** | `solicitudes-de-compra`, `recepciones`, `ordenes-de-pago` | `ciclo-compras` | 🟢 |
+| **Stock** | `stock`, `recuentos`, `valuacion` | `stock`, `recuentos` | 🟢 |
+| **Caja** | `caja` | `caja` | 🟢 |
+| **Bancos** | `banks` | `bank-reconciliation`, `conciliacion-por-http` | 🟢 |
+| **Cheques** | `cheques` | `cheques` | 🟢 |
+| **CRM** | `crm` | `crm` | 🟢 |
+| **Proyectos** | `proyectos` | `proyectos` | 🟢 |
+| **Comisiones** | `comisiones` | `comisiones` | 🟢 |
+| **Sucursales** | `sucursales` | (cubierto en analítica) | 🟢 |
+| **Bienes de uso** | `activos` | `bienes-de-uso` | 🟢 |
+| **Reportes** | `books`, `statements`, `analitica`, `exportaciones` | `financial-statements`, `estados-contables`, `exportaciones` | 🟢 |
+
+Lo que se comprobó y vale la pena destacar, porque son las decisiones que
+distinguen un ERP contable de una planilla:
+
+- **La conciliación bancaria se propone y se confirma de a una.** No hay «aceptar
+  todas»: la norma pide intervención humana, y un botón que acepta todo junto es
+  exactamente lo que la norma evita.
+- **La comisión es devengada, no pagada.** Pagarla es un asiento que firma una
+  persona.
+- **La sucursal no se guarda en la factura**: se deriva del punto de venta
+  vigente el día del comprobante. No hay una columna que pueda contradecir al
+  número que ya viaja en el comprobante.
+- **Un asiento aprobado no se edita**: se anula por contraasiento, y el número
+  del anulado queda.
+- **Una orden de pago aprobada no es plata que salió.**
+
+El detalle pantalla por pantalla está en §11.
 
 ---
 
@@ -337,6 +378,57 @@ audit:cadena
 
 La segunda línea de la cadena es la que importa: el verificador **se probó
 detectando una adulteración**, no solo diciendo que todo está bien.
+
+## H-8 — La verificación corría contra una base que producción no puede tener
+
+**NUEVO, y el más grave de los ocho.** `POST /stock-movements/ajuste` contestaba
+**500 en cualquier base recién migrada**. No fallaba solo la bitácora: fallaba el
+ajuste entero, porque la escritura de auditoría corre dentro de la misma
+transacción y la clave foránea contra `audit_actions` la aborta.
+
+La causa es de una línea. `stock.ts` emite
+
+```
+action: datos.origenTipo === 'AJUSTE' ? 'AJUSTAR_STOCK' : 'REGISTRAR_SALIDA_DE_STOCK'
+```
+
+y **`AJUSTAR_STOCK` no está en ninguna migración**. La 0091, que le dio identidad
+al vocabulario de la bitácora, cargó las otras dos acciones de stock y se salteó
+esta.
+
+**Alcance:** en todo despliegue nuevo de NEXO —o sea, en todos— ajustar
+existencias por recuento, rotura o diferencia devolvía «Error interno». Es la
+operación con la que un contador arregla la diferencia entre lo que dice el
+sistema y lo que hay en el depósito.
+
+### Por qué nadie lo vio, que es lo importante
+
+El control **existía y era correcto**: S-20 compara las acciones que el código
+emite contra `audit_actions`, y ese barrido está escrito con cuidado —entiende
+hasta el ternario de arriba, que le costó dos versiones—. Los tests de stock
+**también** existían y ejercitaban el ajuste.
+
+Lo que fallaba era **contra qué base corrían**. La base de pruebas local se
+arrastraba de hace meses y tenía la fila `AJUSTAR_STOCK` cargada por un esquema
+anterior. Ninguna migración la crea, así que ninguna instalación nueva la iba a
+tener; pero la local sí, y con eso el control pasaba en verde y los tests
+también.
+
+Salió a la luz por accidente: esta auditoría corrió los benchmarks (§17), que
+dejan datos, y después reconstruyó la base de pruebas para limpiarla. **Esa base
+reconstruida es la primera en mucho tiempo idéntica a la que produciría un
+despliegue**, y ahí siete tests se pusieron en rojo de golpe.
+
+La lección no es «faltaba una fila». Es que **un control que corre contra un
+estado que la producción no puede tener no está midiendo la producción**.
+
+### El control que faltaba
+
+S-20 miraba del código hacia la base, y por eso no podía verlo: la fila
+**estaba**; lo que no estaba era el motivo por el que estaba. El control nuevo
+mira en la otra dirección: **cada acción de la base tiene que estar nombrada en
+alguna migración**. Observado fallando con una fila inventada
+(`ACCION_DE_UN_ESQUEMA_VIEJO`), y en verde al sacarla.
 
 ---
 
@@ -545,7 +637,78 @@ Lo que **falta** (§24 lo detalla):
 
 ## Clasificación de las 35 pantallas
 
-*(pendiente de completar en esta pasada — ver §24)*
+**Método:** se creó una empresa nueva con plan **Completo** —para que las 35
+fueran alcanzables— y se abrió **cada una**, midiendo en el DOM: errores
+visibles, filas cargadas, estado vacío presente, y texto que llega al cliente.
+
+**Resultado del barrido: 32 de 33 pantallas alcanzables sin un solo error.** La
+única con caja de error es `config`, y su error es legítimo (falta declarar el
+ejercicio y el marco contable) aunque esté escrito con identificadores.
+
+| Pantalla | Estado | Qué le falta |
+|---|---|---|
+| Panel (inicio) | 🟡 | Rediseñarlo como entrada al día, no como lista de tablas |
+| Pendientes (bandeja) | 🟢 | — |
+| Preguntar (inteligencia) | 🟢 | Degrada honesto: «Sin proveedor de modelo» |
+| Comercial | 🟢 | — |
+| Terceros | 🟢 | — |
+| Productos | 🟢 | — |
+| Precios | 🟢 | — |
+| CRM | 🟢 | — |
+| Comisiones | 🟢 | — |
+| Solicitudes | 🟢 | — |
+| Recepciones | 🟢 | — |
+| Pagos | 🟢 | — |
+| Documentos | 🟢 | Estado vacío agregado hoy |
+| Propuestas de IA | 🟡 | Sin proveedor no hay nada que revisar |
+| Operaciones | 🟢 | — |
+| Existencias | 🟢 | — |
+| Bienes de uso | 🟢 | — |
+| Proyectos | 🟢 | — |
+| Sucursales | 🟢 | — |
+| Integraciones | 🟢 | — |
+| Caja | 🟢 | — |
+| Bancos | 🟢 | Estado vacío agregado hoy |
+| Cheques | 🟢 | — |
+| IVA | 🟢 | — |
+| Asientos | 🟢 | Estado vacío agregado hoy |
+| Libros | 🟢 | — |
+| Estados y notas | 🟢 | — |
+| Períodos y cierre | 🟢 | Estado vacío agregado hoy |
+| Analítica | 🟢 | — |
+| Señales | 🟢 | — |
+| Auditoría | 🟢 | — |
+| Plan (suscripción) | 🟡 | Los topes se muestran como `comprobantes_mes: 300` |
+| Configuración | 🟡 | Permisos y pasos faltantes con identificadores crudos |
+| Cambiar empresa | 🟢 | Salida al alta agregada hoy |
+| **Ingresar** | 🟡 | Respuestas de la API como JSON crudo |
+| **Crear mi empresa** (nueva) | 🟡 | Errores de validación como JSON crudo |
+| **Segundo factor** (nueva) | 🟢 | — |
+
+**Nota sobre el conteo:** el menú tiene 34 botones, hay 37 secciones. Las tres
+que no tienen botón —Ingresar, Segundo factor y Crear mi empresa— son las
+paradas del arranque, y no pueden tenerlo porque el menú todavía no está visible
+cuando se recorren. Dos de las tres **son nuevas de esta auditoría** (§11, H-3).
+
+### Lo que el barrido corrigió
+
+- **Cuatro estados vacíos** donde había una tabla con encabezados y nada más:
+  Documentos, Bancos, Asientos, Períodos y cierre. Cada mensaje dice qué va ahí
+  y por qué todavía no hay nada.
+- **El énfasis de la API se dibuja como énfasis.** Cuarenta y cinco cadenas en
+  catorce módulos escriben `**así**` y `` `así` `` —la convención del
+  repositorio para lo que hay que leer con atención— y la consola las escapaba
+  enteras: en pantalla se leía «La comisión es \*\*devengada, no pagada\*\*».
+  Ahora una sola función lo resuelve, **escapando primero y convirtiendo
+  después**, en ese orden, para que el texto del servidor no pueda inyectar
+  marcado. Verificado en cuatro pantallas: **cero asteriscos literales**.
+  Control en S-15, en las dos direcciones — que no quede ningún texto escapado
+  crudo, y que el orden escapar→convertir no se invierta.
+
+### Lo que sigue faltando
+
+Está en §24. Lo resumido: **JSON crudo en las respuestas**, topes de plan e
+identificadores en castellano, y el rediseño del panel de inicio.
 
 ---
 
@@ -623,16 +786,48 @@ llega como imagen escaneada, no.
 
 # 17. Performance
 
-**NO VERIFICADO en esta pasada.** Existe `scripts/bench-vistas.mjs`, que nació de
-una medición real: `stock_valuation` tardaba 25 segundos con 50.000 movimientos y
-2 milisegundos con los datos de los tests. **Ninguna suite podía verlo**: los
-tests prueban que la cuenta esté bien, no que se pueda esperar el resultado.
+**VERIFICADO POR ESTA AUDITORÍA.** Corrido hoy con `npm run bench:vistas`, con el
+rol `aai_app` y la empresa en contexto —que es como consulta la API—. Medir como
+`postgres` daría números más lindos y equivocados: el superusuario se saltea RLS,
+que es justo la parte que cuesta.
 
-El instrumento existe y mide con el rol `aai_app` y la empresa en contexto, que
-es como consulta la API. Medir como `postgres` daría números más lindos y
-equivocados.
+Carga generada: **50.002 movimientos de stock**, 200 productos × 250 movimientos,
+300 terceros × 40 comprobantes.
 
-*(Pendiente: correrlo y anotar los números.)*
+| Vista | Mejor de 3 |
+|---|---|
+| `company_readiness` | 0 ms |
+| `invoice_settlement` | 5 ms |
+| `analytics_margen_por_producto` | 6 ms |
+| `analytics_por_tercero` | 8 ms |
+| `analytics_operaciones_mensuales` | 8 ms |
+| `stock_ppp` | 24 ms |
+| `analytics_resumen` | 25 ms |
+| `analytics_costo_de_ventas` | 59 ms |
+| **`stock_valuation`** | **66 ms** |
+| `analysis_signals` | 98 ms |
+| `party_aging` | 126 ms |
+| `analytics_flujo_de_fondos` | 173 ms |
+| `work_queue` (bandeja) | 429 ms |
+| `work_queue` · una página | 564 ms |
+
+**Ninguna pasó de 1000 ms.**
+
+El dato que importa es `stock_valuation`: **66 ms con 50.002 movimientos**. Esa
+misma consulta, con ese mismo volumen, tardaba **25 segundos** antes de la
+migración 0086 — y con los datos de los tests tardaba 2 ms, así que **ninguna
+suite podía verlo**. Los tests prueban que la cuenta esté bien, no que se pueda
+esperar el resultado. La mejora es de tres órdenes de magnitud y está medida, no
+estimada.
+
+Lo más lento es `work_queue`, la bandeja de pendientes, con **429–564 ms**. Está
+dentro de lo tolerable y es lo primero que se abre al entrar, así que es la
+candidata natural si algún día hace falta optimizar.
+
+**Lo que estos números NO dicen:** nada sobre producción. Otra máquina, otro
+disco, otra concurrencia, y un solo cliente por vez. Afirman cuánto tarda **esta**
+consulta contra **este** volumen, que es lo que hace falta para distinguir «es
+lento» de «me lo imaginé».
 
 ---
 
@@ -642,24 +837,47 @@ Al cierre de esta auditoría:
 
 ```
 Test Files   149 passed (149)
-Tests        2.267 passed (2267)
+Tests        2.270 passed (2270)
 ```
 
 Controles de la serie S-*: **33** (S-32 y S-33 son nuevos de esta auditoría).
 
-**Lo que esta auditoría cambió sobre cómo se testea aquí:** cada control nuevo
-fue **observado fallando** antes de darlo por bueno. Un control que no se ve
-fallar no es un control — y esta auditoría encontró la prueba de eso: S-15 tenía
-un parser que no admitía guiones en los nombres de vista, así que una pantalla
-nueva llamada `alta-empresa` era invisible para él.
+**Lo que esta auditoría cambió sobre cómo se testea aquí** son dos cosas, y las
+dos importan más que los números:
+
+**1. Un control que no se ve fallar no es un control.** Cada control nuevo se
+mutó y se observó en rojo antes de aceptarlo. La prueba de que hacía falta:
+S-15 tenía un parser que no admitía guiones en los nombres de vista, así que una
+pantalla nueva llamada `alta-empresa` le era invisible. El control estaba, y no
+miraba.
+
+**2. Un control que corre contra un estado que la producción no puede tener no
+está midiendo la producción.** Es H-8 (§8). La base de pruebas local llevaba
+meses arrastrándose y tenía una fila que ninguna migración crea; con eso, siete
+tests correctos daban verde sobre un sistema que en una instalación nueva estaba
+roto. **Reconstruir la base de pruebas cada tanto no es higiene: es medición.**
 
 ---
 
 # 19. E2E
 
 **Se recorrió el sistema como cliente, con el navegador, por primera vez.** Ese
-recorrido produjo H-3, H-4, H-5 y H-6 — cuatro de los siete hallazgos, incluido
+recorrido produjo H-3, H-4, H-5 y H-6 — cuatro de los ocho hallazgos, incluido
 el único bloqueante de V1.
+
+Dos recorridos completos, con cuentas nuevas de verdad:
+
+1. **El alta de punta a punta.** Registro → confirmación (código leído de la
+   bandeja de salida, que es donde queda mientras no haya proveedor de correo) →
+   ingreso → segundo factor → crear empresa → consola operando. Una sola sesión,
+   sin que nadie tocara la base a mano. Antes de esta auditoría, ese recorrido
+   **no llegaba al final**.
+
+2. **Las 33 pantallas alcanzables**, una por una, con una empresa nueva de plan
+   Completo. Cero errores en 32. El barrido está en §11.
+
+También se midió el mismo sistema **desde el plan de entrada**: 34 botones, 23 de
+40 dominios contestando 403. Después del arreglo: 14 botones, todos funcionando.
 
 La conclusión metodológica, ya confirmada dos veces en este proyecto: **auditar
 el código no alcanza.** Los endpoints funcionaban, los tests pasaban, y el
@@ -669,9 +887,35 @@ producto no se podía usar.
 
 # 20. Infraestructura
 
-**NO VERIFICADO en esta pasada.** Es la sección con menos evidencia, y es honesto
-decirlo: no hay hosting contratado, así que no hay nada que medir todavía. Ver
-§23 y §25.
+**PARCIALMENTE VERIFICADO.** Lo que existe, existe de verdad; lo que no está
+decidido, no está.
+
+**Existe y se inspeccionó:**
+
+- `Dockerfile` en dos etapas. La imagen que corre **no lleva el compilador, ni
+  las dependencias de desarrollo, ni el código fuente**: una imagen con `tsc`
+  adentro es superficie de ataque que no sirve para nada en producción. No elige
+  proveedor ni orquestador.
+- `infrastructure/docker-compose.yml` con PostgreSQL 18, Redis 7 y MinIO, los
+  tres con `healthcheck`.
+- **CI en GitHub Actions** que corre cada compuerta por separado —typecheck,
+  lint, lint de arquitectura, prohibición del punto flotante, integridad del
+  archivo normativo, migraciones, y **migraciones idempotentes corriéndolas dos
+  veces**— más los tests con umbrales de cobertura. Cada paso es un paso y no un
+  `npm run ci`, para que la interfaz de GitHub muestre cuál falló.
+- `docs/DESPLIEGUE.md` con lo que falta decidir.
+- Scripts de backup y de restauración.
+
+**No existe, y es lo que falta:**
+
+- Hosting, dominio y certificado (§23).
+- Una **restauración probada**: los scripts están, pero nadie restauró un backup
+  en una base vacía y verificó que la contabilidad cuadre después. Hasta que eso
+  pase, el backup es una intención.
+- Destino de logs y alertas.
+
+**No hay nada que medir de producción porque no hay producción.** Decirlo así es
+más útil que inventar una evaluación.
 
 ---
 
@@ -738,18 +982,24 @@ Precios: **A CONFIRMAR.** No invento números.
 
 Todo esto es trabajo mío y **ninguno depende de un pago**:
 
-1. **Clasificar y productizar las 35 pantallas.** Es el grueso del alcance que
-   elegiste. Incluye estados vacíos, estados de carga, y que ninguna muestre JSON
-   crudo.
+1. **Terminar de productizar las pantallas.** Están clasificadas (§11) y las
+   🟢 son **31 de 37**. Lo que falta es lo marcado 🟡: estados de carga, y que
+   ninguna muestre JSON crudo.
 2. **Sacar el JSON crudo de la interfaz.** Empezando por el alta, que es la
-   primera pantalla que ve un cliente.
+   primera pantalla que ve un cliente: un error de validación se ve hoy como
+   `400 { "error": "VALIDATION_ERROR", "details": [...] }`.
 3. **Los topes de plan en castellano**, no `comprobantes_mes: 300`.
-4. **El cuerpo de los correos**, escrito para una persona.
+4. **El cuerpo de los correos**, escrito para una persona: hoy dice «mandá este
+   código a `/auth/verificar-correo`».
 5. **Rediseñar el panel de inicio** como entrada real al trabajo del día.
-6. **Correr y anotar los benchmarks** (§17).
-7. **Motor de OCR local**, si se decide que V1 lo necesita.
-8. **Auditar las pantallas restantes** con el mismo método que encontró H-3 a
-   H-6: abriéndolas.
+6. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
+7. **Restaurar un backup en una base vacía** y verificar que la contabilidad
+   cuadre después. Los scripts existen; la restauración no se probó nunca.
+8. **Seguir abriendo el producto.** Ocho hallazgos, y los cinco más caros
+   salieron de abrir pantallas y reconstruir la base, no de leer código.
+
+**Ya hechos durante esta auditoría:** clasificar las 37 pantallas, correr los
+benchmarks, y los ocho hallazgos con sus controles.
 
 ---
 
@@ -829,6 +1079,12 @@ preferencia para las recomendaciones; periodicidad anual.
 
 4. **Nadie ha usado NEXO más que nosotros.** No hay carga real, ni un cliente
    real, ni una restauración de backup probada.
+
+5. **La base local puede no ser la base que produce una instalación nueva.** Es
+   H-8, y es el riesgo más difícil de ver porque se manifiesta como *ausencia*
+   de síntomas: todo verde, y la producción rota. Mitigado con el control nuevo
+   de S-20, pero la regla general vale más que el control: **reconstruir la base
+   de pruebas cada tanto no es higiene, es medición.**
 
 ---
 

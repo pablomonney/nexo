@@ -303,7 +303,55 @@ suite('S-20 — el vocabulario de la bitácora', () => {
         rotos.join('\n  '),
     ).toEqual([]);
   });
+
+  /**
+   * La dirección que faltaba: **la base no puede tener acciones que ninguna
+   * migración crea.**
+   *
+   * El 2026-09-09 se descubrió que `AJUSTAR_STOCK` estaba en la base local y en
+   * **ninguna migración**. La 0091 la había salteado. En cualquier instalación
+   * nueva, ajustar existencias devolvía 500 —`recordAudit` corre en la misma
+   * transacción y la clave foránea la aborta—, pero acá pasaba en verde porque
+   * la base de pruebas arrastraba la fila de un esquema anterior.
+   *
+   * Los dos barridos de arriba miran del código hacia la base, y por eso no
+   * podían verlo: la fila **estaba**. Lo que no estaba era el motivo por el que
+   * estaba.
+   *
+   * Salió a la luz al reconstruir la base de pruebas por primera vez en meses.
+   * Ese es el punto: **un control que corre contra un estado que la producción
+   * no puede tener no está midiendo la producción.** Este cierra ese hueco sin
+   * depender de que alguien se acuerde de reconstruir nada.
+   */
+  it('cada acción de la base la crea una migración', async () => {
+    const sql = await sqlDeLasMigraciones();
+    const huerfanas = [...registradas.keys()].filter((id) => !sql.includes(`'${id}'`)).sort();
+
+    expect(
+      huerfanas,
+      'Estas acciones existen en `audit_actions` y ninguna migración las nombra. Vienen de un ' +
+        'esquema anterior: una instalación nueva no las va a tener, y el código que las emite ' +
+        'va a fallar ahí y solo ahí:\n  ' + huerfanas.join('\n  '),
+    ).toEqual([]);
+  });
 });
+
+/** Todo el SQL de las migraciones, concatenado. */
+async function sqlDeLasMigraciones(): Promise<string> {
+  const directorio = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'infrastructure',
+    'db',
+    'migrations',
+  );
+  const nombres = (await readdir(directorio)).filter((n) => n.endsWith('.sql')).sort();
+  const partes = await Promise.all(
+    nombres.map((n) => readFile(join(directorio, n), 'utf8')),
+  );
+  return partes.join('\n');
+}
 
 /** Todos los `.ts` de la API, sin tests. */
 async function archivosDe(directorio: string, salida: string[] = []): Promise<string[]> {

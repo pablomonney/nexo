@@ -24,6 +24,12 @@ export const ACTIONS_REQUIRING_REASON = [
   'ACTIVAR_REGLA',
   'RECLASIFICAR_APROBADO',
   'CAMBIAR_PLAN_CUENTAS',
+  // Un ajuste cambia la existencia sin que entre ni salga nada del mundo real,
+  // y eso impacta en la valuación. Sin motivo es una existencia que cambió
+  // porque sí. La acción faltaba en `audit_actions` desde la 0091: el ajuste
+  // devolvía 500 en toda base recién migrada, y lo tapaba una base de pruebas
+  // arrastrada que tenía la fila de un esquema viejo (0110).
+  'AJUSTAR_STOCK',
   // Declarar que un escenario se aplicó sin decir por qué sería un vínculo sin
   // argumento: es lo único que conecta el acto con la predicción.
   'DECLARAR_ESCENARIO_APLICADO',

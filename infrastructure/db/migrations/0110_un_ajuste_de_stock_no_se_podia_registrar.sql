@@ -1,0 +1,60 @@
+-- ============================================================================
+-- 0110 — Un ajuste de stock no se podía registrar
+-- ============================================================================
+--
+-- `POST /stock-movements/ajuste` contestaba **500 en cualquier base recién
+-- migrada**. No fallaba la bitácora y seguía el ajuste: fallaba el ajuste
+-- entero, porque `recordAudit` corre dentro de la misma transacción y la clave
+-- foránea contra `audit_actions` la aborta.
+--
+-- El motivo es de una línea: `apps/api/src/routes/stock.ts` emite
+--
+--     action: datos.origenTipo === 'AJUSTE' ? 'AJUSTAR_STOCK' : 'REGISTRAR_SALIDA_DE_STOCK'
+--
+-- y `AJUSTAR_STOCK` **no está en ninguna migración**. La 0091, que le dio
+-- identidad al vocabulario de la bitácora, cargó `REGISTRAR_SALIDA_DE_STOCK` y
+-- `TRANSFERIR_STOCK`, y se salteó esta.
+--
+-- ## Por qué nadie lo vio
+--
+-- Es lo más interesante del hallazgo, y no es sobre el stock.
+--
+-- El control **existía y era correcto**: S-20 compara las acciones que el código
+-- emite contra `audit_actions`, y ese barrido está escrito con cuidado —incluso
+-- entiende el ternario de arriba, que le costó dos versiones—. Los tests de
+-- stock **también** existían y ejercitaban el ajuste.
+--
+-- Lo que fallaba era **contra qué base corrían**. La base de pruebas se
+-- arrastraba de hace meses y tenía la fila `AJUSTAR_STOCK` cargada por un
+-- esquema anterior. Ninguna migración la crea, así que ninguna instalación nueva
+-- la iba a tener; pero la base local sí, y con eso el control pasaba en verde y
+-- los tests también.
+--
+-- Salió a la luz el 2026-09-09, y por accidente: la auditoría corrió
+-- `npm run bench:vistas`, que deja datos, y después `npm run test:db -- --reset`
+-- para limpiarla. La base reconstruida es la primera en mucho tiempo idéntica a
+-- la que produciría un despliegue, y ahí los siete tests se pusieron en rojo.
+--
+-- **La lección no es «faltaba una fila».** Es que un control que corre contra un
+-- estado que la producción no puede tener no está midiendo la producción. La
+-- verificación completa daba verde sobre una base que ninguna instalación nueva
+-- produce.
+--
+-- ## Alcance real
+--
+-- En cualquier despliegue nuevo de NEXO —es decir, en todos— ajustar existencias
+-- por recuento, rotura o diferencia devolvía «Error interno». Es la operación con
+-- la que un contador arregla la diferencia entre lo que dice el sistema y lo que
+-- hay en el depósito.
+--
+-- `requiere_motivo = true` porque el endpoint ya lo exige (`z.string().min(3)`),
+-- y porque un ajuste sin explicación es una existencia que cambió porque sí.
+-- Que la base lo pida además del validador no es redundancia: el validador
+-- protege a este endpoint, y la base protege a la tabla de cualquier camino que
+-- se escriba mañana.
+-- ============================================================================
+
+INSERT INTO audit_actions (id, dominio, requiere_motivo)
+VALUES ('AJUSTAR_STOCK', 'stock', true)
+ON CONFLICT (id) DO UPDATE
+  SET dominio = EXCLUDED.dominio, requiere_motivo = EXCLUDED.requiere_motivo;

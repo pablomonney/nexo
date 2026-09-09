@@ -159,6 +159,44 @@ describe('S-15 — la consola escribe en el elemento que cree', () => {
     ).toBe(true);
   });
 
+  /**
+   * El énfasis que manda la API se muestra como énfasis, no como asteriscos.
+   *
+   * Cuarenta y cinco cadenas en catorce módulos de rutas escriben `**así**` y
+   * `` `así` `` — la convención del repositorio para lo que hay que leer con
+   * atención. La consola las pasaba por `escapar()` y salían con los asteriscos
+   * puestos: «La comisión es \*\*devengada, no pagada\*\*», en la pantalla, a un
+   * cliente. Lo encontró la auditoría del 2026-09-09 recorriendo las 33
+   * pantallas; ningún test lo veía porque el texto llega bien y se dibuja donde
+   * corresponde.
+   */
+  it('los textos de alcance se dibujan con énfasis, no con asteriscos', () => {
+    const crudos = [...html.matchAll(/escapar\(([^)]*\.(alcance|metodologia|motivoSinRenglones))\)/g)]
+      .map((m) => m[1]!);
+
+    expect(
+      crudos,
+      'estos textos vienen de la API con énfasis en markdown y se están escapando enteros: ' +
+        'los asteriscos van a salir en la pantalla. Usá `conEnfasis`',
+    ).toEqual([]);
+  });
+
+  it('conEnfasis escapa antes de convertir, no al revés', () => {
+    // El orden es lo único que separa «dibujar énfasis» de «dejar que el
+    // servidor inyecte marcado». Si algún día se invierte, las dos etiquetas
+    // que genera esta función dejan de ser las únicas que salen.
+    const cuerpo = /const conEnfasis = \(t\) =>([\s\S]*?);\n/.exec(html)?.[1] ?? '';
+    expect(cuerpo, 'no se encontró conEnfasis en la consola').not.toBe('');
+
+    const posEscape = cuerpo.indexOf('escapar(t)');
+    const posConversion = cuerpo.indexOf('<strong>');
+    expect(posEscape, 'conEnfasis no escapa').toBeGreaterThanOrEqual(0);
+    expect(
+      posEscape < posConversion,
+      'conEnfasis convierte antes de escapar: eso deja al servidor inyectar marcado',
+    ).toBe(true);
+  });
+
   it('la lista de excepciones no acumula id que ya existen', () => {
     // Una excepción que sobrevive a su motivo convierte la lista en decoración.
     const existentes = new Set(idsDelHtml(html));

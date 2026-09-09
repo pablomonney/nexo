@@ -3301,6 +3301,27 @@ const escapar = (t) => String(t === null || t === undefined ? '' : t)
   .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /**
+ * Los textos de alcance que manda la API, con el énfasis que traen.
+ *
+ * Cuarenta y cinco cadenas en catorce módulos de rutas escriben `**así**` y
+ * `` `así` `` — la misma convención que usa todo el repositorio para lo que hay
+ * que leer con atención. La consola las imprimía con `escapar()` y salían con
+ * los asteriscos puestos: «La comisión es \*\*devengada, no pagada\*\*». Lo vio
+ * la auditoría del 2026-09-09 recorriendo las 33 pantallas.
+ *
+ * Se resuelve acá y no borrando el énfasis de las cuarenta y cinco cadenas
+ * porque el énfasis **está bien puesto**: marca la parte que se malinterpreta.
+ * Lo que estaba mal era el renderizado.
+ *
+ * **Escapa primero y convierte después**, en ese orden y no al revés: así el
+ * texto que venga del servidor no puede inyectar marcado, y lo único que sale
+ * como HTML son las dos etiquetas que se generan acá.
+ */
+const conEnfasis = (t) => escapar(t)
+  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  .replace(/`([^`]+)`/g, '<span class="mono">$1</span>');
+
+/**
  * El tema.
  *
  * Oscuro por defecto porque **es la marca**, no porque lo diga el sistema
@@ -3494,7 +3515,7 @@ async function cargarPlanes() {
     sel.appendChild(o);
   }
 
-  E('on-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('on-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 }
 
 E('b-planes').onclick = () => cargarPlanes();
@@ -3542,7 +3563,7 @@ async function cargarPrueba() {
     (d.situacion === 'VENCIDA'
       ? 'terminó el ' + escapar(d.termina) + '.'
       : 'quedan ' + escapar(String(d.diasRestantes)) + ' día(s), hasta el ' + escapar(d.termina) + '.') +
-    ' ' + escapar(d.alcance) + '</div>';
+    ' ' + conEnfasis(d.alcance) + '</div>';
 }
 
 E('b-alta-reenviar').onclick = async () => {
@@ -3957,7 +3978,7 @@ function pastillaOrigen(origen) {
 async function cargarInteligencia() {
   const r = await api('GET', '/intelligence/preguntas');
   if (!r.ok) return decir('intel-msg', r);
-  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('intel-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const n = r.datos.narracion;
   E('intel-narracion').innerHTML = n.disponible
@@ -4028,7 +4049,7 @@ async function verLinaje(relacion) {
     // ninguna tabla no viene de ningún lado.
     '<p class="ayuda">Los hechos se escriben en: ' +
     v.tablas.map((t) => '<span class="mono">' + escapar(t) + '</span>').join(' · ') +
-    '</p><p class="ayuda">' + escapar(v.alcance) + '</p>';
+    '</p><p class="ayuda">' + conEnfasis(v.alcance) + '</p>';
 }
 
 async function preguntarPorId(preguntaId) {
@@ -4066,7 +4087,7 @@ E('b-intel-riesgos').onclick = async () => {
   const r = await api('GET', '/analysis/riesgos');
   if (!r.ok) return decir('intel-msg', r);
   E('intel-riesgos').hidden = false;
-  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('intel-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-intel-riesgos').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -4109,7 +4130,7 @@ E('b-intel-cupo').onclick = async () => {
     fila('De este usuario, en el último minuto', d.delUsuarioEnElMinuto) +
     fila('Tope técnico por minuto', d.topePorMinuto);
 
-  E('intel-cupo-msg').innerHTML = '<div class="aviso">' + escapar(d.alcance) + '</div>';
+  E('intel-cupo-msg').innerHTML = '<div class="aviso">' + conEnfasis(d.alcance) + '</div>';
   E('intel-cupo-declarar').hidden = !puede('analysis:configure');
 };
 
@@ -4126,7 +4147,7 @@ E('b-intel-panorama').onclick = async () => {
   const r = await api('GET', '/intelligence/panorama');
   if (!r.ok) return decir('intel-msg', r);
   E('intel-panorama').hidden = false;
-  E('intel-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('intel-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-intel-panorama').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -4138,7 +4159,7 @@ E('b-intel-panorama').onclick = async () => {
         ? '<span class="p p-neu">no se afirma</span>'
         : '<strong>' + escapar(t.valor) + '</strong> ' + escapar(t.unidad)) + '</td>' +
       '<td class="mono">' + escapar(t.periodo || '—') + '</td>' +
-      '<td>' + escapar(t.metodologia) + '</td>' +
+      '<td>' + conEnfasis(t.metodologia) + '</td>' +
       '<td>' + escapar(t.noIncluye || '—') + '</td>';
     cuerpo.appendChild(tr);
   }
@@ -4392,6 +4413,11 @@ async function listarDocumentos(cursor) {
 
   const cuerpo = E('t-doc').querySelector('tbody');
   if (!cursor) { cuerpo.innerHTML = ''; estado.documentosSinOperacion = []; }
+  if ((r.datos.documentos || []).length === 0 && !cursor) {
+    E('doc-msg').innerHTML =
+      '<div class="aviso">Todavía no subiste ningún documento. Acá van las facturas, ' +
+      'recibos y extractos que después se convierten en operaciones.</div>';
+  }
 
   for (const d of (r.datos.documentos || [])) {
     const senales = [];
@@ -5320,7 +5346,7 @@ async function cargarSaldoDelTercero(id) {
   // antigüedad tiene que saber si el sistema está afirmando mora o solo
   // contando días desde el comprobante.
   E('ter-saldo-alcance').innerHTML =
-    '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+    '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const aging = E('t-ter-aging').querySelector('tbody');
   aging.innerHTML = '';
@@ -5389,7 +5415,7 @@ async function cargarSaldoDelTercero(id) {
 async function cargarNotasSinAplicar(id, comprobantes) {
   const r = await api('GET', '/parties/' + id + '/notas-sin-aplicar');
   if (!r.ok) return decir('ter-n-msg', r);
-  E('ter-n-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('ter-n-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-ter-notas').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -5478,7 +5504,7 @@ E('b-ter-aplicar-nota').onclick = async () => {
 async function cargarSugerencias() {
   const r = await api('GET', '/parties/' + estado.tercero + '/imputaciones-sugeridas');
   if (!r.ok) return decir('ter-sug-msg', r);
-  E('ter-sug-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.metodologia) + '</div>';
+  E('ter-sug-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.metodologia) + '</div>';
 
   const cuerpo = E('t-ter-sug').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -5673,7 +5699,7 @@ E('b-ter').onclick = () => listarTerceros();
 E('b-ter-aging').onclick = async () => {
   const r = await api('GET', '/reports/aging?direccion=' + E('ter-ag-dir').value);
   if (!r.ok) return decir('ter-ag-msg', r);
-  E('ter-ag-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('ter-ag-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-ter-ag').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -5887,7 +5913,7 @@ E('b-prop').onclick = async () => {
     (yaTiene
       ? 'Este comprobante ya tiene un asiento. La propuesta se muestra para comparar, no ' +
         'para volver a cargarla.'
-      : (hay ? escapar(r.datos.alcance) : escapar(r.datos.motivoSinRenglones))) + '</div>';
+      : (hay ? conEnfasis(r.datos.alcance) : conEnfasis(r.datos.motivoSinRenglones))) + '</div>';
 };
 
 E('b-prop-cargar').onclick = async () => {
@@ -5959,7 +5985,7 @@ async function cargarValuacion() {
 
   const r = await api('GET', '/stock-valuation');
   if (!r.ok) return decir('val-msg', r);
-  E('val-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('val-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   E('val-resumen').innerHTML =
     fila('Método vigente', r.datos.metodoVigente === null
@@ -5978,7 +6004,7 @@ async function cargarValuacion() {
       '<td class="mono">' + (p.costoUnitario === null
         ? '<span class="p p-neu">no se afirma</span>' : escapar(p.costoUnitario)) + '</td>' +
       '<td class="mono">' + (p.costoTotal === null ? '—' : escapar(p.costoTotal)) + '</td>' +
-      '<td>' + escapar(p.metodologia) + '</td>';
+      '<td>' + conEnfasis(p.metodologia) + '</td>';
     cuerpo.appendChild(tr);
   }
 
@@ -6015,7 +6041,7 @@ E('b-val-variacion').onclick = async () => {
   });
   const r = await api('GET', '/analysis/margen/variacion?' + q.toString());
   if (!r.ok) return decir('val-var-msg', r);
-  E('val-var-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) +
+  E('val-var-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) +
     (r.datos.noIncluye ? ' ' + escapar(r.datos.noIncluye) : '') + '</div>';
 
   const e = r.datos.efectos;
@@ -6049,7 +6075,7 @@ E('b-val-variacion').onclick = async () => {
 E('b-val-margen').onclick = async () => {
   const r = await api('GET', '/analysis/margen');
   if (!r.ok) return decir('val-margen-msg', r);
-  E('val-margen-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('val-margen-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const t = r.datos.totalAfirmable;
   E('val-margen-total').innerHTML =
@@ -6079,7 +6105,7 @@ E('b-val-margen').onclick = async () => {
       '<td class="mono">' + (p.margen === null
         ? '<span class="p p-neu">no se afirma</span>' : escapar(p.margen)) + '</td>' +
       '<td class="mono">' + (p.margenPct === null ? '—' : escapar(p.margenPct) + ' %') + '</td>' +
-      '<td>' + escapar(p.metodologia) + '</td>';
+      '<td>' + conEnfasis(p.metodologia) + '</td>';
     cuerpo.appendChild(tr);
   }
 };
@@ -6107,7 +6133,7 @@ E('b-val-cmv').onclick = async () => {
   // Cuando no hay propuesta, lo que se muestra es el motivo: es más útil que
   // una tabla vacía, que se lee como «no pasó nada».
   E('val-cmv-msg').innerHTML = '<div class="aviso">' +
-    escapar(hay ? r.datos.alcance : r.datos.motivoSinRenglones) + '</div>';
+    conEnfasis(hay ? r.datos.alcance : r.datos.motivoSinRenglones) + '</div>';
 };
 
 E('b-val-cmv-cargar').onclick = async () => {
@@ -6435,7 +6461,7 @@ async function abrirStockDeProducto(id, nombre, cursor) {
   limpiar('stk-det-msg');
 
   if (r.datos.llevaStock === false) {
-    E('stk-det-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+    E('stk-det-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
   }
 
   const cuerpo = E('t-stk-mov').querySelector('tbody');
@@ -6623,7 +6649,7 @@ async function cargarCuadroDeAmortizaciones() {
 
   const r = await api('GET', '/reports/depreciation?ejercicioId=' + sel.value);
   if (!r.ok) return decir('act-cua-msg', r);
-  E('act-cua-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) +
+  E('act-cua-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) +
     ' <strong>' + escapar(r.datos.pendientes) + '</strong> sin asentar.</div>';
 
   const cuerpo = E('t-act-cuadro').querySelector('tbody');
@@ -6724,7 +6750,7 @@ async function listarPrecios() {
 
   const r = await api('GET', '/price-lists');
   if (!r.ok) return decir('pre-msg', r);
-  E('pre-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('pre-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-pre').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -6886,8 +6912,8 @@ E('b-pre-consultar').onclick = async () => {
     fila('Fecha consultada', r.datos.fecha) +
     fila('Cantidad', r.datos.cantidad);
   E('pre-c-msg').innerHTML =
-    '<div class="aviso">' + escapar(r.datos.metodologia) + '<br><br>' +
-    escapar(r.datos.alcance) + '</div>';
+    '<div class="aviso">' + conEnfasis(r.datos.metodologia) + '<br><br>' +
+    conEnfasis(r.datos.alcance) + '</div>';
 };
 
 // ══ 4b2 · IVA ═════════════════════════════════════════════════════════════
@@ -7028,6 +7054,11 @@ async function listarBancos() {
 
   const cuerpo = E('t-ban').querySelector('tbody');
   cuerpo.innerHTML = '';
+  if ((r.datos.cuentas || []).length === 0) {
+    E('ban-msg').innerHTML =
+      '<div class="aviso">No hay cuentas bancarias cargadas. Hace falta al menos una para ' +
+      'importar un extracto y conciliarlo contra los movimientos del libro.</div>';
+  }
   const sel = E('ban-cuenta');
   const previo = sel.value;
   sel.innerHTML = '';
@@ -7247,7 +7278,7 @@ async function verificarConciliacion(c) {
       'banco: <span class="mono">' + escapar(v.partidasConciliatorias.enLibroNoEnBanco) +
       '</span></p>';
   }
-  html += '<p class="ayuda">' + escapar(v.alcance) + '</p></div>';
+  html += '<p class="ayuda">' + conEnfasis(v.alcance) + '</p></div>';
   E('ban-ver-msg').innerHTML = html;
 }
 
@@ -7338,7 +7369,7 @@ async function listarCheques() {
 
   const r = await api('GET', '/checks?' + q.toString());
   if (!r.ok) return decir('chq-msg', r);
-  E('chq-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('chq-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const c = r.datos.cartera;
   // `null` es «no hay cheques en cartera», no «cero». Mostrar ceros haría
@@ -7501,7 +7532,7 @@ async function listarSolicitudes() {
 
   const r = await api('GET', '/purchase-requests?' + q.toString());
   if (!r.ok) return decir('sol-msg', r);
-  E('sol-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sol-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-sol').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -7678,7 +7709,7 @@ async function listarOrdenesDePago() {
 
   const r = await api('GET', '/payment-orders?' + q.toString());
   if (!r.ok) return decir('odp-msg', r);
-  E('odp-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('odp-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-odp').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -7748,7 +7779,7 @@ E('odp-f-estado').onchange = () => listarOrdenesDePago();
 E('b-odp-pagables').onclick = async () => {
   const r = await api('GET', '/payment-orders/pagables?proveedorId=' + E('odp-n-proveedor').value);
   if (!r.ok) return decir('odp-alta-msg', r);
-  E('odp-alta-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('odp-alta-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-odp-pagables').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -7810,7 +7841,7 @@ async function listarSucursales() {
 
   const r = await api('GET', '/branches');
   if (!r.ok) return decir('suc-msg', r);
-  E('suc-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('suc-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-suc').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -7853,7 +7884,7 @@ async function listarSucursales() {
           : (Number(s.brechaDeAtribucion) === 0
               ? '<span class="p p-bien">0</span>'
               : '<span class="p p-ojo">' + escapar(s.brechaDeAtribucion) + '</span>')) + '</td>' +
-        '<td>' + escapar(s.metodologia) + '</td>';
+        '<td>' + conEnfasis(s.metodologia) + '</td>';
       c.appendChild(tr);
     }
 
@@ -7936,7 +7967,7 @@ E('b-suc-cerrar').onclick = async () => {
     motivo: E('suc-c-motivo').value,
   });
   if (r.ok) {
-    E('suc-c-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+    E('suc-c-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
     await listarSucursales();
     await abrirSucursal(estado.sucursal, estado.sucursalTitulo);
   } else {
@@ -7951,7 +7982,7 @@ async function listarComisiones() {
 
   const r = await api('GET', '/salespeople');
   if (!r.ok) return decir('cms-msg', r);
-  E('cms-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('cms-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-cms').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -8107,7 +8138,7 @@ async function listarProyectos() {
 
   const r = await api('GET', '/projects');
   if (!r.ok) return decir('proy-msg', r);
-  E('proy-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('proy-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-proy').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -8150,7 +8181,7 @@ async function listarProyectos() {
         '<td class="mono">' + (p.margen === null
           ? '<span class="p p-neu">no se puede afirmar</span>' : escapar(p.margen)) + '</td>' +
         '<td class="mono">' + (p.margenPct === null ? '—' : escapar(p.margenPct) + ' %') + '</td>' +
-        '<td>' + escapar(p.metodologia) + '</td>';
+        '<td>' + conEnfasis(p.metodologia) + '</td>';
       c.appendChild(tr);
     }
   }
@@ -8320,7 +8351,7 @@ async function listarCrm() {
       ? '<div class="aviso">Todavía no hay etapas declaradas. Un embudo es cómo vende esta ' +
         'empresa, así que NEXO no trae uno por defecto: declaralas abajo y el resto del ' +
         'módulo empieza a funcionar.</div>'
-      : '<div class="aviso">' + escapar(etapas.datos.alcance) + '</div>';
+      : '<div class="aviso">' + conEnfasis(etapas.datos.alcance) + '</div>';
 
     for (const id of ['crm-n-etapa', 'crm-t-etapa']) {
       const s = E(id);
@@ -8570,7 +8601,7 @@ async function listarCaja() {
 
   const r = await api('GET', '/cash-sessions');
   if (!r.ok) return decir('caja-msg', r);
-  E('caja-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('caja-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-caja-ses').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -8841,7 +8872,7 @@ E('b-int-importar').onclick = async () => {
       ? '<br>Sin identificador y no importadas, línea(s): ' +
         escapar((d.sinIdentificador || []).join(', '))
       : '') +
-    '<br><span class="ayuda">' + escapar(d.alcance) + '</span></div>';
+    '<br><span class="ayuda">' + conEnfasis(d.alcance) + '</span></div>';
 
   listarIntegraciones();
 };
@@ -8992,7 +9023,7 @@ async function listarSenales() {
 
   const r = await api('GET', '/analysis/signals?' + q.toString());
   if (!r.ok) return decir('sen-msg', r);
-  E('sen-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sen-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-sen').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -9010,7 +9041,7 @@ async function listarSenales() {
       '<td class="mono">' + escapar(s.comparadoCon || '—') + '</td>' +
       '<td class="mono">' + escapar(s.umbral === null ? '—' : s.umbral) + '</td>' +
       '<td>' + veredicto + '</td>' +
-      '<td class="ayuda">' + escapar(s.metodologia) + '</td>';
+      '<td class="ayuda">' + conEnfasis(s.metodologia) + '</td>';
     cuerpo.appendChild(tr);
   }
 
@@ -9084,7 +9115,7 @@ E('b-sen-sugerir').onclick = async () => {
   E('sen-u-sugerencias').innerHTML =
     '<div class="aviso ojo"><strong>Propuestas sobre ' +
     escapar(r.datos.periodosMirados) + ' período(s) de esta empresa — todavía no declaradas' +
-    '</strong><ul>' + detalle + '</ul>' + escapar(r.datos.alcance) + '</div>';
+    '</strong><ul>' + detalle + '</ul>' + conEnfasis(r.datos.alcance) + '</div>';
 };
 
 E('b-sen-flujo').onclick = async () => {
@@ -9125,12 +9156,12 @@ E('b-sen-flujo').onclick = async () => {
     fila('Total', c.total) + fila('Fuera del total', c.noSumable)).join('');
 
   E('sen-flujo-msg').innerHTML =
-    '<div class="aviso">' + escapar(r.datos.metodologia) + '</div>' +
+    '<div class="aviso">' + conEnfasis(r.datos.metodologia) + '</div>' +
     (motivos !== ''
       ? '<div class="aviso ojo"><strong>Qué quedó fuera del total y por qué</strong><ul>' +
         motivos + '</ul></div>'
       : '') +
-    '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+    '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 };
 
 E('b-sen-cobranzas').onclick = async () => {
@@ -9143,7 +9174,7 @@ E('b-sen-cobranzas').onclick = async () => {
     fila('Sin plazo acordado', p.sinPlazoAcordado) +
     fila('Pendiente total', p.pendienteTotal) +
     fila('Cubre', r.datos.cubre === null ? 'nada pendiente' : r.datos.cubre);
-  E('sen-cob-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sen-cob-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 };
 
 E('b-sen-simular').onclick = async () => {
@@ -9196,7 +9227,7 @@ E('b-sen-escenarios').onclick = () => listarEscenarios();
 async function listarEscenarios() {
   const r = await api('GET', '/analysis/scenarios');
   if (!r.ok) return decir('sen-e-msg', r);
-  E('sen-e-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sen-e-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-sen-esc').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -9305,8 +9336,8 @@ E('b-sen-resultado').onclick = async () => {
       d.diferencia.desvioPct + ' %');
 
   E('sen-ap-msg').innerHTML =
-    '<div class="aviso">' + escapar(d.metodologia) + '</div>' +
-    '<div class="aviso">' + escapar(d.alcance) + '</div>';
+    '<div class="aviso">' + conEnfasis(d.metodologia) + '</div>' +
+    '<div class="aviso">' + conEnfasis(d.alcance) + '</div>';
 };
 
 E('b-sen-comparar').onclick = async () => {
@@ -9346,7 +9377,7 @@ E('b-sen-comparar').onclick = async () => {
       escapar(r.datos.motivoNoComparable) + '</div>';
     return;
   }
-  E('sen-c-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sen-c-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
   for (const c of r.datos.comparacion) {
     kv.innerHTML +=
       '<dt>' + escapar(c.escenario) + ' contra ' + escapar(c.contra) + '</dt>' +
@@ -9371,6 +9402,11 @@ async function listarAsientos(cursor) {
 
   const cuerpo = E('t-as').querySelector('tbody');
   if (!cursor) cuerpo.innerHTML = '';
+  if ((r.datos.asientos || []).length === 0 && !cursor) {
+    E('as-msg').innerHTML =
+      '<div class="aviso">Todavía no hay asientos. Se registran solos cuando aprobás una ' +
+      'operación, y también se pueden cargar a mano desde acá.</div>';
+  }
   for (const a of (r.datos.asientos || [])) {
     const tr = document.createElement('tr');
     tr.innerHTML =
@@ -9806,6 +9842,11 @@ async function listarPeriodos() {
 
   const cuerpo = E('t-per').querySelector('tbody');
   cuerpo.innerHTML = '';
+  if (((per.datos && per.datos.periods) || []).length === 0) {
+    E('per-msg').innerHTML =
+      '<div class="aviso">No hay períodos porque todavía no hay ejercicio abierto. El ' +
+      'ejercicio crea los períodos, y sin un período abierto no se puede registrar nada.</div>';
+  }
   for (const p of ((per.datos && per.datos.periods) || [])) {
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + escapar(p.number) + '</td>' +
@@ -10095,8 +10136,8 @@ E('b-au-var').onclick = async () => {
 
   const r = await api('GET', '/audit/variaciones?' + q.toString());
   if (!r.ok) return decir('au-var-msg', r);
-  E('au-var-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + ' ' +
-    escapar(r.datos.metodologia) + '</div>';
+  E('au-var-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + ' ' +
+    conEnfasis(r.datos.metodologia) + '</div>';
 
   E('au-var-resumen').innerHTML =
     fila('Cuentas comparadas', r.datos.resumen.total) +
@@ -10205,7 +10246,7 @@ async function cargarSuscripcion() {
 
   const r = await api('GET', '/subscription');
   if (!r.ok) return decir('sub-msg', r);
-  E('sub-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sub-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const p = r.datos.plan;
   E('sub-plan').innerHTML = p === null
@@ -10260,7 +10301,7 @@ E('b-ale-detectar').onclick = async () => {
 async function cargarAlertas() {
   const r = await api('GET', '/analysis/alerts');
   if (!r.ok) return decir('ale-msg', r);
-  E('ale-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('ale-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const cuerpo = E('t-ale').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -10318,7 +10359,7 @@ async function juzgarAlerta(id, accion) {
 async function cargarDecisiones() {
   const r = await api('GET', '/decision-records');
   if (!r.ok) return decir('dec-msg', r);
-  E('dec-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('dec-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   const c = r.datos.calibracion;
   E('dec-calibracion').innerHTML = c === null
@@ -10510,7 +10551,7 @@ E('b-dec-revisar').onclick = async () => {
 async function cargarFacturacion() {
   const r = await api('GET', '/companies/current/billing');
   if (!r.ok) return decir('fact-msg', r);
-  E('fact-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('fact-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 
   // Lo adeudado va por moneda y nunca sumado: un total que mezcla monedas no
   // significa nada y se ve igual que uno que sí.
@@ -10628,7 +10669,7 @@ async function cargarMapeoContable() {
     cuerpo.appendChild(tr);
   }
 
-  E('map-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) +
+  E('map-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) +
     (r.datos.faltantes.length === 0
       ? ' <b>Está completo.</b>'
       : ' <b>Faltan: ' + escapar(r.datos.faltantes.join(', ')) + '.</b>') + '</div>';
@@ -10701,7 +10742,7 @@ async function verResultadoPorCentro() {
       ? '<div class="aviso"><strong>Sin asignar: ' + escapar(v.sinAsignar.resultado) +
         '</strong><p>' + escapar(v.sinAsignar.motivo) + '</p></div>'
       : '<div class="aviso ok">Todas las líneas de resultado tienen centro declarado.</div>') +
-    '<p class="ayuda">' + escapar(v.alcance) + '</p>';
+    '<p class="ayuda">' + conEnfasis(v.alcance) + '</p>';
 
   const cuerpo = E('t-ccr').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -10846,7 +10887,7 @@ async function cargarConfig() {
               '<td class="mono">' + escapar(r.nivelVerificacion || '—') + '</td>' +
               '<td class="ayuda">' + escapar(r.detalle || '') + '</td></tr>').join('') +
             '</tbody></table></div>') +
-        '<p class="ayuda">' + escapar(v.alcance) + '</p>';
+        '<p class="ayuda">' + conEnfasis(v.alcance) + '</p>';
     }
 
     const gaps = await api('GET', '/normative/gaps');
@@ -10874,7 +10915,7 @@ E('b-sec-listar').onclick = async () => {
   const r = await api('GET', '/companies/current/secrets');
   if (!r.ok) return decir('sec-msg', r);
 
-  E('sec-msg').innerHTML = '<div class="aviso">' + escapar(r.datos.alcance) + '</div>';
+  E('sec-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
   E('sec-declarar').hidden = !puede('secret:manage');
 
   const cuerpo = E('t-sec').querySelector('tbody');
