@@ -955,12 +955,35 @@ decidido, no está.
 - `docs/DESPLIEGUE.md` con lo que falta decidir.
 - Scripts de backup y de restauración.
 
+**La restauración, probada hoy por primera vez:**
+
+```
+Archivo    aai_20260909_153418.backup — 1302 KB
+✔ base "aai_restauracion" creada vacía
+✔ pg_restore terminó sin errores
+✔ audit:estructura — los 435 objetos declarados están presentes
+✔ ledger:verify — NO EJERCITADO: 8 empresas, ninguna con asientos aprobados
+✔ contenido idéntico: 159 tablas, 1038 filas comparadas
+✔ base "aai_restauracion" eliminada
+```
+
+El script hace las tres preguntas por separado, porque fallan por motivos
+distintos: *¿están los candados?*, *¿cuadra lo que hay?*, *¿está todo lo que
+había?*. La tercera es la que convierte «se restauró» en «es la misma base»: sin
+ella, un backup que perdió la mitad de las filas pasa las dos primeras sin
+ruido, porque el esquema está completo y un Mayor con menos asientos igual
+cuadra consigo mismo.
+
+**Lo que quedó sin ejercitar, y el script lo dice en vez de callarlo:** la
+comparación del Mayor. La base de desarrollo tiene ocho empresas y **ninguna con
+asientos aprobados**, así que no hay Mayor que comparar. No se fabricaron datos
+para que el renglón diera verde — eso sería exactamente el falso positivo que
+esta auditoría vino a buscar. Queda pendiente repetirlo con una base que tenga
+contabilidad real.
+
 **No existe, y es lo que falta:**
 
 - Hosting, dominio y certificado (§23).
-- Una **restauración probada**: los scripts están, pero nadie restauró un backup
-  en una base vacía y verificó que la contabilidad cuadre después. Hasta que eso
-  pase, el backup es una intención.
 - Destino de logs y alertas.
 
 **No hay nada que medir de producción porque no hay producción.** Decirlo así es
@@ -1036,14 +1059,15 @@ Todo esto es trabajo mío y **ninguno depende de un pago**:
    modelo no tiene nada que revisar, y eso depende de una decisión (§26) más
    que de trabajo.
 2. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
-3. **Restaurar un backup en una base vacía** y verificar que la contabilidad
-   cuadre después. Los scripts existen; la restauración no se probó nunca.
+3. **Repetir la restauración con contabilidad real.** El backup ya se probó y su
+   contenido coincide (§20), pero la comparación del Mayor no se pudo ejercitar:
+   no hay asientos aprobados en desarrollo.
 4. **Seguir abriendo el producto.** Nueve hallazgos, y los cinco más caros
    salieron de abrir pantallas y reconstruir la base, no de leer código.
 
 **Ya hechos durante esta auditoría:** clasificar las 37 pantallas, correr los
-benchmarks, los nueve hallazgos con sus controles, y la primera tanda de
-productización:
+benchmarks, la primera restauración de backup verificada, los nueve hallazgos
+con sus controles, y la productización:
 
 | | |
 |---|---|
@@ -1116,7 +1140,7 @@ preferencia para las recomendaciones; periodicidad anual.
 | B-6 | Alta autoservicio completa | Desarrollo | Claude | **Cerrado hoy** |
 | B-7 | Paso cruzado por `SECURITY DEFINER` | Seguridad | Claude | **Cerrado hoy** |
 | B-8 | Menú que ofrece lo que el plan no incluye | Producto | Claude | **Cerrado hoy** |
-| B-9 | Backups con una restauración probada | Operación | Pablo | Abierto |
+| B-9 | Backups con una restauración probada | Operación | Claude | **Cerrado hoy** (§20), salvo la comparación del Mayor |
 
 ---
 
@@ -1134,8 +1158,9 @@ preferencia para las recomendaciones; periodicidad anual.
    implícitos.** Tres veces se escribió el permiso que se quería sin leer el que
    había. `has_function_privilege` y `information_schema` contestan en una línea.
 
-4. **Nadie ha usado NEXO más que nosotros.** No hay carga real, ni un cliente
-   real, ni una restauración de backup probada.
+4. **Nadie ha usado NEXO más que nosotros.** No hay carga real ni un cliente
+   real. El backup ya se probó restaurable y completo (§20); lo que falta es
+   probarlo con contabilidad de verdad.
 
 5. **La base local puede no ser la base que produce una instalación nueva.** Es
    H-8, y es el riesgo más difícil de ver porque se manifiesta como *ausencia*
@@ -1155,7 +1180,8 @@ Se puede salir a producción cuando **todo** esto sea cierto:
 3. El alta autoservicio corre de punta a punta con correo real. *(La parte
    técnica ya está: S-33.)*
 4. Términos y política de privacidad publicados.
-5. Un backup restaurado en una base vacía, con la contabilidad cuadrando después.
+5. Un backup restaurado con la contabilidad cuadrando. **Restaurable y completo
+   ya está probado (§20); falta la comparación del Mayor, que necesita datos.**
 6. Los benchmarks corridos con volumen realista.
 7. `npm run verify` en verde, incluidos los 33 controles S-*.
 8. Una auditoría visual como esta, con **cero** hallazgos nuevos de la familia
@@ -1196,8 +1222,8 @@ conocido. Todo lo que falta está identificado, acotado y en manos de alguien.
 **La respuesta a tu pregunta —cuánto de lo que falta se puede hacer antes de
 gastar un peso—:** casi todo, y hoy quedó hecho. Los tres servicios a contratar
 (correo, hosting, pasarela) hacen falta **al final**, para vender. Lo que sigue
-en mi lista —el OCR local si se decide, y una restauración de backup probada— no
-necesita un solo peso.
+en mi lista —el OCR local si se decide, y repetir la restauración con
+contabilidad real— no necesita un solo peso.
 
 Dicho de la forma más corta que se puede: **el trabajo de producto que se podía
 hacer sin pagar, se hizo. Lo que queda antes de vender son tres facturas y un
