@@ -792,14 +792,33 @@ Tras el arreglo de H-4 tampoco miente cuando no puede consultar.
 
 # 14. Decision Engine
 
-**IMPLEMENTADO Y FUNCIONAL. NO VERIFICADO en esta pasada más allá de su
-existencia y sus tests.**
+**CONFIRMADO POR ESTA AUDITORÍA**, leído del catálogo y no de la migración.
 
-`decision_records` exige evidencia (mínimo un elemento), alternativas (mínimo
-dos), y separa `recomendada_id` de `elegida_id` en dos columnas —para poder medir
-cuántas veces se siguió la recomendación—. Las de impacto ALTO o CRÍTICO exigen
-segunda firma. La calibración es un porcentaje de aciertos sobre revisiones que
-escribió una persona: no hay ningún modelo que se ajuste solo.
+`decision_records` tiene **once restricciones CHECK**, y las cuatro que
+sostienen el diseño se comprobaron una por una contra `pg_constraint`:
+
+| Restricción | Lo que impide, textual |
+|---|---|
+| `evidencia_check` | `jsonb_array_length(evidencia) >= 1` — una decisión sin una sola evidencia no se puede guardar |
+| `alternativas_check` | `jsonb_array_length(alternativas) >= 2` — «lo hicimos porque sí» tampoco: si no hay dos caminos, no hubo decisión |
+| `dr_riesgo_alto_con_segunda_firma` | Con riesgo ALTO o CRÍTICO, `aprobada_por IS DISTINCT FROM propuesta_por` — nadie firma su propia decisión grande |
+| `dr_desvio_con_motivo` | Si `elegida_id <> recomendada_id`, el motivo tiene **al menos diez caracteres** — apartarse de la recomendación se puede, en silencio no |
+
+`recomendada_id` y `elegida_id` son **dos columnas y no una**: es lo que permite
+medir cuántas veces se siguió la recomendación y cuántas no, que es la única
+forma de saber si la recomendación sirve.
+
+La vista `decision_calibracion` devuelve `revisadas`, `cumplieron`,
+`no_cumplieron`, **`no_medibles`**, `ejecutadas_sin_revisar`, `aciertos_pct`,
+`siguieron_recomendacion` y `fueron_en_contra`. Las dos columnas que importan
+son las que se suelen omitir: **`no_medibles`** —las decisiones cuyo resultado no
+se pudo atribuir quedan afuera del porcentaje en vez de contarse como error,
+porque castigarlas empujaría a evitar las difíciles de medir— y
+**`ejecutadas_sin_revisar`**, que es la deuda: lo que se hizo y nadie volvió a
+mirar.
+
+La calibración es un porcentaje de aciertos sobre revisiones que **escribió una
+persona**. No hay ningún modelo que se ajuste solo.
 
 ---
 
@@ -1021,7 +1040,7 @@ hoy no hay que pagar casi nada.**
 
 | No pagar | Por qué | Qué hacer en cambio |
 |---|---|---|
-| **Proveedor de modelo de IA** | Nada de lo que NEXO promete hoy lo necesita. `AI_PROVIDER=none` **es un modo de operación**, no una carencia | Terminar las 35 pantallas |
+| **Proveedor de modelo de IA** | Nada de lo que NEXO promete hoy lo necesita. `AI_PROVIDER=none` **es un modo de operación**, no una carencia | Terminar el producto sin él |
 | **Motor de OCR en la nube** | Lo que llega de ARCA y de los bancos es estructurado y ya se procesa | Si hace falta, un motor local antes de un servicio |
 | **Certificado ARCA de producción** | El de homologación vence en 2028 y alcanza para todo el desarrollo | Delegar los 3 servicios que faltan: **$0** |
 | **Monitoreo / APM** | No hay tráfico que observar | Elegir destino cuando haya hosting |
@@ -1098,7 +1117,7 @@ Ordenadas por lo que destraban. El detalle vive en `PABLO_ACCIONES.md`.
 | 6 | Confirmar la matriz de planes y topes | $0 | No, pero conviene antes del primer cliente |
 | 7 | Abogado (términos y privacidad) | A confirmar | Sí para vender |
 
-**Resueltas durante esta etapa:** alcance de V1 (las 35 pantallas) e identidad
+**Resueltas durante esta etapa:** alcance de V1 (las 35 pantallas, hoy 37) e identidad
 visual (aprobada).
 
 ---
@@ -1118,7 +1137,8 @@ visual (aprobada).
 
 # 27. V1 vs V1.1 vs Futuro
 
-**V1** — las 35 pantallas a calidad de producto, sobre el motor que ya existe;
+**V1** — las pantallas a calidad de producto —**36 de 37 hoy**—, sobre el motor
+que ya existe;
 correo, pasarela y hosting contratados; ARCA en modo degradado declarado.
 
 **V1.1** — OCR de imágenes; ARCA de producción por empresa cliente; función de
@@ -1136,7 +1156,7 @@ preferencia para las recomendaciones; periodicidad anual.
 | B-2 | Hosting + dominio + SSL | Contratación | Pablo | Abierto |
 | B-3 | Pasarela de pago | Contratación | Pablo | Abierto |
 | B-4 | Términos y política de privacidad | Legal | Pablo | Abierto |
-| B-5 | Las 35 pantallas productizadas | Desarrollo | Claude | Abierto |
+| B-5 | Las 37 pantallas productizadas | Desarrollo | Claude | **36 de 37 hoy**; la última depende de §26 |
 | B-6 | Alta autoservicio completa | Desarrollo | Claude | **Cerrado hoy** |
 | B-7 | Paso cruzado por `SECURITY DEFINER` | Seguridad | Claude | **Cerrado hoy** |
 | B-8 | Menú que ofrece lo que el plan no incluye | Producto | Claude | **Cerrado hoy** |
