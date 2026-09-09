@@ -31,7 +31,7 @@ NEXO está **mejor de lo que decían las auditorías anteriores en el motor, y p
 de lo que decían en el producto**.
 
 El núcleo —contabilidad, aislamiento multiempresa, trazabilidad, facturación—
-resistió el examen adversarial. Los 2.285 tests pasan **sobre una base
+resistió el examen adversarial. Los 2.286 tests pasan **sobre una base
 reconstruida desde cero** —lo que no es un detalle, ver H-8—, el libro cuadra
 contra movimientos reales, la cadena de auditoría detecta una entrada
 adulterada, y no hay una sola tabla con `company_id` sin RLS forzado.
@@ -41,8 +41,8 @@ en abrir el navegador y recorrer el alta de punta a punta como lo haría alguien
 que llega a pagar. Estaba **cortada en tres lugares distintos**, y ningún test lo
 veía porque todos los endpoints funcionaban por separado.
 
-Los ocho hallazgos nuevos. Ninguno figura en las auditorías anteriores de este
-repositorio, y siete de los ocho no los podía ver ningún test que existiera:
+Los nueve hallazgos nuevos. Ninguno figura en las auditorías anteriores de este
+repositorio, y ocho de los nueve no los podía ver ningún test que existiera:
 
 | # | Hallazgo | Gravedad | Estado |
 |---|---|---|---|
@@ -54,6 +54,7 @@ repositorio, y siete de los ocho no los podía ver ningún test que existiera:
 | **H-6** | Un secreto TOTP ilegible dejaba **inalcanzable el código de recuperación** | Alto | Cerrado |
 | **H-7** | Errores 4xx del framework se contestaban y registraban como **500** | Medio | Cerrado |
 | **H-8** | **Ajustar stock devolvía 500 en toda instalación nueva**, y la verificación daba verde porque corría contra una base arrastrada | **Crítico** | Cerrado (0110, S-20) |
+| **H-9** | Un **CUIT ya registrado** en el alta devolvía «Error interno» | Alto | Cerrado (S-33) |
 
 Todos están corregidos, con control automático que los detecta si vuelven, y
 **cada control fue observado fallando** antes de darlo por bueno.
@@ -65,7 +66,7 @@ instalación nueva —es decir, la única que va a existir en producción— no 
 tiene, y ahí la operación fallaba. Detalle en §8.
 
 **Veredicto anticipado (el detalle está en §31): 🟡 CASI.** Lo que falta para
-vender no es motor: es terminar tres pantallas y tres
+vender no es motor: es terminar dos pantallas y tres
 decisiones de Pablo que no cuestan casi nada. Ver §22: **hoy no hay que pagar
 prácticamente nada.**
 
@@ -625,9 +626,8 @@ Lo que se corrigió en esta auditoría, ya verificado en pantalla:
 
 Lo que **falta** (§24 lo detalla):
 
-- **Estados de carga:** una pantalla que tarda no dice que está trabajando.
-- Los identificadores crudos que quedan en Configuración.
-- El rediseño del panel de inicio.
+- El rediseño del **panel de inicio**, que sigue siendo una lista de tablas.
+- **Propuestas de IA**, que sin proveedor de modelo no tiene nada que revisar.
 
 ## Clasificación de las 37 pantallas
 
@@ -673,7 +673,7 @@ ejercicio y el marco contable) aunque esté escrito con identificadores.
 | Señales | 🟢 | — |
 | Auditoría | 🟢 | — |
 | Plan (suscripción) | 🟢 | Topes en castellano hoy |
-| Configuración | 🟡 | Permisos y pasos faltantes con identificadores crudos |
+| Configuración | 🟢 | Permisos plegados y textos en castellano hoy |
 | Cambiar empresa | 🟢 | Salida al alta agregada hoy |
 | **Ingresar** | 🟢 | Respuestas legibles hoy |
 | **Crear mi empresa** (nueva) | 🟢 | Errores de validación legibles hoy |
@@ -869,7 +869,7 @@ Al cierre de esta auditoría:
 
 ```
 Test Files   151 passed (151)
-Tests        2.285 passed (2285)
+Tests        2.286 passed (2286)
 ```
 
 Controles de la serie S-*: **33** (S-32 y S-33 son nuevos de esta auditoría).
@@ -894,7 +894,7 @@ roto. **Reconstruir la base de pruebas cada tanto no es higiene: es medición.**
 # 19. E2E
 
 **Se recorrió el sistema como cliente, con el navegador, por primera vez.** Ese
-recorrido produjo H-3, H-4, H-5 y H-6 — cuatro de los ocho hallazgos, incluido
+recorrido produjo H-3, H-4, H-5, H-6 y H-9 — cinco de los nueve hallazgos, incluido
 el único bloqueante de V1.
 
 Dos recorridos completos, con cuentas nuevas de verdad:
@@ -1015,18 +1015,18 @@ Precios: **A CONFIRMAR.** No invento números.
 Todo esto es trabajo mío y **ninguno depende de un pago**:
 
 1. **Terminar de productizar las pantallas.** Están clasificadas (§11) y las
-   🟢 son **34 de 37**. Las tres que quedan: estados de carga —una pantalla que
-   tarda no dice que está trabajando—, los identificadores crudos que quedan en
-   Configuración, y el panel de inicio.
+   🟢 son **35 de 37**. Quedan dos: el **panel de inicio**, que hay que rediseñar
+   como entrada al día, y **Propuestas de IA**, que sin proveedor de modelo no
+   tiene nada que revisar (§15).
 2. **Rediseñar el panel de inicio** como entrada real al trabajo del día.
 3. **Motor de OCR local**, si se decide que V1 lo necesita (§26).
 4. **Restaurar un backup en una base vacía** y verificar que la contabilidad
    cuadre después. Los scripts existen; la restauración no se probó nunca.
-5. **Seguir abriendo el producto.** Ocho hallazgos, y los cinco más caros
+5. **Seguir abriendo el producto.** Nueve hallazgos, y los cinco más caros
    salieron de abrir pantallas y reconstruir la base, no de leer código.
 
 **Ya hechos durante esta auditoría:** clasificar las 37 pantallas, correr los
-benchmarks, los ocho hallazgos con sus controles, y la primera tanda de
+benchmarks, los nueve hallazgos con sus controles, y la primera tanda de
 productización:
 
 | | |
@@ -1037,6 +1037,9 @@ productización:
 | Estados vacíos | Cuatro pantallas que eran una tabla con encabezados y nada |
 | Énfasis de la API | Se dibuja como énfasis, no como asteriscos |
 | Textos con rutas de la API | El correo de alta y tres mensajes de error, reescritos para una persona |
+| Estados de carga | Una barra en `api()` —el único punto de contacto— que aparece a los 250 ms y cuenta pedidos en vuelo |
+| Configuración | El rol adelante y los 75 códigos de permiso plegados; lo que falta declarar, en castellano |
+| CUIT repetido | 409 con qué hacer, en vez de «Error interno» (H-9) |
 
 ---
 
@@ -1129,8 +1132,8 @@ preferencia para las recomendaciones; periodicidad anual.
 
 Se puede salir a producción cuando **todo** esto sea cierto:
 
-1. Las 37 pantallas están productizadas: **34 lo están hoy**; faltan estados de
-   carga, los identificadores de Configuración y el panel de inicio.
+1. Las 37 pantallas están productizadas: **35 lo están hoy**; falta el panel de
+   inicio, y Propuestas de IA depende de una decisión (§26).
 2. Correo, hosting y pasarela contratados y verificados con un cobro de prueba.
 3. El alta autoservicio corre de punta a punta con correo real. *(La parte
    técnica ya está: S-33.)*
@@ -1156,11 +1159,11 @@ borrar contabilidad ajena; un relevamiento fiscal que afirmaba sin preguntar; un
 alta autoservicio que no llegaba al final; un plan de entrada donde más de la
 mitad de los botones fallaban; y **una operación —ajustar stock— que estaba rota
 en toda instalación nueva mientras la verificación daba verde**. Nada de eso
-figuraba en ninguna auditoría anterior. Los ocho están cerrados, verificados, y
+figuraba en ninguna auditoría anterior. Los nueve están cerrados, verificados, y
 con un control que los detecta si vuelven — cada uno observado fallando.
 
 **Por qué no es 🟢:** por dos motivos, y los dos son condiciones tuyas del §48.
-Quedan tres pantallas sin llegar a calidad de producto (§11), y **el flujo
+Quedan dos pantallas sin llegar a calidad de producto (§11), y **el flujo
 comercial normal todavía necesita un proveedor de correo para completarse solo**.
 La parte técnica de ese flujo ya está y se camina entera en S-33; lo que falta es
 que el correo salga de la bandeja del servidor.

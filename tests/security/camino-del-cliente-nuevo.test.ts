@@ -212,6 +212,67 @@ suite('S-33 — el camino del cliente nuevo llega hasta el final', () => {
     expect(prueba.statusCode, prueba.body).toBe(200);
     expect((prueba.json() as { enPrueba: boolean }).enPrueba).toBe(true);
   });
+
+  /**
+   * El caso que va a pasar seguido: el CUIT ya está.
+   *
+   * El contador que registró el estudio y no se acuerda, o el socio que se
+   * adelantó. `organizations.tax_id` es único —dos estudios con el mismo CUIT
+   * serían dos verdades sobre el mismo contribuyente— y la violación de
+   * unicidad salía como **500 «Error interno»**, en la primera pantalla que ve
+   * un cliente. Lo encontró la auditoría del 2026-09-09 reusando un CUIT.
+   *
+   * Esa persona necesita saber que la cuenta existe y a quién preguntarle.
+   */
+  it('un CUIT ya registrado se contesta como conflicto, no como falla del servidor', async () => {
+    const otro = `segundo-en-la-fila-${correo}`;
+    await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: { email: otro, password: CLAVE, fullName: 'Segundo En La Fila' },
+    });
+    const bandeja = await raw.query<{ cuerpo: string }>(
+      `SELECT cuerpo FROM email_outbox
+        WHERE destinatario = $1 AND tipo = 'VERIFICACION_DE_ALTA'
+        ORDER BY creado_el DESC LIMIT 1`,
+      [otro],
+    );
+    await app.inject({
+      method: 'POST',
+      url: '/auth/verificar-correo',
+      payload: { token: /\n\n(\S+)\n/.exec(bandeja.rows[0]?.cuerpo ?? '')?.[1] },
+    });
+    const ingreso = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: otro, password: CLAVE },
+    });
+    const cookie = galleta(ingreso);
+
+    // El mismo CUIT que dio de alta el test de arriba.
+    const r = await app.inject({
+      method: 'POST',
+      url: '/onboarding/empresa',
+      headers: { cookie },
+      payload: {
+        estudio: 'Estudio repetido',
+        razonSocial: 'Repetida SRL',
+        cuit,
+        tipoEntidad: 'SRL',
+        jurisdiccion: 'AR-C',
+        cierreEjercicio: '12-31',
+        plan: 'GESTION',
+      },
+    });
+
+    expect(r.statusCode, r.body).toBe(409);
+    const cuerpo = r.json() as { message: string };
+    expect(cuerpo.message).toContain(cuit);
+    expect(cuerpo.message).toContain('ya está registrado');
+    // Y no dice de quién es: sería un oráculo para averiguar en qué estudio
+    // está un CUIT cualquiera.
+    expect(cuerpo.message).not.toContain(correo);
+  });
 });
 
 describe('S-33 — cada parada del camino tiene pantalla propia', () => {

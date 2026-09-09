@@ -120,6 +120,22 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
 
     const actorId = `user:${auth.user.userId}`;
 
+    /**
+     * Un CUIT que ya existe no es una falla del servidor.
+     *
+     * `organizations.tax_id` y `companies.cuit` son únicos, y con razón: dos
+     * estudios con el mismo CUIT serían dos verdades sobre el mismo
+     * contribuyente. Lo que estaba mal era cómo se contestaba — la violación de
+     * unicidad salía como **500 «Error interno»**, en la primera pantalla que ve
+     * un cliente. Lo vio la auditoría del 2026-09-09 al reusar un CUIT.
+     *
+     * Y es un caso que va a pasar seguido: el contador que ya registró el
+     * estudio y no se acuerda, o el socio que se adelantó. Esa persona necesita
+     * saber que la cuenta existe y a quién preguntarle, no «Error interno».
+     */
+    const seCruzaConUnoQueYaEstaba = (error: unknown): boolean =>
+      typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
+
     const resultado = await withoutCompany(actorId, async (tx) => {
       // Quien ya administra un estudio no pasa por acá: el alta normal sabe a
       // qué estudio agregar la empresa, y esta ruta crearía un segundo estudio
@@ -140,26 +156,33 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
         return { estado: 'PLAN_DESCONOCIDO' as const };
       }
 
-      const org = await tx.query<{ create_organization: string }>(
-        'SELECT create_organization($1, $2, $3)',
-        [body.estudio, body.cuit, auth.user.userId],
-      );
-      const organizationId = org.rows[0]!.create_organization;
+      let organizationId: string;
+      let companyId: string;
+      try {
+        const org = await tx.query<{ create_organization: string }>(
+          'SELECT create_organization($1, $2, $3)',
+          [body.estudio, body.cuit, auth.user.userId],
+        );
+        organizationId = org.rows[0]!.create_organization;
 
-      const empresa = await tx.query<{ create_company: string }>(
-        'SELECT create_company($1, $2, $3, $4, $5, $6, $7, $8)',
-        [
-          auth.user.userId,
-          organizationId,
-          body.razonSocial,
-          body.cuit,
-          body.tipoEntidad,
-          body.jurisdiccion,
-          body.organismo ?? '',
-          body.cierreEjercicio,
-        ],
-      );
-      const companyId = empresa.rows[0]!.create_company;
+        const empresa = await tx.query<{ create_company: string }>(
+          'SELECT create_company($1, $2, $3, $4, $5, $6, $7, $8)',
+          [
+            auth.user.userId,
+            organizationId,
+            body.razonSocial,
+            body.cuit,
+            body.tipoEntidad,
+            body.jurisdiccion,
+            body.organismo ?? '',
+            body.cierreEjercicio,
+          ],
+        );
+        companyId = empresa.rows[0]!.create_company;
+      } catch (error) {
+        if (seCruzaConUnoQueYaEstaba(error)) return { estado: 'CUIT_REPETIDO' as const };
+        throw error;
+      }
 
       // Quien crea la empresa la administra. Sin esto quedaría una empresa a la
       // que nadie puede entrar, incluido quien la creó.
@@ -181,6 +204,14 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     }
     if (resultado.estado === 'PLAN_DESCONOCIDO') {
       throw badRequest(`No hay un plan disponible con el código ${body.plan}.`);
+    }
+    if (resultado.estado === 'CUIT_REPETIDO') {
+      // No se dice quién lo registró: sería un oráculo para averiguar en qué
+      // estudio está un CUIT cualquiera. Se dice qué pasó y a quién preguntar.
+      throw conflict(
+        `El CUIT ${body.cuit} ya está registrado en NEXO. Si es tu empresa, pedile acceso a ` +
+          'quien la dio de alta; si creés que es un error, escribinos.',
+      );
     }
 
     // La prueba se inicia con la empresa en contexto: `company_subscriptions`

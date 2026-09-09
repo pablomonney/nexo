@@ -218,6 +218,23 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .p-ia{background:var(--ia-bg);color:var(--ia)}
 .p-neu{background:var(--hund);color:var(--tinta3);border-color:var(--linea2)}
 
+/* ── La barra de «estoy trabajando» ───────────────────────────────────────
+   Dos píxeles arriba de todo, con el cian de la marca corriendo de izquierda a
+   derecha. No dice cuánto falta —no se sabe— así que no finge una barra de
+   progreso: dice que hay algo en curso, que es lo único cierto.
+
+   Con `prefers-reduced-motion` se queda quieta y se muestra igual: la señal no
+   depende del movimiento. */
+#cargando{position:fixed;top:0;left:0;right:0;height:2px;z-index:100;
+          background:var(--linea);overflow:hidden}
+#cargando::after{content:"";position:absolute;top:0;bottom:0;width:40%;
+                 background:linear-gradient(90deg,transparent,var(--acento),transparent);
+                 animation:corre 1.1s ease-in-out infinite}
+@keyframes corre{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
+@media (prefers-reduced-motion: reduce){
+  #cargando::after{animation:none;width:100%;background:var(--acento);opacity:.6}
+}
+
 /* ── Avisos ───────────────────────────────────────────────────────────────── */
 .aviso{background:var(--hund);border-left:3px solid var(--linea2);
        padding:var(--e2) var(--e3);margin:var(--e3) 0;
@@ -303,6 +320,10 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 </style>
 </head>
 <body>
+
+<!-- La señal de que el sistema está trabajando. Arriba de todo y de dos píxeles:
+     tiene que verse desde cualquier pantalla sin taparle nada a ninguna. -->
+<div id="cargando" role="status" aria-live="polite" aria-label="Cargando" hidden></div>
 
 <header>
   <!-- La marca va dibujada en SVG y no tipografiada: no depende de que exista
@@ -3364,21 +3385,66 @@ function aplicarTema(tema) {
   aplicarTema(guardado === 'claro' ? 'claro' : 'oscuro');
 })();
 
+/**
+ * Que se note que el sistema está trabajando.
+ *
+ * Una pantalla que tarda y no dice nada se lee como una pantalla rota, y la
+ * persona vuelve a apretar el botón. Con `work_queue` en 429–564 ms medidos
+ * —lo más lento del sistema, y lo primero que se abre al entrar— eso pasa.
+ *
+ * Va acá y no pantalla por pantalla porque `api()` es el único punto de
+ * contacto con el servidor: una barra, treinta y siete pantallas, y ninguna
+ * chance de que a la número treinta y ocho se le olvide.
+ *
+ * **Se espera un cuarto de segundo antes de mostrarla.** Casi todas las
+ * consultas terminan antes de eso, y una barra que parpadea en cada clic hace
+ * más ruido que información: la señal tiene que aparecer cuando hay algo que
+ * señalar. Y se cuenta en vez de encender y apagar, porque una pantalla dispara
+ * varias consultas a la vez y la primera en volver apagaría la de las otras.
+ */
+let pedidosEnVuelo = 0;
+let relojDeLaBarra = null;
+const DEMORA_ANTES_DE_AVISAR = 250;
+
+function empezoUnPedido() {
+  pedidosEnVuelo += 1;
+  if (relojDeLaBarra !== null) return;
+  relojDeLaBarra = setTimeout(() => {
+    relojDeLaBarra = null;
+    if (pedidosEnVuelo > 0) E('cargando').hidden = false;
+  }, DEMORA_ANTES_DE_AVISAR);
+}
+
+function terminoUnPedido() {
+  pedidosEnVuelo = Math.max(0, pedidosEnVuelo - 1);
+  if (pedidosEnVuelo > 0) return;
+  if (relojDeLaBarra !== null) { clearTimeout(relojDeLaBarra); relojDeLaBarra = null; }
+  E('cargando').hidden = true;
+}
+
 /** Único punto de contacto con la API. La empresa viaja en la cabecera, siempre. */
 async function api(method, url, cuerpo, esForma) {
   const cab = { accept: 'application/json' };
   if (estado.empresa) cab['x-company-id'] = estado.empresa;
   if (cuerpo !== undefined && !esForma) cab['content-type'] = 'application/json';
 
-  const r = await fetch(url, {
-    method,
-    headers: cab,
-    credentials: 'same-origin',
-    body: cuerpo === undefined ? undefined : (esForma ? cuerpo : JSON.stringify(cuerpo)),
-  });
-  let datos = null;
-  try { datos = await r.json(); } catch (e) { /* 204 y similares */ }
-  return { ok: r.ok, status: r.status, datos };
+  empezoUnPedido();
+  try {
+    const r = await fetch(url, {
+      method,
+      headers: cab,
+      credentials: 'same-origin',
+      body: cuerpo === undefined ? undefined : (esForma ? cuerpo : JSON.stringify(cuerpo)),
+    });
+    let datos = null;
+    try { datos = await r.json(); } catch (e) { /* 204 y similares */ }
+    return { ok: r.ok, status: r.status, datos };
+  } finally {
+    // En `finally` y no después del `return`: si la red se cae, la barra
+    // tiene que apagarse igual. Una barra que queda prendida para siempre es
+    // peor que no tenerla — dice «esperá» sobre algo que ya no va a llegar.
+    terminoUnPedido();
+  }
 }
 
 /**
@@ -3459,6 +3525,24 @@ const nombreDelTope = (recurso, tope) => {
   const f = NOMBRE_DEL_RECURSO[recurso];
   return f ? f(tope) : recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
 };
+
+/**
+ * Lo que falta declarar para resolver la normativa, dicho como una frase.
+ *
+ * `GET /normativa/reglas` contesta con identificadores —es el contrato de la
+ * API y está bien que lo sea— y la consola los mostraba tal cual: «Falta
+ * declarar: EJERCICIO_QUE_CONTENGA_LA_FECHA, MARCO_CONTABLE_DECLARADO». Son dos
+ * cosas que el usuario **puede resolver**, y para eso primero tiene que
+ * entender qué le están pidiendo.
+ */
+const FALTA_EN_CASTELLANO = {
+  EJERCICIO_QUE_CONTENGA_LA_FECHA:
+    'abrir un ejercicio que contenga esta fecha (una norma profesional se ata al inicio del ' +
+    'ejercicio, no al hecho)',
+  MARCO_CONTABLE_DECLARADO: 'declarar el marco contable del ente, en Configuración',
+};
+const faltaEnCastellano = (codigo) =>
+  FALTA_EN_CASTELLANO[codigo] ?? codigo.toLowerCase().replace(/_/g, ' ');
 
 const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
@@ -10866,9 +10950,20 @@ async function cargarConfig() {
       fila('Organismo', c.regulator) + fila('Cierre de ejercicio', c.fiscalYearEnd) +
       fila('Marco contable', (empresa.datos.reportingFramework || {}).framework || 'sin fijar') +
       '</dl>';
+    // El rol adelante; los códigos de permiso, plegados.
+    //
+    // No se borran: son exactamente lo que hace falta el día que alguien no
+    // entiende un 403, y por eso siguen enteros y en monoespaciada. Lo que
+    // cambia es que dejan de ser lo primero que se lee: cien códigos separados
+    // por puntos no le dicen nada a quien vino a mirar su acceso.
+    const permisos = empresa.datos.permissions || [];
+    const fuera = (empresa.datos.fueraDelPlan || []).length;
     caja.innerHTML += '<h3>Tu acceso</h3><div class="aviso">' +
       (empresa.datos.roles || []).map((r) => '<span class="p p-neu">' + escapar(r) + '</span>').join(' ') +
-      '<br><span class="mono">' + escapar((empresa.datos.permissions || []).join(' · ')) + '</span></div>';
+      ' — ' + permisos.length + ' permiso(s) sobre esta empresa' +
+      (fuera === 0 ? '' : ', y ' + fuera + ' módulo(s) que tu plan no incluye') + '.' +
+      '<details class="tecnico"><summary>Ver los permisos uno por uno</summary>' +
+      '<pre>' + escapar(permisos.join('\n')) + '</pre></details></div>';
   }
 
   if (puede('user:read')) {
@@ -10944,10 +11039,13 @@ async function cargarConfig() {
           ? '<span class="p p-mal">sin declarar</span>'
           : '<span class="mono">' + escapar(v.contexto.marco) + '</span>') + '</p>' +
         (v.motivo ? '<div class="aviso">' + escapar(v.motivo) + '</div>' : '') +
+        // Los identificadores son el contrato de la API y está bien que lo
+        // sean; lo que no puede es que salgan tal cual a la pantalla. Decía
+        // «Falta declarar: EJERCICIO_QUE_CONTENGA_LA_FECHA, MARCO_CONTABLE_DECLARADO».
         (v.faltaDeclarar.length === 0
           ? ''
-          : '<div class="aviso error">Falta declarar: ' +
-            escapar(v.faltaDeclarar.join(', ')) + '</div>') +
+          : '<div class="aviso error">Falta ' +
+            escapar(v.faltaDeclarar.map(faltaEnCastellano).join('; ')) + '.</div>') +
         (v.reglas.length === 0
           ? ''
           : '<div class="tabla"><table><thead><tr><th>Regla</th><th>Estado</th><th>Norma</th>' +
