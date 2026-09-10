@@ -241,11 +241,20 @@ if [[ "$(consulta 'SELECT 1')" == "1" ]]; then
 
   # El rol con el que conecta la aplicación. Un superusuario acá haría que RLS
   # no se aplique a ninguna consulta escrita fuera de los envoltorios.
-  attrs=$(consulta "SELECT rolcanlogin||' '||rolsuper||' '||rolbypassrls FROM pg_roles WHERE rolname='nexo_app'")
-  if [[ "$attrs" == "t f f" ]]; then
+  # Se piden como enteros y no como booleanos, a propósito.
+  #
+  # `psql -tA` imprime `t`/`f` cuando la columna sale sola, y `true`/`false`
+  # cuando se la concatena —porque ahí PostgreSQL la castea a texto—. Comparar
+  # contra una de las dos formas hace que el control falle sobre un sistema
+  # sano, que es la peor clase de rojo: enseña a ignorarlo. Con `::int` hay una
+  # sola representación posible.
+  attrs=$(consulta "SELECT rolcanlogin::int||rolsuper::int||rolbypassrls::int FROM pg_roles WHERE rolname='nexo_app'")
+  if [[ "$attrs" == "100" ]]; then
     ok "nexo_app: LOGIN, NOSUPERUSER, NOBYPASSRLS"
+  elif [[ -z "$attrs" ]]; then
+    mal "no existe el rol nexo_app"
   else
-    mal "nexo_app tiene atributos inesperados: '$attrs' (se esperaba 't f f')"
+    mal "nexo_app: login/super/bypassrls = $attrs (se esperaba 100)"
   fi
 
   miembro=$(consulta "SELECT pg_has_role('nexo_app','aai_app','MEMBER')")
@@ -277,7 +286,12 @@ if [[ "$AUDITAR" -eq 0 ]]; then
   chmod 750 "$DOCS"
 fi
 if [[ -d "$DOCS" ]]; then
-  ok "$DOCS ($(stat -c '%U:%G %a' "$DOCS"), $(find "$DOCS" -type f 2>/dev/null | wc -l) archivo(s))"
+  # El dueño se informa **numérico**: `%U` intenta resolver el uid contra los
+  # usuarios del host y muestra `UNKNOWN` para el 1000 del contenedor, que es
+  # correcto y se lee como un problema.
+  ok "$DOCS (uid:gid $(stat -c '%u:%g' "$DOCS"), permisos $(stat -c '%a' "$DOCS"), $(find "$DOCS" -type f 2>/dev/null | wc -l) archivo(s))"
+  [[ "$(stat -c '%u' "$DOCS")" == "1000" ]] && ok "pertenece al uid 1000, que es 'node' en la imagen" \
+                                            || mal "el uid no es 1000: el contenedor no va a poder escribir"
 else
   mal "no existe $DOCS"
 fi
@@ -330,6 +344,34 @@ if docker ps --format '{{.Names}}' | grep -qx "$CONTENEDOR_APP"; then
   ro=$(docker inspect "$CONTENEDOR_APP" --format '{{.HostConfig.ReadonlyRootfs}}')
   [[ "$ro" == "true" ]] && ok "sistema de archivos de solo lectura" || aviso "rootfs escribible"
 
+  # La persistencia, probada y no supuesta.
+  #
+  # Que el directorio exista y esté montado no prueba que el contenedor pueda
+  # escribir: corre como `node` con el rootfs de solo lectura, así que una
+  # escritura mal permisada falla con EACCES y una ruta fuera del volumen falla
+  # con EROFS. Las dos aparecerían recién al subir el primer comprobante.
+  marca="/app/var/documents/.escritura-$(date +%s)"
+  if docker exec "$CONTENEDOR_APP" sh -c "printf ok > '$marca'" 2>/dev/null; then
+    if [[ -f "${DOCS}/$(basename "$marca")" ]]; then
+      ok "el contenedor escribe en el volumen, y el archivo aparece en el host"
+      rm -f "${DOCS}/$(basename "$marca")"
+    else
+      mal "el contenedor escribió pero el archivo no está en $DOCS: el montaje no es el que se cree"
+    fi
+  else
+    mal "el contenedor NO puede escribir en /app/var/documents (permisos o rootfs)"
+  fi
+
+  # Y que el resto del sistema de archivos siga cerrado: es lo que promete
+  # `read_only`, y de eso depende que una escritura mal dirigida se note acá y
+  # no en producción.
+  if docker exec "$CONTENEDOR_APP" sh -c 'printf x > /app/prueba-rofs' 2>/dev/null; then
+    mal "el contenedor pudo escribir fuera del volumen: read_only no está aplicando"
+    docker exec "$CONTENEDOR_APP" rm -f /app/prueba-rofs 2>/dev/null
+  else
+    ok "fuera del volumen no se puede escribir (read_only aplicando)"
+  fi
+
   # La sonda desde dentro de la red, que es como llega Traefik.
   cuerpo=$(docker run --rm --network "$RED" --entrypoint sh "$IMAGEN" \
     -c "node -e \"fetch('http://${CONTENEDOR_APP}:3001/health/db').then(r=>r.text()).then(t=>console.log(t)).catch(e=>console.log('ERROR '+e.message))\"" 2>/dev/null)
@@ -350,9 +392,29 @@ titulo "8 · Traefik y publicación"
 if docker ps --format '{{.Names}}\t{{.Image}}' | grep -qi traefik; then
   nombre=$(docker ps --format '{{.Names}}\t{{.Image}}' | grep -i traefik | head -1 | cut -f1)
   ok "Traefik corriendo ($nombre)"
-  docker inspect "$nombre" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' \
-    | grep -q "$RED" && ok "Traefik está en la red $RED" \
-                     || mal "Traefik NO está en la red $RED: no puede llegar a NEXO"
+
+  # Cómo llega Traefik a NEXO depende de su modo de red, y las dos formas son
+  # válidas. La primera versión de este control exigía que Traefik estuviera
+  # **en** la red `nexo` y daba rojo sobre un sistema que funcionaba: este
+  # Traefik corre con `network_mode: host`, así que no está en ninguna red de
+  # Docker y alcanza los contenedores por su IP del puente.
+  #
+  # Lo que importa no es dónde está, es si llega. Así que se comprueba eso.
+  modo=$(docker inspect "$nombre" --format '{{.HostConfig.NetworkMode}}')
+  info "modo de red: $modo"
+
+  if [[ "$modo" == "host" ]]; then
+    ip=$(docker inspect "$CONTENEDOR_APP" --format "{{.NetworkSettings.Networks.${RED}.IPAddress}}" 2>/dev/null)
+    if [[ -n "$ip" ]] && curl -sS --max-time 8 "http://${ip}:3001/health" 2>/dev/null | grep -q '"status":"ok"'; then
+      ok "Traefik llega a NEXO por la IP del puente ($ip)"
+    else
+      mal "Traefik está en modo host y NO alcanza a NEXO en ${ip:-sin IP}:3001"
+    fi
+  else
+    docker inspect "$nombre" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' \
+      | grep -q "$RED" && ok "Traefik está en la red $RED" \
+                       || mal "Traefik NO está en la red $RED ni en modo host: no puede llegar"
+  fi
 else
   mal "no se encontró un contenedor de Traefik"
 fi
