@@ -202,8 +202,15 @@ set -a; . "${RAIZ}/.env" 2>/dev/null; set +a
 DB="${POSTGRES_DB:-aai}"
 ADMIN="${POSTGRES_USER:-nexo_admin}"
 
+# La contraseña se pasa **por nombre**, no por valor.
+#
+# `docker exec -e PGPASSWORD=secreto` deja el secreto en los argumentos del
+# proceso, y `ps` los muestra a cualquiera que pueda leerlos. Con `-e PGPASSWORD`
+# a secas, Docker la toma del entorno de este script y nunca aparece en argv.
+export PGPASSWORD="${POSTGRES_PASSWORD:-}"
+
 consulta() {
-  docker exec -e PGPASSWORD="${POSTGRES_PASSWORD:-}" "$CONTENEDOR_DB" \
+  docker exec -e PGPASSWORD "$CONTENEDOR_DB" \
     psql -U "$ADMIN" -d "$DB" -tAc "$1" 2>/dev/null
 }
 
@@ -218,10 +225,15 @@ if [[ "$(consulta 'SELECT 1')" == "1" ]]; then
     aviso "aplicadas $aplicadas, en disco $disco"
     if [[ "$AUDITAR" -eq 0 ]]; then
       info "migrando (contenedor aparte, nunca el que sirve)..."
+      # Mismo cuidado que arriba: la cadena de conexión **se arma adentro** del
+      # contenedor a partir de variables pasadas por nombre. Construirla acá la
+      # dejaría, con contraseña incluida, en los argumentos de `docker run`.
+      PGPASSWORD="$PGPASSWORD" PGUSER="$ADMIN" PGDB="$DB" PGHOST="$CONTENEDOR_DB" \
       docker run --rm --network "$RED" \
-        -e DATABASE_URL="postgresql://${ADMIN}:${POSTGRES_PASSWORD}@${CONTENEDOR_DB}:5432/${DB}" \
+        -e PGPASSWORD -e PGUSER -e PGDB -e PGHOST \
         -v "${RAIZ}:/repo" -w /repo --entrypoint sh "$IMAGEN" \
-        -c 'node scripts/migrate.mjs up' 2>&1 | tail -8 | sed 's/^/      /'
+        -c 'DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/${PGDB}" node scripts/migrate.mjs up' \
+        2>&1 | tail -8 | sed 's/^/      /'
       aplicadas=$(consulta 'SELECT count(*) FROM schema_migrations')
       [[ "$aplicadas" == "$disco" ]] && ok "migraciones al día: $aplicadas" || mal "siguen faltando: $aplicadas de $disco"
     fi
