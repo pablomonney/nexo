@@ -39,6 +39,7 @@ import { imputacionRoutes } from './routes/imputaciones.js';
 import { stockRoutes } from './routes/stock.js';
 import { activoRoutes } from './routes/activos.js';
 import { integracionRoutes } from './routes/integraciones.js';
+import { migracionRoutes } from './routes/migraciones.js';
 import { analiticaRoutes } from './routes/analitica.js';
 import { analisisRoutes } from './routes/analisis.js';
 import { precioRoutes } from './routes/precios.js';
@@ -151,8 +152,17 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
             },
           }
         : false,
-    // Sin esto, un proxy podría inyectar cabeceras de identidad.
-    trustProxy: false,
+    // Quién dice cuál es la dirección del cliente.
+    //
+    // Por omisión, nadie: sin proxy declarado, `X-Forwarded-For` se ignora y
+    // `request.ip` es la conexión real. Eso impide que cualquiera se invente una
+    // dirección para esquivar el límite de intentos o ensuciar la bitácora.
+    //
+    // Detrás de un proxy hay que activarlo (`TRUST_PROXY=true`), y el motivo no
+    // es cosmético: con `false`, `request.ip` pasa a ser la del proxy **para
+    // todos**, y el límite por origen se convierte en un límite global. El
+    // razonamiento completo está en `config.ts`.
+    trustProxy: config.trustProxy,
     bodyLimit: 1_048_576,
   });
 
@@ -223,6 +233,22 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
     reply.header('Referrer-Policy', 'no-referrer');
     // La API no sirve HTML; una CSP restrictiva no cuesta nada.
     reply.header('Content-Security-Policy', "default-src 'none'");
+
+    // HSTS, y solo en producción.
+    //
+    // Le dice al navegador que a este dominio se entra por HTTPS y nada más,
+    // durante un año. Cierra la ventana del primer pedido en claro, que es por
+    // donde se roba una cookie de sesión en una red ajena.
+    //
+    // Fuera de producción **no se manda**: el navegador la recordaría para
+    // `localhost` y dejaría de poder abrirse por HTTP, que es como se
+    // desarrolla. No se incluye `preload` a propósito: entrar en la lista de
+    // precarga de los navegadores es difícil de revertir y es una decisión
+    // aparte, cuando el dominio esté en uso y con todos sus subdominios en
+    // HTTPS.
+    if (config.isProduction) {
+      reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
 
     // El límite va **antes** de buscar la sesión: si no, cada intento de fuerza
     // bruta seguiría costando una consulta a la base, que es justo lo que un
@@ -303,6 +329,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(stockRoutes);
   await app.register(activoRoutes);
   await app.register(integracionRoutes);
+  await app.register(migracionRoutes);
   await app.register(analiticaRoutes);
   await app.register(analisisRoutes);
   await app.register(precioRoutes);

@@ -571,11 +571,23 @@ async function ejecutarPaso(
     resultado = intento.estado === 'SIN_PASARELA' ? 'OMITIDO' : 'HECHO';
     detalle = intento.detalle;
   } else if (paso.tipo === 'AVISO') {
-    // Avisar es mandar un correo, y no hay proveedor de correo. Se registra el
-    // paso igual y se dice que no se pudo mandar: sin registro, el ciclo lo
-    // volvería a intentar todos los días y el cliente no se enteraría igual.
+    // El aviso de cobranza **todavía no está cableado al puerto de correo**, y
+    // eso es cierto aunque haya proveedor configurado.
+    //
+    // Hasta B2.5.1 el motivo era que no había proveedor, y el detalle lo decía
+    // así. Ahora que `EMAIL_PROVIDER=resend` es posible, ese texto pasaría a
+    // ser falso: diría «falta contratar algo» sobre una instalación que ya lo
+    // contrató, y mandaría a quien lo lea a revisar una configuración que está
+    // bien. Lo que falta acá es el cableado, no el proveedor.
+    //
+    // No se conectó en B2.5.1 a propósito: mandar el aviso es una decisión de
+    // cobranza —a quién, con qué texto, cuántas veces— y no una del transporte.
+    // Se registra el paso igual: sin registro, el ciclo lo volvería a intentar
+    // todos los días y el cliente no se enteraría lo mismo.
     resultado = 'OMITIDO';
-    detalle = 'No hay proveedor de correo configurado: el aviso no se envió.';
+    detalle =
+      'El aviso de cobranza no está conectado al envío de correo: el paso quedó registrado ' +
+      'y el mensaje no salió.';
   } else {
     // La transición se pregunta antes de intentarla. El `WHERE estado = 'ACTIVA'`
     // de abajo la impediría igual, pero en silencio: la suscripción quedaría sin

@@ -20,6 +20,8 @@
 
 import { closePool, initPool } from '@aai/db';
 import { buildServer } from '@aai/api/server';
+import { encolar } from '@aai/api/correo/puerto';
+import { ProveedorDeResend } from '@aai/api/correo/resend';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { asCompany, connect, hasDatabase, seed, type Client, type Fixture } from './helpers/db.js';
@@ -288,5 +290,126 @@ suite('Alta autoservicio', () => {
       return true;
     });
     expect(encolado).toBe(true);
+  });
+
+  /**
+   * Con un proveedor conectado, `email_outbox` tiene que seguir contestando las
+   * mismas preguntas.
+   *
+   * Antes de B2.5.1 no había proveedor, así que la mitad de las columnas de la
+   * tabla —`proveedor`, `referencia_externa`, `enviado_el`, `intentos`— nunca
+   * se habían escrito con un valor de verdad. Estos casos las ejercitan con el
+   * adaptador real y un `fetch` falso: sin ellos, el primer envío en producción
+   * sería la primera vez que ese `INSERT` corre con `estado = 'ENVIADO'`, y el
+   * `CHECK outbox_enviado_con_fecha` de la 0103 es exactamente la clase de cosa
+   * que se descubre ahí.
+   *
+   * **Ninguna llamada sale a la red.** Se inyecta el `fetch`.
+   */
+  describe('la bandeja con un proveedor conectado', () => {
+    const CLAVE_SINTETICA = 're_TEST_SECRET_ONLY_no_es_una_credencial';
+
+    /** Encola con un Resend de mentira que contesta lo que se le pida. */
+    const encolarConResend = async (
+      email: string,
+      respuesta: { status: number; cuerpo: string },
+      maxRetries = 0,
+    ) => {
+      const proveedor = new ProveedorDeResend({
+        apiKey: async () => CLAVE_SINTETICA,
+        from: 'NEXO <hola@ejemplo.invalid>',
+        timeoutMs: 1_000,
+        maxRetries,
+        esperar: async () => undefined,
+        fetch: async () => ({
+          ok: respuesta.status >= 200 && respuesta.status < 300,
+          status: respuesta.status,
+          text: async () => respuesta.cuerpo,
+        }),
+      });
+
+      return asCompany(db, fx.companyA, () =>
+        encolar({ query: (t: string, v?: readonly unknown[]) => db.query(t, v as unknown[]) }, proveedor, {
+          destinatario: email,
+          asunto: 'Confirmá tu dirección para entrar a NEXO',
+          cuerpo: 'Hola,\n\nTOKEN_DE_PRUEBA_9f3c1a7e5b2d4008\n\nVence en 24 horas.',
+          tipo: 'VERIFICACION_DE_ALTA',
+        }),
+      );
+    };
+
+    const filaDe = async (email: string) => {
+      const r = await db.query<{
+        estado: string;
+        proveedor: string | null;
+        referencia_externa: string | null;
+        detalle: string | null;
+        intentos: number;
+        enviado_el: Date | null;
+      }>(
+        `SELECT estado, proveedor, referencia_externa, detalle, intentos, enviado_el
+           FROM email_outbox WHERE destinatario = $1 ORDER BY creado_el DESC LIMIT 1`,
+        [email],
+      );
+      return r.rows[0]!;
+    };
+
+    it('un envío aceptado queda con proveedor, referencia y fecha', async () => {
+      const email = `resend-ok-${stamp}@prueba.local`;
+      const r = await encolarConResend(email, {
+        status: 200,
+        cuerpo: JSON.stringify({ id: '4ef9a417-02e9-4d39-ad75-9611e0fcc33c' }),
+      });
+      expect(r.estado).toBe('ENVIADO');
+
+      const fila = await filaDe(email);
+      expect(fila.estado).toBe('ENVIADO');
+      expect(fila.proveedor).toBe('resend');
+      // Es lo que permite ir a buscar el mensaje al proveedor el día que
+      // alguien diga que no le llegó.
+      expect(fila.referencia_externa).toBe('4ef9a417-02e9-4d39-ad75-9611e0fcc33c');
+      expect(fila.enviado_el).not.toBeNull();
+      expect(fila.detalle).toBeNull();
+      expect(fila.intentos).toBe(1);
+    });
+
+    it('un rechazo queda con el motivo y sin referencia', async () => {
+      const email = `resend-mal-${stamp}@prueba.local`;
+      const r = await encolarConResend(email, {
+        status: 422,
+        cuerpo: JSON.stringify({ message: 'The from address is not verified' }),
+      });
+      expect(r.estado).toBe('FALLIDO');
+
+      const fila = await filaDe(email);
+      expect(fila.estado).toBe('FALLIDO');
+      // El CHECK `outbox_fallo_con_detalle` exige motivo: un fallo sin motivo
+      // no se puede diagnosticar una semana después.
+      expect(fila.detalle).toContain('MENSAJE_RECHAZADO');
+      expect(fila.referencia_externa).toBeNull();
+      expect(fila.enviado_el).toBeNull();
+      // Y el proveedor queda igual: se sabe quién lo rechazó.
+      expect(fila.proveedor).toBe('resend');
+    });
+
+    it('los reintentos quedan contados en la bandeja', async () => {
+      // `intentos` decía 1 fijo. Con un adaptador que reintenta un 429, esa
+      // columna mentía: quien la mirara no vería que el proveedor estuvo caído.
+      const email = `resend-reintentos-${stamp}@prueba.local`;
+      await encolarConResend(email, { status: 503, cuerpo: '{}' }, 2);
+      const fila = await filaDe(email);
+      expect(fila.intentos).toBe(3);
+      expect(fila.detalle).toContain('PROVEEDOR_CAIDO');
+    });
+
+    it('el token no llega al detalle, aunque el cuerpo sí se guarde', async () => {
+      // El cuerpo se guarda entero **a propósito**: es lo que el operador lee.
+      // Lo que no puede pasar es que el token se copie también al `detalle`,
+      // que es el campo que termina en un tablero o en un log.
+      const email = `resend-token-${stamp}@prueba.local`;
+      await encolarConResend(email, { status: 500, cuerpo: 'no es json' });
+      const fila = await filaDe(email);
+      expect(fila.detalle).not.toContain('TOKEN_DE_PRUEBA_9f3c1a7e5b2d4008');
+    });
   });
 });

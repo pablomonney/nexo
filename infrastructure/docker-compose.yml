@@ -1,6 +1,20 @@
 # Entorno de desarrollo local.
 #   docker compose -f infrastructure/docker-compose.yml up -d
 #   DATABASE_URL=postgres://aai:aai@localhost:5433/aai npm run db:migrate
+#
+# ⚠ **Solo `postgres` hace falta.** `redis` y `minio` están declarados acá y
+# ningún archivo del proyecto los usa: no hay colas y los documentos van al
+# disco local (`FilesystemDocumentStore`). Lo encontró la auditoría B-2 al
+# comparar `.env.example` contra el código —de ahí se sacaron `REDIS_URL` y las
+# cuatro `S3_*`, que nadie leía—.
+#
+# Se dejan porque este archivo es solo de desarrollo y porque el día que se
+# conecte object storage el servicio ya está escrito. Levantarlos no cuesta nada
+# y no confunden mientras esta nota esté acá; lo que sí confundía era una
+# variable de entorno que prometía una conexión inexistente.
+#
+# Para levantar únicamente lo que se usa:
+#   docker compose -f infrastructure/docker-compose.yml up -d postgres
 
 services:
   postgres:

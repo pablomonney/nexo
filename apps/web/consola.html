@@ -174,6 +174,9 @@ h4{font-size:.85rem;font-weight:600;margin:var(--e4) 0 var(--e2);color:var(--tin
 /* ── Controles ────────────────────────────────────────────────────────────── */
 label{display:block;font-size:.7rem;font-weight:600;letter-spacing:.06em;
       text-transform:uppercase;color:var(--tinta3);margin:var(--e2) 0 3px}
+/* La aclaración de que un campo no hace falta va sin mayúsculas ni negrita: es
+   una frase, no un rótulo, y leerla en versalitas cuesta más que el dato. */
+.opcional{text-transform:none;letter-spacing:0;font-weight:400;opacity:.85}
 input,select,textarea{width:100%;padding:6px 9px;background:var(--hund);
        color:var(--tinta);border:1px solid var(--linea2);border-radius:var(--r1);
        font:inherit;font-size:.87rem}
@@ -315,6 +318,11 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
            padding:var(--e3);max-height:26rem;overflow:auto}
 .evidencia img{max-width:100%;height:auto}
 
+/* La barra de avance de una importación por tandas. Se llena con `width`. */
+.barra-larga{height:8px;border-radius:999px;background:var(--linea);overflow:hidden;
+             margin:var(--e2) 0 4px}
+.barra-larga>div{height:100%;width:0;background:var(--acento);transition:width .2s ease}
+
 .grupo{border:1px solid var(--linea);border-radius:var(--r2);margin-bottom:var(--e2);
        background:var(--alto2)}
 .grupo>summary{cursor:pointer;padding:8px var(--e3);font-size:.85rem;font-weight:600;
@@ -435,6 +443,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <button data-vista="analisis">Señales</button>
   </div>
   <div class="gnav"><span class="gnav-t">Administración</span>
+    <button data-vista="migraciones">Migraciones</button>
     <button data-vista="auditoria">Auditoría</button>
     <button data-vista="suscripcion">Plan</button>
     <button data-vista="config">Configuración</button>
@@ -446,6 +455,15 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 
 <main>
 
+<!-- Vive fuera de toda vista, y por eso está acá arriba.
+
+     Una suspensión esconde casi todo el menú: sin este cartel la persona ve una
+     consola vacía y no sabe si perdió sus datos, si le sacaron los permisos o
+     si el sistema se rompió. La regla de la casa —«si el backend va a decir que
+     no, la consola no pregunta»— deja de alcanzar cuando lo que se esconde es
+     todo: ahí hay que decir por qué. -->
+<div id="suspension" hidden></div>
+
 <!-- ══ Ingresar ═══════════════════════════════════════════════════════════ -->
 <section id="v-login">
   <h2>Ingresar</h2>
@@ -454,7 +472,14 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div class="fila">
     <div><label>Correo</label><input id="email" type="email" autocomplete="username"></div>
     <div><label>Contraseña</label><input id="pass" type="password" autocomplete="current-password"></div>
-    <div><label>Código MFA (6 dígitos)</label><input id="mfa" inputmode="numeric" maxlength="6"></div>
+    <!-- «Si ya lo configuraste» y no «Código MFA»: el campo estaba rotulado como
+         si fuera obligatorio, y quien entra por primera vez todavía no tiene
+         segundo factor —se configura después, recién cuando el rol lo exige—.
+         Un campo que parece pedir algo que no existe todavía frena el ingreso
+         antes de empezar. -->
+    <div><label>Código de 6 dígitos <span class="opcional">— solo si ya configuraste el
+      segundo factor</span></label><input id="mfa" inputmode="numeric" maxlength="6"
+      placeholder="dejalo vacío la primera vez"></div>
   </div>
   <button id="b-login">Ingresar</button>
 
@@ -3108,6 +3133,132 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div id="cierre-checklist"></div>
 </section>
 
+<!-- ══ Migraciones ════════════════════════════════════════════════════════ -->
+<section id="v-migraciones" hidden>
+  <h2>Traer una empresa de otro sistema</h2>
+  <p class="ayuda">Se sube un archivo exportado del sistema anterior, NEXO lo lee, muestra
+    <strong>qué entraría y qué no</strong>, y recién ahí se confirma. Hasta que apretés
+    «Importar» no se escribe un solo dato en la empresa. Si algo sale mal después,
+    la migración se puede revertir entera.</p>
+  <p class="ayuda"><strong>Un formato soportado no es un sistema soportado.</strong> NEXO lee
+    el CSV que exporte cualquier programa; eso no quiere decir que conozca por dentro a ese
+    programa. La tabla de abajo dice cuáles traen datos hoy y qué le falta a las demás.</p>
+
+  <details class="grupo"><summary>De dónde se puede traer</summary><div>
+    <div id="mig-fuentes-msg"></div>
+    <div class="tabla"><table id="t-mig-fuentes"><thead><tr>
+      <th>Origen</th><th>Medio</th><th>Estado</th><th>Formatos</th><th>Qué falta</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h3>Qué entidades se escriben en NEXO</h3>
+    <p class="ayuda">El motor <em>transporta</em> las nueve: las lee, las mapea y las muestra
+      en la vista previa. Escribirlas en la empresa sabe menos, y cada una dice por qué.</p>
+    <div class="tabla"><table id="t-mig-entidades"><thead><tr>
+      <th>Entidad</th><th>¿Se importa?</th><th>Motivo</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div></details>
+
+  <h3>1 · Empezar una migración</h3>
+  <div class="fila">
+    <div><label>Origen</label><select id="mig-adaptador"></select></div>
+    <div><label>Nombre</label><input id="mig-titulo" placeholder="Clientes del sistema anterior"></div>
+    <div><label>Alcance</label><select id="mig-estrategia">
+      <option value="HISTORICO_COMPLETO">Todo el histórico</option>
+      <option value="APERTURA_Y_SELECTIVO">Saldos de apertura y algo más</option>
+      <option value="SOLO_SALDOS">Solo saldos</option>
+    </select></div>
+  </div>
+  <button id="b-mig-crear">Crear</button>
+  <button id="b-mig-listar" class="sec">Actualizar la lista</button>
+  <div id="mig-msg"></div>
+  <div class="tabla"><table id="t-mig"><thead><tr>
+    <th>Nombre</th><th>Origen</th><th>Estado</th><th>Archivo</th><th>Filas</th>
+    <th>Errores</th><th>Creada</th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+
+  <div id="mig-detalle" hidden>
+    <h3 id="mig-titular">Migración</h3>
+    <dl class="kv" id="mig-kv"></dl>
+
+    <h3>2 · Subir el archivo del sistema anterior</h3>
+    <p class="ayuda">CSV, XLSX, JSON, XML o un ZIP con varios adentro. Hasta 25 MB. Se guarda
+      <strong>tal como vino</strong>, fila por fila: es lo que después responde «¿de dónde
+      salió este dato?». Un archivo por migración, y no se reemplaza — si te equivocaste de
+      exportación, empezá una migración nueva.</p>
+    <div class="fila">
+      <div><label>Archivo</label><input id="mig-archivo" type="file"></div>
+    </div>
+    <button id="b-mig-subir">Subir</button>
+    <div id="mig-origen-msg"></div>
+
+    <h3>3 · Decir qué es cada columna</h3>
+    <p class="ayuda">NEXO propone una correspondencia mirando los encabezados. Es una
+      propuesta: revisala. Una columna que quede sin asignar no se importa, y eso está bien
+      cuando el archivo trae cosas que acá no van.</p>
+    <div id="mig-mapeo"></div>
+    <button id="b-mig-mapeo" class="sec" hidden>Guardar la correspondencia</button>
+    <div id="mig-mapeo-msg"></div>
+
+    <h3>4 · Ver qué entraría</h3>
+    <p class="ayuda">La validación <strong>no toca la empresa</strong>. Cuenta lo que entra,
+      lo que entra con reparos y lo que no puede entrar, y dice por qué en cada caso.</p>
+    <button id="b-mig-validar">Validar</button>
+    <div id="mig-validar-msg"></div>
+    <div class="tabla"><table id="t-mig-hallazgos"><thead><tr>
+      <th>Nivel</th><th>Fila</th><th>Campo</th><th>Qué pasa</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h3>5 · Importar</h3>
+    <p class="ayuda">Acá se escribe en la empresa. Va <strong>por tandas</strong>: cada una se
+      confirma sola, así se puede ver el avance y retomar si se corta. La contrapartida es que
+      una importación interrumpida deja escrito lo que alcanzó a entrar — identificado, para
+      poder revertirlo o seguir desde donde quedó.</p>
+    <p class="ayuda">Las entidades entran en orden de dependencia: primero depósitos y cuentas,
+      después terceros y productos, y al final lo que los necesita. Un comprobante no se puede
+      cargar antes que su cliente.</p>
+    <button id="b-mig-importar">Importar</button>
+    <button id="b-mig-cancelar" class="sec" hidden>Cancelar la importación</button>
+    <div id="mig-progreso" hidden>
+      <div class="barra-larga"><div id="mig-barra"></div></div>
+      <p class="ayuda" id="mig-progreso-texto"></p>
+    </div>
+    <div id="mig-importar-msg"></div>
+
+    <h3>6 · Qué quedó</h3>
+    <button id="b-mig-reporte" class="sec">Ver el reporte</button>
+    <div id="mig-reporte-msg"></div>
+    <div class="tabla"><table id="t-mig-reporte"><thead><tr>
+      <th>Entidad</th><th>En el origen</th><th>Importadas</th><th>Ya estaban</th>
+      <th>Rechazadas</th><th>Omitidas</th><th>Sin explicar</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Existencias, contra lo que declaraba el origen</h4>
+    <p class="ayuda">A la <strong>fecha de corte</strong>, no a hoy: si además se migraron los
+      movimientos posteriores, la existencia de hoy no tiene por qué coincidir con la que el
+      archivo declaraba. Solo aparecen los productos cuya existencia el origen declaró: de los
+      demás no se puede afirmar que sobren ni que falten.</p>
+    <div class="tabla"><table id="t-mig-stock"><thead><tr>
+      <th>Producto</th><th>Depósito</th><th>En el origen</th><th>En NEXO</th><th>Diferencia</th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <h4>Contabilidad, contra lo que declaraba el origen</h4>
+    <div class="tabla"><table id="t-mig-contable"><thead><tr>
+      <th>Concepto</th><th>En el origen</th><th>En NEXO</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+
+    <details class="grupo" id="mig-revertir"><summary>Deshacer esta migración</summary><div>
+      <p class="ayuda">Lo que la migración creó queda <strong>archivado</strong>, no borrado:
+        un tercero puede tener movimientos colgando y borrarlo dejaría la reversión a medias.
+        Lo que ya existía antes de migrar no se toca.</p>
+      <div class="fila">
+        <div><label>Motivo</label><input id="mig-motivo" placeholder="por qué se deshace"></div>
+      </div>
+      <button id="b-mig-revertir" class="sec">Revertir</button>
+      <div id="mig-revertir-msg"></div>
+    </div></details>
+  </div>
+</section>
+
 <!-- ══ Auditoría ══════════════════════════════════════════════════════════ -->
 <section id="v-auditoria" hidden>
   <h2>Auditoría</h2>
@@ -3354,7 +3505,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 // ── Estado de la sesión de trabajo ────────────────────────────────────────
 // Nada de esto se persiste: al recargar, la consola vuelve a preguntar.
 const estado = {
-  empresa: null, empresas: [], permisos: [], roles: [], fueraDelPlan: [],
+  empresa: null, empresas: [], permisos: [], roles: [], fueraDelPlan: [], suscripcion: null,
   vista: 'login', migas: [],
   documento: null, campos: [], tt: null, operacion: null, asiento: null,
   tercero: null, comercial: null, comercialBorrador: [],
@@ -3617,7 +3768,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','bandeja','documentos','propuestas','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
-                'asientos','libros','estados','cierre','auditoria','suscripcion','config'];
+                'asientos','libros','estados','cierre','migraciones','auditoria','suscripcion','config'];
 
 function ir(vista, migas) {
   estado.vista = vista;
@@ -3673,6 +3824,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'asientos') listarAsientos();
     if (v === 'cierre') listarPeriodos();
     if (v === 'estados') listarEstados();
+    if (v === 'migraciones') { cargarFuentesDeMigracion(); listarMigraciones(); }
     if (v === 'auditoria') { listarAuditoria(); cargarPeriodosParaVariacion(); }
     if (v === 'suscripcion') { cargarSuscripcion(); if (puede('billing:read')) cargarFacturacion(); }
     if (v === 'config') cargarConfig();
@@ -3979,6 +4131,8 @@ async function usarEmpresa(id) {
   estado.permisos = c.datos.permissions || [];
   estado.roles = c.datos.roles || [];
   estado.fueraDelPlan = c.datos.fueraDelPlan || [];
+  estado.suscripcion = c.datos.suscripcion || null;
+  mostrarSuspension();
 
   const elegida = estado.empresas.find((x) => x.id === id);
   E('empresa-activa').textContent = elegida ? elegida.legalName + ' · ' + elegida.cuit : '—';
@@ -4035,6 +4189,7 @@ function aplicarPermisosANav() {
     integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
     asientos: 'journal_entry:read', libros: 'report:read',
     estados: 'statement:read', cierre: 'period:read',
+    migraciones: 'migration:read',
     auditoria: 'audit:read', config: 'company:read',
     suscripcion: 'subscription:read',
   };
@@ -4076,6 +4231,38 @@ function aplicarPermisosANav() {
   for (const g of document.querySelectorAll('.gnav')) {
     g.hidden = [...g.querySelectorAll('button')].every((b) => b.hidden);
   }
+}
+
+/**
+ * El cartel de la suscripción cortada.
+ *
+ * Una suspensión deja `fueraDelPlan` con **todos** los dominios, así que el
+ * menú se vacía. Esconder los botones es correcto —cada uno terminaría en
+ * 403— pero esconderlos sin decir nada deja a la persona frente a una consola
+ * vacía, y la primera hipótesis de cualquiera ahí es «perdí mis datos».
+ *
+ * Por eso el cartel dice las tres cosas que hacen falta, en este orden: que
+ * está suspendida, que **los datos están**, y adónde ir. Suscripciones no está
+ * gobernada por ningún plan, así que ese botón sigue estando.
+ */
+function mostrarSuspension() {
+  const caja = E('suspension');
+  const s = estado.suscripcion;
+  if (!s || !s.suspendida) { caja.hidden = true; caja.innerHTML = ''; return; }
+
+  const cancelada = s.estado === 'CANCELADA';
+  caja.hidden = false;
+  caja.innerHTML =
+    '<div class="aviso error"><strong>La suscripción está ' +
+    (cancelada ? 'dada de baja' : 'suspendida') + '.</strong> ' +
+    'El acceso a los módulos está cortado. ' +
+    '<em>Tus datos siguen estando</em>: la contabilidad, los comprobantes y el historial ' +
+    'se conservan enteros y vuelven a estar a mano apenas se regularice. ' +
+    (cancelada
+      ? 'Para volver hace falta contratar una suscripción nueva.'
+      : 'Se levanta pagando la deuda emitida.') +
+    ' <button type="button" class="sec" onclick="ir(\'suscripcion\')">Ver suscripción</button>' +
+    '</div>';
 }
 
 // ══ 1 · Inicio ════════════════════════════════════════════════════════════
@@ -10372,6 +10559,437 @@ async function abrirSiguiente(fiscalYearId) {
     if (r.ok) listarPeriodos();
   };
 }
+
+// ══ 8c · Migraciones ══════════════════════════════════════════════════════
+//
+// El asistente para traer una empresa de otro sistema. Seis pasos y ninguno
+// escribe en la empresa salvo el quinto, que se aprieta a mano.
+//
+// La pantalla no decide nada por su cuenta: qué orígenes hay, qué entidades se
+// escriben y qué le falta a cada adaptador lo contesta `GET /migraciones/fuentes`
+// desde el registro del motor. Es lo que impide que la consola ofrezca un
+// «Conectar con Tango» que el código no tiene.
+
+/** Una fecha larga de la API, mostrada como día. */
+const soloDia = (t) => String(t || '').slice(0, 10) || '—';
+
+/** Los campos canónicos que se le pueden asignar a una columna, por entidad. */
+/**
+ * Los campos que admite cada entidad.
+ *
+ * Los llena `GET /migraciones/fuentes` desde el modelo canónico del motor.
+ * Esta constante era una copia y ya había divergido —decía `padre` donde el
+ * modelo dice `codigoPadre`—, así que el selector ofrecía campos que el
+ * importador ignoraba en silencio. Ahora está vacía hasta que la pantalla
+ * carga las fuentes, que es lo primero que hace.
+ */
+let CAMPOS_DE_ENTIDAD = {};
+
+/** El orden de importación, para mostrarlo. Lo decide el backend. */
+let ORDEN_DE_IMPORTACION = [];
+
+async function cargarFuentesDeMigracion() {
+  const r = await api('GET', '/migraciones/fuentes');
+  if (!r.ok) return decir('mig-fuentes-msg', r);
+
+  const fuentes = r.datos.fuentes || [];
+  E('t-mig-fuentes').querySelector('tbody').innerHTML = fuentes.map((f) =>
+    '<tr><td>' + escapar(f.nombre) + '</td><td>' + escapar(f.medio) + '</td>' +
+    '<td>' + estadoDeFuente(f) + '</td>' +
+    '<td class="mono">' + escapar((f.formatos || []).join(', ') || '—') + '</td>' +
+    '<td>' + escapar(f.queFalta || '—') + '</td></tr>').join('');
+
+  const entidades = r.datos.entidades || [];
+  E('t-mig-entidades').querySelector('tbody').innerHTML = entidades.map((e) =>
+    '<tr><td class="mono">' + escapar(e.codigo) + '</td>' +
+    '<td>' + (e.seImporta ? 'Sí' : 'Todavía no') + '</td>' +
+    '<td>' + escapar(e.motivo || '—') + '</td></tr>').join('');
+
+  // Los campos de cada entidad salen de acá y no de una copia local. Los
+  // obligatorios van primero: son los que sin asignar dejan la fila afuera.
+  CAMPOS_DE_ENTIDAD = {};
+  for (const e of entidades) {
+    CAMPOS_DE_ENTIDAD[e.codigo] = (e.obligatorios || []).concat(e.opcionales || []);
+  }
+  ORDEN_DE_IMPORTACION = r.datos.orden || [];
+
+  // Solo los que traen datos hoy entran al selector. Los demás quedan en la
+  // tabla de arriba, con lo que les falta escrito: se ven, no se eligen.
+  const usables = fuentes.filter((f) => f.sePuedeUsar);
+  E('mig-adaptador').innerHTML = usables.map((f) =>
+    '<option value="' + escapar(f.codigo) + '">' + escapar(f.nombre) + '</option>').join('');
+  E('b-mig-crear').disabled = usables.length === 0;
+}
+
+const estadoDeFuente = (f) => f.sePuedeUsar
+  ? '<span class="ok">trae datos</span>'
+  : '<span class="mono">' + escapar(f.estado) + '</span>';
+
+async function listarMigraciones() {
+  const r = await api('GET', '/migraciones');
+  if (!r.ok) return decir('mig-msg', r);
+
+  const filas = r.datos.migraciones || [];
+  const cuerpo = E('t-mig').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const m of filas) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(m.titulo) + '</td><td class="mono">' + escapar(m.adaptador) + '</td>' +
+      '<td class="mono">' + escapar(m.estado) + '</td>' +
+      '<td>' + escapar(m.archivo || '—') + '</td>' +
+      '<td class="num">' + escapar(m.filas) + '</td>' +
+      '<td class="num">' + (m.errores > 0 ? '<b>' + m.errores + '</b>' : '0') + '</td>' +
+      '<td>' + escapar(soloDia(m.creadaEl)) + '</td><td></td>';
+    const b = document.createElement('button');
+    b.className = 'sec';
+    b.textContent = 'Abrir';
+    b.onclick = () => abrirMigracion(m.id);
+    tr.lastChild.appendChild(b);
+    cuerpo.appendChild(tr);
+  }
+  if (filas.length === 0) cuerpo.innerHTML = '<tr><td colspan="8">Ninguna todavía.</td></tr>';
+}
+
+E('b-mig-listar').onclick = () => listarMigraciones();
+
+E('b-mig-crear').onclick = async () => {
+  const r = await api('POST', '/migraciones', {
+    adaptador: E('mig-adaptador').value,
+    titulo: E('mig-titulo').value.trim(),
+    estrategia: E('mig-estrategia').value,
+  });
+  decir('mig-msg', r, 'Migración creada. Subí el archivo del sistema anterior.');
+  if (r.ok) { await listarMigraciones(); abrirMigracion(r.datos.id); }
+};
+
+async function abrirMigracion(id) {
+  estado.migracion = id;
+  const r = await api('GET', '/migraciones/' + id);
+  if (!r.ok) return decir('mig-msg', r);
+
+  const m = r.datos.migracion || {};
+  E('mig-detalle').hidden = false;
+  E('mig-titular').textContent = m.titulo || 'Migración';
+  ir('migraciones', ['Migraciones', m.titulo || 'migración']);
+
+  E('mig-kv').innerHTML =
+    fila('Origen', m.adaptador) + fila('Estado', m.estado) + fila('Alcance', m.estrategia) +
+    fila('Archivo', m.archivo || 'todavía ninguno') + fila('SHA-256', m.hash || '—') +
+    fila('Creada', soloDia(m.creadaEl)) + fila('Importada', m.importadaEl ? soloDia(m.importadaEl) : '—') +
+    fila('Revertida', m.revertidaEl ? soloDia(m.revertidaEl) : '—');
+
+  dibujarMapeo(r.datos.tablas || []);
+  dibujarHallazgos(r.datos.hallazgos || []);
+
+  // Una migración que quedó a medio importar —porque se cortó el navegador, o
+  // porque alguien la canceló— tiene que mostrar por dónde iba al abrirla. Sin
+  // esto, el progreso solo existía mientras la pestaña estaba abierta.
+  const aMedias = m.estado === 'IMPORTANDO' || m.estado === 'CANCELACION_PEDIDA';
+  E('mig-progreso').hidden = !aMedias;
+  if (aMedias) {
+    const p = await api('GET', '/migraciones/' + id + '/progreso');
+    if (p.ok) {
+      dibujarProgreso(p.datos);
+      E('mig-progreso-texto').textContent +=
+        ' · quedó a medias: apretá «Importar» para seguir desde donde estaba';
+    }
+  }
+}
+
+/**
+ * Los pasos 2 a 6 necesitan una migración abierta.
+ *
+ * Sin esta guarda, apretar «Subir» antes de que termine de crearse la migración
+ * manda el pedido a `/migraciones/undefined/origen` y la pantalla muestra «id:
+ * No es un identificador válido» —un mensaje sobre un campo que nadie escribió—.
+ * Lo encontró una prueba en el navegador; ninguna de las que leen el HTML podía
+ * verlo, porque el HTML está bien: lo que faltaba era el estado.
+ */
+function hayMigracionAbierta(destino) {
+  if (estado.migracion) return true;
+  E(destino).innerHTML =
+    '<div class="aviso error"><strong>Todavía no hay una migración abierta.</strong> ' +
+    'Creá una arriba o abrí una de la lista.</div>';
+  return false;
+}
+
+E('b-mig-subir').onclick = async () => {
+  if (!hayMigracionAbierta('mig-origen-msg')) return;
+  const f = E('mig-archivo').files[0];
+  if (!f) return;
+  const forma = new FormData();
+  forma.append('file', f);
+  const r = await api('POST', '/migraciones/' + estado.migracion + '/origen', forma, true);
+  decir('mig-origen-msg', r, 'Archivo leído. Revisá la correspondencia de columnas.');
+  if (r.ok) abrirMigracion(estado.migracion);
+};
+
+/**
+ * La correspondencia entre las columnas del archivo y los campos de NEXO.
+ *
+ * Se dibuja un selector por columna, con lo que el motor propuso ya elegido.
+ * La propuesta se muestra elegida y no aplicada en silencio: quien migra tiene
+ * que poder verla y cambiarla antes de que valga.
+ */
+function dibujarMapeo(tablas) {
+  const caja = E('mig-mapeo');
+  caja.innerHTML = '';
+  E('b-mig-mapeo').hidden = tablas.length === 0;
+  if (tablas.length === 0) {
+    caja.innerHTML = '<p class="ayuda">Todavía no hay archivo.</p>';
+    return;
+  }
+
+  estado.migTablas = tablas;
+  for (const t of tablas) {
+    const bloque = document.createElement('div');
+    bloque.className = 'grupo';
+    const titulo = document.createElement('h4');
+    titulo.textContent = t.nombre + ' — ' + t.filas + ' filas';
+    bloque.appendChild(titulo);
+
+    const eleccion = document.createElement('div');
+    eleccion.className = 'fila';
+    eleccion.innerHTML =
+      '<div><label>¿Qué son estas filas?</label><select data-tabla="' + escapar(t.id) + '" ' +
+      'data-rol="entidad">' + opcionesDeEntidad(t.entidad) + '</select></div>' +
+      '<div><label>¿Se importa?</label><select data-tabla="' + escapar(t.id) + '" data-rol="incluida">' +
+      '<option value="si"' + (t.incluida ? ' selected' : '') + '>sí</option>' +
+      '<option value="no"' + (t.incluida ? '' : ' selected') + '>no</option></select></div>';
+    bloque.appendChild(eleccion);
+
+    const cols = document.createElement('div');
+    cols.className = 'fila';
+    const mapeo = t.mapeo || {};
+    for (const c of t.columnas || []) {
+      const d = document.createElement('div');
+      d.innerHTML = '<label>' + escapar(c) + '</label>' +
+        '<select data-tabla="' + escapar(t.id) + '" data-columna="' + escapar(c) + '">' +
+        opcionesDeCampo(t.entidad, mapeo[c]) + '</select>';
+      cols.appendChild(d);
+    }
+    bloque.appendChild(cols);
+    caja.appendChild(bloque);
+  }
+
+  // Cambiar la entidad cambia los campos posibles: se redibujan los selectores
+  // de esa tabla en vez de dejar ofrecidos campos de otra cosa.
+  for (const s of caja.querySelectorAll('select[data-rol="entidad"]')) {
+    s.onchange = () => {
+      for (const c of caja.querySelectorAll('select[data-tabla="' + s.dataset.tabla + '"][data-columna]')) {
+        c.innerHTML = opcionesDeCampo(s.value, c.value);
+      }
+    };
+  }
+}
+
+function opcionesDeEntidad(elegida) {
+  const nombres = Object.keys(CAMPOS_DE_ENTIDAD);
+  return '<option value="">sin decidir</option>' + nombres.map((e) =>
+    '<option value="' + e + '"' + (e === elegida ? ' selected' : '') + '>' + e + '</option>').join('');
+}
+
+function opcionesDeCampo(entidad, elegido) {
+  const campos = CAMPOS_DE_ENTIDAD[entidad] || [];
+  return '<option value="">no se importa</option>' + campos.map((c) =>
+    '<option value="' + c + '"' + (c === elegido ? ' selected' : '') + '>' + c + '</option>').join('');
+}
+
+E('b-mig-mapeo').onclick = async () => {
+  if (!hayMigracionAbierta('mig-mapeo-msg')) return;
+  const caja = E('mig-mapeo');
+  const tablas = (estado.migTablas || []).map((t) => {
+    const entidad = caja.querySelector('select[data-tabla="' + t.id + '"][data-rol="entidad"]').value;
+    const incluida = caja.querySelector('select[data-tabla="' + t.id + '"][data-rol="incluida"]').value === 'si';
+    const mapeo = {};
+    for (const s of caja.querySelectorAll('select[data-tabla="' + t.id + '"][data-columna]')) {
+      if (s.value) mapeo[s.dataset.columna] = s.value;
+    }
+    return { id: t.id, entidad: entidad || null, mapeo: mapeo, incluida: incluida };
+  });
+
+  const r = await api('POST', '/migraciones/' + estado.migracion + '/mapeo', { tablas: tablas });
+  decir('mig-mapeo-msg', r, 'Correspondencia guardada. Ahora validá.');
+};
+
+E('b-mig-validar').onclick = async () => {
+  if (!hayMigracionAbierta('mig-validar-msg')) return;
+  const r = await api('POST', '/migraciones/' + estado.migracion + '/validar');
+  decir('mig-validar-msg', r, null);
+  if (!r.ok) return;
+
+  const d = r.datos;
+  const sinEscritor = (d.sinEscritor || []).map((s) =>
+    '<li><span class="mono">' + escapar(s.entidad) + '</span> — ' + escapar(s.motivo) + '</li>').join('');
+
+  E('mig-validar-msg').innerHTML =
+    '<div class="aviso ' + (d.errores > 0 ? 'error' : 'ok') + '">' +
+    '<strong>' + d.errores + '</strong> no pueden entrar · ' +
+    '<strong>' + d.advertencias + '</strong> entran con reparos · ' +
+    '<strong>' + d.informativos + '</strong> a título informativo.' +
+    '<p>' + conEnfasis(d.alcance) + '</p>' +
+    (sinEscritor ? '<p>Se leyeron pero NEXO todavía no sabe escribirlas:</p><ul>' + sinEscritor + '</ul>' : '') +
+    '</div>';
+
+  abrirMigracion(estado.migracion);
+};
+
+function dibujarHallazgos(hallazgos) {
+  const cuerpo = E('t-mig-hallazgos').querySelector('tbody');
+  cuerpo.innerHTML = hallazgos.length === 0
+    ? '<tr><td colspan="4">Nada observado todavía.</td></tr>'
+    : hallazgos.map((h) =>
+      '<tr><td class="mono">' + escapar(h.nivel) + '</td>' +
+      '<td class="mono">' + escapar(h.fila) + '</td>' +
+      '<td class="mono">' + escapar(h.campo || '—') + '</td>' +
+      '<td>' + escapar(h.mensaje) + '</td></tr>').join('');
+}
+
+/**
+ * La importación, en vueltas.
+ *
+ * Cada llamada corre unas cuantas tandas y vuelve con el progreso. Se repite
+ * mientras el backend diga que queda trabajo. Es la contrapartida de tener
+ * puntos de control: el pedido no queda colgado media hora, y entre vuelta y
+ * vuelta la pantalla puede mostrar por dónde va y ofrecer el botón de cancelar.
+ */
+E('b-mig-importar').onclick = async () => {
+  if (!hayMigracionAbierta('mig-importar-msg')) return;
+  E('b-mig-importar').disabled = true;
+  E('b-mig-cancelar').hidden = false;
+  E('mig-progreso').hidden = false;
+
+  let ultima = null;
+  let vueltas = 0;
+  try {
+    while (vueltas < 500) {
+      const r = await api('POST', '/migraciones/' + estado.migracion + '/importar',
+        { topeDeTandas: 20 });
+      if (!r.ok) { decir('mig-importar-msg', r, null); return; }
+      ultima = r;
+      vueltas += 1;
+      dibujarProgreso(r.datos.progreso);
+      if (!r.datos.quedaTrabajo) break;
+    }
+  } finally {
+    E('b-mig-importar').disabled = false;
+    E('b-mig-cancelar').hidden = true;
+  }
+  if (!ultima) return;
+
+  const conteos = (ultima.datos.conteos || []).map((c) =>
+    '<li><span class="mono">' + escapar(c.entidad) + '</span>: ' +
+    c.importados + ' importadas, ' + c.yaEstaban + ' ya estaban, ' +
+    c.rechazados + ' sin importar, de ' + c.enOrigen + ' en el origen</li>').join('');
+
+  E('mig-importar-msg').innerHTML =
+    '<div class="aviso ' + (ultima.datos.cancelada ? 'error' : 'ok') + '">' +
+    '<strong>Terminó en ' + escapar(ultima.datos.estado) + '.</strong>' +
+    '<ul>' + conteos + '</ul>' + conEnfasis(ultima.datos.alcance) + '</div>';
+
+  await listarMigraciones();
+  abrirMigracion(estado.migracion);
+};
+
+function dibujarProgreso(p) {
+  if (!p) return;
+  // En décimas de punto y con enteros, igual que el backend: dos lugares que
+  // dividen dan dos números distintos en cuanto uno redondea diferente.
+  const decimas = p.total === 0 ? 0 : Math.floor((p.procesadas * 1000) / p.total);
+  E('mig-barra').style.width = Math.floor(decimas / 10) + '%';
+  E('mig-progreso-texto').textContent =
+    p.procesadas.toLocaleString('es-AR') + ' de ' + p.total.toLocaleString('es-AR') +
+    ' · ' + Math.floor(decimas / 10) + ',' + (decimas % 10) + '% · tanda ' +
+    p.tandasCompletadas + ' de ' + p.tandas;
+}
+
+E('b-mig-cancelar').onclick = async () => {
+  if (!hayMigracionAbierta('mig-importar-msg')) return;
+  // El motivo se pide acá y no se inventa: la base lo exige para esta acción,
+  // y sin él nadie sabe después si fue un error de datos o una decisión.
+  const motivo = E('mig-motivo').value.trim();
+  if (motivo.length < 10) {
+    E('mig-importar-msg').innerHTML =
+      '<div class="aviso error">Escribí en «Deshacer esta migración» por qué la cancelás: ' +
+      'sin motivo, dentro de seis meses nadie sabe si fue un error de datos o una decisión.</div>';
+    E('mig-revertir').open = true;
+    return;
+  }
+  const r = await api('POST', '/migraciones/' + estado.migracion + '/cancelar', { motivo: motivo });
+  decir('mig-importar-msg', r, 'Cancelación pedida. Se detiene al terminar la tanda en curso.');
+};
+
+E('b-mig-reporte').onclick = async () => {
+  if (!hayMigracionAbierta('mig-reporte-msg')) return;
+  const r = await api('GET', '/migraciones/' + estado.migracion + '/reporte');
+  if (!r.ok) return decir('mig-reporte-msg', r);
+
+  const rec = r.datos.reconciliacion || [];
+  E('t-mig-reporte').querySelector('tbody').innerHTML = rec.length === 0
+    ? '<tr><td colspan="7">Todavía no se importó nada.</td></tr>'
+    : rec.map((e) =>
+      '<tr><td class="mono">' + escapar(e.entidad) + '</td>' +
+      '<td class="num">' + e.enOrigen + '</td><td class="num">' + e.importados + '</td>' +
+      '<td class="num">' + e.yaEstaban + '</td><td class="num">' + e.rechazados + '</td>' +
+      '<td class="num">' + e.omitidos + '</td>' +
+      '<td class="num">' + (e.cuadra ? '0' : '<b>' + e.sinExplicar + '</b>') + '</td></tr>').join('');
+
+  const stock = r.datos.stock || [];
+  E('t-mig-stock').querySelector('tbody').innerHTML = stock.length === 0
+    ? '<tr><td colspan="5">El archivo no declaró existencias.</td></tr>'
+    : stock.map((s) =>
+      '<tr><td class="mono">' + escapar(s.sku) + '</td>' +
+      '<td class="mono">' + escapar(s.deposito) + '</td>' +
+      '<td class="num">' + escapar(s.enOrigen) + '</td>' +
+      '<td class="num">' + escapar(s.enNexo) + '</td>' +
+      '<td class="num">' + (s.cuadra ? '0' : '<b>' + escapar(s.diferencia) + '</b>') +
+      '</td></tr>').join('');
+
+  const contable = r.datos.contabilidad || [];
+  E('t-mig-contable').querySelector('tbody').innerHTML = contable.length === 0
+    ? '<tr><td colspan="4">El archivo no traía asientos.</td></tr>'
+    : contable.map((c) =>
+      '<tr><td>' + escapar(c.concepto) + '</td>' +
+      '<td class="num">' + escapar(c.enOrigen) + '</td>' +
+      '<td class="num">' + escapar(c.enNexo) + '</td>' +
+      '<td>' + (c.cuadra ? 'cuadra' : '<b>no cuadra</b>') + '</td></tr>').join('');
+
+  // «Cuadrar» y «entró todo» son dos cosas distintas, y confundirlas es la
+  // forma más fácil de que alguien crea que migró algo que no migró.
+  //
+  // Cuadrar quiere decir que ninguna fila se perdió por el camino: cada una
+  // terminó importada, reconocida, rechazada u omitida. Una migración con cien
+  // filas rechazadas cuadra perfectamente. Medido en el navegador: dos asientos
+  // rechazados por citar una cuenta que no estaba, y la pantalla decía «la
+  // migración cuadra» sin más.
+  const sinEntrar = rec.reduce((a, e) => a + e.rechazados + e.omitidos, 0);
+  const titular = !r.datos.cierra
+    ? '<strong>Hay filas que no terminaron en ninguna parte.</strong> Eso es un problema del ' +
+      'importador, no de los datos.'
+    : sinEntrar > 0
+      ? '<strong>' + sinEntrar + ' fila(s) no entraron.</strong> Ninguna se perdió —cada una ' +
+        'tiene su motivo más arriba— pero no están en la empresa. Revisá los hallazgos, ' +
+        'corregí el origen y volvé a migrar lo que falta.'
+      : '<strong>Entró todo y cuadra:</strong> cada fila del origen terminó en la empresa.';
+
+  E('mig-reporte-msg').innerHTML =
+    '<div class="aviso ' + (!r.datos.cierra || sinEntrar > 0 ? 'error' : 'ok') + '">' +
+    titular + '<p>' + conEnfasis(r.datos.alcance) + '</p></div>';
+};
+
+E('b-mig-revertir').onclick = async () => {
+  if (!hayMigracionAbierta('mig-revertir-msg')) return;
+  const r = await api('POST', '/migraciones/' + estado.migracion + '/revertir',
+    { motivo: E('mig-motivo').value.trim() });
+  decir('mig-revertir-msg', r, null);
+  if (!r.ok) return;
+  E('mig-revertir-msg').innerHTML =
+    '<div class="aviso ok"><strong>' + r.datos.archivados + ' archivadas.</strong> ' +
+    conEnfasis(r.datos.alcance) + '</div>';
+  await listarMigraciones();
+  abrirMigracion(estado.migracion);
+};
 
 // ══ 9 · Auditoría ═════════════════════════════════════════════════════════
 async function listarAuditoria(cursor) {

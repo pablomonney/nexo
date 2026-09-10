@@ -75,6 +75,21 @@ const SIN_ESCRITOR = new Map<string, string>([
       'volver a asentar, que deja los dos asientos. El nombre está reservado para el día que ' +
       'exista.',
   ],
+  // Las dos de B2.5.4.1. El vocabulario se registra **antes** que el emisor a
+  // propósito: una acción fiscal que aparece en la bitácora el día que alguien
+  // la escribe, sin haber pasado por el registro, es una acción sin dominio y
+  // sin regla de motivo — y estas dos son de las que más necesitan explicarse.
+  [
+    'RECONCILIAR_EMISION',
+    'Reconciliar decide, con evidencia del organismo delante, si un comprobante en duda existe. ' +
+      'No lo escribe nadie todavía: la emisión está cerrada (`EMISION_HABILITADA = false`) y ' +
+      'la reconciliación necesita `FECompConsultar`, que no está implementado.',
+  ],
+  [
+    'ANULAR_INTENCION_FISCAL',
+    'Anular una intención abandona un número de comprobante ya reservado y deja un hueco en la ' +
+      'numeración. No lo escribe nadie todavía por el mismo motivo: no hay quien emita.',
+  ],
 ]);
 
 suite('S-20 — el vocabulario de la bitácora', () => {
@@ -145,7 +160,17 @@ suite('S-20 — el vocabulario de la bitácora', () => {
         // la misma ventana, que es correcto: es el mismo `recordAudit`.
         const ventana = lineas.slice(Math.max(0, i - 12), i + 14).join('\n');
         for (const accion of literales) {
-          conMotivo.set(accion, (conMotivo.get(accion) ?? false) || /motivo:/u.test(ventana));
+          // `motivo:` **o** `motivo,`: la abreviatura de objeto de JavaScript.
+          //
+          // Cuando el parámetro ya se llama `motivo`, lo idiomático es
+          // escribirlo abreviado, y el barrido no lo veía. Le pasó a
+          // `REVERTIR_MIGRACION`, que viaja con su motivo desde el primer día y
+          // este control acusaba de emitirla sin uno. Es el cuarto agujero de la
+          // misma familia —después de `accion:`, los triggers y el ternario— y
+          // siempre es lo mismo: el instrumento ciego a una forma de escritura,
+          // no el código sin ella.
+          const traeMotivo = /\bmotivo\b\s*[:,}]/u.test(ventana);
+          conMotivo.set(accion, (conMotivo.get(accion) ?? false) || traeMotivo);
         }
       }
     }

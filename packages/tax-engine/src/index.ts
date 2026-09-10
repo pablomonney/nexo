@@ -9,3 +9,4 @@ export * from './subdiario.js';
 export * from './libro-iva-digital.js';
 export * from './afectacion.js';
 export * from './subdiario-export.js';
+export * from './emision.js';

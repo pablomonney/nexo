@@ -35,6 +35,27 @@ process.env.DOCUMENT_STORAGE_PATH = join(raiz, 'var', 'test-documents');
 process.env.ARCA_ENVIRONMENT = 'mock';
 
 /**
+ * Los tests **nunca** mandan un correo de verdad.
+ *
+ * Mismo argumento que ARCA, y con una consecuencia peor si se ignora: con
+ * `EMAIL_PROVIDER=resend` en el `.env` de quien desarrolla, las suites de alta
+ * autoservicio le mandarían mensajes reales a direcciones inventadas —
+ * `alta-8f3c@prueba.local` y parecidas— consumiendo cupo de la cuenta y
+ * ensuciando la reputación del dominio con rebotes. Y la suite pasaría igual,
+ * así que nadie lo notaría hasta la factura.
+ *
+ * Se fija acá y no en cada suite porque `config` se evalúa al importarse: los
+ * imports se elevan por encima de cualquier línea del test.
+ *
+ * El adaptador de Resend se prueba **inyectándole un `fetch` falso**
+ * (`tests/unit/proveedor-de-correo.test.ts`), que no necesita ni credencial ni
+ * red y además puede afirmar qué se mandó, cosa que un envío real no permite.
+ */
+process.env.EMAIL_PROVIDER = 'none';
+delete process.env.EMAIL_API_KEY;
+delete process.env.EMAIL_API_KEY_REF;
+
+/**
  * La base de los tests tampoco es la del desarrollo.
  *
  * Mismo argumento que el directorio de documentos, y bastante más grave: las

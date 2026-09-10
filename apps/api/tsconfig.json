@@ -49,6 +49,9 @@
     },
     {
       "path": "../../packages/billing-engine"
+    },
+    {
+      "path": "../../packages/migration-engine"
     }
   ]
 }

@@ -161,12 +161,33 @@ económica (§11 del pliego).
 
 ## 7. Renovación
 
-Los certificados vencen. `company_arca_credentials` guarda `not_after` y la vista
-`company_arca_credentials_public` expone `dias_restantes`, para poder alertar
-antes de que una validación empiece a fallar en pleno cierre.
+Los certificados vencen —duran dos años— y hasta B2.5.4 eso pasaba en silencio.
+`company_arca_credentials_public` calculaba `dias_restantes` desde la 0015 y no
+lo miraba nadie: el día del vencimiento, `credencialVigente()` deja de devolver
+fila y la constatación empieza a contestar `NO_VERIFICABLE / SIN_CREDENCIAL`.
+Es la respuesta correcta, y no hay error ni log que lo anuncie.
 
-Renovar es repetir los pasos 1 y 2. La asociación al servicio del paso 3–4 hay
-que rehacerla con el certificado nuevo.
+**Ahora aparece en la bandeja de pendientes** (`work_queue`, migración 0116):
+
+| Cuándo | Qué muestra |
+|---|---|
+| Faltan más de 30 días | Nada. Un pendiente que no se puede resolver todavía es ruido |
+| Faltan 30 días o menos | `ARCA_CERTIFICADO_POR_VENCER`, con la fecha límite. No bloquea |
+| Ya venció | `ARCA_CERTIFICADO_VENCIDO`, **bloquea**: la capacidad ya se perdió |
+
+Renovar es repetir los pasos 1 y 2. La asociación al servicio del paso 5 hay que
+rehacerla con el certificado nuevo.
+
+> ⚠ **La renovación no se puede solapar, y conviene saberlo antes.**
+> `company_arca_credentials_active` (0015) permite **una sola** credencial
+> `ACTIVE` por empresa y ambiente, porque dos certificados vigentes a la vez
+> hacen impredecible con cuál se firmó cada consulta.
+>
+> La consecuencia: **no se puede pre-cargar el reemplazo**. Hay que revocar el
+> viejo y recién ahí cargar el nuevo, con una ventana sin credencial en el
+> medio. Es corta si se hace de una sentada —y es exactamente para eso que sirve
+> el aviso a treinta días: permite elegir cuándo abrirla, en vez de que la abra
+> el vencimiento en pleno cierre.
 
 ---
 
@@ -180,9 +201,20 @@ que rehacerla con el certificado nuevo.
 | **Endpoints de homologación** | ✅ **verificados contra el servicio real** (2026-08-24) |
 | **Transporte SOAP y parseo de respuesta** | ✅ **verificados**: `ComprobanteDummy` respondió `app=OK db=OK auth=OK` desde homologación |
 | Construcción y firma CMS del TRA | ✅ verificado con un certificado autofirmado generado en el test: el PKCS#7 es válido y contiene el TRA |
-| **Autenticación WSAA de punta a punta** | ⚠️ **no verificada** — es lo único que requiere el certificado |
-| `ComprobanteConstatar` real | ⚠️ no verificado: depende de la autenticación |
-| Padrón A13 y wsapoc | ⬜ no implementados: sus manuales todavía no están archivados con hash |
+| **Autenticación WSAA de punta a punta** | ✅ **verificada contra el servicio real** (2026-08-27, homologación): el certificado quedó autorizado a `wsfe` en WSASS y el WSAA devolvió tickets reales. `buildTra`, `signTra` y `parseLoginResponse` se ejercitaron contra el organismo |
+| `ComprobanteConstatar` real | ⚠️ no verificado: falta autorizar `wscdc` en WSASS, que es un trámite aparte del de `wsfe` |
+| Padrón A13 y A100 | ⬜ no implementados. Sus manuales **sí** están archivados con hash (`ARCA_manual_ws_sr_padron_a13_v1.4.pdf`, `..._a100_v2.1.pdf`); lo que no está es el código |
+
+> **El ticket de WSAA no se pide dos veces.** El organismo emite **uno solo por
+> (CUIT, servicio)** y niega el siguiente mientras el primero viva
+> —`coe.alreadyAuthenticated`, «El CEE ya posee un TA valido»—. Los TA duran
+> horas y reintentar no ayuda: cada pedido de más acerca un bloqueo.
+>
+> Por eso `TicketCacheFs` guarda el TA en `~/.arca/tickets/<ambiente>/` (o
+> `ARCA_TA_CACHE`), **fuera del repositorio**, porque `token` y `sign` son
+> credenciales. No es una optimización: sin caché en disco, dos comandos
+> seguidos no funcionan. Medido el 2026-08-27, `arca:check` sacó el ticket y
+> `comprobantes:generar` —un minuto después— se quedó afuera hasta la noche.
 
 El alcance de lo verificado es más amplio de lo que parecía posible sin
 certificado: los endpoints salieron del manual archivado y **responden**, el

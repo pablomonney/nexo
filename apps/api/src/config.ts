@@ -15,6 +15,38 @@ export const config = {
   port: Number(process.env.PORT ?? 3001),
   databaseUrl: required('DATABASE_URL'),
 
+  /**
+   * ¿Hay un proxy de confianza adelante?
+   *
+   * **Por omisión no**, y cambiarlo tiene consecuencias en los dos sentidos.
+   *
+   * Con `false` detrás de un proxy —que es todo despliegue con TLS terminado
+   * afuera—, `request.ip` es la dirección **del proxy** para todo el mundo. El
+   * límite de intentos usa esa dirección como clave, así que treinta fallos de
+   * cualquiera agotan el cupo de **todos**: un atacante deja al resto afuera con
+   * treinta intentos. Es un defecto que solo aparece desplegado, nunca en
+   * desarrollo, y por eso hay que decidirlo antes de desplegar y no después.
+   *
+   * Con `true` sin un proxy adelante, cualquiera manda `X-Forwarded-For` y se
+   * inventa la dirección que quiera: el límite deja de servir y la bitácora
+   * guarda direcciones falsas.
+   *
+   * O sea: se activa **si y solo si** hay un proxy que reescriba esa cabecera y
+   * no la deje pasar desde afuera. Ver docs/DESPLIEGUE.md §6.
+   */
+  trustProxy: process.env.TRUST_PROXY === 'true',
+
+  /**
+   * Qué versión está corriendo, para la sonda de salud.
+   *
+   * La pone el despliegue —el hash del commit, la etiqueta de la imagen— y si
+   * no está se informa `desconocida`. **No se inventa un valor por defecto**:
+   * decir «1.0.0» sobre un despliegue del que no se sabe qué trae es peor que
+   * decir que no se sabe, porque el que compara dos entornos concluye que son
+   * el mismo.
+   */
+  buildId: process.env.BUILD_ID ?? null,
+
   session: {
     /** Expiración por inactividad. */
     idleMinutes: Number(process.env.SESSION_IDLE_MINUTES ?? 30),
@@ -168,6 +200,59 @@ export const config = {
      * gasto lo gobierna el cupo diario por empresa, que la empresa declara.
      */
     preguntasPorMinuto: Number(process.env.AI_PREGUNTAS_POR_MINUTO ?? 20),
+  },
+
+  correo: {
+    /**
+     * Quién manda el correo. Dos valores, y ninguno más:
+     *
+     *   `none`    sin proveedor. Es el valor por defecto y **es un modo de
+     *             operación**: lo que se encola queda en `email_outbox` con
+     *             estado `SIN_PROVEEDOR` y el operador lo lee con
+     *             `npm run correo:bandeja`. El alta no se completa sola.
+     *   `resend`  el adaptador HTTP contra Resend.
+     *
+     * Un valor desconocido **no cae a `none`**: el servidor no arranca. Es la
+     * misma semántica estricta que `AI_PROVIDER` y `SECRETS_PROVIDER`, y por el
+     * mismo motivo — un typo que degrada en silencio produce un sistema que
+     * dice mandar correos y no manda ninguno, y nadie va a ir a buscar por qué
+     * los usuarios no confirman su cuenta.
+     */
+    provider: process.env.EMAIL_PROVIDER ?? 'none',
+
+    /**
+     * La referencia al secreto, no el secreto: `env:EMAIL_API_KEY`, `kms:<arn>`.
+     *
+     * Igual que `AI_API_KEY_REF`. Poner solo `EMAIL_API_KEY` sigue andando: el
+     * arranque deduce `env:EMAIL_API_KEY`. La forma con referencia existe para
+     * que el día que haya un gestor de secretos lo único que cambie sea el
+     * prefijo.
+     */
+    apiKeyRef:
+      process.env.EMAIL_API_KEY_REF ??
+      (process.env.EMAIL_API_KEY !== undefined && process.env.EMAIL_API_KEY !== ''
+        ? 'env:EMAIL_API_KEY'
+        : null),
+
+    /**
+     * De qué dirección salen los mensajes.
+     *
+     * **No tiene valor por defecto y no puede tenerlo.** Resend solo acepta un
+     * remitente de un dominio verificado en la cuenta; inventar uno acá
+     * produciría un 422 en cada envío, o —peor— un dominio de otro. Sin esto,
+     * el estado es «preparado, no conectado» y el arranque nombra la variable.
+     */
+    from: process.env.EMAIL_FROM ?? null,
+
+    /** Timeout por intento. No existe un envío sin límite. */
+    timeoutMs: Number(process.env.EMAIL_TIMEOUT_MS ?? 10_000),
+
+    /**
+     * Reintentos **además** del primero, y solo para lo que puede salir
+     * distinto la próxima vez sin arriesgar un duplicado. El detalle de qué se
+     * reintenta y qué no está en `correo/resend.ts`.
+     */
+    maxRetries: Number(process.env.EMAIL_MAX_RETRIES ?? 2),
   },
 
   secrets: {

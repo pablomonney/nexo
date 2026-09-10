@@ -48,6 +48,9 @@
     },
     {
       "path": "./apps/api"
+    },
+    {
+      "path": "./packages/migration-engine"
     }
   ]
 }

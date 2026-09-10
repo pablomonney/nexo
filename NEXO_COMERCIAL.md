@@ -205,7 +205,7 @@ llegan de la prueba a la primera venta asentada**, y cuánto tardan.
 | | Estado |
 |---|---|
 | Página pública con precios | **VERIFICADO** — `/` sirve la landing, los precios salen de la API |
-| Registro y confirmación | **BLOQUEADO** — no hay proveedor de correo |
+| Registro y confirmación | **PREPARADO** — el adaptador de Resend está (B2.5.1). Falta la cuenta, el dominio verificado y declarar `EMAIL_PROVIDER=resend`. Con `none` —el valor por omisión— el token queda en la bandeja y lo entrega el operador |
 | Alta de empresa y prueba | **VERIFICADO** — `POST /onboarding/empresa` |
 | Cobrar la suscripción | **BLOQUEADO** — no hay pasarela. Entra por transferencia, a mano |
 | Emitir la factura al cliente | **BLOQUEADO** — certificado ARCA de producción |

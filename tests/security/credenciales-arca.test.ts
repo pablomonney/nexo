@@ -28,7 +28,7 @@ import { totp, withCheckDigit } from '@aai/shared';
 import { desenvolver, envolver } from '@aai/api/arca/credential-store';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { connect, hasDatabase, type Client } from '../integration/helpers/db.js';
+import { asCompany, connect, hasDatabase, type Client } from '../integration/helpers/db.js';
 import { sufijoUnico } from '../integration/helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
@@ -253,6 +253,109 @@ suite('Credenciales de ARCA', () => {
       const r = await pedir('GET', '/companies/current/arca/credentials', undefined, otra);
       expect(r.statusCode, r.body).toBe(200);
       expect(r.json<{ credenciales: unknown[] }>().credenciales).toEqual([]);
+    });
+  });
+
+  /**
+   * El vencimiento se ve antes de que rompa nada.
+   *
+   * Hasta la 0116, `company_arca_credentials_public` calculaba `dias_restantes`
+   * y no lo miraba nadie. Un certificado dura dos años; el día que caduca, la
+   * consulta de credencial vigente deja de devolver fila y la constatación
+   * empieza a contestar `SIN_CREDENCIAL`. Es la respuesta correcta y es
+   * invisible: sin error, sin log, sin pantalla roja.
+   *
+   * Renovar es un trámite ante el organismo y no es instantáneo, así que
+   * enterarse el día que venció es enterarse tarde.
+   */
+  describe('el certificado por vencer aparece en los pendientes', () => {
+    /** Corre el reloj de una credencial sin tocar nada más. */
+    const vencerEn = async (dias: number): Promise<void> => {
+      // `not_before` bien atrás: el CHECK de la 0015 exige
+      // `not_after > not_before`, y con un día de margen la fila vencida —donde
+      // `dias` es negativo— no entraría. Un certificado real dura dos años, así
+      // que retroceder cuatrocientos días es además lo realista.
+      await db.query(
+        `UPDATE company_arca_credentials
+            SET not_before = now() - interval '400 days',
+                not_after  = now() + ($2 || ' days')::interval
+          WHERE id = $1`,
+        [credencialId, String(dias)],
+      );
+    };
+
+    const pendientesDeArca = async (empresa: string): Promise<{ rama: string; bloquea: boolean }[]> => {
+      const r = await asCompany(db, empresa, () =>
+        db.query<{ rama: string; bloquea: boolean }>(
+          `SELECT rama, bloquea FROM work_queue
+            WHERE rama LIKE 'ARCA_CERTIFICADO%' ORDER BY rama`,
+        ),
+      );
+      return r.rows;
+    };
+
+    it('con vigencia holgada no molesta a nadie', async () => {
+      // Un pendiente que no se puede resolver todavía es ruido, y el ruido
+      // enseña a ignorar la bandeja.
+      await vencerEn(365);
+      expect(await pendientesDeArca(empresa)).toEqual([]);
+    });
+
+    it('a treinta días o menos avisa, y todavía no bloquea', async () => {
+      await vencerEn(10);
+      const pendientes = await pendientesDeArca(empresa);
+      expect(pendientes).toHaveLength(1);
+      expect(pendientes[0]!.rama).toBe('ARCA_CERTIFICADO_POR_VENCER');
+      expect(pendientes[0]!.bloquea).toBe(false);
+    });
+
+    it('vencido bloquea: no es un aviso, es una capacidad perdida', async () => {
+      await vencerEn(-1);
+      const pendientes = await pendientesDeArca(empresa);
+      expect(pendientes).toHaveLength(1);
+      expect(pendientes[0]!.rama).toBe('ARCA_CERTIFICADO_VENCIDO');
+      expect(pendientes[0]!.bloquea).toBe(true);
+    });
+
+    it('el pendiente es de su empresa y de ninguna otra', async () => {
+      // El aviso lleva el CUIT del contribuyente y el alias del certificado.
+      // Que se filtre a otra empresa sería contarle a un tercero con qué CUIT
+      // opera un cliente del estudio.
+      await vencerEn(-1);
+      expect(await pendientesDeArca(otra)).toEqual([]);
+    });
+
+    it('no se puede pre-cargar la renovación: hay una sola credencial activa', async () => {
+      // El hallazgo de B2.5.4, y es una consecuencia de diseño, no un defecto.
+      //
+      // `company_arca_credentials_active` (0015) permite **una sola** credencial
+      // ACTIVE por empresa y ambiente, porque dos certificados vigentes a la vez
+      // hacen impredecible con cuál se firmó cada consulta. El precio es que la
+      // renovación no se puede solapar: hay que revocar el viejo y recién ahí
+      // cargar el nuevo, con una ventana —corta, pero real— sin credencial.
+      //
+      // Por eso el aviso a treinta días importa: es lo que permite elegir
+      // cuándo abrir esa ventana en vez de que la abra el vencimiento.
+      await vencerEn(365);
+
+      let codigo = '';
+      try {
+        await db.query(
+          `INSERT INTO company_arca_credentials
+             (company_id, environment, cuit, alias, certificate_pem, private_key_encrypted,
+              key_encryption_ref, not_before, not_after, status, created_by)
+           SELECT company_id, environment, cuit, 'renovado', certificate_pem,
+                  private_key_encrypted, key_encryption_ref,
+                  now() - interval '1 day', now() + interval '400 days', 'ACTIVE', created_by
+             FROM company_arca_credentials WHERE id = $1`,
+          [credencialId],
+        );
+      } catch (error) {
+        codigo = (error as { code?: string }).code ?? '';
+      }
+
+      // 23505 — unique_violation.
+      expect(codigo, 'dos credenciales activas a la vez no deberían entrar').toBe('23505');
     });
   });
 

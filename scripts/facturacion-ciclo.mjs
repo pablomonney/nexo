@@ -48,16 +48,25 @@ const { correrCiclo } = await import(
 
 const args = process.argv.slice(2);
 const ensayo = args.includes('--ensayo');
-const fecha = args.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) ?? hoyIso();
-
-function hoyIso() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
-}
+const fechaDeclarada = args.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) ?? null;
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await cliente.connect();
+
+/**
+ * La fecha del ciclo es la que dice la base, no la que dice UTC.
+ *
+ * Esto se calculaba con `getUTCDate()`. Argentina es UTC menos tres, así que un
+ * ciclo corrido después de las nueve de la noche del 31 se creía en el 1 del mes
+ * siguiente: habría emitido el período equivocado, saltado los vencimientos de
+ * ese día y adelantado un mes de cobranza. Es el mismo defecto que dejó a los
+ * planes sin precio el 2026-09-09 a las 22:07, en otro script.
+ *
+ * Se le pregunta a la base porque es la base la que después compara las fechas
+ * de vigencia y de vencimiento: cualquier otra fuente puede discrepar con ella.
+ */
+const fecha =
+  fechaDeclarada ?? (await cliente.query('SELECT CURRENT_DATE::text AS hoy')).rows[0].hoy;
 
 // El `Tx` que espera el ciclo es solo `{ query }`. No se le pasa el cliente
 // crudo para que no pueda cerrar la conexión ni abrir otra transacción: lo único

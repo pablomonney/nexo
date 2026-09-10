@@ -29,7 +29,7 @@ import {
   vencerPruebas,
   DIAS_DE_PRUEBA,
 } from '@aai/api/billing/prueba';
-import { alcanzaElPlan, olvidarTodosLosPlanes } from '@aai/api/planes/alcance';
+import { alcanzaElPlan, olvidarPlanDe, olvidarTodosLosPlanes } from '@aai/api/planes/alcance';
 import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -67,10 +67,21 @@ suite('Prueba de 14 días', () => {
     return r.rows[0]!.id;
   }
 
-  const hoyMenos = (dias: number): string => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - dias);
-    return d.toISOString().slice(0, 10);
+  /**
+   * Un día contado desde el «hoy» de la base, no desde el de UTC.
+   *
+   * Esto restaba días sobre `getUTCDate()`, y `dias_restantes` los cuenta
+   * contra `CURRENT_DATE`, que en esta instalación es hora argentina. Después
+   * de las nueve de la noche las dos fechas dejan de coincidir y la prueba
+   * fallaba por un día — medido el 2026-09-09 a las 22:07. Un control que
+   * depende de la hora a la que se corre no está midiendo lo que dice medir.
+   */
+  const hoyMenos = async (dias: number): Promise<string> => {
+    const { rows } = await db.query<{ d: string }>(
+      `SELECT (CURRENT_DATE - $1::int)::text AS d`,
+      [dias],
+    );
+    return rows[0]!.d;
   };
 
   it('la prueba recién creada dura catorce días contando el primero', async () => {
@@ -80,7 +91,7 @@ suite('Prueba de 14 días', () => {
     const r = await iniciarPrueba(txDe(db), {
       companyId: empresa,
       planCode: 'GESTION',
-      desde: hoyMenos(0) as never,
+      desde: (await hoyMenos(0)) as never,
       actorId: 'test:alta',
     });
     expect(r.estado).toBe('INICIADA');
@@ -117,12 +128,12 @@ suite('Prueba de 14 días', () => {
     // de la 0073 no lo alcanza: una cancelada ya no está vigente.
     const empresa = await empresaNueva('repetida');
     const primera = await iniciarPrueba(txDe(db), {
-      companyId: empresa, planCode: 'GESTION', desde: hoyMenos(0) as never, actorId: 'test:alta',
+      companyId: empresa, planCode: 'GESTION', desde: (await hoyMenos(0)) as never, actorId: 'test:alta',
     });
     expect(primera.estado).toBe('INICIADA');
 
     const segunda = await iniciarPrueba(txDe(db), {
-      companyId: empresa, planCode: 'GESTION', desde: hoyMenos(0) as never, actorId: 'test:alta',
+      companyId: empresa, planCode: 'GESTION', desde: (await hoyMenos(0)) as never, actorId: 'test:alta',
     });
     expect(segunda.estado).toBe('YA_TUVO_PRUEBA');
   });
@@ -130,7 +141,7 @@ suite('Prueba de 14 días', () => {
   it('una prueba en curso informa cuántos días quedan', async () => {
     const empresa = await empresaNueva('en-curso');
     await iniciarPrueba(txDe(db), {
-      companyId: empresa, planCode: 'GESTION', desde: hoyMenos(2) as never, actorId: 'test:alta',
+      companyId: empresa, planCode: 'GESTION', desde: (await hoyMenos(2)) as never, actorId: 'test:alta',
     });
     const p = await pruebaDe(txDe(db), empresa);
     expect(p?.situacion).toBe('EN_CURSO');
@@ -141,7 +152,7 @@ suite('Prueba de 14 días', () => {
     const empresa = await empresaNueva('por-vencer');
     await iniciarPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION',
-      desde: hoyMenos(DIAS_DE_PRUEBA - 3) as never, actorId: 'test:alta',
+      desde: (await hoyMenos(DIAS_DE_PRUEBA - 3)) as never, actorId: 'test:alta',
     });
     const p = await pruebaDe(txDe(db), empresa);
     expect(p?.situacion).toBe('POR_VENCER');
@@ -154,7 +165,7 @@ suite('Prueba de 14 días', () => {
     const empresa = await empresaNueva('vencida');
     await iniciarPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION',
-      desde: hoyMenos(DIAS_DE_PRUEBA + 5) as never, actorId: 'test:alta',
+      desde: (await hoyMenos(DIAS_DE_PRUEBA + 5)) as never, actorId: 'test:alta',
     });
     const p = await pruebaDe(txDe(db), empresa);
     expect(p?.situacion).toBe('VENCIDA');
@@ -171,10 +182,10 @@ suite('Prueba de 14 días', () => {
     const empresa = await empresaNueva('a-vencer');
     await iniciarPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION',
-      desde: hoyMenos(DIAS_DE_PRUEBA + 2) as never, actorId: 'test:alta',
+      desde: (await hoyMenos(DIAS_DE_PRUEBA + 2)) as never, actorId: 'test:alta',
     });
 
-    const informe = await vencerPruebas(txDe(db), hoyMenos(0) as never, 'test:ciclo');
+    const informe = await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo');
     expect(informe.vencidas.some((v) => v.companyId === empresa)).toBe(true);
 
     const s = await db.query<{ estado: string; motivo: string }>(
@@ -199,7 +210,7 @@ suite('Prueba de 14 días', () => {
     const antes = await db.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_logs WHERE action = 'VENCER_PRUEBA'`,
     );
-    await vencerPruebas(txDe(db), hoyMenos(0) as never, 'test:ciclo');
+    await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo');
     const despues = await db.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_logs WHERE action = 'VENCER_PRUEBA'`,
     );
@@ -211,7 +222,7 @@ suite('Prueba de 14 días', () => {
     // de nuevo al día siguiente.
     const empresa = await empresaNueva('convertida');
     await iniciarPrueba(txDe(db), {
-      companyId: empresa, planCode: 'CONTABLE', desde: hoyMenos(3) as never, actorId: 'test:alta',
+      companyId: empresa, planCode: 'CONTABLE', desde: (await hoyMenos(3)) as never, actorId: 'test:alta',
     });
 
     const r = await convertirPrueba(txDe(db), {
@@ -220,7 +231,7 @@ suite('Prueba de 14 días', () => {
       periodicidad: 'MENSUAL',
       moneda: 'ARS',
       importe: '59900.00',
-      desde: hoyMenos(0) as never,
+      desde: (await hoyMenos(0)) as never,
       actorId: 'test:comercial',
     });
     expect(r.estado).toBe('CONVERTIDA');
@@ -248,13 +259,13 @@ suite('Prueba de 14 días', () => {
     const empresa = await empresaNueva('tardia');
     await iniciarPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION',
-      desde: hoyMenos(DIAS_DE_PRUEBA + 4) as never, actorId: 'test:alta',
+      desde: (await hoyMenos(DIAS_DE_PRUEBA + 4)) as never, actorId: 'test:alta',
     });
-    await vencerPruebas(txDe(db), hoyMenos(0) as never, 'test:ciclo');
+    await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo');
 
     const r = await convertirPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION', periodicidad: 'MENSUAL', moneda: 'ARS',
-      importe: '59900.00', desde: hoyMenos(0) as never, actorId: 'test:comercial',
+      importe: '59900.00', desde: (await hoyMenos(0)) as never, actorId: 'test:comercial',
     });
     expect(r.estado).toBe('CONVERTIDA');
   });
@@ -262,7 +273,7 @@ suite('Prueba de 14 días', () => {
   it('una suscripción cancelada no se convierte', async () => {
     const empresa = await empresaNueva('cancelada');
     await iniciarPrueba(txDe(db), {
-      companyId: empresa, planCode: 'GESTION', desde: hoyMenos(1) as never, actorId: 'test:alta',
+      companyId: empresa, planCode: 'GESTION', desde: (await hoyMenos(1)) as never, actorId: 'test:alta',
     });
     await db.query(
       `UPDATE company_subscriptions SET estado = 'CANCELADA', motivo = 'baja del cliente'
@@ -272,7 +283,7 @@ suite('Prueba de 14 días', () => {
 
     const r = await convertirPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION', periodicidad: 'MENSUAL', moneda: 'ARS',
-      importe: '1.00', desde: hoyMenos(0) as never, actorId: 'test:comercial',
+      importe: '1.00', desde: (await hoyMenos(0)) as never, actorId: 'test:comercial',
     });
     expect(r.estado).toBe('NO_HAY_PRUEBA');
   });
@@ -280,11 +291,11 @@ suite('Prueba de 14 días', () => {
   it('convertir a un plan que no existe se rechaza', async () => {
     const empresa = await empresaNueva('plan-raro');
     await iniciarPrueba(txDe(db), {
-      companyId: empresa, planCode: 'GESTION', desde: hoyMenos(1) as never, actorId: 'test:alta',
+      companyId: empresa, planCode: 'GESTION', desde: (await hoyMenos(1)) as never, actorId: 'test:alta',
     });
     const r = await convertirPrueba(txDe(db), {
       companyId: empresa, planCode: 'NO_EXISTE', periodicidad: 'MENSUAL', moneda: 'ARS',
-      importe: '1.00', desde: hoyMenos(0) as never, actorId: 'test:comercial',
+      importe: '1.00', desde: (await hoyMenos(0)) as never, actorId: 'test:comercial',
     });
     expect(r.estado).toBe('NO_SE_PUEDE');
   });
@@ -481,5 +492,120 @@ suite('La puerta comercial de los planes', () => {
     void v;
     const veredicto = await alcanzaElPlan(txDe(db), empresa, '/analysis/signals?soloDesvios=si');
     expect(veredicto).toMatchObject({ permitido: false, feature: 'analisis' });
+  });
+
+  /**
+   * Suspender corta el acceso — y hasta la auditoría B-2 no lo cortaba.
+   *
+   * `NEXO_BILLING.md` §9 dice, con estas palabras, «suspender corta el acceso y
+   * **conserva todo**». El código hacía lo contrario, y por una razón que no se
+   * ve leyendo: `funcionalidadesDe` filtraba por `estado IN ('ACTIVA','PRUEBA')`,
+   * así que una suscripción SUSPENDIDA no devolvía filas, y **cero filas se
+   * interpretaba como «esta empresa no tiene plan»** —el caso que la puerta
+   * deja pasar a propósito—.
+   *
+   * El resultado era el peor de los posibles: al vencer la prueba de catorce
+   * días, la empresa pasaba de ver **solo los módulos de su plan** a verlos
+   * **todos**. Dejar de pagar ampliaba el producto.
+   *
+   * Ninguna prueba lo veía porque cada mitad estaba bien: la prueba vence y
+   * queda SUSPENDIDA —eso se comprueba más arriba en este archivo—, y la puerta
+   * falla abierta sin suscripción —eso se comprueba en esta misma suite—. El
+   * defecto vivía en la junta: **nadie preguntó qué pasaba después de vencer.**
+   *
+   * La distinción que hay que sostener, y que estas pruebas fijan:
+   *
+   *     sin suscripción           pasa  ← deliberado, es una puerta comercial
+   *     plan sin funcionalidades  pasa  ← deliberado
+   *     SUSPENDIDA / CANCELADA    NO    ← esto es lo que faltaba
+   */
+  const suspender = async (planCode: string, estado: string): Promise<void> => {
+    await suscribir(planCode);
+    await db.query(
+      `UPDATE company_subscriptions
+          SET estado = $2, suspendida_el = CURRENT_DATE,
+              motivo = 'La prueba terminó sin contratación'
+        WHERE company_id = $1`,
+      [empresa, estado],
+    );
+    olvidarTodosLosPlanes();
+  };
+
+  it('una suscripción suspendida no llega a un módulo de su propio plan', async () => {
+    // Con COMPLETO activa, `/analysis/signals` da 200 —está comprobado arriba—.
+    // Suspenderla no puede ampliar lo que se ve.
+    await suspender('COMPLETO', 'SUSPENDIDA');
+    const r = await pedir('/analysis/signals');
+    expect(r.statusCode, r.body).toBe(403);
+    expect(r.json<{ error: string }>().error).toBe('SUSCRIPCION_SUSPENDIDA');
+  });
+
+  it('vencer la prueba no puede AMPLIAR lo que la empresa ve', async () => {
+    // La forma exacta del defecto, medida de los dos lados con el mismo plan.
+    // Sin esta prueba, arreglar el 403 de arriba con una excepción por dominio
+    // dejaría el agujero abierto en cualquier otro.
+    await suscribir('CONTABLE');
+    const conPlan = await pedir('/analysis/signals');
+    expect(conPlan.statusCode, 'CONTABLE no incluye análisis').toBe(403);
+
+    await suspender('CONTABLE', 'SUSPENDIDA');
+    const suspendida = await pedir('/analysis/signals');
+    expect(suspendida.statusCode, 'suspendida ve MÁS que contratada').toBe(403);
+
+    // Y tampoco conserva lo que sí incluía.
+    const propio = await pedir('/accounts');
+    expect(propio.statusCode, propio.body).toBe(403);
+  });
+
+  it('una suscripción cancelada tampoco entra', async () => {
+    await suspender('COMPLETO', 'CANCELADA');
+    const r = await pedir('/accounts');
+    expect(r.statusCode, r.body).toBe(403);
+  });
+
+  it('suspendida sigue llegando a lo que necesita para regularizar', async () => {
+    // «Conserva todo» incluye poder ver qué se debe y volver a contratar. Una
+    // puerta que encierra al cliente afuera de la caja no cobra: enoja.
+    await suspender('COMPLETO', 'SUSPENDIDA');
+    for (const url of ['/suscripciones', '/companies/current']) {
+      const r = await pedir(url);
+      expect(r.statusCode, `${url}: ${r.body}`).not.toBe(403);
+    }
+  });
+
+  it('el mensaje dice que los datos están, y no que se perdieron', async () => {
+    await suspender('COMPLETO', 'SUSPENDIDA');
+    const r = await pedir('/accounts');
+    // Es la primera pantalla que ve alguien que dejó de pagar. Decirle «no
+    // tenés acceso» a secas se lee como «perdí mi contabilidad».
+    expect(r.body).toContain('siguen estando');
+    expect(r.body).toMatch(/suspend/iu);
+  });
+
+  it('levantar la suspensión devuelve el acceso, sin esperar a que venza el cache', async () => {
+    // El control positivo. Sin él, un `permitido: false` constante pasaría
+    // todas las pruebas de arriba y dejaría a todo el mundo afuera.
+    await suspender('COMPLETO', 'SUSPENDIDA');
+    expect((await pedir('/accounts')).statusCode).toBe(403);
+
+    await db.query(
+      `UPDATE company_subscriptions SET estado = 'ACTIVA', suspendida_el = NULL, motivo = NULL
+        WHERE company_id = $1`,
+      [empresa],
+    );
+    olvidarPlanDe(empresa);
+
+    const r = await pedir('/accounts');
+    expect(r.statusCode, r.body).toBe(200);
+  });
+
+  it('sin ninguna suscripción se sigue pasando: el arreglo no cerró la puerta', async () => {
+    // La regla que NO se toca. Una empresa sin fila de suscripción no es una
+    // empresa que dejó de pagar: es una que nunca contrató, y la puerta
+    // comercial la deja pasar a propósito.
+    await db.query('DELETE FROM company_subscriptions WHERE company_id = $1', [empresa]);
+    olvidarTodosLosPlanes();
+    const r = await pedir('/accounts');
+    expect(r.statusCode, r.body).toBe(200);
   });
 });

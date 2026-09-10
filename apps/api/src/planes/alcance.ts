@@ -19,6 +19,30 @@
  * del mes; cerrarla de menos produce un mes de un módulo regalado, que se
  * arregla facturándolo.
  *
+ * ## Falla abierta por lo que no se sabe, NO por lo que dice que no
+ *
+ * Los tres casos de arriba son formas de **no tener información**: nadie
+ * contrató, o el catálogo no dice nada. Una suscripción `SUSPENDIDA` no es eso:
+ * es información, y dice que no. `NEXO_BILLING.md` §9 lo escribe con todas las
+ * letras — «suspender corta el acceso y **conserva todo**» — y hasta la
+ * auditoría B-2 el código hacía lo contrario.
+ *
+ * El defecto era una confusión de dos silencios. `funcionalidadesDe` filtraba
+ * por `estado IN ('ACTIVA','PRUEBA')`, así que una suspendida devolvía **cero
+ * filas**, y cero filas se leía como «esta empresa no tiene plan»: el caso que
+ * se deja pasar. Al vencer la prueba de catorce días, la empresa pasaba de ver
+ * los módulos de su plan a verlos **todos**. Dejar de pagar ampliaba el
+ * producto.
+ *
+ * Por eso el estado se consulta **aparte** de las funcionalidades. Son dos
+ * preguntas distintas —«¿qué contrató?» y «¿está al día?»— y colapsarlas en una
+ * sola consulta fue exactamente lo que produjo el agujero.
+ *
+ * Lo que la suspensión NO toca: los dominios que ningún plan gobierna. Ahí
+ * están `suscripciones`, `planes` y `companies`, que son por dónde se ve la
+ * deuda y se vuelve a contratar. Una puerta que deja al cliente afuera de la
+ * caja no cobra: enoja.
+ *
  * ## El mapa sale de la base, no de una lista acá
  *
  * `product_features.dominios` dice qué prefijo de ruta cubre cada
@@ -47,6 +71,28 @@ interface Cacheado<T> {
 
 let dominios: Cacheado<ReadonlyMap<string, string>> | undefined;
 const porEmpresa = new Map<string, Cacheado<ReadonlySet<string> | null>>();
+const estadoPorEmpresa = new Map<string, Cacheado<EstadoComercial | null>>();
+
+/**
+ * En qué situación está la suscripción vigente de una empresa.
+ *
+ * `null` es «no hay ninguna suscripción», que es distinto de todas las demás:
+ * es el único caso en que no se sabe nada, y el único que deja pasar.
+ */
+export type EstadoComercial = 'PRUEBA' | 'ACTIVA' | 'SUSPENDIDA' | 'CANCELADA';
+
+/**
+ * Los estados en los que la empresa no llega a los módulos que un plan gobierna.
+ *
+ * Escrito como lista de lo que corta y no como lista de lo que deja pasar: un
+ * estado nuevo en el vocabulario tiene que decidir explícitamente si corta, en
+ * vez de heredar el corte por omisión y dejar a alguien afuera sin que nadie lo
+ * haya decidido.
+ */
+const CORTAN_EL_ACCESO: ReadonlySet<EstadoComercial> = new Set<EstadoComercial>([
+  'SUSPENDIDA',
+  'CANCELADA',
+]);
 
 /**
  * Dominio de ruta → funcionalidad que lo cubre.
@@ -106,10 +152,55 @@ export async function funcionalidadesDe(
   return valor;
 }
 
+/**
+ * El estado de la suscripción vigente, o `null` si la empresa no tiene ninguna.
+ *
+ * **Se mira la última fila por `vigencia_desde`, sin filtrar por vigencia.** Es
+ * la diferencia con `funcionalidadesDe` y no es un descuido: una prueba que
+ * venció queda `SUSPENDIDA` con `vigencia_hasta` **en el pasado**, así que
+ * cualquier condición de vigencia la haría desaparecer de la consulta — que es
+ * exactamente cómo el defecto se escondía. Lo que se pregunta acá no es «¿está
+ * vigente?» sino «¿cuál es su situación?», y una suscripción caída sigue
+ * teniendo situación.
+ */
+export async function estadoComercialDe(
+  tx: Tx,
+  companyId: string,
+): Promise<EstadoComercial | null> {
+  const ahora = Date.now();
+  const previo = estadoPorEmpresa.get(companyId);
+  if (previo !== undefined && previo.hasta > ahora) return previo.valor;
+
+  const { rows } = await tx.query<{ estado: EstadoComercial }>(
+    `SELECT estado
+       FROM company_subscriptions
+      WHERE company_id = $1
+      -- created_at desempata: dos filas con la misma fecha de inicio existen
+      -- —convertir una prueba el mismo día que se dio de alta— y sin desempate
+      -- el estado dependería del orden físico de las filas.
+      ORDER BY vigencia_desde DESC, created_at DESC
+      LIMIT 1`,
+    [companyId],
+  );
+
+  const valor = rows[0]?.estado ?? null;
+  estadoPorEmpresa.set(companyId, { valor, hasta: ahora + VIDA_DEL_CACHE });
+  return valor;
+}
+
 export interface Veredicto {
   readonly permitido: boolean;
   /** La funcionalidad que gobierna el dominio, si alguna. */
   readonly feature: string | null;
+  /**
+   * Por qué no se permitió.
+   *
+   * `FUERA_DEL_PLAN` es «no lo contrataste» y `SUSCRIPCION_SUSPENDIDA` es «lo
+   * contrataste y está cortado». Contestar lo mismo en los dos casos mandaría a
+   * comprar un módulo que la empresa ya tiene al cliente que solo tiene que
+   * ponerse al día.
+   */
+  readonly motivo: 'FUERA_DEL_PLAN' | 'SUSCRIPCION_SUSPENDIDA' | null;
 }
 
 /**
@@ -127,13 +218,24 @@ export async function alcanzaElPlan(
   const mapa = await mapaDeDominios(tx);
   const feature = mapa.get(dominio);
 
-  // Dominio sin funcionalidad que lo cubra: ningún plan lo puede excluir.
-  if (feature === undefined) return { permitido: true, feature: null };
+  // Dominio sin funcionalidad que lo cubra: ningún plan lo puede excluir, y
+  // tampoco lo corta una suspensión. Es lo que deja abiertas `/suscripciones` y
+  // `/companies/current` para el que viene a ponerse al día.
+  if (feature === undefined) return { permitido: true, feature: null, motivo: null };
+
+  // El estado se pregunta ANTES que las funcionalidades, y el orden es la
+  // corrección: una suspendida no devuelve funcionalidades, así que preguntarlo
+  // después la haría indistinguible de una empresa sin plan.
+  const estado = await estadoComercialDe(tx, companyId);
+  if (estado !== null && CORTAN_EL_ACCESO.has(estado)) {
+    return { permitido: false, feature, motivo: 'SUSCRIPCION_SUSPENDIDA' };
+  }
 
   const contratadas = await funcionalidadesDe(tx, companyId);
-  if (contratadas === null) return { permitido: true, feature };
+  if (contratadas === null) return { permitido: true, feature, motivo: null };
 
-  return { permitido: contratadas.has(feature), feature };
+  const permitido = contratadas.has(feature);
+  return { permitido, feature, motivo: permitido ? null : 'FUERA_DEL_PLAN' };
 }
 
 /**
@@ -145,10 +247,14 @@ export async function alcanzaElPlan(
  */
 export function olvidarPlanDe(companyId: string): void {
   porEmpresa.delete(companyId);
+  // El estado también, y este importa más: quien acaba de pagar para levantar
+  // una suspensión no puede quedarse hasta un minuto mirando un 403.
+  estadoPorEmpresa.delete(companyId);
 }
 
 /** Vacía todo. Existe para los tests, que cambian planes entre casos. */
 export function olvidarTodosLosPlanes(): void {
   porEmpresa.clear();
+  estadoPorEmpresa.clear();
   dominios = undefined;
 }

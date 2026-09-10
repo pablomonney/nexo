@@ -60,6 +60,15 @@ const SIN_ESCRITOR = new Map<string, string>([
       'alguien lo revisó y decidió que no importaba.',
   ],
   [
+    'fiscal_emissions',
+    'La emisión fiscal está construida y **cerrada a propósito** (B2.5.4.1): `EMISION_HABILITADA` ' +
+      'es `false` y `@aai/arca-emision` sigue fuera del grafo de la aplicación. La tabla es el ' +
+      'candado que impide la doble emisión, y existe antes que el camino que la produciría — que ' +
+      'es la única forma de que no la escriba el apuro. Lo destraba implementar `FECompConsultar` ' +
+      'contra el manual archivado, para que una emisión en duda se pueda cerrar sola; hasta ' +
+      'entonces la reconciliación sabe si el comprobante existe y no puede recuperar su CAE.',
+  ],
+  [
     'arca_access_tickets',
     'El ticket del WSAA se cachea en disco (`TicketCacheFs`, que usa el CLI) y la API no cachea: ' +
       'pide uno por consulta. Esta tabla es la caché **compartida** que haría falta con más de ' +
@@ -90,7 +99,9 @@ const SIN_ESCRITOR = new Map<string, string>([
     'Catálogo de libros por empresa que **duplica** la unión `JournalCode` y el CHECK de ' +
       '`journal_entries.journal_code`. Nada lo referencia: no hay FK contra él. Son dos ' +
       'representaciones del mismo catálogo y la que manda es la otra. Lo destraba decidir si los ' +
-      'libros pasan a ser filas (nombre por empresa, FK real) o si la tabla se va.',
+      'libros pasan a ser filas (nombre por empresa, FK real) o si la tabla se va. El importador ' +
+      'de migraciones llegó a escribirla y se le sacó: le habría agregado a la empresa libros ' +
+      'con el nombre que trajera el archivo, que ninguna otra pantalla conoce.',
   ],
   [
     'lineage_edges',

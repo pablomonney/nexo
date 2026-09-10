@@ -188,6 +188,19 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
   // Y falla abierta: ver `planes/alcance.ts`. Esto no aísla nada; eso lo hacen
   // el RLS y los permisos, que ya corrieron.
   if (!alcance.permitido) {
+    // Dos negativas distintas, y decir la equivocada cuesta plata: al que tiene
+    // la suscripción cortada hay que decirle que se ponga al día, no venderle
+    // un módulo que ya contrató.
+    if (alcance.motivo === 'SUSCRIPCION_SUSPENDIDA') {
+      throw new HttpError(
+        403,
+        'SUSCRIPCION_SUSPENDIDA',
+        'La suscripción está suspendida y el acceso a los módulos está cortado. ' +
+          'Los datos que ya cargaste siguen estando —la contabilidad, los comprobantes y el ' +
+          'historial se conservan enteros—: lo que falta es regularizar la suscripción. ' +
+          'Podés ver la situación en Suscripciones.',
+      );
+    }
     throw new HttpError(
       403,
       'FUERA_DEL_PLAN',

@@ -8,6 +8,7 @@ import { isValidCuit, normalizeCuit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { hashPassword } from '../auth/crypto.js';
+import { config } from '../config.js';
 import {
   clientIp,
   requireAuth,
@@ -16,7 +17,7 @@ import {
   ROLES_REQUIRING_MFA,
 } from '../http/context.js';
 import { conflict, forbidden, HttpError } from '../http/errors.js';
-import { funcionalidadesDe, mapaDeDominios } from '../planes/alcance.js';
+import { estadoComercialDe, funcionalidadesDe, mapaDeDominios } from '../planes/alcance.js';
 
 const ENTITY_TYPES = [
   'SA', 'SA_299', 'SRL', 'SAS', 'SOCIEDAD_SIMPLE', 'ASOC_CIVIL', 'FUNDACION',
@@ -321,12 +322,21 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
           [tenant.companyId],
         );
         const mapa = await mapaDeDominios(tx);
-        const contratadas = await funcionalidadesDe(tx, tenant.companyId);
-        // `null` es «no hay suscripción con plan», que la puerta deja pasar
-        // entera. Devolver todos los dominios como excluidos ahí dejaría la
-        // consola sin menú por no tener nada que decir.
-        const fueraDelPlan =
-          contratadas === null
+        const estado = await estadoComercialDe(tx, tenant.companyId);
+        const suspendida = estado === 'SUSPENDIDA' || estado === 'CANCELADA';
+
+        // Una suspensión corta **todos** los dominios que un plan gobierna, así
+        // que todos salen como excluidos. Sin esta rama, la consola dibujaba el
+        // menú entero y cada botón terminaba en 403: es H-5 de la auditoría del
+        // 2026-09-09 recreada por el otro motivo. Un botón que falla siempre le
+        // enseña a la persona que el sistema falla al azar.
+        const contratadas = suspendida ? null : await funcionalidadesDe(tx, tenant.companyId);
+        // `null` sin suspensión es «no hay suscripción con plan», que la puerta
+        // deja pasar entera. Devolver todos los dominios como excluidos ahí
+        // dejaría la consola sin menú por no tener nada que decir.
+        const fueraDelPlan = suspendida
+          ? [...new Set(mapa.keys())].sort()
+          : contratadas === null
             ? []
             : [...mapa.entries()]
                 .filter(([, feature]) => !contratadas.has(feature))
@@ -339,6 +349,11 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
           roles: [...tenant.roles],
           permissions: [...tenant.permissions].sort(),
           fueraDelPlan,
+          // El motivo, aparte de la lista: sin él la consola diría «no está en
+          // tu plan» sobre módulos que la empresa sí contrató y solo tiene
+          // cortados, y mandaría a comprar de nuevo a quien tiene que pagar
+          // una factura.
+          suscripcion: { estado, suspendida },
         };
       },
     );
@@ -488,13 +503,47 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
       .send(html);
   });
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  /**
+   * ¿El proceso está vivo?
+   *
+   * Es la sonda **de liveness**: no toca la base a propósito. Si preguntara por
+   * PostgreSQL, una caída de la base haría que el orquestador reinicie la
+   * aplicación en bucle, que es lo peor que puede pasar mientras la base vuelve
+   * — se pierden las conexiones que quedaban y no se arregla nada.
+   *
+   * `version` sale del despliegue, no del código. Sirve para lo único que sirve
+   * una versión en una sonda: comprobar que lo que está corriendo es lo que se
+   * publicó, y que dos réplicas no quedaron en versiones distintas.
+   */
+  app.get('/health', async () => ({
+    status: 'ok',
+    // `null` y no una versión inventada: no saber qué está corriendo es un dato,
+    // y decir «1.0.0» sobre un despliegue desconocido hace concluir que dos
+    // entornos son el mismo cuando nadie lo comprobó.
+    version: config.buildId,
+    uptimeSegundos: Math.round(process.uptime()),
+  }));
 
+  /**
+   * ¿La aplicación puede trabajar?
+   *
+   * Es la sonda **de readiness**: llega a la base y dice cuántas migraciones
+   * aplicó. Un servidor que responde y no alcanza PostgreSQL está caído para
+   * todo lo que importa, y el número de migraciones es lo que permite ver, en un
+   * despliegue, si la base quedó atrás del código.
+   *
+   * No expone la cadena de conexión, ni el rol, ni el nombre de la base: es un
+   * extremo sin autenticar.
+   */
   app.get('/health/db', async () => {
     const result = await withoutCompany('system:health', (tx) =>
       tx.query<{ n: string }>('SELECT count(*)::text AS n FROM schema_migrations'),
     );
-    return { status: 'ok', migrations: Number(result.rows[0]!.n) };
+    return {
+      status: 'ok',
+      migrations: Number(result.rows[0]!.n),
+      version: config.buildId,
+    };
   });
 
   app.get('/normative/gaps', async (request) => {

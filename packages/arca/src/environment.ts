@@ -42,9 +42,23 @@ const PRODUCCION: ServiceEndpoints = {
  * Nivel de verificación de cada endpoint, con el mismo criterio que el motor
  * normativo: `V1` significa "leído de documentación oficial archivada".
  *
- * Los de WSAA y WSCDC están en `V1`. Los de padrón y wsfev1 provienen de la
- * documentación pública de ARCA pero sus manuales todavía no se archivaron con
- * hash, así que quedan en `V2` hasta que se descarguen. No se usan en FASE 3.
+ * Los de WSAA y WSCDC están en `V1`.
+ *
+ * **wsfev1 y padrón siguen en `V2`, y el motivo cambió en B2.5.4.** Decía que
+ * sus manuales «todavía no se archivaron con hash», y eso dejó de ser cierto:
+ * `ARCA_manual_desarrollador_wsfev1_v4.6.pdf`, `ARCA_QR_especificaciones.pdf` y
+ * los dos de padrón están archivados y `npm run norms:verify` los da íntegros.
+ *
+ * Lo que falta es distinto y más preciso: de wsfev1 **está confirmado el
+ * extremo de homologación y no el de producción**. El que está archivado es
+ * `ARCA_wsfev1_homologacion.wsdl`, y ahí figura exactamente
+ * `https://wswhomo.afip.gov.ar/wsfev1/service.asmx`, que es el que declara este
+ * archivo. Del de producción no hay fuente archivada que lo respalde.
+ *
+ * Se deja en `V2` por eso, y no por lo que decía antes. Confirmarlo contra el
+ * WSDL de producción es un paso de la lista previa a emitir —ver
+ * `NEXO_B2_5_4_ARCA_PRODUCCION.md` §23—: apuntar a un extremo equivocado en
+ * producción no falla de forma obvia, falla como «ARCA no contesta».
  */
 export const ENDPOINT_VERIFICATION: Record<keyof ServiceEndpoints, 'V1' | 'V2'> = {
   wsaa: 'V1',

@@ -48,12 +48,25 @@ try {
 }
 
 const aplicar = process.argv.includes('--aplicar');
-const desde = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) ?? hoyIso();
+const desdeDeclarado = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) ?? null;
 
-function hoyIso() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+/**
+ * «Hoy» es el día que dice la base, no el que dice UTC.
+ *
+ * Esto decía `getUTCDate()`, y en Argentina —UTC menos tres— después de las
+ * nueve de la noche eso ya es mañana. Consecuencia medida el 2026-09-09 a las
+ * 22:07: los cinco precios quedaron con `vigente_desde` en el día siguiente, la
+ * consulta del catálogo —que compara contra `CURRENT_DATE`— no encontró
+ * ninguno, y **los planes se quedaron sin precio hasta la medianoche**. Tres
+ * pruebas se pusieron en rojo por un huso horario.
+ *
+ * Se le pregunta a la base porque es la base la que después compara: cualquier
+ * otra fuente puede discrepar con ella y este es exactamente el error que se
+ * está arreglando.
+ */
+async function hoySegunLaBase(cliente) {
+  const { rows } = await cliente.query('SELECT CURRENT_DATE::text AS hoy');
+  return rows[0].hoy;
 }
 
 /**
@@ -103,6 +116,8 @@ try {
   if (faltantes.length > 0) {
     throw new Error(`No hay planes disponibles con estos códigos: ${faltantes.join(', ')}`);
   }
+
+  const desde = desdeDeclarado ?? (await hoySegunLaBase(cliente));
 
   console.log(`\n══ Hipótesis comercial B-1 ${aplicar ? '' : '(ENSAYO)'} ═══════════════\n`);
   console.log(`  Vigente desde ${desde}\n`);

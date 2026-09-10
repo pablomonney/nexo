@@ -94,6 +94,10 @@ const CON_DELETE: Readonly<Record<string, string>> = {
   commercial_document_lines: 'Renglón de un documento comercial en preparación',
   company_account_map: 'Asociación entre concepto y cuenta: se cambia, no es un hecho',
   goods_receipt_lines: 'Renglón de una recepción en preparación',
+  migration_findings:
+    'Lo que el validador opina hoy sobre una fila cruda con el mapeo de hoy: es derivado y ' +
+    'se recalcula entero en cada validación. La prueba de lo que el origen traía está en ' +
+    'migration_rows, que sí es inmutable y no tiene DELETE (0112)',
   party_price_lists: 'Asignación de lista a un tercero',
   payment_order_lines: 'Renglón de una orden de pago en preparación',
   payment_orders: 'Orden de pago en preparación; una vez pagada la impide el trigger',

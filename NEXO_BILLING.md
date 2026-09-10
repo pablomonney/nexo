@@ -107,8 +107,15 @@ Lo que el ciclo no puede hacer lo informa en vez de callarlo:
 
 ```
 REINTENTO  OMITIDO  No hay pasarela de pago conectada.
-AVISO      OMITIDO  No hay proveedor de correo configurado.
+AVISO      OMITIDO  El aviso de cobranza no está conectado al envío de correo.
 ```
+
+> **El aviso y el correo son dos cosas distintas, desde B2.5.1.** NEXO ya tiene
+> proveedor de correo —Resend, ver `apps/api/src/correo/`— y el alta lo usa. Lo
+> que sigue sin estar es el **cableado del aviso de cobranza a ese puerto**: a
+> quién se le manda, con qué texto y cuántas veces son decisiones de cobranza,
+> no del transporte. Configurar `EMAIL_PROVIDER=resend` no hace salir este
+> aviso.
 
 ## 6. Fechas y centavos
 

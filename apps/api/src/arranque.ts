@@ -43,6 +43,7 @@ import {
   faltantesDeHttp,
   type ConfiguracionDeIa,
 } from './ai/proveedor.js';
+import { modoDeCorreo, type ConfiguracionDeCorreo } from './correo/fabrica.js';
 import { modoDeSecretos } from './secrets/fabrica.js';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -116,6 +117,109 @@ export async function verificarEsquema(): Promise<ProblemaDeArranque[]> {
   }
 
   return migracionesFaltantes(enDisco, ya);
+}
+
+/**
+ * Con qué rol de PostgreSQL está corriendo la aplicación.
+ *
+ * Dos roles, y son distintos a propósito:
+ *
+ *     session_user  con el que conecta `DATABASE_URL`.
+ *     current_user  el que queda adentro de `withCompany`/`withoutCompany`,
+ *                   después del `SET LOCAL ROLE aai_app` de `tenancy.ts`.
+ */
+export interface RolesDeLaBase {
+  readonly sesion: string;
+  readonly efectivo: string;
+  readonly sesionEsSuperusuario: boolean;
+  readonly efectivoSalteaRls: boolean;
+}
+
+export async function rolesDeLaBase(): Promise<RolesDeLaBase> {
+  return withoutCompany('system:arranque', async (tx) => {
+    // `session_user` sigue siendo el de la conexión aunque este bloque ya haya
+    // hecho `SET LOCAL ROLE`: es justamente lo que se quiere saber.
+    const { rows } = await tx.query<{
+      sesion: string;
+      efectivo: string;
+      sesion_super: boolean | null;
+      efectivo_bypass: boolean | null;
+    }>(
+      `SELECT session_user::text                       AS sesion,
+              current_user::text                       AS efectivo,
+              (SELECT rolsuper     FROM pg_roles WHERE rolname = session_user) AS sesion_super,
+              (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user) AS efectivo_bypass`,
+    );
+    const f = rows[0]!;
+    return {
+      sesion: f.sesion,
+      efectivo: f.efectivo,
+      // `null` sería no haber podido afirmar que NO es superusuario, y en una
+      // comprobación de seguridad eso se trata como el caso peligroso.
+      sesionEsSuperusuario: f.sesion_super !== false,
+      efectivoSalteaRls: f.efectivo_bypass !== false,
+    };
+  });
+}
+
+/**
+ * El aislamiento entre empresas no puede depender de dónde se despliegue.
+ *
+ * ## Lo que este control existe para impedir
+ *
+ * Todo el aislamiento de NEXO se apoya en RLS, y RLS **se evalúa contra el rol
+ * que ejecuta la consulta**. Un rol con `BYPASSRLS` —o un superusuario— no ve
+ * las políticas: las atraviesa. No falla nada, no hay error, no hay log: una
+ * empresa ve los datos de otra y el sistema se comporta como si estuviera bien.
+ *
+ * `tenancy.ts` hace `SET LOCAL ROLE aai_app` en cada transacción, así que el rol
+ * **efectivo** es el correcto aunque se conecte con otro. Eso es lo que hace que
+ * la base de desarrollo pueda conectar como superusuario sin romper los tests.
+ *
+ * Pero en producción no alcanza, y por un motivo concreto: si el rol de la
+ * conexión es superusuario, **cualquier consulta que se escriba fuera de esos
+ * dos envoltorios corre sin ninguna política**. Hoy no hay ninguna; el control
+ * está para el día que alguien agregue una sin darse cuenta.
+ *
+ * Por eso en producción se exige que la conexión **no sea superusuario** y que
+ * el rol efectivo **no pueda saltear RLS**. Fuera de producción se informa y se
+ * deja pasar: obligar a un rol dedicado para levantar el proyecto en una
+ * máquina de desarrollo sería costo sin beneficio.
+ */
+export function problemasDelRol(
+  roles: RolesDeLaBase,
+  esProduccion: boolean,
+): ProblemaDeArranque[] {
+  if (!esProduccion) return [];
+  const problemas: ProblemaDeArranque[] = [];
+
+  if (roles.sesionEsSuperusuario) {
+    problemas.push({
+      que:
+        `DATABASE_URL conecta como "${roles.sesion}", que es superusuario. En producción el ` +
+        'aislamiento entre empresas quedaría a merced de que ninguna consulta se escriba ' +
+        'fuera de withCompany/withoutCompany',
+      // `aai_app` es NOLOGIN a propósito —es el rol al que se baja cada
+      // transacción, no uno con el que se conecta—, así que decir «apuntá
+      // DATABASE_URL a aai_app» sería mandar a hacer algo imposible. Hace falta
+      // un rol de conexión que sea **miembro** suyo.
+      comoSeArregla:
+        'crear un rol de conexión sin SUPERUSER y miembro de aai_app, y apuntar DATABASE_URL ' +
+        'ahí: CREATE ROLE nexo_app LOGIN PASSWORD \'…\' NOSUPERUSER NOBYPASSRLS NOCREATEDB; ' +
+        'GRANT aai_app TO nexo_app;  (ver docs/DESPLIEGUE.md §6.1)',
+    });
+  }
+
+  if (roles.efectivoSalteaRls) {
+    problemas.push({
+      que:
+        `el rol efectivo "${roles.efectivo}" puede saltear RLS (BYPASSRLS). Las políticas por ` +
+        'empresa no se le aplican: una empresa vería los datos de otra, sin error y sin rastro',
+      comoSeArregla: 'ALTER ROLE ' + roles.efectivo + ' NOBYPASSRLS',
+    });
+  }
+
+  return problemas;
 }
 
 /**
@@ -212,6 +316,7 @@ export function modoDeIa(ia: ConfiguracionDeIa): ModoDeOperacion {
 export function modosDeOperacion(config: {
   readonly arca: { readonly environment: string };
   readonly ai: ConfiguracionDeIa;
+  readonly correo: ConfiguracionDeCorreo;
   readonly secrets: { readonly provider: string };
   readonly documents: { readonly ocrEngine: string };
   readonly isProduction: boolean;
@@ -225,6 +330,25 @@ export function modosDeOperacion(config: {
     { nombre: 'OCR', valor: config.documents.ocrEngine, real: config.documents.ocrEngine !== 'none' && config.documents.ocrEngine !== 'mock' },
     modoDeIa(config.ai),
     modoDeSecretos(config.secrets.provider),
+    // El correo y el cobro faltaban en este banner hasta la auditoría B-2: se
+    // recorrían las variables de entorno, y lo que no tenía variable no
+    // aparecía. Eran justo los dos modos apagados del sistema entero, así que
+    // el único lugar que existe para hacer visible un modo degradado callaba
+    // los dos más degradados de todos.
+    //
+    // El correo dejó de ser fijo en B2.5.1, que es lo que aquella nota decía
+    // que iba a pasar: ahora sale de la configuración, y conectar un proveedor
+    // y decir que está conectado son el mismo cambio. El cobro sigue fijo
+    // porque sigue sin haber pasarela.
+    modoDeCorreo(config.correo),
+    {
+      nombre: 'cobro',
+      valor: 'manual',
+      real: false,
+      detalle:
+        'no hay pasarela: se emite y se lleva la cobranza, pero un cobro con tarjeta no se ' +
+        'puede ejecutar. Una transferencia se registra a mano',
+    },
     { nombre: 'entorno', valor: config.isProduction ? 'production' : 'development', real: true },
   ];
 }

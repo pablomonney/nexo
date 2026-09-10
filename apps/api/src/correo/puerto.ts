@@ -1,10 +1,18 @@
 /**
- * El puerto de correo. **No hay proveedor conectado.**
+ * El puerto de correo.
  *
  * Misma forma que resolvió el proveedor de modelo y el gestor de secretos: la
- * estructura de este lado, el vendor del otro lado de la interfaz. Cuando haya
- * proveedor se escribe un adaptador que implemente `ProveedorDeCorreo` y no
- * cambia una línea de quien lo usa.
+ * estructura de este lado, el vendor del otro lado de la interfaz.
+ *
+ * **La promesa se cumplió y conviene dejarlo escrito.** Este encabezado decía
+ * «no hay proveedor conectado» y que el día que lo hubiera se escribiría un
+ * adaptador «y no cambia una línea de quien lo usa». En B2.5.1 se conectó
+ * Resend: el adaptador es `resend.ts`, la elección vive en `fabrica.ts`, y de
+ * este archivo **no cambió el contrato** — solo se agregó `intentos`, que se
+ * explica abajo.
+ *
+ * Cuál proveedor se usa lo decide `EMAIL_PROVIDER`, y `none` sigue siendo el
+ * valor por defecto y un modo de operación legítimo.
  *
  * ## Encolar no es enviar, y el estado lo dice
  *
@@ -54,10 +62,28 @@ export interface Mensaje {
   readonly tipo: TipoDeMensaje;
 }
 
+/**
+ * Qué pasó al intentar mandarlo.
+ *
+ * `intentos` es **opcional y aditivo**, y es lo único que este contrato ganó al
+ * conectar un proveedor real. El motivo: `encolar` escribía `intentos: 1` fijo,
+ * que era cierto mientras el único proveedor no reintentaba nada. Un adaptador
+ * que reintenta un 429 hace que esa columna mienta, y `email_outbox.intentos`
+ * existe para contestar «¿cuántas veces se probó?» — si dijera 1 sobre tres
+ * intentos, quien lea la bandeja no vería que el proveedor estuvo caído.
+ *
+ * Es opcional para que `SinProveedorDeCorreo` —y cualquier adaptador que no
+ * reintente— no tenga que declararlo: sin el campo, se asume un intento.
+ */
 export type ResultadoDeEnvio =
-  | { readonly estado: 'ENVIADO'; readonly proveedor: string; readonly referencia: string }
+  | {
+      readonly estado: 'ENVIADO';
+      readonly proveedor: string;
+      readonly referencia: string;
+      readonly intentos?: number;
+    }
   | { readonly estado: 'SIN_PROVEEDOR'; readonly detalle: string }
-  | { readonly estado: 'FALLIDO'; readonly detalle: string };
+  | { readonly estado: 'FALLIDO'; readonly detalle: string; readonly intentos?: number };
 
 export interface ProveedorDeCorreo {
   readonly id: string;
@@ -102,7 +128,7 @@ export async function encolar(
     `INSERT INTO email_outbox
        (destinatario, asunto, cuerpo, tipo, estado, proveedor,
         referencia_externa, detalle, intentos, enviado_el)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
              CASE WHEN $5 = 'ENVIADO' THEN now() END)`,
     [
       mensaje.destinatario,
@@ -113,6 +139,9 @@ export async function encolar(
       resultado.estado === 'ENVIADO' ? resultado.proveedor : proveedor.id,
       resultado.estado === 'ENVIADO' ? resultado.referencia : null,
       resultado.estado === 'ENVIADO' ? null : resultado.detalle,
+      // Sin el campo se asume uno: es lo que hacía esta consulta con un `1`
+      // fijo, y sigue siendo cierto para todo adaptador que no reintente.
+      resultado.estado === 'SIN_PROVEEDOR' ? 1 : (resultado.intentos ?? 1),
     ],
   );
 

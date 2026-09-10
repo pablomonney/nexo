@@ -79,4 +79,60 @@ describe('S-27 — los secretos no llegan al log', () => {
       expect(texto).not.toMatch(/apiKey/u);
     }
   });
+
+  /**
+   * El banner, con **todo** conectado, no dice ninguna credencial.
+   *
+   * La comprobación de arriba mira el texto de dos archivos y busca la palabra
+   * `apiKey`. Alcanzaba cuando el banner tenía cuatro filas y una sola
+   * integración con credencial; hoy tiene siete y tres —IA, correo y métricas—,
+   * y una fila nueva que imprimiera un secreto con otro nombre pasaría entera.
+   *
+   * Así que se arma el banner de verdad, con cada integración **configurada**
+   * —que es el único estado donde hay algo que filtrar— y credenciales
+   * sintéticas, y se busca cada una en la salida.
+   */
+  it('con todas las integraciones configuradas, el banner no dice ninguna credencial', async () => {
+    const { modosDeOperacion } = await import('@aai/api/arranque');
+
+    const CLAVE_IA = 'sk-TEST_SECRET_ONLY_ia_no_es_una_credencial';
+    const CLAVE_CORREO = 're_TEST_SECRET_ONLY_correo_no_es_una_credencial';
+
+    const modos = modosDeOperacion({
+      arca: { environment: 'produccion' },
+      ai: {
+        provider: 'http',
+        // La referencia dice **dónde** está la clave. El banner puede nombrarla
+        // sin filtrar nada; lo que no puede es imprimir el valor.
+        apiKeyRef: `env:${CLAVE_IA}`,
+        modelId: 'un-modelo',
+        baseUrl: 'https://proveedor.example/v1',
+        timeoutMs: 30_000,
+        maxRetries: 2,
+      },
+      correo: {
+        provider: 'resend',
+        apiKeyRef: `env:${CLAVE_CORREO}`,
+        from: 'NEXO <hola@ejemplo.invalid>',
+        timeoutMs: 10_000,
+        maxRetries: 2,
+      },
+      secrets: { provider: 'env' },
+      documents: { ocrEngine: 'none' },
+      isProduction: true,
+    });
+
+    const impreso = modos
+      .map((m) => `${m.nombre} ${m.valor} ${m.detalle ?? ''}`)
+      .join('\n');
+
+    for (const credencial of [CLAVE_IA, CLAVE_CORREO]) {
+      expect(impreso, `el banner imprime «${credencial}»`).not.toContain(credencial);
+    }
+
+    // Y el control positivo: el banner sí dice algo de cada integración. Sin
+    // esto, un banner vacío pasaría la comprobación de arriba.
+    expect(impreso).toContain('resend');
+    expect(impreso).toContain('http');
+  });
 });

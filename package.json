@@ -66,7 +66,10 @@
     "metricas:saas": "node scripts/metricas-saas.mjs",
     "correo:bandeja": "node scripts/correo-bandeja.mjs",
     "comercial:b1": "node scripts/sembrar-comercial-b1.mjs",
-    "landing:construir": "node scripts/construir-landing.mjs"
+    "landing:construir": "node scripts/construir-landing.mjs",
+    "bench:migracion": "node scripts/bench-migracion.mjs",
+    "limpiar:pruebas": "node scripts/limpiar-datos-de-prueba.mjs",
+    "diario": "node scripts/tareas-diarias.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

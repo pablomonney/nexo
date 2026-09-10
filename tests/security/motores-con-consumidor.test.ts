@@ -58,6 +58,57 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
  * "se acuerde de llamarla".
  */
 const SIN_CONSUMIDOR = new Map<string, string>([
+  // ── La seguridad de la emisión fiscal (B2.5.4.1) ─────────────────────────
+  //
+  // Las siete tienen **el mismo** motivo y por eso conviene leerlo una vez: la
+  // emisión está construida y cerrada a propósito. `EMISION_HABILITADA` es
+  // `false` y `@aai/arca-emision` sigue fuera del grafo de la aplicación, así
+  // que no hay ningún camino productivo que pueda llamarlas todavía.
+  //
+  // Es deliberado y es el punto de la fase: emitir una factura no se deshace,
+  // así que las reglas que lo impiden se escriben **antes** que el camino que
+  // lo produciría. Si se escribieran después, las escribiría el apuro.
+  //
+  // Lo que las destraba a las siete: habilitar la emisión, que exige
+  // implementar `FECompConsultar` contra el manual archivado, confirmar el
+  // extremo de producción de wsfev1, sacar la regla de aislamiento a sabiendas
+  // y tener el certificado. Ver `NEXO_B2_5_4_1_FISCAL_EMISSION_SAFETY.md` §17.
+  [
+    'puedePedirCae',
+    'Contesta la pregunta más importante del módulo —si desde este estado se puede pedir un ' +
+      'CAE— y hoy no hay quien emita. Ver el bloque de B2.5.4.1 arriba.',
+  ],
+  [
+    'requiereReconciliacion',
+    'Dice si hay que averiguar qué pasó antes de hacer cualquier otra cosa. Su consumidor es ' +
+      'el emisor, que no existe. Ver el bloque de B2.5.4.1 arriba.',
+  ],
+  [
+    'estadoSegunDesenlace',
+    'Traduce el resultado de la llamada a ARCA en un estado. Sin llamada no hay desenlace que ' +
+      'traducir. Ver el bloque de B2.5.4.1 arriba.',
+  ],
+  [
+    'reintentoSeguro',
+    'Decide si un fallo se puede reintentar solo. Ver el bloque de B2.5.4.1 arriba.',
+  ],
+  [
+    'verificarEvidencia',
+    'Comprueba que el CAE, su vencimiento y el número autorizado alcancen para escribir ' +
+      'AUTORIZADA. Sin emisión no hay evidencia que verificar. Ver el bloque de B2.5.4.1 arriba.',
+  ],
+  [
+    'reconciliarPorUltimoAutorizado',
+    'Concluye, comparando contra `FECompUltimoAutorizado`, si un comprobante en duda existe. ' +
+      'Su consumidor es el reconciliador, que necesita además `FECompConsultar` para recuperar ' +
+      'el CAE. Ver el bloque de B2.5.4.1 arriba.',
+  ],
+  [
+    'claveDeIntencion',
+    'Deriva la clave de idempotencia de la operación comercial. La escribe hoy la base —el ' +
+      'índice único de `fiscal_emissions`— y la usará el emisor cuando exista. Ver el bloque ' +
+      'de B2.5.4.1 arriba.',
+  ],
   [
     'InMemorySecretProvider',
     'Es un **doble de test**, y este barrido no cuenta los tests como consumidores — con ' +

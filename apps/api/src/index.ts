@@ -16,8 +16,9 @@
 // funcionaba y por qué fallaba en silencio.
 import { origenEnv } from './cargar-env.js';
 import { closePool, initPool } from '@aai/db';
-import { modosDeOperacion, verificarEsquema } from './arranque.js';
+import { modosDeOperacion, problemasDelRol, rolesDeLaBase, verificarEsquema } from './arranque.js';
 import { verificarProveedor } from './ai/proveedor.js';
+import { verificarProveedorDeCorreo } from './correo/fabrica.js';
 import { crearProveedorDeSecretos, verificarGestor } from './secrets/fabrica.js';
 import { config } from './config.js';
 import { buildServer } from './server.js';
@@ -29,6 +30,17 @@ initPool(config.databaseUrl);
 const proveedorInvalido = verificarProveedor(config.ai);
 if (proveedorInvalido !== null) {
   console.error(`NEXO no arranca:\n\n  ✘ ${proveedorInvalido}\n`);
+  await closePool();
+  process.exit(1);
+}
+
+// Y lo mismo con el correo. Acá el silencio sería el más caro de los tres: un
+// `EMAIL_PROVIDER` mal escrito no rompe nada visible —el alta contesta 200— y
+// el síntoma es que los usuarios nunca confirman su cuenta. Nadie va a ir a
+// leer `email_outbox` para descubrir por qué.
+const correoInvalido = verificarProveedorDeCorreo(config.correo);
+if (correoInvalido !== null) {
+  console.error(`NEXO no arranca:\n\n  ✘ ${correoInvalido}\n`);
   await closePool();
   process.exit(1);
 }
@@ -56,6 +68,21 @@ try {
 
   ✘ ${(error as Error).message}
 `);
+  await closePool();
+  process.exit(1);
+}
+
+// Con qué rol se conecta a PostgreSQL. En producción, un rol que puede saltear
+// RLS convierte el aislamiento entre empresas en una convención del código: no
+// falla nada, no hay error, y una empresa ve los datos de otra.
+const roles = await rolesDeLaBase();
+const problemasDeRol = problemasDelRol(roles, config.isProduction);
+if (problemasDeRol.length > 0) {
+  console.error('NEXO no arranca:\n');
+  for (const p of problemasDeRol) {
+    console.error(`  ✘ ${p.que}`);
+    console.error(`    → ${p.comoSeArregla}\n`);
+  }
   await closePool();
   process.exit(1);
 }
@@ -101,3 +128,17 @@ for (const modo of modosDeOperacion(config)) {
   console.log(`  ${modo.nombre.padEnd(9)} ${modo.valor}${marca}`);
   if (modo.detalle !== undefined) console.log(`            ${modo.detalle}`);
 }
+
+// El rol de la base y el proxy se imprimen **siempre**, incluso cuando están
+// bien. Los dos deciden cosas que no se ven desde afuera —si RLS se aplica y si
+// el límite de intentos distingue a un cliente de otro— y de los dos hay una
+// versión que funciona sin dar ningún síntoma cuando está mal puesta.
+console.log(
+  `  base      ${roles.sesion}` +
+    (roles.sesion === roles.efectivo ? '' : ` → ${roles.efectivo} en cada transacción`) +
+    (config.isProduction ? '' : roles.sesionEsSuperusuario ? '   · superusuario (solo dev)' : ''),
+);
+console.log(
+  `  proxy     ${config.trustProxy ? 'de confianza: se lee X-Forwarded-For' : 'ninguno: se usa la conexión directa'}`,
+);
+if (config.buildId !== null) console.log(`  versión   ${config.buildId}`);

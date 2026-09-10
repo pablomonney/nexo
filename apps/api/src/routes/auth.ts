@@ -20,7 +20,8 @@ import {
   tooManyRequests,
   unauthorized,
 } from '../http/errors.js';
-import { SinProveedorDeCorreo, encolar, type ResultadoDeEnvio } from '../correo/puerto.js';
+import { encolar, type ProveedorDeCorreo, type ResultadoDeEnvio } from '../correo/puerto.js';
+import { crearProveedorDeCorreo } from '../correo/fabrica.js';
 
 const loginSchema = z.object({
   email: z.string().email().max(320),
@@ -75,6 +76,18 @@ interface UserRow {
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * El proveedor de correo, resuelto **una vez** al registrar las rutas.
+   *
+   * Acá y no adentro de cada handler por lo mismo que `crearProveedorDeSecretos`
+   * se construye en el arranque: si `EMAIL_PROVIDER` tiene un valor que no
+   * existe, que falle al levantar el servidor y no en el primer alta de un
+   * usuario real. La fábrica tira solo en ese caso; que falte la credencial o
+   * el remitente devuelve `SinProveedorDeCorreo`, que es lo que mantiene el
+   * alta funcionando en una instalación sin correo.
+   */
+  const correo = crearProveedorDeCorreo();
+
   app.post('/auth/login', async (request, reply) => {
     const body = loginSchema.parse(request.body);
 
@@ -415,6 +428,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const envio = await emitirVerificacion(
         tx,
+        correo,
         creado.rows[0]!.id,
         body.email,
         request.ip,
@@ -429,12 +443,21 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       estado: 'REGISTRADO',
       mensaje:
         'Si la dirección no estaba registrada, te mandamos un mensaje para confirmarla.',
+      // Tres desenlaces y tres textos. Antes eran dos, porque el único
+      // proveedor que había no podía fallar: todo lo que no era ENVIADO era
+      // «no hay proveedor». Con un proveedor real, decirle eso a quien se
+      // encontró con un rechazo de Resend lo mandaría a esperar a que el
+      // operador le acerque un mensaje que sí se intentó mandar y rebotó.
       correo:
         salida.enviado === 'ENVIADO'
           ? 'El mensaje de verificación salió.'
-          : 'ATENCIÓN: no hay proveedor de correo configurado en esta instalación, así que ' +
-            'el mensaje quedó en la bandeja de salida y no llegó a ningún lado. Hasta que se ' +
-            'contrate uno, el alta la completa el operador.',
+          : salida.enviado === 'FALLIDO'
+            ? 'El mensaje de verificación no se pudo entregar. Si la dirección es correcta, ' +
+              'pedí uno nuevo en unos minutos; si el problema sigue, avisale a quien administra ' +
+              'esta instalación.'
+            : 'ATENCIÓN: no hay proveedor de correo configurado en esta instalación, así que ' +
+              'el mensaje quedó en la bandeja de salida y no llegó a ningún lado. Hasta que se ' +
+              'contrate uno, el alta la completa el operador.',
     };
   });
 
@@ -509,7 +532,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           WHERE user_id = $1 AND proposito = 'ALTA' AND consumido_el IS NULL`,
         [u.id],
       );
-      await emitirVerificacion(tx, u.id, email, request.ip);
+      await emitirVerificacion(tx, correo, u.id, email, request.ip);
     });
 
     return {
@@ -537,6 +560,7 @@ const HORAS_DE_VIDA_DEL_ENLACE = 24;
  */
 async function emitirVerificacion(
   tx: Tx,
+  correo: ProveedorDeCorreo,
   userId: string,
   email: string,
   ip: string,
@@ -550,7 +574,7 @@ async function emitirVerificacion(
     [userId, hashToken(token), String(HORAS_DE_VIDA_DEL_ENLACE), config.recordIpInAudit ? ip : null],
   );
 
-  return encolar(tx, new SinProveedorDeCorreo(), {
+  return encolar(tx, correo, {
     destinatario: email,
     asunto: 'Confirmá tu dirección para entrar a NEXO',
     // Escrito para la persona que lo recibe, no para quien programó el

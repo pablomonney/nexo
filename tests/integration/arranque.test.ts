@@ -39,6 +39,24 @@ const IA_APAGADA = {
   maxRetries: 2,
 } as const;
 
+/**
+ * El correo apagado, con la forma completa. Mismo criterio que `IA_APAGADA`.
+ *
+ * **Hay que pasarlo siempre**, y omitirlo no da error: `modoDeCorreo` tiene
+ * parámetro por defecto, así que un `undefined` cae en el `config` del proceso
+ * en vez de en lo que el caso quiso declarar. El test seguiría en verde
+ * midiendo la variable de entorno de quien lo corre, que es justo lo que estos
+ * fixtures existen para no hacer. Se descubrió acá mismo, en B2.5.1, cuando
+ * `correo` pasó a ser parte de la configuración.
+ */
+const CORREO_APAGADO = {
+  provider: 'none',
+  apiKeyRef: null,
+  from: null,
+  timeoutMs: 10_000,
+  maxRetries: 2,
+} as const;
+
 suite('Arranque del servidor', () => {
   beforeAll(() => {
     initPool(DATABASE_URL);
@@ -87,6 +105,7 @@ suite('Arranque del servidor', () => {
     const modos = modosDeOperacion({
       arca: { environment: 'mock' },
       ai: IA_APAGADA,
+      correo: CORREO_APAGADO,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'mock' },
       isProduction: false,
@@ -104,6 +123,7 @@ suite('Arranque del servidor', () => {
     const modos = modosDeOperacion({
       arca: { environment: 'homologacion' },
       ai: IA_APAGADA,
+      correo: CORREO_APAGADO,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: false,
@@ -119,11 +139,69 @@ suite('Arranque del servidor', () => {
     const modos = modosDeOperacion({
       arca: { environment: 'mock' },
       ai: IA_APAGADA,
+      correo: CORREO_APAGADO,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: true,
     });
 
     expect(modos.find((m) => m.nombre === 'entorno')!.valor).toBe('production');
+  });
+
+  it('el banner nombra el correo y el cobro, que son los dos apagados de verdad', () => {
+    // El defecto que encontró B-2: este banner existe para que ningún modo
+    // degradado sea invisible, y recorría solo lo que tiene variable de
+    // entorno. Correo y cobro no tienen ninguna —porque no hay nada que
+    // configurar— así que los dos únicos que están apagados del todo eran los
+    // dos que no se veían.
+    const modos = modosDeOperacion({
+      arca: { environment: 'produccion' },
+      ai: IA_APAGADA,
+      correo: CORREO_APAGADO,
+      secrets: { provider: 'env' },
+      documents: { ocrEngine: 'none' },
+      isProduction: true,
+    });
+
+    const porNombre = new Map(modos.map((m) => [m.nombre, m]));
+    for (const nombre of ['correo', 'cobro']) {
+      const modo = porNombre.get(nombre);
+      expect(modo, `el banner no nombra «${nombre}»`).toBeDefined();
+      expect(modo!.real, `«${nombre}» no está conectado y el banner dice que sí`).toBe(false);
+      // Sin detalle, un `· simulado o apagado` no dice qué falta ni qué pasa
+      // mientras tanto, que es lo único accionable de la línea.
+      expect(modo!.detalle, `«${nombre}» no dice cuál es la consecuencia`).toBeTruthy();
+    }
+  });
+
+  it('con Resend configurado, el banner lo dice y el cobro sigue apagado', () => {
+    // El control positivo del anterior, y el que prueba que la fila sale de la
+    // configuración y no de un texto fijo: sin él, `real: false` constante
+    // pasaría los dos casos y el banner mentiría el día que haya proveedor.
+    //
+    // También comprueba que **inyectar la configuración funciona**: si
+    // `modosDeOperacion` ignorara el `correo` que recibe, acá saldría `none`.
+    const modos = modosDeOperacion({
+      arca: { environment: 'mock' },
+      ai: IA_APAGADA,
+      correo: {
+        provider: 'resend',
+        apiKeyRef: 'env:EMAIL_API_KEY',
+        from: 'NEXO <hola@ejemplo.invalid>',
+        timeoutMs: 10_000,
+        maxRetries: 2,
+      },
+      secrets: { provider: 'env' },
+      documents: { ocrEngine: 'none' },
+      isProduction: false,
+    });
+
+    const porNombre = new Map(modos.map((m) => [m.nombre, m]));
+    expect(porNombre.get('correo')!.valor).toBe('resend');
+    expect(porNombre.get('correo')!.real).toBe(true);
+    // El banner va a la consola del servidor y de ahí al log del contenedor.
+    expect(JSON.stringify(porNombre.get('correo'))).not.toContain('EMAIL_API_KEY');
+    // Conectar el correo no conecta el cobro.
+    expect(porNombre.get('cobro')!.real).toBe(false);
   });
 });

@@ -57,6 +57,22 @@ export const ACTIONS_REQUIRING_REASON = [
   // Vencer una prueba le corta el acceso a alguien. Tiene que poder explicarse
   // sin reconstruirlo desde las fechas.
   'VENCER_PRUEBA',
+  // Revertir una migración deshace escrituras en la empresa. Sin motivo, seis
+  // meses después nadie sabe si el archivo venía mal o si fue una decisión.
+  'REVERTIR_MIGRACION',
+  // Cancelar deja la empresa a medio cargar **a propósito**. Es la que más
+  // necesita explicarse: alguien que la mire después va a ver una migración que
+  // trajo la mitad de los clientes y ninguna razón aparente.
+  'CANCELAR_MIGRACION',
+  // Reconciliar una emisión fiscal es decidir, con evidencia del organismo
+  // delante, si un comprobante existe o no. De esa decisión depende si la venta
+  // se vuelve a facturar: sin el motivo escrito, seis meses después nadie puede
+  // saber en qué se basó quien la tomó.
+  'RECONCILIAR_EMISION',
+  // Anular una intención fiscal abandona un número de comprobante que ya se
+  // reservó. Deja un hueco en la numeración, y un hueco sin explicación es
+  // exactamente lo que una inspección va a preguntar.
+  'ANULAR_INTENCION_FISCAL',
 ] as const;
 
 export interface AuditEvent {

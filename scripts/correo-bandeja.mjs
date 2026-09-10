@@ -18,11 +18,21 @@
  *
  * ## Lo que hay que entender antes de usarlo
  *
- * **No hay proveedor de correo contratado.** Todo lo que se encola queda en
- * `SIN_PROVEEDOR`: no salió, no va a salir solo, y quien se registró está
- * esperando. Hasta que se contrate uno, completar un alta autoservicio es un
- * trabajo manual del operador — y decirlo así es preferible a un sistema que
- * parece mandar correos y no manda ninguno.
+ * **Depende de `EMAIL_PROVIDER`, y los dos casos se leen distinto.**
+ *
+ *     none      no hay proveedor. Todo lo encolado queda en `SIN_PROVEEDOR`:
+ *               no salió, no va a salir solo, y quien se registró está
+ *               esperando. Completar un alta es un trabajo manual del operador
+ *               — y decirlo así es preferible a un sistema que parece mandar
+ *               correos y no manda ninguno.
+ *     resend    hay proveedor (B2.5.1). Lo que aparezca acá con `FALLIDO` es lo
+ *               que **se intentó mandar y rebotó**, con su motivo y su cuenta
+ *               de intentos. Eso ya no lo arregla el operador entregando el
+ *               mensaje a mano: hay que mirar el motivo.
+ *
+ * `SIN_PROVEEDOR` y `FALLIDO` no son sinónimos y esta pantalla es donde más
+ * importa: el primero dice que falta contratar algo, el segundo que el mensaje
+ * o la dirección tienen un problema.
  *
  * Por eso el cuerpo **no se muestra salvo que se lo pida**: leerlo es leer un
  * token de otra persona, y conviene que ese acto sea deliberado.
@@ -92,9 +102,13 @@ try {
 
   const sinProveedor = resumen.rows.find((r) => r.estado === 'SIN_PROVEEDOR');
   if (sinProveedor !== undefined && Number(sinProveedor.n) > 0) {
-    console.log('  ⚠ No hay proveedor de correo configurado en esta instalación.');
-    console.log('    Esos mensajes NO salieron y no van a salir solos. Quien se registró');
-    console.log('    está esperando algo que nunca le va a llegar.\n');
+    // Se habla en pasado a propósito: la fila dice que **cuando se encoló** no
+    // había proveedor. Si desde entonces se configuró uno, decir «no hay
+    // proveedor en esta instalación» sería falso, y mandaría a revisar una
+    // configuración que ya está bien en vez de a reenviar esos mensajes.
+    console.log('  ⚠ Estos mensajes se encolaron SIN proveedor de correo configurado.');
+    console.log('    NO salieron y no van a salir solos, ni siquiera si ahora hay proveedor:');
+    console.log('    nada los reintenta. Quien se registró sigue esperando.\n');
   }
 } catch (error) {
   console.error(`No se pudo leer la bandeja: ${error.message}`);
