@@ -21,6 +21,20 @@ COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
 COPY packages ./packages
 COPY apps ./apps
 
+# Las migraciones **entran a la imagen**, y no es para poder migrar desde el
+# contenedor —eso sigue prohibido, ver el CMD—. Es porque el preflight de
+# `arranque.ts` compara los `.sql` del disco contra `schema_migrations` y **se
+# niega a arrancar** si la base quedó atrás.
+#
+# Sin esta línea, el preflight no encuentra el directorio y contesta «no se pudo
+# comprobar el esquema», que es un arranque fallido con un mensaje que parece un
+# problema de permisos. Le pasó a este despliegue el 2026-09-10.
+#
+# Se copia en la etapa de build y se arrastra a la de runtime desde el build,
+# igual que todo lo demás. Copiarla en runtime `--from=build` sin haberla traído
+# acá primero es la dependencia circular que ya se cometió una vez.
+COPY infrastructure ./infrastructure
+
 # `npm ci` respeta el lockfile exacto. `npm install` podría traer una versión
 # distinta de la que se probó, que es la peor forma de que producción y CI dejen
 # de ser lo mismo.
@@ -45,6 +59,8 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/apps ./apps
 COPY --from=build --chown=node:node /app/package.json ./package.json
+# El preflight las lee al arrancar. Ver la nota de la etapa de build.
+COPY --from=build --chown=node:node /app/infrastructure ./infrastructure
 
 # El almacén de documentos es un volumen: si vive adentro del contenedor, se
 # pierde en el primer redespliegue.

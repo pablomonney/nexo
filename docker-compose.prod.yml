@@ -1,0 +1,148 @@
+# ============================================================================
+# NEXO — servicio de producción
+# ============================================================================
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml logs -f nexo
+#
+# ## Qué define este archivo, y qué NO
+#
+# Define **solo la aplicación**. PostgreSQL ya corre como contenedor propio
+# (`nexo-postgres`) sobre la red `nexo`, con su volumen y sus datos.
+#
+# No se lo trae acá adentro **a propósito**: adoptar un contenedor que ya está
+# corriendo dentro de un proyecto de Compose nuevo lo hace recrear —las
+# etiquetas del proyecto no coinciden— y recrear un contenedor de base de datos
+# en producción es exactamente la clase de acto que no se hace a ciegas. El día
+# que se quiera unificar, se hace con la base parada, con copia verificada
+# delante y comprobando que el volumen se conserva.
+#
+# Lo que sí garantiza este archivo es que **la aplicación** sea reproducible: la
+# misma imagen, la misma red, el mismo archivo de entorno y el mismo volumen de
+# documentos, levantados con un comando.
+#
+# ## Lo que deliberadamente no se publica
+#
+# Ni el 3001 de NEXO ni el 5432 de PostgreSQL salen al host. Traefik llega a
+# NEXO **por la red de Docker**, que es para lo que la red existe; publicar el
+# puerto además abriría un camino que esquiva el proxy, el TLS y sus middlewares.
+
+name: nexo
+
+services:
+  nexo:
+    image: nexo:production
+    container_name: nexo-app
+
+    # Vuelve solo salvo que alguien lo haya parado a mano. `always` lo
+    # relevantaría incluso después de un `docker stop` deliberado, que es
+    # justamente cuando no se lo quiere de vuelta.
+    restart: unless-stopped
+
+    # Los secretos viven en el archivo del servidor, con permisos restrictivos,
+    # y **no** entran a la imagen: `.dockerignore` la excluye y S-43 lo
+    # comprueba.
+    env_file:
+      - /opt/nexo/.env
+
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+
+      # Hay un proxy adelante, así que `X-Forwarded-For` es de fiar.
+      #
+      # Sin esto, `request.ip` sería la de Traefik **para todos**, y el límite
+      # de intentos por origen se volvería global: treinta fallos de un atacante
+      # dejarían afuera a todos los clientes. El razonamiento completo está en
+      # `apps/api/src/config.ts` y en docs/DESPLIEGUE.md §6.2.
+      TRUST_PROXY: 'true'
+
+      # Qué versión está corriendo. Se pasa al desplegar —el hash del commit— y
+      # es lo que contesta `GET /health`. Sin él la sonda informa `null`, que es
+      # preferible a un número inventado.
+      BUILD_ID: ${BUILD_ID:-}
+
+    volumes:
+      # Los documentos son comprobantes de terceros con plazos legales de
+      # guarda. Adentro del contenedor se perderían en el próximo despliegue.
+      - /opt/nexo/var/documents:/app/var/documents
+
+    networks:
+      - nexo
+
+    # La misma sonda que el HEALTHCHECK de la imagen, declarada acá para que
+    # Compose la reporte y para que el `depends_on` de cualquier servicio futuro
+    # pueda esperarla. Pregunta por la base: un proceso que responde y no llega
+    # a PostgreSQL está caído para todo lo que importa.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health/db').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+    # ── Traefik ─────────────────────────────────────────────────────────────
+    #
+    # Traefik ya corre en el servidor (`/docker/traefik`) con los puertos 80 y
+    # 443 y ACME configurado. **No se levanta otro proxy**: NEXO solo se
+    # anuncia con etiquetas.
+    #
+    # `NEXO_DOMAIN` y `TRAEFIK_CERTRESOLVER` salen del entorno para no escribir
+    # acá un dominio que todavía no está aprobado ni el nombre de un resolvedor
+    # que tiene que coincidir con el de la configuración de Traefik. Mientras el
+    # dominio no resuelva, el enrutador simplemente no encuentra tráfico: el
+    # contenedor corre igual y la sonda interna sigue funcionando.
+    labels:
+      traefik.enable: 'true'
+      # Cuál de las redes usar para llegar al contenedor. Sin esto, con más de
+      # una red, Traefik elige y a veces elige la que no llega.
+      traefik.docker.network: nexo
+
+      traefik.http.services.nexo.loadbalancer.server.port: '3001'
+
+      # HTTP: solo para que ACME resuelva el desafío y para redirigir.
+      traefik.http.routers.nexo-http.rule: Host(`${NEXO_DOMAIN}`)
+      traefik.http.routers.nexo-http.entrypoints: web
+      traefik.http.routers.nexo-http.middlewares: nexo-a-https
+
+      traefik.http.middlewares.nexo-a-https.redirectscheme.scheme: https
+      traefik.http.middlewares.nexo-a-https.redirectscheme.permanent: 'true'
+
+      # HTTPS: el que sirve.
+      traefik.http.routers.nexo.rule: Host(`${NEXO_DOMAIN}`)
+      traefik.http.routers.nexo.entrypoints: websecure
+      traefik.http.routers.nexo.tls: 'true'
+      traefik.http.routers.nexo.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+
+    # ── Endurecimiento del contenedor ───────────────────────────────────────
+    #
+    # La imagen ya corre como `node` (S-43 lo comprueba). Esto agrega lo que no
+    # depende de la imagen.
+    security_opt:
+      # Sin esto, un proceso del contenedor podría ganar privilegios con un
+      # binario setuid. NEXO no necesita ninguno.
+      - no-new-privileges:true
+
+    # El sistema de archivos de la imagen no se escribe: lo único que NEXO
+    # escribe es el volumen de documentos, y lo que Node necesite en /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+    logging:
+      driver: json-file
+      options:
+        # Sin tope, un log de producción llena el disco y tira abajo también a
+        # PostgreSQL, que comparte la máquina.
+        max-size: '10m'
+        max-file: '5'
+
+networks:
+  # Ya existe, con PostgreSQL y Traefik adentro. `external` es lo que impide
+  # que Compose intente crear una segunda red con el mismo propósito.
+  nexo:
+    external: true

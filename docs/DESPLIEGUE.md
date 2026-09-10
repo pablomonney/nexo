@@ -339,11 +339,43 @@ despliegue con TLS terminado por el proveedor está en ese caso.
 
 ## 7 · El despliegue, paso a paso
 
+### 7.0 · La forma concreta, en el servidor actual
+
+Decidida y escrita en `docker-compose.prod.yml` el 2026-09-10, sobre el
+servidor que ya existe:
+
+| | |
+|---|---|
+| Aplicación | `nexo-app`, imagen `nexo:production`, red `nexo` |
+| Base | `nexo-postgres`, **fuera de este Compose** — ver la nota del archivo |
+| Proxy | Traefik, ya instalado en `/docker/traefik`. NEXO solo se anuncia con etiquetas |
+| Documentos | `/opt/nexo/var/documents` → `/app/var/documents` |
+| Puertos publicados | **ninguno**. Traefik llega por la red de Docker |
+
+Tres decisiones que conviene no deshacer sin leer el archivo:
+
+- **PostgreSQL no está en este Compose.** Adoptar un contenedor que ya corre lo
+  hace recrear, y recrear una base en producción no se hace a ciegas.
+- **`TRUST_PROXY=true`**, porque hay proxy adelante. Sin eso, `request.ip` sería
+  la de Traefik para todos y el límite de intentos pasaría a ser global (§6.2).
+- **`read_only: true`**, que es una promesa sobre el código: la API escribe
+  únicamente en el volumen de documentos. La sostiene un control (S-43).
+
 ### 7.1 · Construir
 
 ```bash
-docker build -t nexo:$(git rev-parse --short HEAD) .
+docker build -t nexo:$(git rev-parse --short HEAD) -t nexo:production .
 ```
+
+> ⚠ **La imagen tiene que llevar `infrastructure/`.** El preflight compara los
+> `.sql` del disco contra `schema_migrations` y **se niega a arrancar** si no
+> puede hacerlo. El primer despliegue real, el 2026-09-10, falló exactamente
+> por eso: el Dockerfile no copiaba ese directorio.
+>
+> Se corrigió **en el servidor y no en el repositorio**, así que durante unas
+> horas la imagen que andaba no era reproducible desde un clone limpio. Está
+> corregido en el Dockerfile y lo vigila `tests/security/imagen-de-produccion.test.ts`,
+> que además detecta la dependencia circular que se introdujo al arreglarlo.
 
 La imagen es de dos etapas: la que corre no lleva compilador, ni dependencias de
 desarrollo, ni el código fuente. Corre como `node`, no como root, y expone 3001.
@@ -369,6 +401,21 @@ justamente el orden que hace posible abortar sin consecuencias.
 
 La guarda de checksum impide otra cosa distinta: **una migración ya aplicada no
 se puede editar**. Corregir algo es una migración nueva.
+
+### 7.2.1 · Levantar
+
+```bash
+cd /opt/nexo
+git pull                                   # el código, no ediciones a mano
+docker build -t nexo:production .
+BUILD_ID=$(git rev-parse --short HEAD) \
+  docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+```
+
+`NEXO_DOMAIN` y `TRAEFIK_CERTRESOLVER` salen del entorno o de `/opt/nexo/.env`.
+Mientras el dominio no resuelva, el contenedor corre igual y el enrutador de
+Traefik simplemente no encuentra tráfico — la sonda interna sigue andando.
 
 ### 7.3 · Comprobar que quedó sano
 
