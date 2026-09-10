@@ -288,9 +288,23 @@ titulo "7 · Servicio"
 
 [[ -f "$COMPOSE" ]] || { mal "falta $COMPOSE"; exit 1; }
 
+# ¿Se pide certificado real? Solo si el dominio resuelve.
+#
+# Con NXDOMAIN, el desafío HTTP de ACME no puede pasar y cada intento cuenta
+# contra el cupo de validaciones fallidas de Let's Encrypt. Detectarlo acá evita
+# gastarlo y evita tener que acordarse de nada el día que el dominio exista.
+DOMINIO="${NEXO_DOMAIN:-nexointelligence.com.ar}"
+ARCHIVOS=(-f "$COMPOSE")
+if getent hosts "$DOMINIO" >/dev/null 2>&1; then
+  ok "$DOMINIO resuelve — se pide certificado real"
+  [[ -f "${RAIZ}/docker-compose.tls.yml" ]] && ARCHIVOS+=(-f "${RAIZ}/docker-compose.tls.yml")
+else
+  aviso "$DOMINIO no resuelve (NXDOMAIN) — sin resolvedor ACME, se sirve el certificado por defecto"
+fi
+
 if [[ "$AUDITAR" -eq 0 ]]; then
   info "levantando..."
-  BUILD_ID="$BUILD_ID" docker compose -f "$COMPOSE" up -d 2>&1 | sed 's/^/      /'
+  BUILD_ID="$BUILD_ID" docker compose "${ARCHIVOS[@]}" up -d 2>&1 | sed 's/^/      /'
   info "esperando a que la sonda pase..."
   for _ in $(seq 1 20); do
     s=$(docker inspect "$CONTENEDOR_APP" --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null)
@@ -343,19 +357,46 @@ else
   mal "no se encontró un contenedor de Traefik"
 fi
 
-dominio="${NEXO_DOMAIN:-}"
-if [[ -z "$dominio" ]]; then
-  aviso "NEXO_DOMAIN sin definir: el enrutador de Traefik no va a coincidir con nada"
+info "dominio: $DOMINIO"
+
+# El ruteo se prueba **sin depender del DNS**, con la cabecera `Host`.
+#
+# Es la comprobación que faltaba: sin dominio no se puede pedir la URL, pero sí
+# se puede pedirle a Traefik, en el propio servidor, que enrute como si el
+# nombre resolviera. Eso ejercita la cadena entera —entrypoint, enrutador,
+# servicio, red, contenedor— y deja afuera solo el DNS y el certificado, que es
+# exactamente lo que falta.
+titulo "8.1 · Ruteo de punta a punta"
+
+redir=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+  -H "Host: ${DOMINIO}" http://127.0.0.1/health 2>/dev/null || echo 000)
+if [[ "$redir" == "301" || "$redir" == "302" || "$redir" == "308" ]]; then
+  ok "HTTP → redirección $redir (la global de Traefik)"
 else
-  ok "NEXO_DOMAIN=$dominio"
-  if getent hosts "$dominio" >/dev/null 2>&1; then
-    ok "$dominio resuelve"
-    codigo=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://${dominio}/health" 2>/dev/null || echo 000)
-    [[ "$codigo" == "200" ]] && ok "https://${dominio}/health → 200" || mal "https://${dominio}/health → $codigo"
-  else
-    aviso "$dominio no resuelve todavía (NXDOMAIN) — bloqueante externo, no del despliegue"
-  fi
+  mal "HTTP contestó $redir, se esperaba una redirección a HTTPS"
 fi
+
+# `-k` porque mientras no haya dominio el certificado es el de por defecto de
+# Traefik, autofirmado. No se disimula: se informa cuál se presentó.
+cuerpo=$(curl -sSk --max-time 15 -H "Host: ${DOMINIO}" https://127.0.0.1/health 2>/dev/null)
+if [[ "$cuerpo" == *'"status":"ok"'* ]]; then
+  ok "HTTPS → Traefik → NEXO: $cuerpo"
+else
+  mal "HTTPS no llegó a NEXO: ${cuerpo:-sin respuesta}"
+fi
+
+db=$(curl -sSk --max-time 15 -H "Host: ${DOMINIO}" https://127.0.0.1/health/db 2>/dev/null)
+if [[ "$db" == *'"status":"ok"'* ]]; then
+  ok "HTTPS → NEXO → PostgreSQL: $db"
+else
+  mal "/health/db por Traefik: ${db:-sin respuesta}"
+fi
+
+emisor=$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$DOMINIO" 2>/dev/null \
+  | openssl x509 -noout -issuer 2>/dev/null)
+info "certificado: ${emisor:-no se pudo leer}"
+[[ "$emisor" == *"TRAEFIK DEFAULT CERT"* ]] && \
+  aviso "es el certificado por defecto: no hay certificado real mientras el dominio no resuelva"
 
 # ── Resumen ─────────────────────────────────────────────────────────────────
 

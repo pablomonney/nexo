@@ -1,0 +1,26 @@
+# ============================================================================
+# NEXO — certificado real, cuando el dominio resuelve
+# ============================================================================
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d
+#
+# `scripts/desplegar.sh` lo agrega **solo** cuando comprueba que el dominio
+# resuelve, así que en el uso normal no hay que acordarse de nada.
+#
+# ## Por qué es un archivo aparte y no una etiqueta más
+#
+# Porque pedir un certificado para un dominio que no existe no es inocuo. El
+# desafío HTTP de ACME necesita que el dominio apunte a este servidor; con
+# NXDOMAIN la validación falla, Traefik reintenta, y **Let's Encrypt cuenta las
+# validaciones fallidas**. Gastarlas ahora significa esperar más el día que el
+# dominio sí resuelva y el certificado haga falta de verdad.
+#
+# Al 2026-09-10 `nexointelligence.com.ar` está en NXDOMAIN: el trámite ante NIC
+# Argentina sigue abierto. Es un bloqueante externo y no se disimula.
+
+services:
+  nexo:
+    labels:
+      # El nombre tiene que coincidir con el de la configuración estática de
+      # Traefik: `--certificatesresolvers.letsencrypt.acme...`.
+      traefik.http.routers.nexo.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}

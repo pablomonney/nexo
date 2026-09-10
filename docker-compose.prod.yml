@@ -91,32 +91,35 @@ services:
     # 443 y ACME configurado. **No se levanta otro proxy**: NEXO solo se
     # anuncia con etiquetas.
     #
-    # `NEXO_DOMAIN` y `TRAEFIK_CERTRESOLVER` salen del entorno para no escribir
-    # acá un dominio que todavía no está aprobado ni el nombre de un resolvedor
-    # que tiene que coincidir con el de la configuración de Traefik. Mientras el
-    # dominio no resuelva, el enrutador simplemente no encuentra tráfico: el
-    # contenedor corre igual y la sonda interna sigue funcionando.
+    # Leído de la configuración real de Traefik el 2026-09-10
+    # (`/docker/traefik/docker-compose.yml`):
+    #
+    #   · `--providers.docker.exposedbydefault=false` → hace falta `traefik.enable`.
+    #   · entrypoints `web` (:80) y `websecure` (:443).
+    #   · **la redirección HTTP→HTTPS ya está puesta a nivel de entrypoint**
+    #     (`--entrypoints.web.http.redirections...`), así que acá no se declara
+    #     ningún enrutador de :80 ni ningún middleware de redirección: sería una
+    #     segunda copia de una regla que ya existe.
+    #   · `network_mode: host` — Traefik llega al contenedor por su IP en la red
+    #     `nexo`, y `traefik.docker.network` es lo que le dice cuál usar.
+    #
+    # **Acá no se pide certificado.** El resolvedor vive en
+    # `docker-compose.tls.yml`, que se agrega cuando el dominio resuelve. Pedir
+    # ACME para un dominio en NXDOMAIN falla una y otra vez y gasta el cupo de
+    # validaciones fallidas de Let's Encrypt, que es de las pocas cosas de este
+    # despliegue que se agotan y hay que esperar.
     labels:
       traefik.enable: 'true'
-      # Cuál de las redes usar para llegar al contenedor. Sin esto, con más de
-      # una red, Traefik elige y a veces elige la que no llega.
       traefik.docker.network: nexo
 
       traefik.http.services.nexo.loadbalancer.server.port: '3001'
 
-      # HTTP: solo para que ACME resuelva el desafío y para redirigir.
-      traefik.http.routers.nexo-http.rule: Host(`${NEXO_DOMAIN}`)
-      traefik.http.routers.nexo-http.entrypoints: web
-      traefik.http.routers.nexo-http.middlewares: nexo-a-https
-
-      traefik.http.middlewares.nexo-a-https.redirectscheme.scheme: https
-      traefik.http.middlewares.nexo-a-https.redirectscheme.permanent: 'true'
-
-      # HTTPS: el que sirve.
-      traefik.http.routers.nexo.rule: Host(`${NEXO_DOMAIN}`)
+      traefik.http.routers.nexo.rule: Host(`${NEXO_DOMAIN:-nexointelligence.com.ar}`)
       traefik.http.routers.nexo.entrypoints: websecure
+      # Sin resolvedor, Traefik sirve su certificado por defecto: el enrutador
+      # existe y se puede probar, y el navegador avisa que no está firmado —
+      # que es exactamente la verdad mientras no haya dominio.
       traefik.http.routers.nexo.tls: 'true'
-      traefik.http.routers.nexo.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
 
     # ── Endurecimiento del contenedor ───────────────────────────────────────
     #
