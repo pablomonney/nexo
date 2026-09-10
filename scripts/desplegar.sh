@@ -248,7 +248,12 @@ if [[ "$(consulta 'SELECT 1')" == "1" ]]; then
   # contra una de las dos formas hace que el control falle sobre un sistema
   # sano, que es la peor clase de rojo: enseña a ignorarlo. Con `::int` hay una
   # sola representación posible.
-  attrs=$(consulta "SELECT rolcanlogin::int||rolsuper::int||rolbypassrls::int FROM pg_roles WHERE rolname='nexo_app'")
+  #
+  # Con `concat()` y no con `||`: PostgreSQL **no tiene** operador `integer ||
+  # integer`, así que la consulta erraba, el error se iba por stderr y el
+  # control informaba «no existe el rol nexo_app» sobre un rol que estaba ahí.
+  # Un control que se equivoca de diagnóstico es peor que uno que no existe.
+  attrs=$(consulta "SELECT concat(rolcanlogin::int, rolsuper::int, rolbypassrls::int) FROM pg_roles WHERE rolname='nexo_app'")
   if [[ "$attrs" == "100" ]]; then
     ok "nexo_app: LOGIN, NOSUPERUSER, NOBYPASSRLS"
   elif [[ -z "$attrs" ]]; then
