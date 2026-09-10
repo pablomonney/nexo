@@ -35,8 +35,20 @@ services:
     container_name: nexo-app
 
     # Vuelve solo salvo que alguien lo haya parado a mano. `always` lo
-    # relevantaría incluso después de un `docker stop` deliberado, que es
+    # levantaría incluso después de un `docker stop` deliberado, que es
     # justamente cuando no se lo quiere de vuelta.
+    #
+    # **Ojo con cómo se comprueba**, que es donde es fácil equivocarse:
+    #
+    #   caída de verdad     el proceso muere solo → Docker lo levanta.
+    #                       Verificado el 2026-09-10 matando el PID 1 desde
+    #                       adentro: RestartCount pasó a 1 y volvió healthy.
+    #   `docker kill/stop`  Docker lo marca como detenido **por una persona** y
+    #                       NO lo levanta. Es lo correcto y es lo que
+    #                       `unless-stopped` significa.
+    #
+    # Probarlo con `docker kill` y concluir que la política no anda es el error
+    # que se cometió acá primero — y deja el servicio abajo.
     restart: unless-stopped
 
     # Los secretos viven en el archivo del servidor, con permisos restrictivos,
