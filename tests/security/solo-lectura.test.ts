@@ -63,6 +63,17 @@ const FUERA_DE_LA_EMPRESA = new Set([
   // suyo. Lo que sí la gobierna está adentro de la ruta —se niega si el que
   // llama ya administra un estudio— y se prueba en `prueba-y-planes`.
   'POST /onboarding/empresa',
+  // El webhook de la pasarela de pagos. No es una escritura de empresa y no
+  // tiene forma de serlo: quien llama es un servidor del proveedor, no un
+  // usuario, así que no hay rol que pueda gobernarla.
+  //
+  // Lo que la protege es la firma de la notificación. Un usuario de solo lectura
+  // que llame a esta ruta recibe 400 —su cuerpo no dice de qué recurso habla— y
+  // si armara uno bien formado recibiría 401, porque no puede firmarlo sin el
+  // secreto. Y aunque lo lograra, **no cobraría nada**: la ruta solo deja la
+  // notificación en una bandeja que otro proceso contrasta contra la pasarela.
+  // Se ejercita entero en `tests/integration/webhook-de-pagos.test.ts`.
+  'POST /webhooks/pagos',
 ]);
 
 /**

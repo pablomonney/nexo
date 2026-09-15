@@ -19,6 +19,7 @@ import { closePool, initPool } from '@aai/db';
 import { modosDeOperacion, problemasDelRol, rolesDeLaBase, verificarEsquema } from './arranque.js';
 import { verificarProveedor } from './ai/proveedor.js';
 import { verificarProveedorDeCorreo } from './correo/fabrica.js';
+import { verificarAmbienteDePagos, verificarProveedorDePagos } from './pagos/fabrica.js';
 import { crearProveedorDeSecretos, verificarGestor } from './secrets/fabrica.js';
 import { config } from './config.js';
 import { buildServer } from './server.js';
@@ -41,6 +42,30 @@ if (proveedorInvalido !== null) {
 const correoInvalido = verificarProveedorDeCorreo(config.correo);
 if (correoInvalido !== null) {
   console.error(`NEXO no arranca:\n\n  ✘ ${correoInvalido}\n`);
+  await closePool();
+  process.exit(1);
+}
+
+// Y con la pasarela de pagos. Un `PAYMENTS_PROVIDER` mal escrito produce un
+// sistema que emite facturas durante meses sin que entre la plata, y el síntoma
+// aparece en la conciliación bancaria, no en un log.
+const pagosInvalidos = verificarProveedorDePagos(config.pagos);
+if (pagosInvalidos !== null) {
+  console.error(`NEXO no arranca:\n\n  ✘ ${pagosInvalidos}\n`);
+  await closePool();
+  process.exit(1);
+}
+
+// Y —lo más importante de las tres— que el ambiente declarado coincida con la
+// credencial que hay.
+//
+// Mercado Pago usa la misma URL para prueba y producción, así que no existe
+// ninguna barrera de red entre las dos. Declarar `sandbox` con un token real
+// significa que cada prueba mueve plata de verdad, y nada lo delataría hasta
+// que alguien mire un resumen de tarjeta.
+const ambienteInvalido = await verificarAmbienteDePagos(config.pagos);
+if (ambienteInvalido !== null) {
+  console.error(`NEXO no arranca:\n\n  ✘ ${ambienteInvalido}\n`);
   await closePool();
   process.exit(1);
 }

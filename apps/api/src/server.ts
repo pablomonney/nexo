@@ -64,6 +64,7 @@ import { valuacionRoutes } from './routes/valuacion.js';
 import { exportacionRoutes } from './routes/exportaciones.js';
 import { linajeRoutes } from './routes/linaje.js';
 import { normativaRoutes } from './routes/normativa.js';
+import { webhooksDePagoRoutes, type OpcionesDeWebhook } from './routes/webhooks-pagos.js';
 
 /**
  * Las rutas donde un intento cuesta poco y probar mil sale gratis.
@@ -114,7 +115,22 @@ declare module 'fastify' {
   }
 }
 
-export async function buildServer(options: { logger?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildServer(
+  options: {
+    logger?: boolean;
+    /**
+     * La pasarela de pagos que usan el webhook y las rutas de suscripción.
+     *
+     * Se inyecta **solo en los tests**, y es la única forma de ejercitar el
+     * camino completo: no hay cuenta de Mercado Pago, y aunque la hubiera, una
+     * suite que hablara con la API real estaría a un `.env` mal copiado de
+     * cobrarle a alguien —producción y prueba comparten la misma URL—.
+     *
+     * En producción no se pasa y sale de `config`.
+     */
+    pagos?: OpcionesDeWebhook;
+  } = {},
+): Promise<FastifyInstance> {
   // Antes de registrar una sola ruta: los esquemas se evalúan cuando llega el
   // pedido, pero el mapa por defecto es global y conviene que esté puesto desde
   // el principio y en un solo lugar.
@@ -340,7 +356,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(proyectoRoutes);
   await app.register(comisionRoutes);
   await app.register(sucursalRoutes);
-  await app.register(suscripcionRoutes);
+  await app.register(suscripcionRoutes(options.pagos));
   await app.register(facturacionRoutes);
   await app.register(registroDeDecisionesRoutes);
   await app.register(alertaRoutes);
@@ -371,6 +387,7 @@ export async function buildServer(options: { logger?: boolean } = {}): Promise<F
   await app.register(auditRoutes);
   await app.register(linajeRoutes);
   await app.register(normativaRoutes);
+  await app.register(webhooksDePagoRoutes(options.pagos));
 
   return app;
 }

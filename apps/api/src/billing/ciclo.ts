@@ -20,11 +20,16 @@
  *
  *     emitir           sí — sale del precio acordado y del período
  *     registrar cobro  sí — un pago por transferencia se registra a mano
- *     cobrar solo      NO — no hay pasarela contratada
+ *     cobrar solo      NO — y con pasarela conectada **tampoco**
  *
- * El paso que falta es el único que necesita un tercero. Todo lo demás está y
- * corre. Cuando haya pasarela, `intentarCobro` deja de devolver
- * `SIN_PASARELA` y ninguna fila se migra.
+ * La última fila cambió de motivo en B2.5.5 y conviene no confundir los dos.
+ *
+ * Antes era «no hay pasarela contratada». Ahora hay adaptador, y sigue siendo
+ * que no: en un esquema de suscripción (`preapproval`) **el débito lo ejecuta la
+ * pasarela**, no NEXO. NEXO autoriza el medio de pago una vez y a partir de ahí
+ * se entera por webhook. No existe ninguna operación «cobrale ahora a esta
+ * suscripción», así que `intentarCobro` no cobra: consulta, y dice cuál de los
+ * cuatro desenlaces es. Ver su propio encabezado.
  *
  * ## Cero no es «no se puede afirmar»
  *
@@ -35,8 +40,13 @@
 
 import { recordAudit, type Tx } from '@aai/db';
 import { vencerPruebas, type InformeDePruebas } from './prueba.js';
+import { config } from '../config.js';
+import { crearProveedorDePagos } from '../pagos/fabrica.js';
+import type { ProveedorDePagos } from '../pagos/puerto.js';
 import {
+  consecuenciaDeSuscripcion,
   esAtrasado,
+  esProblemaDeConfiguracion,
   esRepeticion,
   pasoPendiente,
   periodoDe,
@@ -92,9 +102,24 @@ export interface DocumentoEmitido {
 export interface Omision {
   readonly subscriptionId: string;
   readonly companyId: string;
+  /**
+   * Acá **no está `SIN_PRECIO_VIGENTE`**, y la ausencia vale la pena explicarla
+   * porque el valor estuvo en esta lista durante meses sin que nada lo emitiera.
+   *
+   * El ciclo no mira `plan_prices`: factura contra `importe_acordado`, que se
+   * congeló al convertir la prueba y puede diferir de la lista —un contrato es
+   * exactamente eso—. Y el `CHECK` de la 0096 garantiza que si hay importe hay
+   * también periodicidad, moneda y próxima facturación, así que el caso «se iba
+   * a facturar y no había precio» no puede ocurrir en este punto.
+   *
+   * Un valor que nadie produce es peor que uno que falta: quien leyera el tipo
+   * concluiría que existe un control de precio vigente en el camino de emisión.
+   * Ese control existe, pero **un paso antes** —en `POST /subscription/convertir`,
+   * que es donde se decide el importe— y devuelve ese mismo nombre como código
+   * de conflicto.
+   */
   readonly motivo:
     | 'SIN_CONDICIONES_ACORDADAS'
-    | 'SIN_PRECIO_VIGENTE'
     | 'MONEDA_DESCONOCIDA'
     | 'PERIODO_YA_FACTURADO';
   readonly detalle: string;
@@ -497,10 +522,23 @@ export async function politicaVigente(
  * El disparador es **el fallo de pago**, no el vencimiento del documento: un
  * documento que nunca se intentó cobrar no está en mora por culpa del cliente.
  */
+/**
+ * Lo que el paso de reintento necesita saber del mundo exterior.
+ *
+ * Se inyecta para poder ejercitar los cuatro desenlaces —incluidos los que en
+ * producción aparecen una vez cada mil cobros— sin cuenta de pasarela y sin red.
+ * En producción no se pasa nada y sale de `config`.
+ */
+export interface OpcionesDeCobranza {
+  readonly proveedor?: ProveedorDePagos;
+  readonly ambienteConfigurado?: string;
+}
+
 export async function avanzarCobranza(
   tx: Tx,
   hoy: CalendarDate,
   actorId: string,
+  opciones: OpcionesDeCobranza = {},
 ): Promise<PasoEjecutado[]> {
   const politica = await politicaVigente(tx, hoy);
 
@@ -550,7 +588,7 @@ export async function avanzarCobranza(
     const paso = pasoPendiente(plan, yaHechos, hoy);
     if (paso === null) continue;
 
-    const ejecutado = await ejecutarPaso(tx, fila, paso, actorId);
+    const ejecutado = await ejecutarPaso(tx, fila, paso, actorId, opciones);
     hechos.push(ejecutado);
   }
 
@@ -562,13 +600,24 @@ async function ejecutarPaso(
   fila: { document_id: string; company_id: string; subscription_id: string },
   paso: PasoDeCobranza,
   actorId: string,
+  opciones: OpcionesDeCobranza,
 ): Promise<PasoEjecutado> {
   let resultado: 'HECHO' | 'FALLIDO' | 'OMITIDO' = 'HECHO';
   let detalle = '';
 
   if (paso.tipo === 'REINTENTO') {
-    const intento = await intentarCobro();
-    resultado = intento.estado === 'SIN_PASARELA' ? 'OMITIDO' : 'HECHO';
+    const intento = await intentarCobro(tx, { subscriptionId: fila.subscription_id }, opciones);
+
+    // Los cuatro resultados no se colapsan en dos. `OMITIDO` significa «no había
+    // nada que hacer»; `FALLIDO` significa «se intentó y no salió». Meter
+    // `MEDIO_NO_AUTORIZADO` en `OMITIDO` escondería el único caso que necesita
+    // que alguien le escriba al cliente.
+    resultado =
+      intento.estado === 'SIN_PASARELA'
+        ? 'OMITIDO'
+        : intento.estado === 'A_CARGO_DEL_PROVEEDOR'
+          ? 'HECHO'
+          : 'FALLIDO';
     detalle = intento.detalle;
   } else if (paso.tipo === 'AVISO') {
     // El aviso de cobranza **todavía no está cableado al puerto de correo**, y
@@ -621,6 +670,22 @@ async function ejecutarPaso(
       };
     }
 
+    /**
+     * Esta suspensión **no pausa la suscripción de la pasarela**, y es una
+     * decisión, no un olvido.
+     *
+     * `POST /subscription/:id/estado` sí la pausa: ahí una persona decidió
+     * cortar el servicio. Acá la decisión la tomó la política de cobranza
+     * porque el cobro falló, y pausar del otro lado apagaría los reintentos de
+     * la propia pasarela — que son justamente lo que puede cobrar la deuda. Se
+     * suspendería el acceso *y* se cerraría la única vía de recuperarlo.
+     *
+     * Lo que corresponde es lo contrario: NEXO corta el acceso, la pasarela
+     * sigue intentando, y cuando el cobro entra el webhook reactiva. El
+     * invariante que protege `sincronizarEstadoConLaPasarela` —que nadie quede
+     * suspendido mientras le cobran **sin que corresponda**— no se viola: acá
+     * corresponde, porque la deuda existe y el ciclo la sigue emitiendo.
+     */
     await tx.query(
       `UPDATE company_subscriptions
           SET estado = 'SUSPENDIDA', suspendida_el = $1::date, motivo = $2
@@ -664,24 +729,164 @@ async function ejecutarPaso(
 }
 
 /**
- * Cobrarle a una tarjeta. **No hay pasarela contratada.**
+ * El paso de reintento de la política de cobranza, contra la pasarela.
  *
- * Devuelve un estado en vez de tirar: que no haya proveedor de pagos es una
- * condición conocida del despliegue, no un error del ciclo. El ciclo sigue
- * corriendo, emite, informa y deja constancia de qué no pudo hacer.
+ * ## Por qué esta función no cobra, aunque se llame así
  *
- * El día que haya pasarela, esto pasa a llamar al adaptador y **ninguna fila se
- * migra**: lo que cambia es de dónde sale la respuesta.
+ * Se llamaba `intentarCobro` cuando no existía ninguna pasarela y devolvía
+ * `SIN_PASARELA` sin más. Ahora que hay adaptador conviene decir con precisión
+ * qué se puede hacer, porque **no es cobrar**:
+ *
+ * En un esquema de suscripción (`preapproval`), el cobro periódico lo ejecuta el
+ * proveedor. NEXO autoriza el medio de pago una vez, y a partir de ahí Mercado
+ * Pago debita en cada período y avisa por webhook. **No hay ninguna operación
+ * «cobrale ahora a esta suscripción»**, y no la hay en la API: inventarla acá
+ * significaría escribir una llamada que no existe, o —peor— crear un cobro
+ * suelto por fuera de la suscripción, que le cobraría al cliente un cargo
+ * adicional en vez de reintentar el que falló.
+ *
+ * Lo que sí se puede hacer, y es lo que hace, es **preguntar**. De ahí salen
+ * cuatro respuestas, y las cuatro son distintas para quien lee la bandeja:
+ *
+ *     SIN_PASARELA           no hay proveedor. El ciclo cobra por transferencia.
+ *     A_CARGO_DEL_PROVEEDOR  la suscripción sigue autorizada: el reintento lo
+ *                            hace el proveedor con su propio calendario. No hay
+ *                            nada que NEXO pueda apurar.
+ *     MEDIO_NO_AUTORIZADO    pausada o cancelada del otro lado. **Ningún
+ *                            reintento va a entrar**: hace falta que el cliente
+ *                            vuelva a autorizar un medio de pago.
+ *     NO_SE_PUDO_CONSULTAR   el proveedor no contestó, o contestó algo ilegible.
+ *                            No se sabe. No es lo mismo que «no se puede cobrar».
+ *
+ * La diferencia entre las dos últimas es la que más importa. `MEDIO_NO_AUTORIZADO`
+ * dice «dejá de esperar, escribile al cliente»; `NO_SE_PUDO_CONSULTAR` dice
+ * «volvé a preguntar mañana». Colapsarlas haría que una caída de veinte minutos
+ * del proveedor se leyera como una cartera entera de tarjetas vencidas.
+ *
+ * ## El ambiente se comprueba antes de preguntar
+ *
+ * Una suscripción creada contra la cuenta de prueba no existe en la de
+ * producción. Preguntar por ella con las credenciales de la otra cuenta devuelve
+ * 404, y un 404 acá se leería como «esta suscripción no existe» — o sea, como
+ * que el cliente nunca autorizó nada. Por eso `ambiente_pago` se compara contra
+ * el ambiente configurado y, si no coinciden, se dice eso y no se llama.
  */
-export async function intentarCobro(): Promise<{
-  readonly estado: 'SIN_PASARELA';
-  readonly detalle: string;
-}> {
+export type ResultadoDeReintento =
+  | 'SIN_PASARELA'
+  | 'A_CARGO_DEL_PROVEEDOR'
+  | 'MEDIO_NO_AUTORIZADO'
+  | 'NO_SE_PUDO_CONSULTAR';
+
+export async function intentarCobro(
+  tx: Tx,
+  entrada: { readonly subscriptionId: string },
+  opciones: {
+    readonly proveedor?: ProveedorDePagos;
+    readonly ambienteConfigurado?: string;
+  } = {},
+): Promise<{ readonly estado: ResultadoDeReintento; readonly detalle: string }> {
+  const proveedor = opciones.proveedor ?? crearProveedorDePagos();
+  const ambienteConfigurado = opciones.ambienteConfigurado ?? config.pagos.ambiente;
+
+  const fila = await tx.query<{
+    referencia_externa: string | null;
+    proveedor_pago: string | null;
+    ambiente_pago: string | null;
+  }>(
+    `SELECT referencia_externa, proveedor_pago, ambiente_pago
+       FROM company_subscriptions WHERE id = $1`,
+    [entrada.subscriptionId],
+  );
+  const s = fila.rows[0];
+
+  if (s === undefined || s.referencia_externa === null) {
+    // Sin referencia externa no hay nada que preguntar, y eso es lo normal en
+    // una instalación sin pasarela: la suscripción existe, el ciclo emite, y el
+    // cobro entra por transferencia. No es un fallo.
+    return {
+      estado: 'SIN_PASARELA',
+      detalle:
+        'La suscripción no está conectada a ninguna pasarela: el reintento automático no ' +
+        'existe. Un cobro por transferencia se registra igual, a mano.',
+    };
+  }
+
+  if (s.proveedor_pago !== proveedor.id) {
+    return {
+      estado: 'SIN_PASARELA',
+      detalle:
+        `La suscripción quedó conectada a "${s.proveedor_pago}" y la pasarela configurada ` +
+        `es "${proveedor.id}". No se consultó: la referencia no vale en otra pasarela.`,
+    };
+  }
+
+  if (s.ambiente_pago !== ambienteConfigurado) {
+    // No se consulta. Ver el encabezado: un 404 de la cuenta equivocada se
+    // leería como «el cliente nunca autorizó nada», que es lo contrario de lo
+    // que pasa.
+    return {
+      estado: 'NO_SE_PUDO_CONSULTAR',
+      detalle:
+        `La suscripción se creó en el ambiente "${s.ambiente_pago}" y la instalación corre ` +
+        `en "${ambienteConfigurado}". No se consultó al proveedor: la referencia pertenece a ` +
+        'otra cuenta y preguntar por ella daría un 404 que se leería como una suscripción ' +
+        'inexistente.',
+    };
+  }
+
+  const salida = await proveedor.consultarSuscripcion(s.referencia_externa);
+
+  if (!salida.ok) {
+    if (salida.fallo.codigo === 'SIN_PASARELA') {
+      return {
+        estado: 'SIN_PASARELA',
+        detalle:
+          'No hay pasarela conectada: el reintento no se pudo ejecutar. ' +
+          'Un cobro por transferencia se registra igual, a mano.',
+      };
+    }
+    return {
+      estado: 'NO_SE_PUDO_CONSULTAR',
+      // El código va adelante para que la bandeja se lea de un vistazo, y
+      // detrás va **de quién es el problema**. Sin esa segunda parte, un token
+      // caducado se lee igual que una caída del proveedor, y quien mire la
+      // cobranza se queda esperando a que se arregle solo algo que no se
+      // arregla solo.
+      detalle:
+        `No se pudo consultar la suscripción (${salida.fallo.codigo}): ${salida.fallo.detalle}` +
+        (esProblemaDeConfiguracion(salida.fallo.codigo)
+          ? ' — Esto lo arregla quien administra la instalación, no el cliente: ' +
+            'no hay nada que reintentar hasta que se corrija.'
+          : ''),
+    };
+  }
+
+  const consecuencia = consecuenciaDeSuscripcion(salida.valor.estado);
+
+  if (salida.valor.estado === 'AUTORIZADA') {
+    return {
+      estado: 'A_CARGO_DEL_PROVEEDOR',
+      detalle:
+        'La suscripción sigue autorizada en la pasarela: el reintento del débito lo hace el ' +
+        'proveedor con su propio calendario, y el resultado va a llegar por webhook. ' +
+        'No hay ninguna operación que NEXO pueda ejecutar para apurarlo.',
+    };
+  }
+
+  if (salida.valor.estado === 'PENDIENTE') {
+    return {
+      estado: 'MEDIO_NO_AUTORIZADO',
+      detalle:
+        'La suscripción está creada y el cliente nunca terminó de autorizar el medio de pago. ' +
+        'Ningún reintento va a entrar hasta que complete la autorización.',
+    };
+  }
+
   return {
-    estado: 'SIN_PASARELA',
+    estado: 'MEDIO_NO_AUTORIZADO',
     detalle:
-      'No hay pasarela de pago conectada: el reintento no se pudo ejecutar. ' +
-      'Un cobro por transferencia se registra igual, a mano.',
+      `La pasarela informa la suscripción como ${salida.valor.estado}: ningún reintento va a ` +
+      `entrar. ${consecuencia.tipo === 'TRANSICION' ? consecuencia.motivo : ''}`.trim(),
   };
 }
 
@@ -726,6 +931,12 @@ export async function procesarEventoDePago(
     readonly referenciaExterna?: string | null;
     readonly intentId?: string | null;
     readonly ocurrioEl?: Date | null;
+    /**
+     * Por qué falló, si falló. Ver más abajo: sin esto, pasar un intento a
+     * `FALLIDO` viola `payment_intents_fallo_con_detalle` y **rompe la
+     * transacción entera**, no solo este evento.
+     */
+    readonly detalleDelFallo?: string | null;
   },
 ): Promise<{ readonly resultado: ResultadoDeEvento; readonly intentId: string | null }> {
   const yaVisto = await tx.query<{ resultado: string; intent_id: string | null }>(
@@ -792,12 +1003,39 @@ export async function procesarEventoDePago(
     return { resultado: 'CONFLICTO', intentId: encontrado.id };
   }
 
+  /**
+   * El motivo del fallo, que la base exige y que nadie estaba pasando.
+   *
+   * `payment_intents_fallo_con_detalle` (0096) impide guardar un `FALLIDO` sin
+   * `detalle_error`. Es una regla buena: el día que un cliente pregunte por qué
+   * no le pasó la tarjeta, esta columna es lo único que hay. Pero hasta acá
+   * ninguna ruta de este camino la llenaba, así que el primer rechazo que
+   * llegara por webhook tiraba una violación de `CHECK` **dentro de la
+   * transacción del drenaje**: no fallaba ese evento, fallaba la corrida entera
+   * y todo lo que venía detrás quedaba sin procesar.
+   *
+   * Cuando el proveedor no dice por qué, se escribe eso mismo. Es feo y es
+   * cierto; inventar un motivo concreto sería peor, porque después alguien se
+   * lo repite al cliente.
+   *
+   * Solo se escribe al pasar a `FALLIDO`: `COALESCE` en cualquier otra
+   * transición conservaría el detalle de un fallo anterior sobre un intento que
+   * después salió bien, y eso se leería como que el cobro falló.
+   */
+  const detalleDelFallo =
+    evento.estadoInformado !== 'FALLIDO'
+      ? null
+      : (evento.detalleDelFallo ?? null) === null || evento.detalleDelFallo?.trim() === ''
+        ? 'El proveedor informó el rechazo y no dio un motivo.'
+        : evento.detalleDelFallo!;
+
   await tx.query(
     `UPDATE payment_intents
         SET estado = $1, updated_at = now(),
-            referencia_externa = COALESCE(referencia_externa, $2)
+            referencia_externa = COALESCE(referencia_externa, $2),
+            detalle_error = CASE WHEN $1 = 'FALLIDO' THEN $4 ELSE detalle_error END
       WHERE id = $3`,
-    [evento.estadoInformado, evento.referenciaExterna ?? null, encontrado.id],
+    [evento.estadoInformado, evento.referenciaExterna ?? null, encontrado.id, detalleDelFallo],
   );
   await guardar('APLICADO', `De ${encontrado.estado} a ${evento.estadoInformado}.`);
   return { resultado: 'APLICADO', intentId: encontrado.id };

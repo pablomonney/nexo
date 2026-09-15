@@ -255,6 +255,90 @@ export const config = {
     maxRetries: Number(process.env.EMAIL_MAX_RETRIES ?? 2),
   },
 
+  pagos: {
+    /**
+     * Quién cobra. Dos valores, y ninguno más:
+     *
+     *   `none`          sin pasarela. Es el valor por defecto y **es un modo de
+     *                   operación**: el ciclo emite los documentos, lleva la
+     *                   cobranza y registra los cobros por transferencia a
+     *                   mano. `intentarCobro` contesta `SIN_PASARELA`.
+     *   `mercadopago`   el adaptador contra la API de suscripciones.
+     *
+     * Un valor desconocido **no cae a `none`**: el servidor no arranca. Mismo
+     * criterio que `EMAIL_PROVIDER`, y acá la consecuencia de degradar en
+     * silencio es más cara: un sistema que cree tener pasarela deja de facturar
+     * sin que nadie reciba un error.
+     */
+    provider: process.env.PAYMENTS_PROVIDER ?? 'none',
+
+    /**
+     * Contra qué cuenta se cobra. **La variable más peligrosa del archivo.**
+     *
+     *   `sandbox`     credenciales de prueba (`TEST-…`). No mueve plata.
+     *   `production`  credenciales reales (`APP_USR-…`). Mueve plata de verdad.
+     *
+     * A diferencia de ARCA, Mercado Pago **no tiene dos URLs**: producción y
+     * prueba comparten `api.mercadopago.com` y se distinguen únicamente por el
+     * prefijo del access token. Eso significa que no hay ninguna barrera de red
+     * entre probar y cobrar: un token real pegado en la variable equivocada
+     * cobra.
+     *
+     * Por eso el ambiente se declara **explícitamente** y el arranque compara lo
+     * declarado contra el prefijo del token que encuentra. Declarar `sandbox` y
+     * traer un token `APP_USR-` impide arrancar. Ver `verificarAmbienteDePagos`.
+     */
+    ambiente: process.env.PAYMENTS_ENV ?? 'sandbox',
+
+    /**
+     * La referencia al secreto, no el secreto: `env:PAYMENTS_ACCESS_TOKEN`,
+     * `kms:<arn>`. Igual que `EMAIL_API_KEY_REF` y `AI_API_KEY_REF`.
+     */
+    accessTokenRef:
+      process.env.PAYMENTS_ACCESS_TOKEN_REF ??
+      (process.env.PAYMENTS_ACCESS_TOKEN !== undefined && process.env.PAYMENTS_ACCESS_TOKEN !== ''
+        ? 'env:PAYMENTS_ACCESS_TOKEN'
+        : null),
+
+    /**
+     * El secreto con el que Mercado Pago firma las notificaciones.
+     *
+     * Es **distinto** del access token y se da de alta aparte, en el panel de
+     * la aplicación. Puede faltar teniendo token: es una instalación a medio
+     * configurar, no un error, y en ese estado el webhook no se puede verificar
+     * — así que se rechaza en vez de creerle. Ver `rutas.ts`.
+     */
+    webhookSecretRef:
+      process.env.PAYMENTS_WEBHOOK_SECRET_REF ??
+      (process.env.PAYMENTS_WEBHOOK_SECRET !== undefined &&
+      process.env.PAYMENTS_WEBHOOK_SECRET !== ''
+        ? 'env:PAYMENTS_WEBHOOK_SECRET'
+        : null),
+
+    /**
+     * A dónde vuelve el navegador después de que el cliente autoriza el medio
+     * de pago.
+     *
+     * Sin esto no se puede crear una suscripción: el cliente quedaría en el
+     * sitio de Mercado Pago sin forma de volver, y NEXO sin saber que autorizó
+     * hasta el primer webhook.
+     */
+    backUrl: process.env.PAYMENTS_BACK_URL ?? null,
+
+    /** Timeout por intento. No existe una llamada de cobro sin límite. */
+    timeoutMs: Number(process.env.PAYMENTS_TIMEOUT_MS ?? 10_000),
+
+    /**
+     * Reintentos **además** del primero.
+     *
+     * Se aplican distinto según la llamada sea una lectura o una escritura: el
+     * detalle está en `pagos/mercadopago.ts` y el criterio, ejercitable, en
+     * `@aai/billing-engine/pasarela`. Reintentar mal una escritura cobra dos
+     * veces, así que el valor por defecto es deliberadamente bajo.
+     */
+    maxRetries: Number(process.env.PAYMENTS_MAX_RETRIES ?? 2),
+  },
+
   secrets: {
     /**
      * De dónde salen los secretos de las integraciones.

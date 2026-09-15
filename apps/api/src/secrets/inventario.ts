@@ -370,6 +370,89 @@ export const INVENTARIO_DE_SECRETOS: readonly SecretoDeclarado[] = [
     destino: 'ENTORNO',
   },
 
+  // ── Cobro de suscripciones ───────────────────────────────────────────────
+  {
+    variable: 'PAYMENTS_PROVIDER',
+    uso: 'none o mercadopago. Un valor desconocido impide arrancar.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+  {
+    variable: 'PAYMENTS_ENV',
+    uso:
+      'sandbox o production. Mercado Pago usa la MISMA URL para los dos y los ' +
+      'distingue solo por el prefijo del token: sin esta variable no hay forma ' +
+      'de detectar que una instalación de prueba está cobrando de verdad.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+  {
+    variable: 'PAYMENTS_ACCESS_TOKEN',
+    uso: 'El access token de la aplicación de Mercado Pago.',
+    sensibilidad: 'CRITICO',
+    // Sin él el estado es «preparado, no conectado» y el ciclo sigue emitiendo
+    // y llevando la cobranza contra transferencias.
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'GESTOR',
+  },
+  {
+    variable: 'PAYMENTS_ACCESS_TOKEN_REF',
+    uso: 'Dónde está el access token.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+  {
+    variable: 'PAYMENTS_WEBHOOK_SECRET',
+    uso:
+      'Con qué se verifica la firma de las notificaciones. Distinto del access ' +
+      'token. Sin él el webhook contesta 503 y no registra ningún cobro solo.',
+    sensibilidad: 'CRITICO',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'GESTOR',
+  },
+  {
+    variable: 'PAYMENTS_WEBHOOK_SECRET_REF',
+    uso: 'Dónde está el secreto de firma de los webhooks.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+  {
+    variable: 'PAYMENTS_BACK_URL',
+    uso: 'A dónde vuelve el cliente después de autorizar el medio de pago.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+  {
+    variable: 'PAYMENTS_TIMEOUT_MS',
+    uso: 'Timeout por llamada a la pasarela.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+  {
+    variable: 'PAYMENTS_MAX_RETRIES',
+    uso:
+      'Reintentos además del primero. Una escritura no se reintenta ante un ' +
+      '5xx; un timeout no se reintenta nunca.',
+    sensibilidad: 'CONFIGURACION',
+    impideArrancar: false,
+    integracion: 'pagos',
+    destino: 'ENTORNO',
+  },
+
   // ── OCR ──────────────────────────────────────────────────────────────────
   {
     variable: 'OCR_ENGINE',

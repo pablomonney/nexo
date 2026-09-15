@@ -47,6 +47,10 @@ export const ACTIONS_REQUIRING_REASON = [
   // Cortarle el acceso a una empresa es la consecuencia mas grave del ciclo.
   // Tiene que poder explicarse sin reconstruirla desde los intentos de pago.
   'SUSPENDER_POR_FALTA_DE_PAGO',
+  // Conectar una suscripcion a una pasarela es lo que habilita que a una
+  // empresa se le debite todos los meses. Sin motivo, dentro de un ano nadie
+  // sabe de donde salio ese debito ni quien lo autorizo.
+  'CONECTAR_PASARELA',
   // Descartar una decision propuesta: sin motivo, el registro dice que alguien
   // penso el problema y no dice por que no se hizo nada.
   'DESCARTAR_DECISION',

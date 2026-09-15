@@ -462,9 +462,16 @@ suite('Facturación — cobranza sin política y con política', () => {
     const mio = informe.cobranza.find((p) => p.documentId === documento);
 
     expect(mio?.paso).toMatchObject({ tipo: 'REINTENTO', numero: 1 });
-    // Y como no hay pasarela, el reintento no se pudo ejecutar. Se registra igual.
+    // Y como esta suscripción no está conectada a ninguna pasarela, el reintento
+    // no se pudo ejecutar. Se registra igual: sin registro, el ciclo lo volvería
+    // a intentar todos los días y el paso siguiente nunca llegaría.
     expect(mio?.resultado).toBe('OMITIDO');
-    expect(mio?.detalle).toMatch(/No hay pasarela/u);
+    // El motivo mira la **suscripción** y no la configuración del despliegue.
+    // En B2.5.5 esa distinción pasó a importar: una instalación puede tener
+    // pasarela conectada y esta suscripción en particular no estar suscripta,
+    // que es lo que pasa con toda empresa que paga por transferencia.
+    expect(mio?.detalle).toMatch(/no está conectada a ninguna pasarela/u);
+    expect(mio?.detalle).toMatch(/transferencia/u);
   });
 
   it('avanza un paso por corrida hasta suspender, y la suspensión conserva todo', async () => {

@@ -158,6 +158,11 @@ const SIN_PANTALLA = new Map<string, string>([
   // Lo lee un recolector, no una persona, y su token no puede estar en una
   // página que se sirve sin autenticación.
   ['metrics', 'Es para el recolector de métricas: exige un token que la consola no tiene'],
+  // Quien llama es un servidor de la pasarela de pagos, que no tiene sesión en
+  // NEXO y no podría tenerla. Lo que la protege es la firma de la propia
+  // notificación, no un token de usuario. Una pantalla sería un botón para
+  // fabricarse un aviso de cobro a mano.
+  ['webhooks', 'La llama la pasarela de pagos, no una persona: se verifica por firma'],
 ]);
 
 // Nota para quien venga después: acá hubo cuatro excepciones más —`vat`,

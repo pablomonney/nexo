@@ -65,6 +65,8 @@
     "facturacion:ciclo": "node scripts/facturacion-ciclo.mjs",
     "metricas:saas": "node scripts/metricas-saas.mjs",
     "correo:bandeja": "node scripts/correo-bandeja.mjs",
+    "pagos:bandeja": "node scripts/pagos-bandeja.mjs",
+    "pagos:plan": "node scripts/declarar-plan-de-pasarela.mjs",
     "comercial:b1": "node scripts/sembrar-comercial-b1.mjs",
     "landing:construir": "node scripts/construir-landing.mjs",
     "bench:migracion": "node scripts/bench-migracion.mjs",

@@ -9,3 +9,4 @@
 export * from './periodos.js';
 export * from './cobranza.js';
 export * from './estados.js';
+export * from './pasarela.js';

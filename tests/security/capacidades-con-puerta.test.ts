@@ -59,6 +59,11 @@ const SIN_PUERTA = new Map<string, string>([
   ['GET /health', 'Sonda de infraestructura, para el orquestador.'],
   ['GET /health/db', 'Ídem: la usa el despliegue, no una persona.'],
   ['GET /metrics', 'Exige un token que una página servida sin autenticar no puede tener.'],
+  // Quien la llama es un servidor de la pasarela de pagos, que no tiene sesión
+  // en NEXO y no podría tenerla: lo que la protege es la firma de la propia
+  // notificación. Una pantalla acá sería un botón para fabricarse a mano un
+  // aviso de cobro, que es exactamente lo que el diseño impide.
+  ['POST /webhooks/pagos', 'La llama la pasarela de pagos, no una persona.'],
 
   // ── Administración del estudio: antes de elegir empresa ────────────────
   //

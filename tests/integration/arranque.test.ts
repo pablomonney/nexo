@@ -57,6 +57,22 @@ const CORREO_APAGADO = {
   maxRetries: 2,
 } as const;
 
+/**
+ * La pasarela apagada. Vale palabra por palabra lo que dice `CORREO_APAGADO`
+ * arriba, y por el mismo motivo: en B2.5.5 el cobro dejó de ser una fila de
+ * texto fijo y pasó a salir de la configuración, así que omitirlo acá haría que
+ * estos casos midieran el `PAYMENTS_PROVIDER` de quien corre los tests.
+ */
+const PAGOS_APAGADOS = {
+  provider: 'none',
+  ambiente: 'sandbox',
+  accessTokenRef: null,
+  webhookSecretRef: null,
+  backUrl: null,
+  timeoutMs: 10_000,
+  maxRetries: 2,
+} as const;
+
 suite('Arranque del servidor', () => {
   beforeAll(() => {
     initPool(DATABASE_URL);
@@ -106,6 +122,7 @@ suite('Arranque del servidor', () => {
       arca: { environment: 'mock' },
       ai: IA_APAGADA,
       correo: CORREO_APAGADO,
+      pagos: PAGOS_APAGADOS,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'mock' },
       isProduction: false,
@@ -124,6 +141,7 @@ suite('Arranque del servidor', () => {
       arca: { environment: 'homologacion' },
       ai: IA_APAGADA,
       correo: CORREO_APAGADO,
+      pagos: PAGOS_APAGADOS,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: false,
@@ -140,6 +158,7 @@ suite('Arranque del servidor', () => {
       arca: { environment: 'mock' },
       ai: IA_APAGADA,
       correo: CORREO_APAGADO,
+      pagos: PAGOS_APAGADOS,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: true,
@@ -158,6 +177,7 @@ suite('Arranque del servidor', () => {
       arca: { environment: 'produccion' },
       ai: IA_APAGADA,
       correo: CORREO_APAGADO,
+      pagos: PAGOS_APAGADOS,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: true,
@@ -203,5 +223,67 @@ suite('Arranque del servidor', () => {
     expect(JSON.stringify(porNombre.get('correo'))).not.toContain('EMAIL_API_KEY');
     // Conectar el correo no conecta el cobro.
     expect(porNombre.get('cobro')!.real).toBe(false);
+  });
+
+  it('con una pasarela configurada, el banner dice el ambiente y no el token', () => {
+    // El control positivo del cobro, equivalente al del correo de arriba y por
+    // el mismo motivo: sin él, un `real: false` constante pasaría todos los
+    // casos y el banner mentiría el día que haya pasarela.
+    const modos = modosDeOperacion({
+      arca: { environment: 'mock' },
+      ai: IA_APAGADA,
+      correo: CORREO_APAGADO,
+      pagos: {
+        provider: 'mercadopago',
+        ambiente: 'sandbox',
+        accessTokenRef: 'env:PAYMENTS_ACCESS_TOKEN',
+        webhookSecretRef: 'env:PAYMENTS_WEBHOOK_SECRET',
+        backUrl: 'https://ejemplo.invalid/volver',
+        timeoutMs: 10_000,
+        maxRetries: 2,
+      },
+      secrets: { provider: 'env' },
+      documents: { ocrEngine: 'none' },
+      isProduction: false,
+    });
+
+    const cobro = new Map(modos.map((m) => [m.nombre, m])).get('cobro')!;
+    expect(cobro.valor).toBe('mercadopago');
+    expect(cobro.real).toBe(true);
+    // Qué ambiente es lo más importante de esta línea: en Mercado Pago la URL
+    // es la misma para prueba y producción, así que el banner es el único lugar
+    // donde alguien puede ver contra qué cuenta está corriendo.
+    expect(cobro.detalle).toContain('sandbox');
+    // El banner va a la consola y de ahí al log del contenedor. Ni el token ni
+    // el secreto de firma, ni siquiera el nombre de sus variables.
+    expect(JSON.stringify(cobro)).not.toContain('PAYMENTS_ACCESS_TOKEN');
+    expect(JSON.stringify(cobro)).not.toContain('PAYMENTS_WEBHOOK_SECRET');
+  });
+
+  it('sin secreto de firma, el banner dice que los cobros no se van a registrar solos', () => {
+    // El estado que más fácil pasa desapercibido: hay token, se cobra, y las
+    // notificaciones se rechazan porque no hay con qué verificarlas. Todo
+    // funciona salvo enterarse.
+    const modos = modosDeOperacion({
+      arca: { environment: 'mock' },
+      ai: IA_APAGADA,
+      correo: CORREO_APAGADO,
+      pagos: {
+        provider: 'mercadopago',
+        ambiente: 'production',
+        accessTokenRef: 'env:PAYMENTS_ACCESS_TOKEN',
+        webhookSecretRef: null,
+        backUrl: 'https://ejemplo.invalid/volver',
+        timeoutMs: 10_000,
+        maxRetries: 2,
+      },
+      secrets: { provider: 'env' },
+      documents: { ocrEngine: 'none' },
+      isProduction: true,
+    });
+
+    const cobro = new Map(modos.map((m) => [m.nombre, m])).get('cobro')!;
+    expect(cobro.detalle).toContain('PAYMENTS_WEBHOOK_SECRET');
+    expect(cobro.detalle).toContain('no se van a registrar solos');
   });
 });

@@ -44,6 +44,7 @@ import {
   type ConfiguracionDeIa,
 } from './ai/proveedor.js';
 import { modoDeCorreo, type ConfiguracionDeCorreo } from './correo/fabrica.js';
+import { modoDePagos, type ConfiguracionDePagos } from './pagos/fabrica.js';
 import { modoDeSecretos } from './secrets/fabrica.js';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -317,6 +318,7 @@ export function modosDeOperacion(config: {
   readonly arca: { readonly environment: string };
   readonly ai: ConfiguracionDeIa;
   readonly correo: ConfiguracionDeCorreo;
+  readonly pagos: ConfiguracionDePagos;
   readonly secrets: { readonly provider: string };
   readonly documents: { readonly ocrEngine: string };
   readonly isProduction: boolean;
@@ -336,19 +338,17 @@ export function modosDeOperacion(config: {
     // el único lugar que existe para hacer visible un modo degradado callaba
     // los dos más degradados de todos.
     //
-    // El correo dejó de ser fijo en B2.5.1, que es lo que aquella nota decía
-    // que iba a pasar: ahora sale de la configuración, y conectar un proveedor
-    // y decir que está conectado son el mismo cambio. El cobro sigue fijo
-    // porque sigue sin haber pasarela.
+    // El correo dejó de ser fijo en B2.5.1 y el cobro en B2.5.5, que es lo que
+    // aquella nota decía que iba a pasar en los dos casos: ahora los dos salen
+    // de la configuración, y conectar un proveedor y decir que está conectado
+    // son el mismo cambio.
+    //
+    // El texto fijo que había acá —«no hay pasarela»— era cierto mientras no
+    // existía el adaptador. Dejarlo ahora lo volvería falso en cuanto alguien
+    // configurara `PAYMENTS_PROVIDER`, y un banner que miente sobre un modo
+    // degradado es peor que no tener banner.
     modoDeCorreo(config.correo),
-    {
-      nombre: 'cobro',
-      valor: 'manual',
-      real: false,
-      detalle:
-        'no hay pasarela: se emite y se lleva la cobranza, pero un cobro con tarjeta no se ' +
-        'puede ejecutar. Una transferencia se registra a mano',
-    },
+    modoDePagos(config.pagos),
     { nombre: 'entorno', valor: config.isProduction ? 'production' : 'development', real: true },
   ];
 }

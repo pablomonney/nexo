@@ -3382,6 +3382,25 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     </tr></thead><tbody></tbody></table></div>
   </div>
 
+  <h3>Contratar</h3>
+  <p class="ayuda">Los dos pasos del alta, en orden. <strong>Convertir</strong> cierra la prueba y
+    fija lo que se debe: el importe sale de la lista de precios vigente, no se escribe acá.
+    <strong>Conectar el medio de pago</strong> decide cómo se paga — y si esta instalación no
+    tiene pasarela, el cargo se emite igual y se cobra por transferencia.</p>
+  <div class="fila" id="sub-contratar" hidden>
+    <div><label>Plan</label><select id="sub-c-plan"></select></div>
+    <div><label>Periodicidad</label><select id="sub-c-periodicidad">
+      <option value="MENSUAL">Mensual</option><option value="ANUAL">Anual</option>
+    </select></div>
+    <div><label>Moneda</label><input id="sub-c-moneda" value="ARS" maxlength="3"></div>
+    <div><label>&nbsp;</label><button id="b-sub-convertir">Convertir la prueba</button></div>
+    <div><label>&nbsp;</label><button id="b-sub-pasarela" class="sec">Conectar el medio de pago</button></div>
+  </div>
+  <p class="ayuda">Los datos de la tarjeta se cargan <strong>en el sitio del proveedor</strong>.
+    NEXO no los ve, no los recibe y no los guarda: lo único que vuelve para acá es un
+    identificador opaco.</p>
+  <div id="sub-c-msg"></div>
+
   <details class="grupo" id="sub-declarar" hidden><summary>Declarar el plan</summary><div>
     <div class="fila">
       <div><label>Plan</label><select id="sub-n-plan"></select></div>
@@ -11127,6 +11146,7 @@ E('b-au-mas').onclick = () => listarAuditoria(estado.cursores.au);
 // ══ 8b · Plan del propio NEXO ═════════════════════════════════════════════
 async function cargarSuscripcion() {
   E('sub-declarar').hidden = !puede('subscription:write');
+  E('sub-contratar').hidden = !puede('subscription:write');
 
   const planes = await api('GET', '/subscription-plans');
   if (planes.ok) {
@@ -11135,6 +11155,12 @@ async function cargarSuscripcion() {
     const sel = E('sub-n-plan');
     const previo = sel.value;
     sel.innerHTML = '';
+    // El mismo catálogo alimenta los dos selectores. Poblar uno solo dejaría el
+    // otro vacío la primera vez que se abre la pantalla, que es exactamente
+    // cuando alguien va a contratar.
+    const selC = E('sub-c-plan');
+    const previoC = selC.value;
+    selC.innerHTML = '';
     for (const p of planes.datos.planes || []) {
       const tr = document.createElement('tr');
       tr.innerHTML =
@@ -11159,9 +11185,19 @@ async function cargarSuscripcion() {
         const o = document.createElement('option');
         o.value = p.codigo; o.textContent = p.nombre;
         sel.appendChild(o);
+
+        const oc = document.createElement('option');
+        oc.value = p.codigo;
+        // Se muestra el precio al lado del nombre: elegir un plan sin ver lo que
+        // sale obliga a mirar la tabla de arriba y volver.
+        oc.textContent = p.nombre + ((p.precios || []).length === 0
+          ? ' — sin precio declarado'
+          : ' — ' + p.precios.map((x) => x.moneda + ' ' + x.importe).join(' · '));
+        selC.appendChild(oc);
       }
     }
     sel.value = previo;
+    selC.value = previoC;
     E('sub-planes-alcance').textContent = planes.datos.alcance;
   }
 
@@ -11566,6 +11602,60 @@ E('b-sub-declarar').onclick = async () => {
   const r = await api('POST', '/subscription', cuerpo);
   decir('sub-n-msg', r, 'Plan declarado');
   if (r.ok) cargarSuscripcion();
+};
+
+/**
+ * Convertir la prueba.
+ *
+ * **No hay campo de importe, y no es un olvido.** El precio sale de la lista
+ * vigente: un formulario donde quien paga escribe cuánto paga no es un
+ * formulario, es un descuento.
+ */
+E('b-sub-convertir').onclick = async () => {
+  const r = await api('POST', '/subscription/convertir', {
+    plan: E('sub-c-plan').value,
+    periodicidad: E('sub-c-periodicidad').value,
+    moneda: E('sub-c-moneda').value.trim().toUpperCase(),
+  });
+
+  if (!r.ok) return decir('sub-c-msg', r);
+
+  const c = r.datos.condiciones;
+  E('sub-c-msg').innerHTML =
+    '<div class="aviso ok"><strong>Suscripción activa.</strong> ' +
+    escapar(c.moneda + ' ' + c.importe) + (c.incluyeImpuestos ? '' : ' + IVA') +
+    ' por ' + (c.periodicidad === 'MENSUAL' ? 'mes' : 'año') +
+    ', desde el ' + escapar(c.proximaFacturacion) + '.</div>' +
+    '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
+  cargarSuscripcion();
+};
+
+/**
+ * Conectar el medio de pago.
+ *
+ * Lo que devuelve es una URL **del proveedor**. Se abre en una pestaña nueva y
+ * además se deja el enlace a la vista: un `window.open` bloqueado por el
+ * navegador dejaría a la persona sin saber que había un paso más.
+ */
+E('b-sub-pasarela').onclick = async () => {
+  const r = await api('POST', '/subscription/pasarela', {});
+  if (!r.ok) return decir('sub-c-msg', r);
+
+  const url = r.datos.urlDeAutorizacion;
+  E('sub-c-msg').innerHTML =
+    '<div class="aviso ' + (url ? 'ok' : '') + '">' +
+    (r.datos.estado === 'YA_ESTABA'
+      ? 'Esta suscripción <strong>ya estaba conectada</strong>. No se creó otra: dos ' +
+        'suscripciones en la pasarela serían dos débitos al mismo cliente.'
+      : 'Suscripción creada en la pasarela. <strong>Falta que autorices el medio de ' +
+        'pago</strong>: hasta entonces no se debita nada.') +
+    (url
+      ? ' <a href="' + escapar(url) + '" target="_blank" rel="noopener noreferrer">Autorizar ahora</a>'
+      : ' El enlace de autorización solo se entrega al crearla; si lo perdiste, se retoma ' +
+        'desde el panel del proveedor.') +
+    '</div>';
+  if (url) window.open(url, '_blank', 'noopener');
+  cargarSuscripcion();
 };
 
 async function cargarMapeoContable() {

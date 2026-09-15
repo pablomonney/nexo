@@ -49,6 +49,12 @@ const SOLO_LECTURA: Readonly<Record<string, string>> = {
   plan_prices: 'El precio de un plan es de NEXO, no de la empresa que lo paga',
   collection_policies: 'La política de cobranza es de NEXO',
   billing_account_status: 'Vista de lectura sobre las anteriores',
+  // 0118 la creó diciendo «solo lectura para la aplicación» y escribiendo
+  // `GRANT SELECT`, que no quita nada: el defecto de la cabecera de este
+  // archivo, por cuarta vez. Lo corrige la 0119. Esta línea es la otra mitad de
+  // la corrección — sin ella el control mira una lista donde la tabla no está y
+  // no puede fallar.
+  payment_plan_map: 'Crear un plan del lado de la pasarela es un acto comercial, no una petición',
 
   // El promedio ponderado lo escribe un trigger. Que la API pudiera escribirlo
   // sería una segunda verdad sobre el costo, capaz de contradecir al libro
@@ -70,6 +76,32 @@ const SOLO_LECTURA: Readonly<Record<string, string>> = {
 /** Lo que además no se puede ni leer. */
 const NI_LEER: Readonly<Record<string, string>> = {
   payment_events: 'Diario de integración del operador: la aplicación no lo mira',
+};
+
+/**
+ * Bandejas: la aplicación **deja** y no **mira**.
+ *
+ * Es una tercera forma, y hasta ahora no estaba declarada en ninguna parte. Las
+ * dos tablas de abajo dicen en su `COMMENT` «insertar sí, leer no», y eso vivía
+ * únicamente en la prosa de una migración: `email_outbox` está así desde la
+ * 0103 y nada comprobaba que siguiera estándolo.
+ *
+ * La forma existe porque hay contenido que la aplicación **produce** y no debe
+ * **consultar**:
+ *
+ *   email_outbox            el cuerpo de un mensaje de verificación lleva el
+ *                           token de alta. Poder leer la bandeja sería poder
+ *                           tomar la cuenta de cualquiera.
+ *   payment_webhook_inbox   poder leerla sería poder enumerar los
+ *                           identificadores de cobro de todas las empresas.
+ *
+ * Las dos direcciones importan y por eso se comprueban las dos. Sin `INSERT` el
+ * alta deja de funcionar y no se manda ningún correo; con `SELECT` se abre lo
+ * que las dos tablas existen para tener cerrado.
+ */
+const SOLO_INSERTA: Readonly<Record<string, string>> = {
+  email_outbox: 'El cuerpo de un mensaje de verificación lleva el token de alta (0103)',
+  payment_webhook_inbox: 'Leerla sería enumerar los cobros de todas las empresas (0119)',
 };
 
 /**
@@ -165,6 +197,39 @@ suite('S-29 — lo declarado de solo lectura lo es de verdad', () => {
         [Object.keys(NI_LEER)],
       );
       expect(rows).toEqual([]);
+    } finally {
+      await db.end();
+    }
+  });
+
+  it('en una bandeja la aplicación deja y no mira', async () => {
+    const db = await conectar();
+    try {
+      const { rows } = await db.query<{ table_name: string; privilege_type: string }>(
+        `SELECT table_name, privilege_type FROM information_schema.role_table_grants
+          WHERE grantee = 'aai_app' AND table_name = ANY($1::text[])
+          ORDER BY table_name, privilege_type`,
+        [Object.keys(SOLO_INSERTA)],
+      );
+
+      const porTabla = new Map<string, string[]>();
+      for (const r of rows) {
+        porTabla.set(r.table_name, [...(porTabla.get(r.table_name) ?? []), r.privilege_type]);
+      }
+
+      // Se comprueban las dos direcciones en una sola aserción para que el
+      // mensaje de error muestre lo que la tabla tiene, no solo que difiere.
+      const real = Object.fromEntries(
+        Object.keys(SOLO_INSERTA).map((t) => [t, (porTabla.get(t) ?? []).sort()]),
+      );
+      const esperado = Object.fromEntries(Object.keys(SOLO_INSERTA).map((t) => [t, ['INSERT']]));
+
+      expect(
+        real,
+        'una bandeja se escribe y no se lee. Con SELECT de más se abre lo que la tabla ' +
+          'existe para tener cerrado; sin INSERT, la aplicación deja de poder encolar y ' +
+          'el alta se rompe en silencio',
+      ).toEqual(esperado);
     } finally {
       await db.end();
     }

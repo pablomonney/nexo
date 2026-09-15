@@ -37,14 +37,38 @@ largo y tiene final. Todo lo que sigue en este archivo se lee con ese alcance.
 ### 4 · Contratar pasarela de pago
 
 | | |
+**La integración ya está hecha.** B2.5.5 cerró el código contra Mercado Pago:
+adaptador, webhook, firma, mapeo de planes y registro de cobros. Conectar la
+cuenta **no requiere programar** — son cinco variables de entorno y un comando.
+El detalle completo está en `NEXO_MERCADO_PAGO_STATUS.md`.
+
+Lo que sigue pendiente es solo lo que no puedo hacer yo.
+
+|  |  |
 |---|---|
-| **Acción** | Crear la cuenta, completar el alta comercial, darme credenciales y la URL de webhook |
-| **Motivo** | Hoy solo entra lo que se registra a mano |
+| **Acción** | Crear la cuenta de Mercado Pago, completar el alta comercial, crear una aplicación y darme: (1) el **access token**, (2) el **secreto de firma del webhook** —que es otro—, (3) confirmación de que diste de alta la notificación apuntando a `/webhooks/pagos` |
+| **Motivo** | Hoy solo entra lo que se registra a mano. El código está listo y `PAYMENTS_PROVIDER=none` |
 | **Bloquea V1** | Sí |
-| **Proveedor** | Mercado Pago o Stripe. **Para Argentina y cobro recurrente en pesos, Mercado Pago** |
+| **Proveedor** | **Decidido: Mercado Pago.** Es el único implementado |
 | **Costo** | Comisión por transacción, **PRECIO A CONFIRMAR** (orden de 3–6 %). Es el costo variable más grande del modelo |
-| **Qué tenés que decidir** | Cuál, y si vas a cobrar también por transferencia |
+| **Qué tenés que decidir** | Si vas a cobrar también por transferencia (hoy se puede, y se registra a mano) |
+| **Depende de** | El dominio resuelto: Mercado Pago tiene que poder llegar al webhook. Ver la acción 5 |
 | **Desbloquea** | El ciclo comercial sin intervención manual, y el costo variable real del modelo |
+
+> **Empezá por las credenciales de prueba (`TEST-…`).** Mercado Pago usa la misma
+> URL para prueba y producción y las distingue solo por el prefijo del token: no
+> hay ninguna barrera de red entre probar y cobrar de verdad. NEXO se niega a
+> arrancar si el ambiente declarado y el token no coinciden, pero esa red está
+> puesta justamente porque el error es fácil.
+
+> **No me mandes las credenciales por chat.** Van al archivo de entorno del
+> servidor, con permisos restrictivos, y nunca a Git.
+
+**Falta además decidir los precios.** Sin precio vigente declarado no se puede
+crear el plan del lado de la pasarela, y este trabajo no inventó ninguno: un
+número de ejemplo se ve igual que uno decidido, y aparecería en el catálogo, en
+un documento de cobro y en un tablero de facturación sin que nadie sepa de dónde
+salió.
 
 ### 5 · Contratar hosting, dominio y SSL
 

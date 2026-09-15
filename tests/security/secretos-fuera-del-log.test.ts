@@ -85,8 +85,9 @@ describe('S-27 — los secretos no llegan al log', () => {
    *
    * La comprobación de arriba mira el texto de dos archivos y busca la palabra
    * `apiKey`. Alcanzaba cuando el banner tenía cuatro filas y una sola
-   * integración con credencial; hoy tiene siete y tres —IA, correo y métricas—,
-   * y una fila nueva que imprimiera un secreto con otro nombre pasaría entera.
+   * integración con credencial; hoy tiene ocho y cuatro —IA, correo, pagos y
+   * métricas—, y una fila nueva que imprimiera un secreto con otro nombre
+   * pasaría entera.
    *
    * Así que se arma el banner de verdad, con cada integración **configurada**
    * —que es el único estado donde hay algo que filtrar— y credenciales
@@ -97,6 +98,8 @@ describe('S-27 — los secretos no llegan al log', () => {
 
     const CLAVE_IA = 'sk-TEST_SECRET_ONLY_ia_no_es_una_credencial';
     const CLAVE_CORREO = 're_TEST_SECRET_ONLY_correo_no_es_una_credencial';
+    const TOKEN_PAGOS = 'APP_USR-TEST_SECRET_ONLY_pagos_no_es_una_credencial';
+    const FIRMA_PAGOS = 'whsec_TEST_SECRET_ONLY_firma_no_es_una_credencial';
 
     const modos = modosDeOperacion({
       arca: { environment: 'produccion' },
@@ -117,6 +120,15 @@ describe('S-27 — los secretos no llegan al log', () => {
         timeoutMs: 10_000,
         maxRetries: 2,
       },
+      pagos: {
+        provider: 'mercadopago',
+        ambiente: 'production',
+        accessTokenRef: `env:${TOKEN_PAGOS}`,
+        webhookSecretRef: `env:${FIRMA_PAGOS}`,
+        backUrl: 'https://ejemplo.invalid/volver',
+        timeoutMs: 10_000,
+        maxRetries: 2,
+      },
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: true,
@@ -126,7 +138,7 @@ describe('S-27 — los secretos no llegan al log', () => {
       .map((m) => `${m.nombre} ${m.valor} ${m.detalle ?? ''}`)
       .join('\n');
 
-    for (const credencial of [CLAVE_IA, CLAVE_CORREO]) {
+    for (const credencial of [CLAVE_IA, CLAVE_CORREO, TOKEN_PAGOS, FIRMA_PAGOS]) {
       expect(impreso, `el banner imprime «${credencial}»`).not.toContain(credencial);
     }
 
@@ -134,5 +146,6 @@ describe('S-27 — los secretos no llegan al log', () => {
     // esto, un banner vacío pasaría la comprobación de arriba.
     expect(impreso).toContain('resend');
     expect(impreso).toContain('http');
+    expect(impreso).toContain('mercadopago');
   });
 });

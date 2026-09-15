@@ -13,6 +13,31 @@
  * proveedor devuelve. Lo que se le cobró a la empresa vive en
  * `routes/facturacion.ts`, y **solo se lee**.
  *
+ * ## El importe no lo elige quien paga
+ *
+ * `POST /subscription/convertir` cierra la prueba y fija las condiciones, y
+ * **no acepta un importe en el cuerpo**. Lo resuelve contra `plan_prices`, que
+ * es donde el precio vive con su vigencia y su motivo. La alternativa —recibirlo
+ * del cliente— le dejaría al administrador de una empresa elegir cuánto paga,
+ * que es una frase que no hace falta terminar.
+ *
+ * Que un contrato pueda diferir de la lista sigue siendo cierto: `convertirPrueba`
+ * conserva el parámetro y lo usa quien convierte del lado del operador. Lo que
+ * cambia es que por esta puerta entra siempre el precio declarado.
+ *
+ * ## La referencia de la pasarela ya no se escribe a mano
+ *
+ * `POST /subscription` aceptaba `referenciaExterna` y la escribía sola. Desde la
+ * 0118 eso es imposible: `cs_pasarela_completa` exige que la referencia, el
+ * proveedor y el ambiente estén los tres o ninguno, porque una referencia sin
+ * dueño ni cuenta apunta a un recurso que nadie puede consultar —y un 404 de la
+ * cuenta equivocada se lee como «el cliente nunca autorizó nada»—.
+ *
+ * El campo se sacó del cuerpo en vez de completarlo con supuestos. Quien escribe
+ * las tres columnas es `pagos/suscripcion.ts`, en un solo `UPDATE`, con lo que
+ * el proveedor devolvió. No hay otra forma de obtener una referencia válida:
+ * inventarla a mano era escribir un identificador que no existe del otro lado.
+ *
  * ## El límite avisa, no bloquea
  *
  * Exceder el plan no impide registrar una factura ni cerrar un ejercicio. Un
@@ -31,7 +56,12 @@ import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { conflict, notFound } from '../http/errors.js';
+import { conflict, conflictoTipado, notFound } from '../http/errors.js';
+import { convertirPrueba } from '../billing/prueba.js';
+import { precioVigenteDe } from '../billing/precios.js';
+import { conectarConLaPasarela, sincronizarEstadoConLaPasarela } from '../pagos/suscripcion.js';
+import type { PasarelaInyectada } from '../pagos/inyeccion.js';
+import { parseCalendarDate } from '@aai/shared';
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
 
@@ -50,7 +80,18 @@ function medir(recurso: string, uso: number, tope: number | null): Recurso {
   return { recurso, uso, tope, estado: uso > tope ? 'EXCEDIDO' : 'DENTRO_DEL_TOPE' };
 }
 
-export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
+/**
+ * Se volvió una fábrica por lo mismo que el webhook: para poder ejercitar el
+ * camino entero con un proveedor de pagos doble. En producción no se le pasa
+ * nada y todo sale de `config.pagos`.
+ */
+export function suscripcionRoutes(pasarela: PasarelaInyectada = {}) {
+  return async function registrar(app: FastifyInstance): Promise<void> {
+    await declararRutas(app, pasarela);
+  };
+}
+
+async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada): Promise<void> {
   /** El catálogo, sin precios. */
   app.get('/subscription-plans', async (request) => {
     const tenant = await requireCompany(request);
@@ -197,8 +238,11 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
         estado: z.enum(['PRUEBA', 'ACTIVA']).default('ACTIVA'),
         vigenciaDesde: fecha,
         vigenciaHasta: fecha.nullish(),
-        // Identificador opaco del proveedor de pagos. Nunca datos de tarjeta.
-        referenciaExterna: z.string().max(200).nullish(),
+        // `referenciaExterna` **no está**, y no es un olvido. Ver el encabezado:
+        // desde la 0118 una referencia sin proveedor ni ambiente viola
+        // `cs_pasarela_completa`, y completarlos con supuestos sería peor —
+        // apuntaría a un recurso de otra cuenta—. Las tres columnas las escribe
+        // `pagos/suscripcion.ts` con lo que devolvió el proveedor.
       })
       .parse(request.body);
 
@@ -215,12 +259,11 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
 
           const r = await tx.query<{ id: string }>(
             `INSERT INTO company_subscriptions
-               (company_id, plan_id, estado, vigencia_desde, vigencia_hasta,
-                referencia_externa, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+               (company_id, plan_id, estado, vigencia_desde, vigencia_hasta, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
             [
               tenant.companyId, plan.rows[0]!.id, body.estado, body.vigenciaDesde,
-              body.vigenciaHasta ?? null, body.referenciaExterna ?? null,
+              body.vigenciaHasta ?? null,
               `user:${auth.user.userId}`,
             ],
           );
@@ -251,7 +294,184 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** Suspender o cancelar. Los dos con motivo, y sin tocar ningún dato del cliente. */
+  /**
+   * Convertir la prueba en una suscripción paga.
+   *
+   * ## Las cuatro columnas que nadie escribía
+   *
+   * `periodicidad`, `moneda`, `importe_acordado` y `proxima_facturacion` van
+   * juntas o no va ninguna (`company_subscriptions_condiciones_completas`,
+   * 0096), y el ciclo de facturación **solo levanta suscripciones que las
+   * tengan**. `convertirPrueba` era la única función que las escribía y no la
+   * llamaba nadie: sin esta ruta, una empresa podía contratar y no ser
+   * facturada nunca.
+   *
+   * ## El importe sale de la lista, no del cuerpo
+   *
+   * Ver el encabezado del archivo. Sin precio vigente esto contesta 409 con
+   * `SIN_PRECIO_VIGENTE` y no convierte: cobrar cero sería inventar una decisión
+   * comercial que nadie tomó.
+   *
+   * ## Convertir no conecta la pasarela
+   *
+   * Son dos pasos y a propósito. Convertir fija **lo que se debe**; conectar la
+   * pasarela decide **cómo se paga**, y una instalación sin pasarela cobra por
+   * transferencia con la conversión hecha igual. Juntarlos haría imposible
+   * contratar donde no hay pasarela — que es donde está NEXO hoy.
+   */
+  app.post('/subscription/convertir', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'subscription:write');
+    const auth = requireAuth(request);
+
+    const body = z
+      .object({
+        plan: z.string().min(1).max(40),
+        periodicidad: z.enum(['MENSUAL', 'ANUAL']),
+        moneda: z
+          .string()
+          .regex(/^[A-Z]{3}$/u, 'La moneda es un código ISO de tres letras, por ejemplo ARS'),
+        // `importe` **no está**: lo resuelve `plan_prices`. Ver el encabezado.
+      })
+      .parse(request.body);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const busqueda = await precioVigenteDe(tx, {
+          planCode: body.plan,
+          periodicidad: body.periodicidad,
+          moneda: body.moneda,
+        });
+
+        if (!busqueda.hay) {
+          if (busqueda.motivo === 'PLAN_DESCONOCIDO') throw notFound(busqueda.detalle);
+          // Tipado porque la consola lo distingue: sin precio no es un error del
+          // cliente, es una lista que falta cargar de este lado.
+          throw conflictoTipado(busqueda.motivo, busqueda.detalle);
+        }
+        const precio = busqueda.precio;
+
+        // «Hoy» según la base, no según `new Date()`. Argentina es UTC−3 y
+        // después de las nueve de la noche una fecha calculada acá ya es la de
+        // mañana: ese defecto dejó a los planes sin precio el 2026-09-09 a las
+        // 22:07. Se le pregunta a la base porque es la base la que compara.
+        const { rows } = await tx.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy');
+        const hoy = parseCalendarDate(rows[0]!.hoy);
+
+        const salida = await convertirPrueba(tx, {
+          companyId: tenant.companyId,
+          planCode: body.plan,
+          periodicidad: body.periodicidad,
+          moneda: precio.moneda,
+          importe: precio.importe,
+          desde: hoy,
+          actorId: `user:${auth.user.userId}`,
+        });
+
+        if (salida.estado === 'NO_HAY_PRUEBA') {
+          throw conflict(
+            'Esta empresa no tiene una prueba ni una suscripción suspendida que convertir. ' +
+              'Si ya está ACTIVA no hay nada que hacer; si está CANCELADA, de ahí no se ' +
+              'vuelve: se declara una suscripción nueva.',
+          );
+        }
+        if (salida.estado === 'NO_SE_PUEDE') throw conflict(salida.detalle);
+
+        return {
+          subscriptionId: salida.subscriptionId,
+          plan: body.plan,
+          condiciones: {
+            periodicidad: precio.periodicidad,
+            moneda: precio.moneda,
+            importe: precio.importe,
+            incluyeImpuestos: precio.incluyeImpuestos,
+            proximaFacturacion: hoy,
+          },
+          alcance:
+            'El importe quedó **congelado** en la suscripción: declarar una lista de precios ' +
+            'nueva no altera lo acordado con quien ya está. El cargo lo emite el ciclo de ' +
+            'facturación; conectar la pasarela es un paso aparte y sin ella se cobra por ' +
+            'transferencia.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Conectar la suscripción con la pasarela y devolver dónde autoriza el cliente.
+   *
+   * Lo que vuelve en `urlDeAutorizacion` es una URL **del proveedor**: ahí se
+   * cargan los datos de la tarjeta, de ese lado. NEXO no los ve, no los recibe y
+   * no los guarda — lo único que cruza para acá es un identificador opaco.
+   *
+   * Es idempotente por diseño: la fila se bloquea antes de mirar y, si ya había
+   * referencia, no se vuelve a llamar al proveedor. Crear un segundo
+   * `preapproval` sería dos débitos mensuales a la misma empresa.
+   */
+  app.post('/subscription/pasarela', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'subscription:write');
+    const auth = requireAuth(request);
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const salida = await conectarConLaPasarela(
+          tx,
+          {
+            companyId: tenant.companyId,
+            // El correo de quien está contratando. El proveedor lo exige para
+            // identificar al pagador; la clave del vínculo es el `id` de la
+            // suscripción, así que cambiar de correo después no rompe nada.
+            correoDelPagador: auth.user.email,
+            actorId: `user:${auth.user.userId}`,
+          },
+          {
+            ...(pasarela.proveedor === undefined ? {} : { proveedor: pasarela.proveedor }),
+            ...(pasarela.ambiente === undefined ? {} : { ambienteConfigurado: pasarela.ambiente }),
+            ...(pasarela.urlDeRetorno === undefined
+              ? {}
+              : { urlDeRetorno: pasarela.urlDeRetorno }),
+          },
+        );
+
+        if (salida.estado === 'NO_SE_PUDO') {
+          if (salida.motivo === 'SUSCRIPCION_INEXISTENTE') throw notFound(salida.detalle);
+          // Tipado: la consola muestra cada motivo con su propia indicación, y
+          // «falta declarar el plan en la pasarela» lo resuelve el operador
+          // mientras que «la suscripción está en PRUEBA» lo resuelve el cliente.
+          throw conflictoTipado(salida.motivo, salida.detalle);
+        }
+
+        return {
+          ...salida,
+          alcance:
+            'Los datos de la tarjeta se cargan **en el sitio del proveedor**, no acá: NEXO no ' +
+            'los ve ni los guarda. Hasta que el cliente autorice, la suscripción del proveedor ' +
+            'queda pendiente y no debita nada.',
+        };
+      },
+    );
+  });
+
+  /**
+   * Suspender, cancelar o reactivar. Los tres con motivo, y sin tocar ningún
+   * dato del cliente.
+   *
+   * ## Primero se le avisa a la pasarela, y recién después se escribe
+   *
+   * Esta ruta escribía el estado en la base y no le avisaba a nadie. Con una
+   * pasarela conectada eso significa un cliente que se da de baja, ve
+   * «CANCELADA» en la consola y **sigue viendo el débito en su resumen todos
+   * los meses**. Ver `pagos/suscripcion.ts`: la llamada va antes del `UPDATE`
+   * justamente para que un fallo deje todo como estaba.
+   *
+   * Si la pasarela no confirma, la ruta devuelve 409 y **no cambia nada**. Suena
+   * mal —una pasarela caída impide cancelar— y es lo correcto: entre «probá de
+   * nuevo» y «te dimos de baja y te seguimos cobrando», la segunda es un cargo
+   * indebido.
+   */
   app.post('/subscription/:subscriptionId/estado', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'subscription:write');
@@ -280,6 +500,23 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
             throw conflict('Una suscripción cancelada no vuelve: se declara una nueva.');
           }
 
+          // La pasarela primero. Ver el encabezado de la ruta: el orden es lo
+          // que impide que NEXO diga «cancelada» sobre algo que sigue debitando.
+          const pasarelaDice = await sincronizarEstadoConLaPasarela(
+            tx,
+            { subscriptionId, hacia: body.estado },
+            {
+              ...(pasarela.proveedor === undefined ? {} : { proveedor: pasarela.proveedor }),
+              ...(pasarela.ambiente === undefined
+                ? {}
+                : { ambienteConfigurado: pasarela.ambiente }),
+            },
+          );
+
+          if (pasarelaDice.estado === 'NO_SE_PUDO') {
+            throw conflictoTipado(pasarelaDice.motivo, pasarelaDice.detalle);
+          }
+
           await tx.query(
             `UPDATE company_subscriptions
                 SET estado = $3, motivo = $4,
@@ -298,7 +535,11 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
             objectType: 'company_subscriptions',
             objectId: subscriptionId,
             oldValue: { estado: antes.rows[0]!.estado },
-            newValue: { estado: body.estado },
+            // Qué dijo la pasarela queda en la bitácora junto al cambio. Es lo
+            // único que, dentro de un año, distingue «se canceló y la pasarela
+            // lo confirmó» de «se canceló y no había pasarela»: dos hechos que
+            // se ven iguales en la fila de la suscripción y no lo son.
+            newValue: { estado: body.estado, pasarela: pasarelaDice.estado },
             motivo: body.motivo,
             ip: clientIp(request),
             userAgent: request.headers['user-agent'] ?? null,
@@ -307,6 +548,7 @@ export async function suscripcionRoutes(app: FastifyInstance): Promise<void> {
           return {
             subscriptionId,
             estado: body.estado,
+            pasarela: { resultado: pasarelaDice.estado, detalle: pasarelaDice.detalle },
             alcance:
               'Cambiar el estado del plan **no toca ni un dato del cliente**: sus ' +
               'comprobantes, sus asientos y sus documentos siguen donde estaban, y siguen ' +

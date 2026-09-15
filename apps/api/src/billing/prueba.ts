@@ -268,6 +268,13 @@ export interface InformeDePruebas {
  *
  * Correrlo dos veces el mismo día es inocuo: la segunda no encuentra ninguna en
  * `PRUEBA`.
+ *
+ * ## No hay nada que sincronizar con la pasarela, y se puede demostrar
+ *
+ * Vencer una prueba no pausa ninguna suscripción del proveedor porque **una
+ * prueba no puede estar conectada a ninguno**: `conectarConLaPasarela` exige
+ * `ACTIVA`, que es el estado al que se llega convirtiendo. No es que se decidió
+ * no avisarle: no hay a quién.
  */
 export async function vencerPruebas(
   tx: Tx,
