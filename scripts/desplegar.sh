@@ -228,11 +228,31 @@ if [[ "$(consulta 'SELECT 1')" == "1" ]]; then
       # Mismo cuidado que arriba: la cadena de conexión **se arma adentro** del
       # contenedor a partir de variables pasadas por nombre. Construirla acá la
       # dejaría, con contraseña incluida, en los argumentos de `docker run`.
+      #
+      # ## La contraseña se codifica, y esto costó un despliegue
+      #
+      # Una contraseña se pega en una URL y una URL tiene sintaxis. La de esta
+      # instalación es de 48 caracteres en base64 y contiene `/` y `+`; pegada
+      # cruda produce `postgresql://usuario:cla/ve@host:5432/base`, donde la
+      # barra corta el `userinfo` y `pg-connection-string` contesta
+      # `ERR_INVALID_URL` sin poder decir por qué —el `input` viene redactado,
+      # justamente porque lleva la credencial—.
+      #
+      # Medido el 2026-09-15: el paso de migraciones falló, la imagen nueva
+      # levantó contra un esquema viejo, el arranque se negó a servir —lo
+      # correcto— y producción quedó abajo. Las migraciones 0001..0117 nunca
+      # habían pasado por acá, así que el defecto estuvo latente desde el
+      # principio.
+      #
+      # `encodeURIComponent` corre **dentro** del contenedor y lee la
+      # contraseña del entorno, no de un argumento: no aparece en `argv` de
+      # ningún proceso, que es la propiedad que este bloque ya tenía y que no
+      # había que perder al arreglarlo.
       PGPASSWORD="$PGPASSWORD" PGUSER="$ADMIN" PGDB="$DB" PGHOST="$CONTENEDOR_DB" \
       docker run --rm --network "$RED" \
         -e PGPASSWORD -e PGUSER -e PGDB -e PGHOST \
         -v "${RAIZ}:/repo" -w /repo --entrypoint sh "$IMAGEN" \
-        -c 'DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/${PGDB}" node scripts/migrate.mjs up' \
+        -c 'CLAVE=$(node -e "process.stdout.write(encodeURIComponent(process.env.PGPASSWORD))"); DATABASE_URL="postgresql://${PGUSER}:${CLAVE}@${PGHOST}:5432/${PGDB}" node scripts/migrate.mjs up' \
         2>&1 | tail -8 | sed 's/^/      /'
       aplicadas=$(consulta 'SELECT count(*) FROM schema_migrations')
       [[ "$aplicadas" == "$disco" ]] && ok "migraciones al día: $aplicadas" || mal "siguen faltando: $aplicadas de $disco"
