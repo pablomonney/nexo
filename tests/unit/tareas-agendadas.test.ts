@@ -19,6 +19,7 @@
  * imagen. Cada eslabón roto es un timer verde que no hace nada.
  */
 
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -361,5 +362,224 @@ describe('tareas agendadas — los scripts que ejecutan', () => {
     expect(s).toContain('spawn(');
     const opciones = /spawn\([^)]*\{([^}]*)\}/u.exec(s)?.[1] ?? '';
     expect(opciones).not.toContain('env:');
+  });
+});
+
+/**
+ * Los dos modos de los verificadores, y por qué la distinción importa.
+ *
+ *     CONDUCTUAL     arma una base de verificación aparte, la siembra con
+ *                    fixtures propios —incluida una cadena de bitácora rota a
+ *                    propósito— y comprueba que el verificador la detecte.
+ *                    Prueba **el verificador**. Es el modo del gate de CI.
+ *     OBSERVACIONAL  mira la base que le pasaron, tal como está. Prueba **los
+ *                    libros de esta instalación**.
+ *
+ * La tarea diaria de producción corría en conductual, que es el modo
+ * equivocado por dos razones independientes: verificaría fixtures inventados en
+ * vez de los libros de la empresa, y no puede hacerlo —siembra con
+ * `seed-norms.mjs`, que lee `docs/normative-sources/`, y `docs` está excluido
+ * de la imagen por `.dockerignore`—. Fallaba todos los días después de haber
+ * hecho bien el ciclo de facturación.
+ */
+describe('tareas agendadas — modo de verificación', () => {
+  const leerScript = (nombre: string): string =>
+    readFileSync(join(RAIZ, 'scripts', nombre), 'utf8');
+
+  const VERIFICADORES = ['verify-ledger.mjs', 'verify-audit-chain.mjs'] as const;
+
+  it('el gate de CI sigue corriendo en modo conductual', () => {
+    // Lo primero que hay que no romper. `npm run verify` usa estos dos para
+    // comprobar que el verificador detecta una adulteración: sin fixtures
+    // malos, verificar un libro sano no prueba que el control funcione.
+    const pkg = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts['ledger:verify']).toBe('node scripts/verify-ledger.mjs');
+    expect(pkg.scripts['audit:cadena']).toBe('node scripts/verify-audit-chain.mjs');
+    for (const s of Object.values(pkg.scripts)) {
+      expect(s, s).not.toContain('--observacional');
+    }
+  });
+
+  it('la tarea diaria pide observacional explícitamente, en sus dos modos', () => {
+    const diarias = leerScript('tareas-diarias.mjs');
+    for (const verificador of VERIFICADORES) {
+      // Dos veces cada uno: en `comando` y en `ensayo`. Si el ensayo corriera
+      // en otro modo que la corrida real, probaría otra cosa que la que corre.
+      const apariciones = [...diarias.matchAll(new RegExp(`'${verificador}'\\), OBSERVACIONAL`, 'gu'))];
+      expect(apariciones, verificador).toHaveLength(2);
+    }
+    expect(diarias).toContain("const OBSERVACIONAL = '--observacional'");
+  });
+
+  it('lo que necesita docs/ está detrás del modo conductual, y se importa dinámicamente', () => {
+    // La propiedad estructural que hace que la tarea diaria NO dependa de
+    // `docs/`: `verification-db.mjs` —que es quien llama a `seed-norms.mjs`—
+    // solo se carga dentro del `if (conductual)`, y con `await import`. Un
+    // `import` estático arriba del archivo lo traería siempre, y el módulo se
+    // evaluaría aunque la rama no corra.
+    for (const verificador of VERIFICADORES) {
+      const fuente = leerScript(verificador);
+
+      expect(fuente, verificador).not.toMatch(/^import .*verification-db/mu);
+      expect(fuente, verificador).not.toMatch(/^import .*fixtures-invariantes/mu);
+
+      const rama = /if \(conductual\) \{([\s\S]*?)\n\} else/u.exec(fuente)?.[1];
+      expect(rama, `${verificador}: no encontré la rama conductual`).toBeDefined();
+      expect(rama!).toContain("await import('./verification-db.mjs')");
+    }
+  });
+
+  it('ningún script de la cadena diaria LEE nada de docs/', () => {
+    // El control por el otro lado: que no aparezca una dependencia nueva de
+    // `docs/` por otro camino. `docs` no está en la imagen y no va a estarlo.
+    //
+    // Lo que se busca es una **lectura**, no una mención: `tareas-diarias.mjs`
+    // nombra `docs/DESPLIEGUE.md §4` en el texto que imprime al final, y eso es
+    // una referencia para quien lo lee, no un archivo que abra. Prohibir la
+    // palabra convertiría este caso en uno que hay que desactivar.
+    const cadena = ['tareas-diarias.mjs', 'facturacion-ciclo.mjs', ...VERIFICADORES];
+    const LECTURAS = /(readFile|readFileSync|createReadStream|existsSync|open|join)\s*\([^)]*docs/isu;
+    for (const nombre of cadena) {
+      expect(leerScript(nombre), nombre).not.toMatch(LECTURAS);
+    }
+  });
+
+  // Los casos que siguen **ejecutan** los verificadores. Sin base se saltean, y
+  // no se inventa un resultado: es la misma regla que los propios verificadores
+  // aplican con sus datos.
+  const conBase = (process.env.DATABASE_URL ?? '') === '' ? it.skip : it;
+
+  const correrVerificador = (nombre: string, args: readonly string[]) =>
+    spawnSync(process.execPath, [join(RAIZ, 'scripts', nombre), ...args], {
+      cwd: RAIZ,
+      encoding: 'utf8',
+      env: process.env,
+      timeout: 120_000,
+    });
+
+  conBase(
+    'sin nada que verificar, el observacional dice NO EJERCITADO y NO afirma que esté bien',
+    () => {
+      // El requisito que más importa de los tres: que la ausencia de datos no se
+      // convierta en un chequeo verde. Se usa un CUIT que no existe, que es la
+      // forma barata de llegar al caso «no hay ni una empresa» sin montar una
+      // base vacía.
+      //
+      // Sale con 0 —en observacional el comando es una pregunta, no una
+      // promesa— y el texto dice las dos cosas: que no se ejercitó, y que no se
+      // está afirmando nada. Un `exit 0` mudo sería exactamente la mentira.
+      for (const [nombre, frase] of [
+        ['verify-ledger.mjs', 'No se afirma que el Mayor coincida'],
+        ['verify-audit-chain.mjs', 'No se afirma que la bitácora esté íntegra'],
+      ] as const) {
+        const r = correrVerificador(nombre, ['--observacional', '99999999999']);
+        const salida = `${r.stdout}${r.stderr}`;
+        expect(r.status, `${nombre}: ${salida}`).toBe(0);
+        expect(salida, nombre).toContain('NO EJERCITADO');
+        expect(salida, nombre).toContain(frase);
+        // Y no dice ninguna de las frases que afirman.
+        expect(salida, nombre).not.toContain('sin discrepancias');
+        expect(salida, nombre).not.toContain('sin adulteraciones');
+      }
+    },
+    180_000,
+  );
+
+  conBase(
+    'el observacional corre de punta a punta sin pasar por docs/',
+    () => {
+      // Lo que este caso demuestra es la independencia de `docs/`: los dos
+      // verificadores recorren datos reales y en ningún momento siembran normas
+      // ni arman una base aparte. Es la condición para que la tarea diaria
+      // funcione adentro del contenedor.
+      for (const nombre of VERIFICADORES) {
+        const r = correrVerificador(nombre, ['--observacional']);
+        const salida = `${r.stdout}${r.stderr}`;
+        expect(salida, nombre).toContain('Modo OBSERVACIONAL');
+        // La rama que necesita `docs/` no dejó ni un rastro.
+        expect(salida, nombre).not.toContain('CONDUCTUAL');
+        expect(salida, nombre).not.toContain('fixtures conductuales');
+        expect(salida, nombre).not.toContain('registro-de-descargas');
+        // Y comparó de verdad: llegó a mirar empresas.
+        expect(salida, nombre).toMatch(/\d+\)/u);
+      }
+    },
+    180_000,
+  );
+
+  conBase(
+    'sobre datos reales e íntegros el observacional afirma, y sale con 0',
+    () => {
+      // La contracara del NO EJERCITADO: con datos que están bien, dice que
+      // están bien.
+      //
+      // Se usa la cadena de auditoría y **no** el Mayor, y el motivo vale
+      // escribirlo: `aai_test` es una base de trabajo donde cientos de suites
+      // dejan estados rotos a propósito, así que el verificador del Mayor sale
+      // con 1 sobre ella — correctamente—. Afirmar acá que `aai_test` cuadra
+      // sería afirmar algo falso sobre una base que no tiene por qué cuadrar.
+      // La bitácora sí: es append-only por trigger, y ninguna suite la rompe.
+      const r = correrVerificador('verify-audit-chain.mjs', ['--observacional']);
+      const salida = `${r.stdout}${r.stderr}`;
+      expect(r.status, salida).toBe(0);
+      expect(salida).toContain('Modo OBSERVACIONAL');
+      expect(salida).toContain('verificada(s) con entradas reales, sin adulteraciones');
+    },
+    180_000,
+  );
+});
+
+/**
+ * El lector de estado, que también tuvo un defecto de formato.
+ *
+ * `systemctl show --value` de `NextElapseUSecRealtime` devuelve, en systemd
+ * 255, `Wed 2026-09-16 03:25:13 UTC` — texto, pese a que el nombre de la
+ * propiedad promete microsegundos. El script hacía aritmética sobre eso y el
+ * campo salía vacío, con un `unbound variable` en el medio.
+ */
+describe('tareas agendadas — el lector de estado', () => {
+  const estado = (): string => readFileSync(join(UNIDADES, 'estado-de-tareas.sh'), 'utf8');
+
+  it('no supone el formato: acepta microsegundos y fecha legible', () => {
+    const s = estado();
+    expect(s).toContain('microsegundos_de()');
+    // La rama numérica y la de texto, las dos presentes.
+    expect(s).toMatch(/\[\[ "\$valor" =~ \^\[0-9\]\+\$ \]\]/u);
+    expect(s).toContain('date -d "$valor" +%s');
+    // Y el caso «nunca», que no es una fecha de 1970.
+    expect(s).toContain('|| "$valor" == "0"');
+  });
+
+  it('la próxima corrida sale de list-timers, que sí devuelve un número', () => {
+    const s = estado();
+    expect(s).toContain("systemctl list-timers 'nexo-*' --all --output=json");
+    // Con respaldo, por si la versión de systemd no soporta la bandera.
+    expect(s).toContain('NextElapseUSecRealtime');
+    // Y sin invocar `jq`, que no tiene por qué estar en el servidor. Se busca
+    // una llamada, no la palabra: el propio script explica en un comentario por
+    // qué no lo usa, y prohibir la palabra rompería este caso con la
+    // explicación.
+    const codigo = s.replace(/^\s*#.*$/gmu, '');
+    expect(codigo).not.toMatch(/(^|[|;&(\s])jq[\s|]/mu);
+  });
+
+  it('las dos salidas traen los seis datos', () => {
+    const s = estado();
+    for (const campo of ['última corrida', 'última exitosa', 'último resultado', 'próxima']) {
+      expect(s, campo).toContain(campo);
+    }
+    for (const clave of [
+      'ultimaCorrida',
+      'segundosDesdeLaUltima',
+      'ultimaExitosa',
+      'segundosDesdeLaUltimaExitosa',
+      'resultado',
+      'proxima',
+      'segundosParaLaProxima',
+    ]) {
+      expect(s, clave).toContain(`"${clave}"`);
+    }
   });
 });

@@ -23,7 +23,7 @@
 # la cobranza no avanza — y eso se descubre semanas después, contando plata que
 # no entró.
 #
-# ## Los cuatro datos, y por qué son cuatro
+# ## Los datos, y por qué son estos
 #
 #     última corrida       cuándo arrancó la última vez. Sin esto no se sabe si
 #                          el timer está vivo.
@@ -32,12 +32,30 @@
 #                          distinto del anterior en el caso que importa: una
 #                          tarea que corre cada cinco minutos y falla siempre
 #                          tiene «última corrida» de hace un minuto.
-#     último error         el código de salida y el motivo de la última que
-#                          falló. Un `exit 1` de la tarea y un timeout de
+#     último resultado     el motivo del fallo y el código de salida de la
+#                          última. Un `exit 1` de la tarea y un timeout de
 #                          systemd se arreglan distinto.
-#     hace cuánto          en segundos. Es lo que una sonda compara contra un
-#                          umbral; una fecha obliga a que el que mira haga la
-#                          cuenta.
+#     hace cuánto          en segundos, para las dos fechas. Es lo que una sonda
+#                          compara contra un umbral; una fecha obliga a que el
+#                          que mira haga la cuenta.
+#     próxima              cuándo vuelve a dispararse.
+#
+# ## De dónde sale cada uno, que no es obvio
+#
+# **systemd no devuelve las fechas en un solo formato**, y asumir que sí fue un
+# defecto real de este script: con systemd 255, `systemctl show --value` de
+# `NextElapseUSecRealtime` contesta `Wed 2026-09-16 03:25:13 UTC` —texto— y no
+# microsegundos, pese al nombre de la propiedad. El campo salía vacío con un
+# `unbound variable` en el medio.
+#
+# Así que:
+#
+#   · la **próxima** sale de `systemctl list-timers --output=json`, que sí
+#     devuelve microsegundos numéricos y es la fuente más estable para esto;
+#   · las **fechas de la unidad** salen de `systemctl show` y pasan por
+#     `microsegundos_de`, que acepta las dos formas y no supone ninguna;
+#   · la **última exitosa** sale del journal, porque systemd no la guarda como
+#     propiedad: `Result` describe solo la última corrida, buena o mala.
 #
 # ## Lo que este script NO hace
 #
@@ -62,30 +80,94 @@ JSON=0
 # ancho de la terminal y del idioma.
 prop() { systemctl show "$1" --property="$2" --value 2>/dev/null; }
 
-# systemd devuelve microsegundos desde el epoch, o `0` cuando nunca pasó. Cero
-# **no es una fecha**: es «nunca», y mostrarlo como 1970 haría que una tarea que
-# jamás corrió se viera como una que corrió hace cincuenta y seis años.
+# ---------------------------------------------------------------------------
+# Microsegundos desde el epoch, venga como venga
+# ---------------------------------------------------------------------------
+#
+# systemd usa **tres** representaciones para lo mismo y no avisa cuál:
+#
+#     1789529412529554              microsegundos, que es lo que el nombre
+#                                   `...USec...` promete;
+#     Wed 2026-09-16 03:25:13 UTC   texto legible, que es lo que esa MISMA
+#                                   propiedad devuelve con `show --value`
+#                                   en systemd 255;
+#     (vacío) o 0                   nunca pasó.
+#
+# Cero y vacío **no son fechas**: son «nunca», y traducirlos a 1970 haría que
+# una tarea que jamás corrió se viera como una que corrió hace cincuenta y seis
+# años. Se devuelve vacío y lo interpreta quien llama.
+microsegundos_de() {
+  local valor="${1:-}"
+  [[ -z "$valor" || "$valor" == "0" || "$valor" == "n/a" ]] && { echo ""; return; }
+
+  # Ya numérico: viene en microsegundos.
+  if [[ "$valor" =~ ^[0-9]+$ ]]; then
+    echo "$valor"
+    return
+  fi
+
+  # Texto: lo traduce `date`, que entiende el formato de systemd. Si tampoco
+  # puede, se devuelve vacío en vez de un número inventado.
+  local epoch
+  epoch=$(date -d "$valor" +%s 2>/dev/null) || { echo ""; return; }
+  [[ -z "$epoch" ]] && { echo ""; return; }
+  echo "$(( epoch * 1000000 ))"
+}
+
 segundos_desde() {
-  local usec="$1"
-  [[ -z "$usec" || "$usec" == "0" ]] && { echo ""; return; }
+  local usec="${1:-}"
+  [[ -z "$usec" ]] && { echo ""; return; }
   echo $(( ( $(date +%s%6N) - usec ) / 1000000 ))
 }
 
 fecha_de() {
-  local usec="$1"
-  [[ -z "$usec" || "$usec" == "0" ]] && { echo "nunca"; return; }
-  date -d "@$(( usec / 1000000 ))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "?"
+  local usec="${1:-}"
+  [[ -z "$usec" ]] && { echo "nunca"; return; }
+  date -d "@$(( usec / 1000000 ))" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "?"
 }
 
+# Solo para fechas pasadas: la próxima corrida se imprime con su propio texto,
+# porque «hace» y «en» no son la misma pregunta.
 humano() {
-  local s="$1"
+  local s="${1:-}"
   [[ -z "$s" ]] && { echo "—"; return; }
-  if   (( s < 120 ));   then echo "hace ${s}s"
-  elif (( s < 7200 ));  then echo "hace $(( s / 60 )) min"
-  elif (( s < 172800 ));then echo "hace $(( s / 3600 )) h"
-  else                       echo "hace $(( s / 86400 )) días"
+  if   (( s < 120 ));    then echo "hace ${s}s"
+  elif (( s < 7200 ));   then echo "hace $(( s / 60 )) min"
+  elif (( s < 172800 )); then echo "hace $(( s / 3600 )) h"
+  else                        echo "hace $(( s / 86400 )) días"
   fi
 }
+
+# ---------------------------------------------------------------------------
+# La próxima corrida, del listado de timers
+# ---------------------------------------------------------------------------
+#
+# `--output=json` devuelve `next` en microsegundos numéricos, que es la forma
+# que no hay que adivinar. Se lee **una vez** para las tres unidades: llamar a
+# `systemctl` por unidad multiplica el trabajo sin ganar nada.
+#
+# Si esta versión de systemd no soporta `--output=json`, la variable queda vacía
+# y cada unidad cae a `NextElapseUSecRealtime`, que `microsegundos_de` sabe leer
+# en cualquiera de sus dos formas. Degradar así es preferible a depender de una
+# bandera que no todas las versiones tienen.
+LISTADO=$(systemctl list-timers 'nexo-*' --all --output=json --no-pager 2>/dev/null || echo "")
+
+proxima_de() {
+  local timer="$1" desde_el_listado=""
+  if [[ -n "$LISTADO" ]]; then
+    # Un objeto por línea, y de la línea de este timer se saca `next`. Sin `jq`,
+    # que no tiene por qué estar en el servidor.
+    desde_el_listado=$(printf '%s' "$LISTADO" \
+      | tr '{' '\n' \
+      | grep -F "\"unit\":\"${timer}\"" \
+      | grep -oE '"next":[0-9]+' \
+      | head -1 | cut -d: -f2)
+  fi
+  [[ -n "$desde_el_listado" ]] && { microsegundos_de "$desde_el_listado"; return; }
+  microsegundos_de "$(prop "$timer" NextElapseUSecRealtime)"
+}
+
+# ---------------------------------------------------------------------------
 
 [[ "$JSON" -eq 0 ]] && printf '\n\033[1m══ Tareas agendadas de NEXO ═════════════════════════════════════\033[0m\n'
 
@@ -102,11 +184,7 @@ for unidad in "${UNIDADES[@]}"; do
   # `ExecMainStartTimestamp` es cuándo arrancó el proceso de la última corrida.
   # Se usa el de arranque y no el de salida porque una tarea colgada todavía no
   # tiene salida, y es justo el caso que hay que poder ver.
-  #
-  # systemd lo devuelve como texto («Mon 2026-09-15 03:15:02 -03») y no como
-  # número, así que se lo pasa por `date`. Vacío o sin parsear es `0`, que
-  # `fecha_de` muestra como «nunca» — y nunca como 1970.
-  inicio_usec=$(date -d "$(prop "$servicio" ExecMainStartTimestamp)" +%s%6N 2>/dev/null || echo 0)
+  inicio_usec=$(microsegundos_de "$(prop "$servicio" ExecMainStartTimestamp)")
 
   # `Result` es `success` o el motivo del fallo (`exit-code`, `timeout`,
   # `signal`…). `ExecMainStatus` es el código de salida del proceso. Los dos:
@@ -114,8 +192,7 @@ for unidad in "${UNIDADES[@]}"; do
   resultado=$(prop "$servicio" Result)
   codigo=$(prop "$servicio" ExecMainStatus)
 
-  # `NextElapseUSecRealtime` sí viene en microsegundos desde el epoch.
-  proxima=$(prop "$timer" NextElapseUSecRealtime)
+  proxima_usec=$(proxima_de "$timer")
 
   # systemd no guarda «la última corrida exitosa» como propiedad: `Result` solo
   # describe la última, buena o mala. Queda en el journal, y de ahí se saca: la
@@ -123,21 +200,31 @@ for unidad in "${UNIDADES[@]}"; do
   # rotado se contesta «no consta», que es lo honesto, y no «nunca».
   ultima_ok=$(journalctl -u "$servicio" --output=json --no-pager -n 400 2>/dev/null \
     | grep '"JOB_RESULT":"done"' \
-    | grep -o '"__REALTIME_TIMESTAMP":"[0-9]*"' \
-    | grep -o '[0-9]\{10,\}' | tail -1)
+    | grep -oE '"__REALTIME_TIMESTAMP":"[0-9]*"' \
+    | grep -oE '[0-9]{10,}' | tail -1)
 
   desde_ultima=$(segundos_desde "$inicio_usec")
-  desde_ok=$(segundos_desde "${ultima_ok:-0}")
+  desde_ok=$(segundos_desde "${ultima_ok:-}")
+
+  # `segundos_desde` cuenta hacia atrás, así que sobre una fecha futura da
+  # negativo. Se invierte una sola vez, acá, para que el nombre del campo diga
+  # la verdad en las dos salidas.
+  faltan=$(segundos_desde "${proxima_usec:-}")
+  para_la_proxima=""
+  [[ -n "$faltan" ]] && para_la_proxima=$(( -faltan ))
 
   if [[ "$JSON" -eq 1 ]]; then
     [[ "$primera" -eq 0 ]] && printf ','
     primera=0
-    printf '{"unidad":"%s","habilitado":"%s","activo":"%s","ultimaCorrida":"%s",' \
-      "$unidad" "$habilitado" "$activo" "$(fecha_de "$inicio_usec")"
-    printf '"segundosDesdeLaUltima":%s,"ultimaExitosa":"%s","segundosDesdeLaUltimaExitosa":%s,' \
-      "${desde_ultima:-null}" "$(fecha_de "${ultima_ok:-0}")" "${desde_ok:-null}"
-    printf '"resultado":"%s","codigoDeSalida":%s,"proxima":"%s"}' \
-      "${resultado:-desconocido}" "${codigo:-null}" "$(fecha_de "${proxima:-0}")"
+    printf '{"unidad":"%s","habilitado":"%s","activo":"%s"' "$unidad" "$habilitado" "$activo"
+    printf ',"ultimaCorrida":"%s","segundosDesdeLaUltima":%s' \
+      "$(fecha_de "$inicio_usec")" "${desde_ultima:-null}"
+    printf ',"ultimaExitosa":"%s","segundosDesdeLaUltimaExitosa":%s' \
+      "$(fecha_de "${ultima_ok:-}")" "${desde_ok:-null}"
+    printf ',"resultado":"%s","codigoDeSalida":%s' \
+      "${resultado:-desconocido}" "${codigo:-null}"
+    printf ',"proxima":"%s","segundosParaLaProxima":%s}' \
+      "$(fecha_de "${proxima_usec:-}")" "${para_la_proxima:-null}"
     continue
   fi
 
@@ -167,7 +254,12 @@ for unidad in "${UNIDADES[@]}"; do
     printf '    último resultado  \033[31m%s\033[0m (salida %s)\n' "${resultado:-desconocido}" "${codigo:-?}"
     printf '                      journalctl -u %s -n 50\n' "$servicio"
   fi
-  printf '    próxima           %s\n' "$(fecha_de "${proxima:-0}")"
+
+  if [[ -n "${proxima_usec:-}" ]]; then
+    printf '    próxima           %s   en %ss\n' "$(fecha_de "$proxima_usec")" "$para_la_proxima"
+  else
+    printf '    próxima           \033[31mno se pudo leer\033[0m\n'
+  fi
 done
 
 if [[ "$JSON" -eq 1 ]]; then

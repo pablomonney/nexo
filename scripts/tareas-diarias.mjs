@@ -51,8 +51,12 @@
  * inventada por este script sería tomar esa decisión sin decirlo. Se agenda
  * aparte, a sabiendas.
  *
- * **No manda avisos.** No hay proveedor de correo. El ciclo lo informa como
- * omitido, con ese motivo.
+ * **No manda avisos.** Los encola. La entrega la hace `correo:bandeja`, que
+ * tiene su propio timer: un aviso que sale desde adentro de la transacción del
+ * ciclo es un correo que no se puede deshacer si el ciclo se revierte.
+ *
+ * **No verifica el verificador.** Eso lo hace el modo conductual, que corre en
+ * CI. Acá se verifican los libros de esta instalación. Ver `OBSERVACIONAL`.
  */
 
 import { spawn } from 'node:child_process';
@@ -61,6 +65,37 @@ import { fileURLToPath } from 'node:url';
 
 const RAIZ = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'));
 const ENSAYO = process.argv.includes('--ensayo');
+
+/**
+ * Los dos verificadores corren en modo **observacional**, y la diferencia no es
+ * cosmética.
+ *
+ *     CONDUCTUAL     arma una base de verificación aparte, la siembra con
+ *                    fixtures propios —incluida una cadena rota a propósito— y
+ *                    comprueba que el verificador la detecte. Prueba **el
+ *                    verificador**. Es el modo de `npm run verify`, o sea del
+ *                    gate de CI, y ahí es el correcto.
+ *     OBSERVACIONAL  mira la base que le pasaron, tal como está. Prueba **los
+ *                    libros de esta instalación**, que es lo que a las 03:15 de
+ *                    la mañana hay que saber.
+ *
+ * Correr el conductual en producción verificaría unos fixtures inventados y no
+ * miraría ni una fila de la empresa. Además no puede: siembra con
+ * `seed-norms.mjs`, que lee `docs/normative-sources/`, y `docs` está excluido
+ * de la imagen por `.dockerignore`. La tarea diaria fallaba ahí, después de
+ * haber hecho bien lo único que importaba —el ciclo de facturación—.
+ *
+ * ## Sin datos, ninguno de los dos miente
+ *
+ * En observacional, una instalación sin asientos aprobados contesta
+ * `NO EJERCITADO` con todas las letras —«no se afirma que el Mayor coincida»— y
+ * sale con 0. No es lo mismo que «coincide», y la diferencia está escrita en la
+ * salida para que nadie la lea al revés.
+ *
+ * En conductual ese mismo caso sale con 1, y también está bien: ahí el fixture
+ * prometió producir asientos y no lo hizo, así que el roto es el fixture.
+ */
+const OBSERVACIONAL = '--observacional';
 
 /**
  * Las tareas, en orden.
@@ -80,16 +115,18 @@ const TAREAS = [
   },
   {
     nombre: 'verificación del libro',
-    porque: 'recalcula el Mayor contra los movimientos y avisa si dejó de cuadrar.',
-    comando: ['node', [join(RAIZ, 'scripts', 'verify-ledger.mjs')]],
+    porque:
+      'recalcula el Mayor contra los movimientos REALES de esta instalación y avisa si ' +
+      'dejó de cuadrar.',
+    comando: ['node', [join(RAIZ, 'scripts', 'verify-ledger.mjs'), OBSERVACIONAL]],
     // De solo lectura: en un ensayo corre igual, porque no escribe nada.
-    ensayo: ['node', [join(RAIZ, 'scripts', 'verify-ledger.mjs')]],
+    ensayo: ['node', [join(RAIZ, 'scripts', 'verify-ledger.mjs'), OBSERVACIONAL]],
   },
   {
     nombre: 'cadena de auditoría',
-    porque: 'comprueba que ninguna entrada de la bitácora fue alterada.',
-    comando: ['node', [join(RAIZ, 'scripts', 'verify-audit-chain.mjs')]],
-    ensayo: ['node', [join(RAIZ, 'scripts', 'verify-audit-chain.mjs')]],
+    porque: 'comprueba que ninguna entrada de la bitácora de esta instalación fue alterada.',
+    comando: ['node', [join(RAIZ, 'scripts', 'verify-audit-chain.mjs'), OBSERVACIONAL]],
+    ensayo: ['node', [join(RAIZ, 'scripts', 'verify-audit-chain.mjs'), OBSERVACIONAL]],
   },
 ];
 
