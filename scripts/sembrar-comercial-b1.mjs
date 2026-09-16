@@ -1,34 +1,43 @@
 #!/usr/bin/env node
 /**
- * Declara los precios y los topes de la hipótesis comercial B-1.
+ * Declara la configuración comercial de NEXO: precios y topes de los cinco
+ * planes disponibles.
  *
- *   npm run comercial:b1              # ve qué haría
+ *   npm run comercial:b1              # muestra qué haría, sin escribir
  *   npm run comercial:b1 -- --aplicar # lo declara
+ *
+ * ## Los números de acá son decisiones tomadas, no hipótesis
+ *
+ * La versión anterior de este archivo llevaba la lista de B-1 —29.900 a
+ * 159.900, netos— con `declarado_por = 'hipotesis-b1'` y una advertencia de que
+ * **nadie los había decidido**. Esos valores quedaron obsoletos el 2026-09-15 y
+ * **no se pueden volver a sembrar**: no están en ninguna parte de este archivo.
+ *
+ * Lo que hay ahora son los precios comerciales definitivos, con dos diferencias
+ * que cambian lo que se cobra y conviene tener presentes:
+ *
+ *   · **Son finales, con IVA incluido** (`incluye_impuestos = true`). La lista
+ *     anterior era neta. Un plan de 59.900 se le cobra al cliente 59.900, y el
+ *     neto sale de dividir, no de sumar.
+ *   · Los topes **también son decisiones**, ya no hipótesis. Por eso
+ *     `declarado_por` dice `comercial-2026-09` y no `hipotesis-b1`.
  *
  * ## Por qué esto es un script y no una migración
  *
- * Un precio cambia y una migración no. Poner `29900.00` dentro de un archivo
- * que se aplica una sola vez y no se puede editar dejaría el precio de octubre
- * escrito para siempre en la historia del esquema, y el de noviembre en otro
- * lado.
+ * Un precio cambia y una migración no. Poner `59900.00` dentro de un archivo
+ * que se aplica una sola vez y no se puede editar dejaría el precio de
+ * septiembre escrito para siempre en la historia del esquema, y el de octubre
+ * en otro lado.
  *
  * Acá cada precio se declara con **vigencia y motivo**, y una vigencia nueva
  * cierra la anterior en vez de pisarla: un documento emitido en marzo se tiene
  * que poder rehacer con el precio de marzo.
  *
- * ## Lo que estos números son, exactamente
+ * ## Correrlo dos veces no duplica nada
  *
- * Los **precios** salen de una decisión tomada: son los de B-1.
- *
- * Los **topes** —cuántas empresas, cuántos usuarios, cuántos comprobantes por
- * mes entran en cada plan— **no los decidió nadie todavía**. Son una hipótesis,
- * y por eso quedan declarados con `declarado_por = 'hipotesis-b1'`: para que se
- * distingan de una decisión tomada cuando alguien mire por qué a un cliente se
- * le avisó que excedió su plan.
- *
- * Que se puedan distinguir importa porque **el tope no bloquea**: avisa. Un
- * sistema contable que se niega a registrar un hecho por una cuestión comercial
- * deja los libros incompletos, y eso no se arregla pagando después.
+ * Los precios cierran la vigencia anterior y abren una nueva solo si cambió
+ * algo; los topes se escriben con `ON CONFLICT DO UPDATE`. Volver a correrlo el
+ * mismo día deja la base como está.
  *
  * ## Sin `--aplicar` no escribe nada
  *
@@ -50,6 +59,14 @@ try {
 const aplicar = process.argv.includes('--aplicar');
 const desdeDeclarado = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) ?? null;
 
+/** Quién declaró esto. Sirve para distinguirlo de la hipótesis vieja. */
+const DECLARANTE = 'comercial-2026-09';
+
+const MOTIVO_PRECIO =
+  'Lista comercial de septiembre de 2026. Importes FINALES, con IVA incluido.';
+const MOTIVO_TOPE =
+  'Topes comerciales de septiembre de 2026. Decisión tomada, no hipótesis.';
+
 /**
  * «Hoy» es el día que dice la base, no el que dice UTC.
  *
@@ -57,12 +74,7 @@ const desdeDeclarado = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) 
  * nueve de la noche eso ya es mañana. Consecuencia medida el 2026-09-09 a las
  * 22:07: los cinco precios quedaron con `vigente_desde` en el día siguiente, la
  * consulta del catálogo —que compara contra `CURRENT_DATE`— no encontró
- * ninguno, y **los planes se quedaron sin precio hasta la medianoche**. Tres
- * pruebas se pusieron en rojo por un huso horario.
- *
- * Se le pregunta a la base porque es la base la que después compara: cualquier
- * otra fuente puede discrepar con ella y este es exactamente el error que se
- * está arreglando.
+ * ninguno, y **los planes se quedaron sin precio hasta la medianoche**.
  */
 async function hoySegunLaBase(cliente) {
   const { rows } = await cliente.query('SELECT CURRENT_DATE::text AS hoy');
@@ -70,34 +82,43 @@ async function hoySegunLaBase(cliente) {
 }
 
 /**
- * Los precios de B-1. **Sin IVA**: `incluye_impuestos = false`.
+ * Los precios definitivos. **Finales, con IVA incluido.**
  *
- * La lista comercial dice «+ IVA», así que lo que se guarda es el neto. Guardar
- * el final y llamarlo neto sería equivocarse por un 21 % en cada cargo.
+ * `incluye_impuestos` no tiene valor por defecto en el esquema justamente para
+ * que esta decisión se escriba: suponerla mal cambia lo que se cobra en un 21 %.
  */
+const INCLUYE_IMPUESTOS = true;
+
 const PRECIOS = [
-  ['CONTABLE', 'MENSUAL', 'ARS', '29900.00'],
-  ['GESTION', 'MENSUAL', 'ARS', '59900.00'],
-  ['ESTUDIO', 'MENSUAL', 'ARS', '79900.00'],
-  ['EMPRESA_B1', 'MENSUAL', 'ARS', '99900.00'],
-  ['COMPLETO', 'MENSUAL', 'ARS', '159900.00'],
+  ['CONTABLE', 'MENSUAL', 'ARS', '59900.00'],
+  ['ESTUDIO', 'MENSUAL', 'ARS', '89900.00'],
+  ['GESTION', 'MENSUAL', 'ARS', '119900.00'],
+  ['EMPRESA_B1', 'MENSUAL', 'ARS', '249900.00'],
+  ['COMPLETO', 'MENSUAL', 'ARS', '449900.00'],
 ];
 
 /**
- * Los topes. **Hipótesis, no decisión.**
+ * Los topes, por plan y por recurso.
  *
- * Cada uno responde a lo que el plan pretende cubrir: Contable es una empresa
- * llevando sus libros; Estudio es una cartera de clientes; Completo es una
- * organización con varias unidades.
+ * `ILIMITADO` no es un número grande: es una fila que declara que **este plan no
+ * tiene tope de ese recurso** (0122). Es distinto de no declarar la fila, que
+ * significa «nadie lo escribió» y así se informa.
  *
- * Ninguno bloquea: el sistema mide el uso y avisa.
+ * Los cinco recursos que el sistema mide de verdad. `EMPRESAS` pasó a medirse
+ * en la 0122: antes se podía declarar y ninguna vista lo evaluaba.
+ *
+ * `COMPROBANTES_MES` y `DOCUMENTOS_MES` son dos recursos distintos —un
+ * comprobante fiscal no es un documento subido— y la decisión comercial les da
+ * el mismo número a los dos.
  */
+const ILIMITADO = Symbol('sin tope');
+
 const TOPES = {
-  CONTABLE:   { EMPRESAS: 1,  USUARIOS: 3,  COMPROBANTES_MES: 300,   DOCUMENTOS_MES: 300,   INTEGRACIONES: 1 },
-  GESTION:    { EMPRESAS: 1,  USUARIOS: 8,  COMPROBANTES_MES: 1500,  DOCUMENTOS_MES: 1500,  INTEGRACIONES: 2 },
-  ESTUDIO:    { EMPRESAS: 25, USUARIOS: 10, COMPROBANTES_MES: 4000,  DOCUMENTOS_MES: 4000,  INTEGRACIONES: 2 },
-  EMPRESA_B1: { EMPRESAS: 3,  USUARIOS: 20, COMPROBANTES_MES: 6000,  DOCUMENTOS_MES: 6000,  INTEGRACIONES: 5 },
-  COMPLETO:   { EMPRESAS: 5,  USUARIOS: 40, COMPROBANTES_MES: 20000, DOCUMENTOS_MES: 20000, INTEGRACIONES: 15 },
+  CONTABLE:   { EMPRESAS: 1,  USUARIOS: 2,  COMPROBANTES_MES: 1000,   DOCUMENTOS_MES: 1000,   INTEGRACIONES: 1 },
+  ESTUDIO:    { EMPRESAS: 20, USUARIOS: 5,  COMPROBANTES_MES: 5000,   DOCUMENTOS_MES: 5000,   INTEGRACIONES: 3 },
+  GESTION:    { EMPRESAS: 1,  USUARIOS: 5,  COMPROBANTES_MES: 5000,   DOCUMENTOS_MES: 5000,   INTEGRACIONES: 3 },
+  EMPRESA_B1: { EMPRESAS: 5,  USUARIOS: 15, COMPROBANTES_MES: 25000,  DOCUMENTOS_MES: 25000,  INTEGRACIONES: 10 },
+  COMPLETO:   { EMPRESAS: 20, USUARIOS: 50, COMPROBANTES_MES: 100000, DOCUMENTOS_MES: 100000, INTEGRACIONES: ILIMITADO },
 };
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -119,24 +140,20 @@ try {
 
   const desde = desdeDeclarado ?? (await hoySegunLaBase(cliente));
 
-  console.log(`\n══ Hipótesis comercial B-1 ${aplicar ? '' : '(ENSAYO)'} ═══════════════\n`);
-  console.log(`  Vigente desde ${desde}\n`);
+  console.log(`\n══ Configuración comercial ${aplicar ? '' : '(ENSAYO)'} ═══════════════════\n`);
+  console.log(`  Vigente desde ${desde}   ·   importes FINALES (IVA incluido)\n`);
 
   for (const [code, , moneda, importe] of PRECIOS) {
-    console.log(`  ${planes.get(code).name.padEnd(16)} ${moneda} ${importe.padStart(10)} / mes + IVA`);
+    const t = TOPES[code];
+    console.log(`  ${planes.get(code).name.padEnd(16)} ${moneda} ${importe.padStart(10)} / mes`);
+    console.log(
+      `    ${Object.entries(t)
+        .map(([r, v]) => `${r.toLowerCase()}=${v === ILIMITADO ? 'sin tope' : v}`)
+        .join('  ')}`,
+    );
   }
-  console.log('');
 
   if (!aplicar) {
-    console.log('  Los TOPES son una hipótesis, no una decisión tomada:\n');
-    for (const [code, topes] of Object.entries(TOPES)) {
-      console.log(
-        `    ${code.padEnd(11)} ` +
-          Object.entries(topes)
-            .map(([r, t]) => `${r.toLowerCase()}=${t}`)
-            .join('  '),
-      );
-    }
     console.log('\n  Nada se escribió. Para declararlo: npm run comercial:b1 -- --aplicar\n');
     process.exit(0);
   }
@@ -157,45 +174,46 @@ try {
       `INSERT INTO plan_prices
          (plan_id, periodicidad, moneda, importe, incluye_impuestos, vigente_desde,
           declarado_por, motivo)
-       VALUES ($1, $2, $3, $4::numeric, false, $5::date, 'b1', $6)
-       ON CONFLICT (plan_id, periodicidad, moneda, vigente_desde) DO NOTHING`,
-      [
-        planId,
-        periodicidad,
-        moneda,
-        importe,
-        desde,
-        'Lista de precios de B-1. Importes NETOS: la lista comercial dice «+ IVA».',
-      ],
+       VALUES ($1, $2, $3, $4::numeric, $5, $6::date, $7, $8)
+       ON CONFLICT (plan_id, periodicidad, moneda, vigente_desde) DO UPDATE
+         SET importe = EXCLUDED.importe,
+             incluye_impuestos = EXCLUDED.incluye_impuestos,
+             declarado_por = EXCLUDED.declarado_por,
+             motivo = EXCLUDED.motivo`,
+      [planId, periodicidad, moneda, importe, INCLUYE_IMPUESTOS, desde, DECLARANTE, MOTIVO_PRECIO],
     );
   }
 
   for (const [code, topes] of Object.entries(TOPES)) {
     const planId = planes.get(code).id;
-    for (const [recurso, tope] of Object.entries(topes)) {
+    for (const [recurso, valor] of Object.entries(topes)) {
+      const sinTope = valor === ILIMITADO;
       await cliente.query(
-        `INSERT INTO plan_limits (plan_id, recurso, tope, declarado_por)
-         VALUES ($1, $2, $3, 'hipotesis-b1')
+        `INSERT INTO plan_limits (plan_id, recurso, tope, ilimitado, declarado_por)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (plan_id, recurso) DO UPDATE
-           SET tope = EXCLUDED.tope, declarado_por = EXCLUDED.declarado_por,
+           SET tope = EXCLUDED.tope,
+               ilimitado = EXCLUDED.ilimitado,
+               declarado_por = EXCLUDED.declarado_por,
                declarado_el = now()`,
-        [planId, recurso, tope],
+        [planId, recurso, sinTope ? null : valor, sinTope, DECLARANTE],
       );
     }
   }
 
   await cliente.query('COMMIT');
 
-  console.log('  Declarado.\n');
-  console.log('  Los precios quedaron como decisión (declarado_por = b1).');
-  console.log('  Los topes quedaron como HIPÓTESIS (declarado_por = hipotesis-b1):');
-  console.log('  cuando alguien los confirme, volver a declararlos con su nombre.\n');
-  console.log('  Recordá que el tope NO bloquea: avisa. Un sistema contable que se');
-  console.log('  niega a registrar un hecho por una cuestión comercial deja los libros');
-  console.log('  incompletos, y eso no se arregla pagando después.\n');
+  console.log('\n  Declarado.\n');
+  console.log(`  ${MOTIVO_PRECIO}`);
+  console.log(`  ${MOTIVO_TOPE}\n`);
+  console.log(
+    '  Declarar la lista NO cambia lo acordado con quien ya está suscripto:\n' +
+      '  company_subscriptions.importe_acordado se congela al alta, y un contrato\n' +
+      '  puede diferir de la lista.\n',
+  );
 } catch (error) {
-  await cliente.query('ROLLBACK').catch(() => undefined);
-  console.error(`No se pudo declarar: ${error.message}`);
+  await cliente.query('ROLLBACK');
+  console.error(`\n  ✘ No se pudo declarar: ${error.message}\n`);
   process.exitCode = 1;
 } finally {
   await cliente.end();

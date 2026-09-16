@@ -68,14 +68,38 @@ const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
 /** Un recurso medido, con su uso y su tope declarado (o la falta de él). */
 interface Recurso {
   readonly recurso: string;
-  readonly uso: number;
+  readonly uso: number | null;
   readonly tope: number | null;
-  readonly estado: 'DENTRO_DEL_TOPE' | 'EXCEDIDO' | 'SIN_TOPE_DECLARADO';
+  readonly estado: 'DENTRO_DEL_TOPE' | 'EXCEDIDO' | 'SIN_TOPE_DECLARADO' | 'SIN_TOPE' | 'USO_NO_MEDIBLE';
 }
 
-function medir(recurso: string, uso: number, tope: number | null): Recurso {
-  // Tres estados, no dos: «sin tope declarado» no es lo mismo que «dentro del
-  // tope», y confundirlos haría que un plan sin definir pareciera cumplido.
+/**
+ * Los cinco estados de un recurso, y por qué son cinco.
+ *
+ * Los tres de siempre siguen significando lo mismo. Los dos nuevos separan
+ * cosas que antes se confundían con ellos:
+ *
+ *   `SIN_TOPE_DECLARADO`  no hay fila: **nadie lo escribió**. No es ilimitado.
+ *   `SIN_TOPE`            hay fila y dice ilimitado: **se decidió**. No se
+ *                         puede exceder, y no cuenta como sin declarar.
+ *   `USO_NO_MEDIBLE`      el uso vino en `null`. Pasa solo fuera de un contexto
+ *                         de empresa —`empresas` lo devuelve así para el
+ *                         operador— y por esta ruta no ocurre, porque siempre
+ *                         hay empresa. Se contempla igual: un `null` tratado
+ *                         como cero diría «no usás nada» sobre algo que no se
+ *                         midió, y ningún tope se excedería jamás.
+ *
+ * La distinción entre los dos primeros es la que permite vender un plan con
+ * integraciones ilimitadas sin que la consola muestre un hueco.
+ */
+function medir(
+  recurso: string,
+  uso: number | null,
+  tope: number | null,
+  ilimitado: boolean,
+): Recurso {
+  if (ilimitado) return { recurso, uso, tope: null, estado: 'SIN_TOPE' };
+  if (uso === null) return { recurso, uso: null, tope, estado: 'USO_NO_MEDIBLE' };
   if (tope === null) return { recurso, uso, tope: null, estado: 'SIN_TOPE_DECLARADO' };
   return { recurso, uso, tope, estado: uso > tope ? 'EXCEDIDO' : 'DENTRO_DEL_TOPE' };
 }
@@ -104,7 +128,7 @@ async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada):
         const r = await tx.query(
           `SELECT p.id, p.code AS codigo, p.name AS nombre, p.descripcion, p.orden, p.status,
                   coalesce(
-                    (SELECT json_agg(json_build_object('recurso', l.recurso, 'tope', l.tope)
+                    (SELECT json_agg(json_build_object('recurso', l.recurso, 'tope', l.tope, 'ilimitado', l.ilimitado)
                                      ORDER BY l.recurso)
                        FROM plan_limits l WHERE l.plan_id = p.id),
                     '[]'::json)                     AS topes,
@@ -164,23 +188,32 @@ async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada):
           tope_comprobantes_mes: number | null;
           tope_documentos_mes: number | null;
           tope_integraciones: number | null;
+          empresas: number | null;
+          tope_empresas: number | null;
+          topes_ilimitados: string[];
         }>(
           `SELECT subscription_id, plan_codigo, plan_nombre, estado,
                   vigencia_desde::text, vigencia_hasta::text, motivo,
                   usuarios, comprobantes_mes, documentos_mes, integraciones,
                   tope_usuarios, tope_comprobantes_mes, tope_documentos_mes,
-                  tope_integraciones
+                  tope_integraciones, empresas, tope_empresas, topes_ilimitados
              FROM subscription_status WHERE company_id = $1`,
           [tenant.companyId],
         );
         if (r.rowCount === 0) throw notFound('Empresa no encontrada');
         const f = r.rows[0]!;
+        const sinTope = (recurso: string): boolean =>
+          (f.topes_ilimitados ?? []).includes(recurso);
 
         const recursos: Recurso[] = [
-          medir('USUARIOS', f.usuarios, f.tope_usuarios),
-          medir('COMPROBANTES_MES', f.comprobantes_mes, f.tope_comprobantes_mes),
-          medir('DOCUMENTOS_MES', f.documentos_mes, f.tope_documentos_mes),
-          medir('INTEGRACIONES', f.integraciones, f.tope_integraciones),
+          // `EMPRESAS` primero porque es la que distingue a los planes entre sí.
+          // Hasta la 0122 se podía declarar y no se medía: el número estaba en
+          // la tabla y ninguna vista lo evaluaba.
+          medir('EMPRESAS', f.empresas, f.tope_empresas, sinTope('EMPRESAS')),
+          medir('USUARIOS', f.usuarios, f.tope_usuarios, sinTope('USUARIOS')),
+          medir('COMPROBANTES_MES', f.comprobantes_mes, f.tope_comprobantes_mes, sinTope('COMPROBANTES_MES')),
+          medir('DOCUMENTOS_MES', f.documentos_mes, f.tope_documentos_mes, sinTope('DOCUMENTOS_MES')),
+          medir('INTEGRACIONES', f.integraciones, f.tope_integraciones, sinTope('INTEGRACIONES')),
         ];
 
         const historial = await tx.query(

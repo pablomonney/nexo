@@ -62,6 +62,30 @@ export interface PlanParaProveedor {
   readonly importeCentavos: bigint;
   readonly moneda: string;
   readonly periodicidad: Periodicidad;
+  /**
+   * Días de prueba que el **proveedor** tiene que regalar antes del primer
+   * cobro, o `null` para que no regale ninguno.
+   *
+   * ## Existe, y está deliberadamente sin usar
+   *
+   * Mercado Pago soporta `free_trial` dentro de `auto_recurring`, con
+   * `frequency_type: "days"`. El campo está acá para que el día que se quiera
+   * usar no haya que tocar la interfaz — pero **hoy nadie lo manda, y es una
+   * decisión tomada**, no un pendiente.
+   *
+   * El motivo: en NEXO la prueba de catorce días **es la suscripción**
+   * (`estado = 'PRUEBA'`), empieza sin pedir tarjeta y termina cuando el cliente
+   * convierte. Recién ahí se conecta la pasarela. Si además el plan del
+   * proveedor tuviera `free_trial`, el reloj arrancaría de nuevo en el momento
+   * de autorizar: el cliente tendría catorce días más de gracia **mientras NEXO
+   * ya está emitiendo el cargo**. Serían dos semanas de servicio facturado que
+   * nadie paga, por cliente y por plan.
+   *
+   * La prueba vive en un solo lugar. `scripts/declarar-plan-de-pasarela.mjs` no
+   * lo manda nunca, y `tests/unit/pasarela-de-pagos.test.ts` comprueba que el
+   * cuerpo salga sin `free_trial`.
+   */
+  readonly diasDePruebaDelProveedor?: number | null;
 }
 
 export interface SuscripcionParaProveedor {
@@ -105,6 +129,19 @@ export interface SuscripcionExterna {
   readonly urlDeAutorizacion?: string | null;
   /** La referencia de NEXO que viajó, tal como la devuelve el proveedor. */
   readonly referenciaNexo?: string | null;
+  /**
+   * Cuándo va a debitar el proveedor la próxima vez, en `AAAA-MM-DD`.
+   *
+   * Es lo único que permite contestar la pregunta que nadie podía contestar:
+   * **¿la fecha en la que NEXO factura es la misma en la que la pasarela
+   * cobra?** El ciclo de NEXO avanza `proxima_facturacion` con su propio
+   * calendario y el proveedor debita con el suyo, contado desde el día que el
+   * cliente autorizó. No tienen por qué coincidir, y cuando se separan nadie se
+   * entera: los dos sistemas funcionan bien, cada uno por su lado.
+   *
+   * `null` es «el proveedor no lo informó», no «no hay próximo cobro».
+   */
+  readonly proximoCobro?: string | null;
 }
 
 /** Lo que se sabe de un cobro concreto dentro de una suscripción. */

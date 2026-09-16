@@ -38,7 +38,7 @@ interface Guion {
     /** El `status_detail` del proveedor. Opcional: no siempre viene. */
     detalle?: string;
   } | null;
-  suscripcion: { id: string; estado: string } | null;
+  suscripcion: { id: string; estado: string; proximoCobro?: string } | null;
   falla: boolean;
 }
 
@@ -68,6 +68,7 @@ function doble(guion: Guion) {
               estado: guion.suscripcion.estado as 'AUTORIZADA',
               urlDeAutorizacion: null,
               referenciaNexo: null,
+              proximoCobro: guion.suscripcion.proximoCobro ?? null,
             },
           };
     },
@@ -397,6 +398,54 @@ suite('La bandeja de pagos', () => {
 
     expect(segundo!.desenlace).toBe('SIN_EFECTO');
     expect(segundo!.detalle).toMatch(/ya estaba SUSPENDIDA/u);
+  });
+
+  it('cada notificación anota cuándo dice la pasarela que va a cobrar', async () => {
+    // Sin esto la fecha se guardaría solo al conectar, y la divergencia de
+    // calendario aparece **después**, cuando los dos relojes avanzan por
+    // separado. Se aprovecha cada consulta aunque el aviso no mueva ningún
+    // estado: acá la suscripción ya está ACTIVA y el desenlace es SIN_EFECTO,
+    // y la fecha se anota igual.
+    const empresa = await nuevaEmpresa('fecha');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-fecha`, 'ACTIVA');
+
+    guion.suscripcion = {
+      id: `mp-sub-${stamp}-fecha`,
+      estado: 'AUTORIZADA',
+      proximoCobro: '2026-12-07',
+    };
+    await encolar(`evt-${stamp}-fecha`, 'subscription_preapproval', `mp-sub-${stamp}-fecha`);
+    await drenar();
+
+    const fila = await db.query<{ f: string | null }>(
+      'SELECT proxima_facturacion_pasarela::text AS f FROM company_subscriptions WHERE id = $1',
+      [sub],
+    );
+    expect(fila.rows[0]!.f).toBe('2026-12-07');
+  });
+
+  it('si la pasarela no informa fecha, no se borra la que ya estaba', async () => {
+    // `NULL` es «esta respuesta no lo dice», no «ya no hay próximo cobro».
+    // Borrarla ante un silencio haría desaparecer la divergencia de la bandeja
+    // justo cuando el proveedor deja de informar, que es cuando más conviene
+    // mirarla.
+    const empresa = await nuevaEmpresa('fecha-muda');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-muda`, 'ACTIVA');
+    await db.query(
+      `UPDATE company_subscriptions SET proxima_facturacion_pasarela = DATE '2026-12-01'
+        WHERE id = $1`,
+      [sub],
+    );
+
+    guion.suscripcion = { id: `mp-sub-${stamp}-muda`, estado: 'AUTORIZADA' };
+    await encolar(`evt-${stamp}-muda`, 'subscription_preapproval', `mp-sub-${stamp}-muda`);
+    await drenar();
+
+    const fila = await db.query<{ f: string | null }>(
+      'SELECT proxima_facturacion_pasarela::text AS f FROM company_subscriptions WHERE id = $1',
+      [sub],
+    );
+    expect(fila.rows[0]!.f).toBe('2026-12-01');
   });
 
   it('una suscripción PENDIENTE no mueve el estado comercial', async () => {

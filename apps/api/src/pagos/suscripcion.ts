@@ -291,6 +291,10 @@ export async function conectarConLaPasarela(
   }
 
   await guardarReferencia(tx, s.id, salida.valor, proveedor.id, ambiente);
+  // Al crearla el proveedor todavía no suele informar fecha —nadie autorizó el
+  // medio de pago— pero si viene, se guarda. La que va a importar es la que
+  // llegue con las notificaciones posteriores.
+  await anotarProximoCobro(tx, s.id, salida.valor.proximoCobro);
 
   await recordAudit(tx, entrada.companyId, {
     actorType: 'USER',
@@ -317,6 +321,31 @@ export async function conectarConLaPasarela(
     urlDeAutorizacion: salida.valor.urlDeAutorizacion ?? null,
     estadoEnLaPasarela: salida.valor.estado,
   };
+}
+
+/**
+ * Guarda cuándo dice el proveedor que va a debitar.
+ *
+ * Se llama cada vez que NEXO le pregunta algo a la pasarela sobre una
+ * suscripción, que en la práctica es cada notificación que se drena. Así la
+ * fecha guardada es siempre la última que el proveedor informó, sin ningún
+ * proceso dedicado a refrescarla.
+ *
+ * No pisa con `NULL`: que una respuesta no traiga `next_payment_date` significa
+ * «esta respuesta no lo dice», no «ya no hay próximo cobro». Borrar el dato
+ * ante un silencio haría desaparecer la divergencia de la bandeja justo cuando
+ * el proveedor deja de informar, que es cuando más conviene mirarla.
+ */
+export async function anotarProximoCobro(
+  tx: Tx,
+  subscriptionId: string,
+  fecha: string | null | undefined,
+): Promise<void> {
+  if (fecha === null || fecha === undefined) return;
+  await tx.query(
+    `UPDATE company_subscriptions SET proxima_facturacion_pasarela = $2::date WHERE id = $1`,
+    [subscriptionId, fecha],
+  );
 }
 
 // ── Sincronizar el estado con la pasarela ───────────────────────────────────

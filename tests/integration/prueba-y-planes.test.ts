@@ -608,4 +608,122 @@ suite('La puerta comercial de los planes', () => {
     const r = await pedir('/accounts');
     expect(r.statusCode, r.body).toBe(200);
   });
+
+  // ── Los topes, después de la 0122 ─────────────────────────────────────────
+
+  /** Declara un tope para el plan de esta empresa, y lo limpia el que sigue. */
+  const declararTope = async (
+    planCode: string,
+    recurso: string,
+    tope: number | null,
+    ilimitado = false,
+  ): Promise<void> => {
+    const plan = await db.query<{ id: string }>(
+      'SELECT id FROM subscription_plans WHERE code = $1',
+      [planCode],
+    );
+    await db.query(
+      `INSERT INTO plan_limits (plan_id, recurso, tope, ilimitado, declarado_por)
+       VALUES ($1, $2, $3, $4, 'test:topes')
+       ON CONFLICT (plan_id, recurso) DO UPDATE
+         SET tope = EXCLUDED.tope, ilimitado = EXCLUDED.ilimitado`,
+      [plan.rows[0]!.id, recurso, tope, ilimitado],
+    );
+  };
+
+  const recursosDe = async (): Promise<
+    readonly { recurso: string; uso: number | null; tope: number | null; estado: string }[]
+  > => {
+    const r = await pedir('/subscription');
+    return r.json<{
+      recursos: { recurso: string; uso: number | null; tope: number | null; estado: string }[];
+    }>().recursos;
+  };
+
+  it('EMPRESAS se mide: era un tope que se podía declarar y nadie evaluaba', async () => {
+    // El defecto que la 0122 vino a cerrar. Hasta entonces el número estaba en
+    // la tabla y ninguna vista lo miraba, así que un plan «de una empresa»
+    // admitía las que fueran. Es la diferencia comercial entre cuatro de los
+    // cinco planes.
+    await suscribir('CONTABLE');
+    await declararTope('CONTABLE', 'EMPRESAS', 1);
+
+    const empresas = (await recursosDe()).find((x) => x.recurso === 'EMPRESAS');
+
+    expect(empresas, 'EMPRESAS no aparece en los recursos medidos').toBeDefined();
+    expect(empresas!.tope).toBe(1);
+    // El fixture de esta suite crea más de una empresa en el mismo estudio, así
+    // que el uso real es mayor que uno y el tope tiene que verse excedido. Lo
+    // que se afirma no es el número: es que **hay número** y que se compara.
+    expect(empresas!.uso).not.toBeNull();
+    expect(empresas!.uso!).toBeGreaterThan(0);
+    expect(empresas!.estado).toBe(empresas!.uso! > 1 ? 'EXCEDIDO' : 'DENTRO_DEL_TOPE');
+  });
+
+  it('un tope excedido se detecta y uno holgado no', async () => {
+    await suscribir('CONTABLE');
+    await declararTope('CONTABLE', 'USUARIOS', 1);
+    const apretado = (await recursosDe()).find((x) => x.recurso === 'USUARIOS');
+    expect(apretado!.estado).toBe(apretado!.uso! > 1 ? 'EXCEDIDO' : 'DENTRO_DEL_TOPE');
+
+    await declararTope('CONTABLE', 'USUARIOS', 9999);
+    const holgado = (await recursosDe()).find((x) => x.recurso === 'USUARIOS');
+    expect(holgado!.estado).toBe('DENTRO_DEL_TOPE');
+  });
+
+  it('ilimitado declarado NO es lo mismo que sin declarar', async () => {
+    // Los dos se ven como «no hay número» y significan cosas opuestas: uno es
+    // una decisión escrita y el otro es un silencio. Confundirlos hace que un
+    // plan que se vende ilimitado aparezca como un hueco.
+    await suscribir('CONTABLE');
+
+    await db.query(
+      `DELETE FROM plan_limits WHERE recurso = 'INTEGRACIONES' AND plan_id =
+         (SELECT id FROM subscription_plans WHERE code = 'CONTABLE')`,
+    );
+    const sinDeclarar = (await recursosDe()).find((x) => x.recurso === 'INTEGRACIONES');
+    expect(sinDeclarar!.estado).toBe('SIN_TOPE_DECLARADO');
+
+    await declararTope('CONTABLE', 'INTEGRACIONES', null, true);
+    const ilimitado = (await recursosDe()).find((x) => x.recurso === 'INTEGRACIONES');
+    expect(ilimitado!.estado).toBe('SIN_TOPE');
+    expect(ilimitado!.tope).toBeNull();
+  });
+
+  it('un ilimitado no se puede exceder ni cuenta como sin declarar', async () => {
+    await suscribir('CONTABLE');
+    await declararTope('CONTABLE', 'USUARIOS', null, true);
+
+    const fila = await db.query<{ excedidos: number; sin_declarar: number }>(
+      `SELECT topes_excedidos AS excedidos, topes_sin_declarar AS sin_declarar
+         FROM subscription_status WHERE company_id = $1`,
+      [empresa],
+    );
+    const estado = (await recursosDe()).find((x) => x.recurso === 'USUARIOS');
+
+    expect(estado!.estado).toBe('SIN_TOPE');
+    // Aunque el uso sea alto, un ilimitado nunca entra en el contador de
+    // excedidos; y como está declarado, tampoco en el de sin declarar.
+    expect(Number(fila.rows[0]!.excedidos)).toBe(0);
+    expect(Number(fila.rows[0]!.sin_declarar)).toBeLessThan(5);
+  });
+
+  it('la base impide una fila que no diga ni número ni ilimitado', async () => {
+    // Sería indistinguible de no haberla escrito, salvo porque ocupa lugar.
+    const plan = await db.query<{ id: string }>(
+      "SELECT id FROM subscription_plans WHERE code = 'CONTABLE'",
+    );
+    let code = '';
+    try {
+      await db.query(
+        `INSERT INTO plan_limits (plan_id, recurso, tope, ilimitado, declarado_por)
+         VALUES ($1, 'DOCUMENTOS_MES', NULL, false, 'test:topes')
+         ON CONFLICT (plan_id, recurso) DO UPDATE SET tope = NULL, ilimitado = false`,
+        [plan.rows[0]!.id],
+      );
+    } catch (error) {
+      code = (error as { code?: string }).code ?? '';
+    }
+    expect(code).toBe('23514'); // check_violation
+  });
 });

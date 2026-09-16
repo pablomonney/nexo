@@ -81,7 +81,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
                             FROM plan_features pf
                             JOIN product_features f ON f.code = pf.feature_code
                            WHERE pf.plan_id = p.id), '[]'::json) AS incluye,
-                coalesce((SELECT json_agg(json_build_object('recurso', l.recurso, 'tope', l.tope)
+                coalesce((SELECT json_agg(json_build_object('recurso', l.recurso, 'tope', l.tope, 'ilimitado', l.ilimitado)
                                           ORDER BY l.recurso)
                             FROM plan_limits l WHERE l.plan_id = p.id), '[]'::json) AS topes
            FROM subscription_plans p

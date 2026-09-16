@@ -3732,7 +3732,39 @@ const NOMBRE_DEL_RECURSO = {
   INTEGRACIONES: (n) => n + (Number(n) === 1 ? ' integración' : ' integraciones'),
   USUARIOS: (n) => n + (Number(n) === 1 ? ' usuario' : ' usuarios'),
 };
-const nombreDelTope = (recurso, tope) => {
+/**
+ * Cómo se muestra cada estado de un recurso medido.
+ *
+ * Un mapa cerrado y no un ternario encadenado, por lo mismo que los mapas de
+ * estados del adaptador de pagos: un estado nuevo que la API agregue tiene que
+ * salir por «no sé qué es esto» y no quedar disfrazado del último `else`. Ese
+ * `else` decía «dentro del tope» y ahí caían ILIMITADO y NO MEDIBLE.
+ */
+const ESTADO_DEL_TOPE_CONOCIDO = {
+  EXCEDIDO: '<span class="p p-ojo">EXCEDIDO</span>',
+  DENTRO_DEL_TOPE: '<span class="p p-bien">dentro del tope</span>',
+  // Nadie lo escribió. No es ilimitado, y decirlo así evita prometer lo que no
+  // se acordó.
+  SIN_TOPE_DECLARADO: '<span class="p p-neu">Sin tope declarado</span>',
+  // Se decidió que no tiene tope. Es una declaración, no un silencio.
+  SIN_TOPE: '<span class="p p-bien">Ilimitado</span>',
+  // El uso vino en null. No es cero ni es ilimitado: es que no se midió.
+  USO_NO_MEDIBLE: '<span class="p p-neu">Uso no medible</span>',
+};
+
+const ESTADO_DEL_TOPE = new Proxy(ESTADO_DEL_TOPE_CONOCIDO, {
+  get: (mapa, estado) =>
+    Object.prototype.hasOwnProperty.call(mapa, estado)
+      ? mapa[estado]
+      : '<span class="p p-neu">' + escapar(String(estado)) + '</span>',
+});
+
+const nombreDelTope = (recurso, tope, ilimitado) => {
+  // SIN_TOPE declarado no es SIN_TOPE_DECLARADO. Uno es una decisión escrita
+  // —«este plan no tiene tope de esto»— y el otro es que nadie lo escribió.
+  // Mostrarlos igual haría que un plan que se vende ilimitado apareciera como
+  // un hueco en la tabla de planes.
+  if (ilimitado) return recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope';
   const f = NOMBRE_DEL_RECURSO[recurso];
   return f ? f(tope) : recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
 };
@@ -3904,7 +3936,7 @@ async function cargarPlanes() {
         : '<span class="p p-neu">sin precio declarado</span>') + '</td>' +
       '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
       '<td>' + escapar((p.topes || [])
-        .map((t) => nombreDelTope(t.recurso, t.tope)).join(' · ') || 'sin declarar') + '</td>';
+        .map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).join(' · ') || 'sin declarar') + '</td>';
     cuerpo.appendChild(tr);
 
     const o = document.createElement('option');
@@ -11178,7 +11210,7 @@ async function cargarSuscripcion() {
         // declaró todavía, y decirlo así evita prometer lo que no se acordó.
         '<td>' + (p.topes.length === 0
           ? '<span class="p p-neu">sin declarar</span>'
-          : escapar(p.topes.map((t) => nombreDelTope(t.recurso, t.tope)).join(' · '))) + '</td>';
+          : escapar(p.topes.map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).join(' · '))) + '</td>';
       cuerpo.appendChild(tr);
 
       if (p.status === 'DISPONIBLE') {
@@ -11218,14 +11250,16 @@ async function cargarSuscripcion() {
     const tr = document.createElement('tr');
     tr.innerHTML =
       '<td>' + escapar(x.recurso) + '</td>' +
-      '<td class="mono">' + escapar(String(x.uso)) + '</td>' +
+      // `uso` puede venir en null —«no se pudo medir»— y `String(null)` pinta
+      // la palabra «null» en la celda. Un guion dice lo mismo sin mentir.
+      '<td class="mono">' + (x.uso === null ? '—' : escapar(String(x.uso))) + '</td>' +
       '<td class="mono">' + (x.tope === null ? '—' : escapar(String(x.tope))) + '</td>' +
-      // Tres estados, no dos: «sin tope declarado» no es «dentro del tope».
-      '<td>' + (x.estado === 'EXCEDIDO'
-        ? '<span class="p p-ojo">EXCEDIDO</span>'
-        : (x.estado === 'SIN_TOPE_DECLARADO'
-            ? '<span class="p p-neu">sin tope declarado</span>'
-            : '<span class="p p-bien">dentro del tope</span>')) + '</td>';
+      // Cinco estados, y cada uno con su palabra. Antes esto era un ternario
+      // con un `else` atrapatodo que decía «dentro del tope», así que un
+      // recurso declarado ILIMITADO y uno que no se pudo medir se mostraban
+      // como si estuvieran cumpliendo el tope. Es la misma confusión que la
+      // 0122 vino a eliminar, sobreviviendo en la pantalla.
+      '<td>' + ESTADO_DEL_TOPE[x.estado] + '</td>';
     uso.appendChild(tr);
   }
 

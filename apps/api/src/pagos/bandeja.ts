@@ -54,6 +54,7 @@ import type { Tx } from '@aai/db';
 import { consecuenciaDeSuscripcion, puedeTransicionar } from '@aai/billing-engine';
 import type { EstadoDeSuscripcion } from '@aai/billing-engine';
 import { procesarEventoDePago, type ResultadoDeEvento } from '../billing/ciclo.js';
+import { anotarProximoCobro } from './suscripcion.js';
 import type { ProveedorDePagos } from './puerto.js';
 
 /**
@@ -313,6 +314,15 @@ async function aplicarSuscripcion(
     [consulta.valor.id, proveedor.id],
   );
   const s = sub.rows[0];
+
+  // Cada notificación es una oportunidad de saber cuándo va a cobrar el
+  // proveedor, y se aprovecha aunque el aviso no mueva ningún estado. Sin esto
+  // la fecha se anotaría solo al conectar, y la divergencia de calendario
+  // —que aparece **después**, cuando los dos relojes avanzan por separado— no
+  // se vería nunca.
+  if (s !== undefined) {
+    await anotarProximoCobro(tx, s.id, consulta.valor.proximoCobro);
+  }
 
   if (s === undefined) {
     return dicho(

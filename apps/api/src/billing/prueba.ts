@@ -40,6 +40,22 @@ import { addDays, parseCalendarDate, type CalendarDate } from '@aai/shared';
  */
 export const DIAS_DE_PRUEBA = 14;
 
+/**
+ * Cuántos días de prueba da un plan.
+ *
+ * Desde la 0121 la duración es **un dato del plan**, no una constante: quien
+ * quiera dar treinta días en Completo y siete en Contable lo declara en la base
+ * y no despliega nada.
+ *
+ * `dias_de_prueba IS NULL` significa «este plan no declaró nada», y entonces
+ * vale `DIAS_DE_PRUEBA`. **No significa cero**: un cero acá le sacaría la
+ * prueba a todo el que contrate ese plan, que es exactamente la confusión que
+ * el sistema evita en los topes y en los precios.
+ */
+export function diasDePruebaDe(declarado: number | null | undefined): number {
+  return declarado === null || declarado === undefined ? DIAS_DE_PRUEBA : declarado;
+}
+
 /** Cuántos días antes del fin se considera «por vencer». */
 export const AVISO_ANTES_DE_VENCER = 3;
 
@@ -70,8 +86,9 @@ export async function iniciarPrueba(
   | { readonly estado: 'YA_TUVO_PRUEBA' }
   | { readonly estado: 'PLAN_DESCONOCIDO'; readonly detalle: string }
 > {
-  const plan = await tx.query<{ id: string; name: string }>(
-    `SELECT id, name FROM subscription_plans WHERE code = $1 AND status = 'DISPONIBLE'`,
+  const plan = await tx.query<{ id: string; name: string; dias_de_prueba: number | null }>(
+    `SELECT id, name, dias_de_prueba FROM subscription_plans
+      WHERE code = $1 AND status = 'DISPONIBLE'`,
     [entrada.planCode],
   );
   if (plan.rows[0] === undefined) {
@@ -92,7 +109,8 @@ export async function iniciarPrueba(
   // El día de alta cuenta, así que catorce días son `desde + 13`. Sumar catorce
   // daría quince días de prueba, que es el error clásico de un intervalo
   // cerrado contado como abierto.
-  const hasta = addDays(entrada.desde, DIAS_DE_PRUEBA - 1);
+  const dias = diasDePruebaDe(plan.rows[0].dias_de_prueba);
+  const hasta = addDays(entrada.desde, dias - 1);
 
   const r = await tx.query<{ id: string }>(
     `INSERT INTO company_subscriptions
@@ -108,7 +126,10 @@ export async function iniciarPrueba(
     action: 'INICIAR_PRUEBA',
     objectType: 'company_subscription',
     objectId: r.rows[0]!.id,
-    newValue: { plan: entrada.planCode, desde: entrada.desde, hasta, dias: DIAS_DE_PRUEBA },
+    // `dias` es el que se usó de verdad, no la constante: si el plan declaró
+    // otra duración, la bitácora tiene que decir la que se le dio a esta
+    // empresa y no la que suele darse.
+    newValue: { plan: entrada.planCode, desde: entrada.desde, hasta, dias },
   });
 
   return {

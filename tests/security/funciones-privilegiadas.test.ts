@@ -67,6 +67,10 @@ const PERMITIDAS: Readonly<Record<string, string>> = {
     'Exige que el actor tenga nivel en el estudio de la empresa donde otorga el rol',
   'user_companies()':
     'No recibe parámetros: lee app.actor_id, así que no hay identificador ajeno que pasarle',
+  'empresas_de_la_organizacion(uuid)':
+    'Recibe una organización y comprueba que la empresa en contexto le pertenezca; sobre ' +
+    'cualquier otra devuelve NULL. Devuelve un número, nunca filas: es el tope EMPRESAS, que ' +
+    'no se puede medir desde una vista porque companies tiene RLS forzado',
 };
 
 /**

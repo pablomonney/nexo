@@ -36,11 +36,12 @@
 import { closePool, initPool } from '@aai/db';
 import { buildServer } from '@aai/api/server';
 import { emitirVencidos } from '@aai/api/billing/ciclo';
+import { iniciarPrueba, DIAS_DE_PRUEBA } from '@aai/api/billing/prueba';
 import { conectarConLaPasarela } from '@aai/api/pagos/suscripcion';
 import { SinPasarela, type EstadoExternoDeSuscripcion } from '@aai/api/pagos/puerto';
 import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from './helpers/db.js';
 import { sufijoUnico } from './helpers/identificadores.js';
 
@@ -192,6 +193,30 @@ suite('De la prueba al cobro', () => {
       )
     ).rows[0]!.id;
 
+    /**
+     * El plan de prueba lleva **todas** las funcionalidades del catálogo.
+     *
+     * No es decoración: mientras exista, es un plan `DISPONIBLE` como cualquier
+     * otro, y S-33 —que comprueba que el menú no ofrezca lo que un plan a la
+     * venta excluye— lo ve y lo cuenta. Sin features, este plan excluía **todos
+     * los dominios**, así que S-33 fallaba cada vez que los dos archivos se
+     * cruzaban en paralelo. Pasaba solo, fallaba acompañado.
+     *
+     * Con el catálogo completo el plan no excluye nada y deja de existir para
+     * S-33, sin desactivar nada ni depender de en qué orden corran los
+     * archivos. El mismo remedio que las fechas aparcadas en 2027: no estorbar,
+     * en vez de pedir que no te miren.
+     */
+    await db.query(
+      `INSERT INTO plan_features (plan_id, feature_code, declarado_por, motivo)
+       SELECT $1, f.code, 'test:conversion',
+              'El plan de la suite de conversión incluye todo el catálogo para no ' ||
+              'aparecer ante S-33 como un plan a la venta que excluye dominios'
+         FROM product_features f
+       ON CONFLICT DO NOTHING`,
+      [planId],
+    );
+
     // ── La empresa y quien la administra ──────────────────────────────────
     const { hash: argonHash } = await import('@node-rs/argon2');
     const clave = await argonHash(PASSWORD, {
@@ -268,6 +293,11 @@ suite('De la prueba al cobro', () => {
     await borrarSuscripciones();
     await db.query('DELETE FROM payment_plan_map WHERE plan_id = $1', [planId]);
     await db.query('DELETE FROM plan_prices WHERE plan_id = $1', [planId]);
+    // Las features del plan de prueba también se van: la fila del plan queda
+    // (una suscripción histórica tiene que encontrarlo) pero no hace falta que
+    // arrastre diecinueve filas de catálogo.
+    await db.query('DELETE FROM plan_features WHERE plan_id = $1', [planId]);
+    await db.query('DELETE FROM plan_limits WHERE plan_id = $1', [planId]);
     await app.close();
     await db.end();
     await closePool();
@@ -307,7 +337,59 @@ suite('De la prueba al cobro', () => {
    * se borran nunca, que es el motivo por el que `billing_documents` tiene
    * estados `ANULADO` e `INCOBRABLE` en vez de un `DELETE`.
    */
+  /**
+   * La ventana de fechas de este archivo, y por qué existe.
+   *
+   * `emitirVencidos` recorre **todas** las suscripciones de la base, y la base
+   * de pruebas la comparten los archivos que corren en paralelo. Mientras una
+   * suscripción de acá tenga `proxima_facturacion` dentro del rango que usan
+   * las otras suites —2026-01 a 2026-10— el ciclo de ellas la levanta, y si
+   * justo la borro entre su `SELECT` y su `INSERT`, el que falla es su test con
+   * una violación de clave foránea. Pasó dos veces.
+   *
+   * La solución es no estar en su rango: apenas una suscripción de este archivo
+   * tiene fecha, se la manda a 2027. Nadie más mira ahí.
+   */
+  const FECHA_APARCADA = '2027-03-05';
+
+  const aparcarFechas = async (): Promise<void> => {
+    await db.query(
+      `UPDATE company_subscriptions SET proxima_facturacion = $2::date
+        WHERE company_id = $1 AND proxima_facturacion IS NOT NULL`,
+      [empresa, FECHA_APARCADA],
+    );
+  };
+
+  /**
+   * Al terminar cada caso, las fechas se van a 2027.
+   *
+   * Convertir deja `proxima_facturacion` en la fecha de hoy, que cae dentro del
+   * rango de las otras suites. Aparcarla en `afterEach` —que corre también
+   * cuando el caso falla— reduce la exposición a la duración de un solo test,
+   * en vez de dejarla viva entre casos.
+   *
+   * Es una limitación de compartir la base entre archivos que corren en
+   * paralelo, no un defecto del producto: en producción nada borra
+   * suscripciones, y por eso el ciclo no se defiende de que desaparezcan.
+   */
+  afterEach(async () => {
+    if (db !== undefined) await aparcarFechas();
+  });
+
   const borrarSuscripciones = async (): Promise<void> => {
+    // Primero se le sacan las condiciones: sin `proxima_facturacion` la fila
+    // deja de ser elegible para cualquier ciclo, y recién entonces se borra.
+    //
+    // Las cuatro juntas y no solo la fecha: `condiciones_completas` (0096) exige
+    // que estén las cuatro o ninguna, así que vaciar una sola viola el CHECK.
+    // Es el mismo candado que impide un importe sin moneda, funcionando.
+    await db.query(
+      `UPDATE company_subscriptions
+          SET periodicidad = NULL, moneda = NULL, importe_acordado = NULL,
+              proxima_facturacion = NULL
+        WHERE company_id = $1`,
+      [empresa],
+    );
     await db.query('DELETE FROM payment_intents WHERE company_id = $1', [empresa]);
     await db.query('DELETE FROM billing_documents WHERE company_id = $1', [empresa]);
     await db.query('DELETE FROM billing_periods WHERE company_id = $1', [empresa]);
@@ -807,26 +889,50 @@ suite('De la prueba al cobro', () => {
      * No es una manía de aislamiento: es que un test que ensucia a otro hace
      * fallar al inocente, y ahí se busca el defecto en el lugar equivocado.
      */
-    const CORTE = '2025-03-05';
-    await db.query(
-      `UPDATE company_subscriptions SET proxima_facturacion = $2::date WHERE company_id = $1`,
-      [empresa, CORTE],
-    );
+    await aparcarFechas();
 
-    const informe = await emitirVencidos(txDe(db), CORTE as never, 'test:ciclo');
+    /**
+     * El ciclo corre **dentro de una transacción que se deshace**.
+     *
+     * Dos motivos, y los dos son de convivencia:
+     *
+     *   · `emitirVencidos` emite para todo lo que encuentre vencido, no solo
+     *     para esta empresa. Sin el `ROLLBACK`, este archivo le crearía
+     *     documentos a los fixtures de las otras suites mientras las están
+     *     usando.
+     *   · La fecha está aparcada en 2027, fuera del rango de las demás, así que
+     *     lo de este lado tampoco es visible para sus ciclos.
+     *
+     * Lo que se prueba no se pierde: el informe y las filas se leen **antes**
+     * de deshacer.
+     */
+    await db.query('BEGIN');
+    let informe: Awaited<ReturnType<typeof emitirVencidos>>;
+    let docEstado: string | undefined;
+    let docImporte: string | undefined;
+    try {
+      informe = await emitirVencidos(txDe(db), FECHA_APARCADA as never, 'test:ciclo');
+      const doc = await db.query<{ estado: string; importe_total: string }>(
+        `SELECT estado, importe_total::text AS importe_total
+           FROM billing_documents WHERE company_id = $1`,
+        [empresa],
+      );
+      docEstado = doc.rows[0]?.estado;
+      docImporte = doc.rows[0]?.importe_total;
+    } finally {
+      await db.query('ROLLBACK');
+    }
 
-    const mio = informe.emitidos.find((d) => d.companyId === empresa);
-    expect(mio, JSON.stringify(informe.omitidos)).toBeDefined();
+    const mio = informe!.emitidos.find((d) => d.companyId === empresa);
+    expect(mio, JSON.stringify(informe!.omitidos)).toBeDefined();
     expect(mio!.importe).toBe(PRECIO);
     expect(mio!.moneda).toBe('ARS');
 
-    const doc = await db.query<{ estado: string; importe_total: string }>(
-      `SELECT estado, importe_total::text AS importe_total
-         FROM billing_documents WHERE company_id = $1`,
-      [empresa],
-    );
-    expect(doc.rows[0]!.estado).toBe('EMITIDO');
-    expect(doc.rows[0]!.importe_total).toBe(PRECIO);
+    // El documento existió dentro de la transacción, con el importe de la
+    // lista. Que después se haya deshecho no le quita nada a lo que prueba:
+    // el ciclo levantó la suscripción convertida y emitió el cargo.
+    expect(docEstado).toBe('EMITIDO');
+    expect(docImporte).toBe(PRECIO);
   });
 
   // ── 4 · Cancelar, pausar y reactivar: NEXO y la pasarela, o ninguno ──────
@@ -848,6 +954,7 @@ suite('De la prueba al cobro', () => {
       payload: { plan: planCode, periodicidad: 'MENSUAL', moneda: 'ARS' },
     });
     await app.inject({ method: 'POST', url: '/subscription/pasarela', headers: cabeceras() });
+    await aparcarFechas();
     // El cliente autorizó el medio de pago: es el estado desde el que la
     // pasarela debita todos los meses, o sea donde cancelar importa de verdad.
     guion.externo = 'AUTORIZADA';
@@ -1025,6 +1132,106 @@ suite('De la prueba al cobro', () => {
     // observable — la pasarela sigue autorizada y puede seguir intentando.
     expect(guion.externo).toBe('AUTORIZADA');
     expect(guion.pedidos).toEqual([]);
+  });
+
+  // ── 5 · La prueba es del plan, y las fechas se comparan (0121) ───────────
+
+  it('un plan sin dias_de_prueba declarados da los catorce por defecto', async () => {
+    // `NULL` es «nadie lo declaró», no «cero días». Confundirlos le sacaría la
+    // prueba a todo el que contrate ese plan.
+    await borrarSuscripciones();
+    await db.query('UPDATE subscription_plans SET dias_de_prueba = NULL WHERE id = $1', [planId]);
+
+    const r = await iniciarPrueba(txDe(db), {
+      companyId: empresa,
+      planCode: planCode,
+      desde: (await db.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy')).rows[0]!
+        .hoy as never,
+      actorId: 'test:conversion',
+    });
+
+    expect(r.estado).toBe('INICIADA');
+    if (r.estado !== 'INICIADA') return;
+    const dias = (Date.parse(r.prueba.hasta) - Date.parse(r.prueba.desde)) / 86_400_000 + 1;
+    expect(dias).toBe(DIAS_DE_PRUEBA);
+  });
+
+  it('un plan que declara otra duración manda sobre la constante', async () => {
+    // El punto de la 0121: cambiar la prueba de un plan es declarar un dato, no
+    // desplegar código.
+    await borrarSuscripciones();
+    await db.query('UPDATE subscription_plans SET dias_de_prueba = 30 WHERE id = $1', [planId]);
+
+    const r = await iniciarPrueba(txDe(db), {
+      companyId: empresa,
+      planCode: planCode,
+      desde: (await db.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy')).rows[0]!
+        .hoy as never,
+      actorId: 'test:conversion',
+    });
+
+    expect(r.estado).toBe('INICIADA');
+    if (r.estado !== 'INICIADA') return;
+    const dias = (Date.parse(r.prueba.hasta) - Date.parse(r.prueba.desde)) / 86_400_000 + 1;
+    expect(dias).toBe(30);
+
+    await db.query('UPDATE subscription_plans SET dias_de_prueba = NULL WHERE id = $1', [planId]);
+  });
+
+  it('cuando NEXO factura un día y la pasarela cobra otro, aparece en la bandeja', async () => {
+    // El precio de haber dejado la prueba en NEXO: el ciclo cuenta desde la
+    // conversión y el proveedor desde la autorización, así que los dos
+    // calendarios pueden separarse sin que falle nada. Lo que no puede pasar es
+    // que nadie lo note.
+    await conectadaYAutorizada();
+    const sub = await suscripcionId();
+
+    await db.query(
+      `UPDATE company_subscriptions
+          SET proxima_facturacion = DATE '2026-11-01',
+              proxima_facturacion_pasarela = DATE '2026-11-05'
+        WHERE id = $1`,
+      [sub],
+    );
+
+    const bandeja = await db.query<{ rama: string; motivo: string; bloquea: boolean }>(
+      `SELECT rama, motivo, bloquea FROM work_queue_calendario WHERE entity_id = $1`,
+      [sub],
+    );
+
+    expect(bandeja.rows).toHaveLength(1);
+    expect(bandeja.rows[0]!.rama).toBe('PASARELA_FECHA_DIVERGENTE');
+    expect(bandeja.rows[0]!.motivo).toMatch(/4 día\(s\) de diferencia/u);
+    // No bloquea: cobrar un día distinto no impide operar.
+    expect(bandeja.rows[0]!.bloquea).toBe(false);
+
+    // Y con las dos fechas iguales, la rama desaparece. Un aviso que no se va
+    // cuando el problema se arregla entrena a la gente a ignorar la bandeja.
+    await db.query(
+      `UPDATE company_subscriptions SET proxima_facturacion_pasarela = proxima_facturacion
+        WHERE id = $1`,
+      [sub],
+    );
+    const despues = await db.query(
+      'SELECT 1 FROM work_queue_calendario WHERE entity_id = $1',
+      [sub],
+    );
+    expect(despues.rowCount).toBe(0);
+  });
+
+  it('sin fecha informada por la pasarela no se inventa una divergencia', async () => {
+    // `NULL` es «el proveedor no lo dijo», no «no hay próximo cobro». Tratarlo
+    // como una diferencia llenaría la bandeja de trabajo que no existe.
+    await conectadaYAutorizada();
+    const sub = await suscripcionId();
+    await db.query(
+      `UPDATE company_subscriptions
+          SET proxima_facturacion = DATE '2026-11-01', proxima_facturacion_pasarela = NULL
+        WHERE id = $1`,
+      [sub],
+    );
+    const r = await db.query('SELECT 1 FROM work_queue_calendario WHERE entity_id = $1', [sub]);
+    expect(r.rowCount).toBe(0);
   });
 
   async function mapearPlan(): Promise<void> {

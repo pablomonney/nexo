@@ -140,6 +140,25 @@ function cadena(fuente: Record<string, unknown>, campo: string): string | null {
 }
 
 /**
+ * El día de un sello de tiempo del proveedor, **sin hacer cuentas de huso**.
+ *
+ * `next_payment_date` viene como `2026-10-03T00:00:00.000-03:00`. Lo que hace
+ * falta es el día, y se toma el que el proveedor escribió: recortar antes de la
+ * `T` conserva la fecha **en el huso de la cuenta de Mercado Pago**, que es el
+ * huso en el que el proveedor va a debitar.
+ *
+ * La alternativa —`new Date(...)` y después `toISOString()`— convierte a UTC, y
+ * en Argentina (UTC−3) un cobro de la medianoche se leería como el día
+ * siguiente. Sería un error de un día en una comparación que existe justamente
+ * para detectar diferencias de días.
+ */
+function soloLaFecha(sello: string | null): string | null {
+  if (sello === null) return null;
+  const dia = sello.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/u.test(dia) ? dia : null;
+}
+
+/**
  * El identificador de un recurso, que Mercado Pago devuelve como texto en unos
  * endpoints y como número en otros (los pagos, notablemente).
  *
@@ -328,6 +347,26 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
 
     let cuerpo: string;
     try {
+      /**
+       * `free_trial` se agrega **solo si quien llama lo pidió**, y hoy no lo
+       * pide nadie.
+       *
+       * Mercado Pago lo acepta dentro de `auto_recurring` con
+       * `frequency_type: "days"`. Que el adaptador sepa mandarlo y que el
+       * comando que crea los planes no lo use es deliberado: la prueba de
+       * catorce días vive en NEXO —ver `PlanParaProveedor`— y duplicarla acá
+       * regalaría dos semanas de servicio ya facturado.
+       *
+       * El campo ausente y el campo en cero **no son lo mismo** para el
+       * proveedor, así que no se manda `free_trial: null` ni `frequency: 0`: si
+       * no hay prueba del lado de la pasarela, la clave no aparece.
+       */
+      const dias = plan.diasDePruebaDelProveedor ?? null;
+      const pruebaGratis =
+        dias !== null && dias > 0
+          ? { free_trial: { frequency: dias, frequency_type: 'days' } }
+          : {};
+
       cuerpo = conImporte(
         {
           reason: plan.nombre,
@@ -336,6 +375,7 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
             frequency_type: type,
             transaction_amount: MARCA_DE_IMPORTE,
             currency_id: plan.moneda,
+            ...pruebaGratis,
           },
         },
         plan.importeCentavos,
@@ -464,6 +504,7 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
         // normal, no un fallo.
         urlDeAutorizacion: cadena(cuerpo, 'init_point'),
         referenciaNexo: cadena(cuerpo, 'external_reference'),
+        proximoCobro: soloLaFecha(cadena(cuerpo, 'next_payment_date')),
       },
     };
   }

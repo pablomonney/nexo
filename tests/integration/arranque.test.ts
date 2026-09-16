@@ -211,6 +211,12 @@ suite('Arranque del servidor', () => {
         timeoutMs: 10_000,
         maxRetries: 2,
       },
+      // `pagos` faltaba acá y estaba en los otros cuatro casos. Sin él, la
+      // última afirmación —«conectar el correo no conecta el cobro»— no medía
+      // el código: medía el `PAYMENTS_PROVIDER` de quien corría los tests. Dio
+      // verde hasta el día que alguien configuró una credencial de sandbox en
+      // su `.env`, que es exactamente cuando un test así deja de servir.
+      pagos: PAGOS_APAGADOS,
       secrets: { provider: 'env' },
       documents: { ocrEngine: 'none' },
       isProduction: false,

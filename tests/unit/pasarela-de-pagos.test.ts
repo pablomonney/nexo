@@ -158,6 +158,88 @@ describe('el adaptador manda lo que corresponde', () => {
     expect(llamadas[0]!.init.body).toContain('"frequency_type":"months"');
   });
 
+  it('el plan sale SIN free_trial: la prueba de NEXO no se duplica en la pasarela', async () => {
+    // La decisión del 2026-09-15, comprobada donde se puede comprobar: en el
+    // cuerpo que sale a la red.
+    //
+    // Mercado Pago acepta `free_trial` y NEXO sabe mandarlo. No lo manda porque
+    // la prueba de catorce días **es la suscripción** de este lado: empieza sin
+    // tarjeta y termina al convertir. Si el plan del proveedor también tuviera
+    // prueba, el reloj arrancaría de nuevo al autorizar y serían catorce días
+    // de servicio ya facturado que nadie paga.
+    //
+    // Si alguien agrega `free_trial` "porque Mercado Pago lo soporta", este test
+    // se pone en rojo y lo manda a leer por qué.
+    const { mp, llamadas } = proveedor([ok({ id: 'plan-1', status: 'active' })]);
+
+    await mp.asegurarPlan({
+      codigo: 'COMPLETO',
+      nombre: 'Completo',
+      importeCentavos: 19_999n,
+      moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+    });
+
+    expect(llamadas[0]!.init.body).not.toContain('free_trial');
+  });
+
+  it('y lo manda solo si quien llama lo pide, en días', async () => {
+    // El campo existe y funciona: lo que no hay es quien lo use. Se ejercita
+    // para que el día que se decida usarlo no haya que descubrir si andaba.
+    const { mp, llamadas } = proveedor([ok({ id: 'plan-1', status: 'active' })]);
+
+    await mp.asegurarPlan({
+      codigo: 'COMPLETO',
+      nombre: 'Completo',
+      importeCentavos: 19_999n,
+      moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      diasDePruebaDelProveedor: 14,
+    });
+
+    expect(llamadas[0]!.init.body).toContain('"free_trial":{"frequency":14,"frequency_type":"days"}');
+  });
+
+  it('cero días de prueba no manda la clave: ausente y cero no son lo mismo', async () => {
+    // Para el proveedor, `free_trial` ausente es «sin prueba» y
+    // `frequency: 0` es un pedido inválido. Mandar cero sería pedirle que
+    // interprete un vacío.
+    const { mp, llamadas } = proveedor([ok({ id: 'plan-1', status: 'active' })]);
+    await mp.asegurarPlan({
+      codigo: 'COMPLETO',
+      nombre: 'Completo',
+      importeCentavos: 19_999n,
+      moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      diasDePruebaDelProveedor: 0,
+    });
+    expect(llamadas[0]!.init.body).not.toContain('free_trial');
+  });
+
+  it('la fecha del próximo cobro se lee sin hacer cuentas de huso horario', async () => {
+    // `next_payment_date` viene con el huso de la cuenta. Pasarlo por `Date` y
+    // volver a ISO lo convierte a UTC, y en Argentina —UTC−3— un cobro de la
+    // medianoche se leería como el día siguiente. Sería un error de un día en
+    // la comparación que existe para detectar diferencias de días.
+    const { mp } = proveedor([
+      ok({
+        id: 'sub-1',
+        status: 'authorized',
+        next_payment_date: '2026-10-03T00:00:00.000-03:00',
+      }),
+    ]);
+
+    const r = await mp.consultarSuscripcion('sub-1');
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.valor.proximoCobro).toBe('2026-10-03');
+  });
+
+  it('si la pasarela no informa la próxima fecha, queda en null y no se inventa', async () => {
+    const { mp } = proveedor([ok({ id: 'sub-1', status: 'authorized' })]);
+    const r = await mp.consultarSuscripcion('sub-1');
+    expect(r.ok && r.valor.proximoCobro).toBeNull();
+  });
+
   it('una moneda que NEXO no conoce no llega a la red', async () => {
     const { mp, llamadas } = proveedor([ok({ id: 'plan-1', status: 'active' })]);
     const r = await mp.asegurarPlan({
