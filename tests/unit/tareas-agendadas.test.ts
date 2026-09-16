@@ -86,13 +86,183 @@ describe('tareas agendadas — las unidades de systemd', () => {
 
   it('ninguna unidad lleva credenciales en la línea de comandos', () => {
     // Las variables entran por `--env-file`, que es el mismo archivo que usa
-    // docker-compose.prod.yml. Armar la cadena de conexión acá la dejaría, con
-    // contraseña incluida, en `argv` de un proceso del host y en el journal.
+    // docker-compose.prod.yml. La cadena de conexión se arma **dentro** del
+    // contenedor: armarla en el `ExecStart` dejaría la contraseña en `argv` de
+    // un proceso del host y en el journal.
     for (const { unidad } of TAREAS) {
-      const servicio = leer(`${unidad}.service`);
-      expect(servicio, unidad).toContain('--env-file /opt/nexo/.env');
-      expect(servicio, unidad).not.toMatch(/postgres(ql)?:\/\//u);
-      expect(servicio, unidad).not.toMatch(/PGPASSWORD=/u);
+      const exec = execStartDe(unidad);
+      expect(exec, unidad).toContain('--env-file /opt/nexo/.env');
+      // La contraseña nunca aparece literal ni por nombre con valor.
+      expect(exec, unidad).not.toMatch(/PGPASSWORD=\S/u);
+      // La cadena que sí aparece es la plantilla, con las variables sin
+      // resolver: eso es lo contrario de una credencial en la línea.
+      expect(exec, unidad).toContain('postgresql://$${POSTGRES_USER}:$${CLAVE}@');
+    }
+  });
+});
+
+/**
+ * El `ExecStart` de una unidad, con las continuaciones pegadas como las pega
+ * systemd: barra al final de línea, y el espacio de la siguiente se descarta.
+ */
+function execStartDe(unidad: string): string {
+  const texto = leer(`${unidad}.service`).replace(/\\\r?\n\s*/gu, ' ');
+  const linea = /^ExecStart=(.+)$/mu.exec(texto);
+  if (linea === null) throw new Error(`${unidad}.service no tiene ExecStart`);
+  return linea[1]!;
+}
+
+/**
+ * Lo que systemd le entrega a la shell.
+ *
+ * systemd expande `$VAR` y `${VAR}` contra el entorno de la **unidad** —que
+ * acá no tiene ninguna— y traduce `$$` a un dólar literal. Esto es esa
+ * traducción, y sirve para ver qué llega del otro lado.
+ */
+function comoLoVeLaShell(exec: string): string {
+  // Un solo pase y un reemplazo por función: con dos pases hace falta un
+  // centinela para no volver a tocar lo ya traducido, y un centinela dentro de
+  // un literal es la clase de carácter que termina escrito de verdad en el
+  // archivo. Pasó acá.
+  return exec.replace(/\$\$|\$\{?\w+\}?/gu, (m) => (m === '$$' ? '$' : ''));
+}
+
+describe('tareas agendadas — la credencial operatoria', () => {
+  /**
+   * El guion que arma la cadena de conexión, tal como está en las unidades.
+   *
+   * Las tareas son **del operador**: escriben en `payment_intents`, en
+   * `payment_events` y en `email_outbox`, y el rol de la aplicación no puede
+   * ninguna de las tres. Eso no es una configuración a corregir: es el candado
+   * que impide que el administrador de una empresa cliente se marque un cargo
+   * como pagado.
+   *
+   * El `DATABASE_URL` del `--env-file` es el de la aplicación, así que la
+   * unidad arma otro adentro del contenedor. Medido el 2026-09-16 en el ensayo
+   * aislado, con el de la aplicación: `permission denied` en las tres tareas.
+   */
+  const GUION =
+    'CLAVE=$$(node -e "process.stdout.write(encodeURIComponent(process.env.POSTGRES_PASSWORD))"); ' +
+    'export DATABASE_URL="postgresql://$${POSTGRES_USER}:$${CLAVE}@nexo-postgres:5432/$${POSTGRES_DB}";';
+
+  it('las tres unidades arman la cadena igual, carácter por carácter', () => {
+    // Tres copias de la misma línea son tres oportunidades de que una quede
+    // distinta, y la que quede distinta va a fallar sola, cada cinco minutos.
+    for (const { unidad } of TAREAS) {
+      expect(execStartDe(unidad), unidad).toContain(GUION);
+    }
+  });
+
+  it('el instalador prueba con el MISMO guion, sin los dólares dobles', () => {
+    // La cuarta copia. En `instalar.sh` no hay systemd en el medio, así que los
+    // dólares van sueltos; salvo por eso tiene que decir lo mismo. Sin esta
+    // comprobación, el instalador podría seguir probando con una credencial que
+    // los timers ya no usan, y dar verde sobre algo que falla.
+    const instalar = readFileSync(join(UNIDADES, 'instalar.sh'), 'utf8');
+    expect(instalar).toContain(GUION.replaceAll('$$', '$'));
+  });
+
+  it('todos los dólares van dobles: ninguno se lo come systemd', () => {
+    // systemd expande `$VAR` y `${VAR}` contra el entorno de la unidad, que no
+    // tiene ninguna de estas variables: un dólar suelto llega vacío a la shell
+    // y la cadena queda `postgresql://:@nexo-postgres:5432/`.
+    //
+    // Es el defecto que este archivo tuvo y que no se ve leyendo: un `replace`
+    // con cadena de reemplazo interpreta `$$` como escape y lo colapsa a `$`.
+    for (const { unidad } of TAREAS) {
+      const exec = execStartDe(unidad);
+      for (const corrida of exec.match(/\$+/gu) ?? []) {
+        expect(corrida.length % 2, `${unidad}: ${corrida.length} dólares seguidos`).toBe(0);
+      }
+      // Y el control por el otro lado: después de la traducción de systemd, las
+      // tres variables siguen ahí para que las resuelva la shell.
+      const paraLaShell = comoLoVeLaShell(exec);
+      for (const v of ['${POSTGRES_USER}', '${POSTGRES_DB}', '${CLAVE}']) {
+        expect(paraLaShell, `${unidad} pierde ${v}`).toContain(v);
+      }
+      expect(paraLaShell).toContain('$(node -e ');
+    }
+  });
+
+  it('la contraseña se codifica, y una con / o + no rompe la URL', () => {
+    // El defecto del 2026-09-15, que dejó producción abajo: la contraseña de
+    // esta instalación es base64 de 48 caracteres y contiene `/` y `+`. Pegada
+    // cruda produce `postgresql://usuario:cla/ve@host:5432/base`, donde la
+    // barra corta el `userinfo` y `pg-connection-string` contesta
+    // `ERR_INVALID_URL` sin poder decir por qué: el input viene redactado,
+    // justamente porque lleva la credencial.
+    //
+    // La expresión que se ejercita **se saca del archivo de la unidad**, no se
+    // escribe acá: probar una copia no prueba lo que corre.
+    const exec = execStartDe('nexo-pagos');
+    const expresion = /node -e "([^"]+)"/u.exec(exec)?.[1];
+    expect(expresion).toBe(
+      'process.stdout.write(encodeURIComponent(process.env.POSTGRES_PASSWORD))',
+    );
+
+    const CLAVES = [
+      'aB3/xY+z9Q==',           // base64 con los dos caracteres que rompieron
+      'a/b+c=d',                 // los tres de una vez
+      '@:/?#[]!$&()*+,;=',       // todo lo que una URL trata como sintaxis
+      'K7+8/vNqR2sT4uW1xY0zA3bC5dE6fG9hJ0kL2mN4oP=', // largo, como la real
+      'sin-nada-raro',
+    ];
+
+    for (const clave of CLAVES) {
+      // Lo que hace el `node -e` de la unidad.
+      const codificada = encodeURIComponent(clave);
+      // Lo que hace la shell con la plantilla, con valores de ejemplo.
+      const cadena = `postgresql://nexo_admin:${codificada}@nexo-postgres:5432/aai`;
+
+      const url = new URL(cadena);
+      expect(url.protocol, clave).toBe('postgresql:');
+      expect(url.hostname, clave).toBe('nexo-postgres');
+      expect(url.port, clave).toBe('5432');
+      expect(url.pathname, clave).toBe('/aai');
+      expect(url.username, clave).toBe('nexo_admin');
+      // Lo único que importa de verdad: la contraseña vuelve entera.
+      expect(decodeURIComponent(url.password), clave).toBe(clave);
+    }
+  });
+
+  it('sin codificar, la misma contraseña rompe la URL: el control no es decorativo', () => {
+    // La contracara del caso anterior. Si esto empezara a pasar, significaría
+    // que `/` dejó de cortar el `userinfo` y que `encodeURIComponent` ya no hace
+    // falta — que no va a pasar, y por eso el caso vale como documentación.
+    const cruda = 'postgresql://nexo_admin:aB3/xY+z9Q==@nexo-postgres:5432/aai';
+    // Ni siquiera llega a parsear con otro host: la barra corta el `userinfo` y
+    // lo que queda no es una URL. Del otro lado, `pg-connection-string` no puede
+    // decir qué estaba mal, porque el input viene redactado — justamente porque
+    // lleva la credencial.
+    expect(() => new URL(cruda)).toThrow(/Invalid URL/u);
+  });
+
+  it('el instalador comprueba que el rol de la aplicación SIGA sin poder', () => {
+    // Que la tarea ande con la credencial operatoria es la mitad. La otra es que
+    // la de la aplicación siga sin poder: si esa empezara a andar, el candado
+    // que impide que una empresa cliente se marque un cargo como pagado ya no
+    // estaría, y nada más lo notaría.
+    const instalar = readFileSync(join(UNIDADES, 'instalar.sh'), 'utf8');
+    expect(instalar).toContain('sigue sin poder leer email_outbox');
+    expect(instalar).toContain('se le ampliaron privilegios');
+  });
+
+  it('nadie le otorga permisos a aai_app para que esto funcione', () => {
+    // El arreglo correcto era cambiar con qué credencial conecta la tarea, no
+    // ampliarle los privilegios al rol de la aplicación. Ninguna migración
+    // nueva puede tener un GRANT a `aai_app` sobre las tablas del operador.
+    const migraciones = ['0124_deber_no_es_lo_mismo_que_estar_cortado.sql',
+      '0125_que_sobrevive_a_la_mora.sql',
+      '0126_un_aviso_no_alcanza_y_la_mora_tiene_dia.sql'];
+    for (const m of migraciones) {
+      const sql = readFileSync(join(RAIZ, 'infrastructure', 'db', 'migrations', m), 'utf8');
+      const sinComentarios = sql.replace(/^\s*--.*$/gmu, '');
+      for (const tabla of ['email_outbox', 'payment_webhook_inbox', 'payment_events',
+        'payment_intents', 'billing_documents', 'collection_steps']) {
+        expect(sinComentarios, `${m} otorga sobre ${tabla}`).not.toMatch(
+          new RegExp(`GRANT[^;]+${tabla}[^;]+aai_app`, 'isu'),
+        );
+      }
     }
   });
 

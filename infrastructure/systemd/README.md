@@ -59,6 +59,27 @@ Por eso `scripts/` entra a la imagen (ver el `Dockerfile`). No estaba, y la
 ausencia era invisible mientras nadie las corriera: el despliegue monta el repo
 para migrar y con eso alcanzaba. Un timer no puede depender de eso.
 
+**La credencial es la del operador, no la de la aplicación.** El `DATABASE_URL`
+de `/opt/nexo/.env` conecta como `nexo_app`, miembro de `aai_app`, que **no
+tiene `SELECT`** sobre `email_outbox`, `payment_webhook_inbox` ni
+`payment_events`. Eso no es algo que haya que corregir: es el candado que impide
+que el administrador de una empresa cliente se marque un cargo como pagado o se
+levante una suspensión.
+
+Estas tareas son del operador, así que cada unidad arma su propia cadena de
+conexión **dentro del contenedor**, con `POSTGRES_USER`, `POSTGRES_PASSWORD` y
+`POSTGRES_DB`, pasando la contraseña por `encodeURIComponent` — el mismo patrón
+que `scripts/desplegar.sh` usa para migrar, incluida la codificación que costó
+un despliegue el 2026-09-15 porque la clave lleva `/` y `+`. La contraseña nunca
+aparece en `argv` de un proceso del host, ni en `ps`, ni en el journal.
+
+`MFA_ENCRYPTION_KEY` sigue viniendo del `--env-file`: `config.js` la exige al
+cargarse con `NODE_ENV=production`, antes de tocar la base.
+
+Lo encontró el ensayo aislado del 2026-09-16, con las tres tareas fallando en
+`permission denied`. `instalar.sh` comprueba las dos mitades: que la tarea corra
+con la credencial operatoria, **y que la de la aplicación siga sin poder**.
+
 **`Persistent=true` en los tres.** Una máquina apagada entre las 03:00 y las
 04:00 dejaría un día sin facturar que nadie notaría hasta la conciliación del
 mes. Con `Persistent`, la corrida perdida se ejecuta al arrancar.

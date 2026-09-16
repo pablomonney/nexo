@@ -27,6 +27,46 @@ Type=oneshot
 # Sin `-d`: la salida de la tarea es la salida de la unidad y va al journal. Es
 # lo que hace que `journalctl -u nexo-diario` muestre qué se emitió y qué se
 # omitió, que es el informe que alguien tiene que poder leer al día siguiente.
+# ## Con qué credencial conecta, y por qué NO es la del .env
+#
+# `--env-file` trae el archivo entero, y su `DATABASE_URL` conecta como
+# `nexo_app` — miembro de `aai_app`, el rol de la aplicación—. Ese rol está
+# despojado a propósito: no tiene `SELECT` sobre `email_outbox`, ni sobre
+# `payment_webhook_inbox`, ni sobre `payment_events`.
+#
+# Eso no es una configuración que haya que corregir: es el candado que impide
+# que el administrador de una empresa cliente se marque un cargo como pagado o
+# se levante una suspensión. Las tareas de acá son **del operador**, que es otra
+# cosa, y por eso se arma una cadena de conexión distinta.
+#
+# Medido el 2026-09-16 en el ensayo aislado, con la credencial de la aplicación:
+#
+#     pagos-bandeja --ver   permission denied (aclcheck_error)
+#     correo-bandeja --ver  permission denied for table email_outbox
+#     migrate.mjs status    permission denied for schema public
+#
+# ## La contraseña se codifica, y esto ya costó un despliegue
+#
+# Una contraseña se pega en una URL y una URL tiene sintaxis. La de esta
+# instalación es de 48 caracteres en base64 y contiene `/` y `+`; pegada cruda
+# produce `postgresql://usuario:cla/ve@host:5432/base`, donde la barra corta el
+# `userinfo` y `pg-connection-string` contesta `ERR_INVALID_URL` sin poder decir
+# por qué —el input viene redactado, justamente porque lleva la credencial—.
+# Pasó el 2026-09-15 en el paso de migraciones y dejó producción abajo.
+#
+# `encodeURIComponent` corre **dentro** del contenedor y lee la contraseña del
+# entorno, no de un argumento: no aparece en `argv` de ningún proceso del host,
+# ni en `ps`, ni en el journal. Es el mismo patrón, línea por línea, que
+# `scripts/desplegar.sh` usa para migrar.
+#
+# ## Los dólares van dobles
+#
+# systemd expande `$VAR` y `${VAR}` en `ExecStart` contra el entorno de la
+# **unidad**, que no tiene ninguna de estas variables: sin escapar, llegarían
+# vacías a la shell. `$$` es el escape documentado para un dólar literal.
+#
+# `MFA_ENCRYPTION_KEY` sigue viniendo del `--env-file`: `config.js` la exige al
+# cargarse con `NODE_ENV=production`, antes de tocar la base.
 ExecStart=/usr/bin/docker run --rm \
     --name nexo-tarea-diaria \
     --network nexo \
@@ -34,8 +74,9 @@ ExecStart=/usr/bin/docker run --rm \
     --env NODE_ENV=production \
     --read-only --tmpfs /tmp:size=64m,mode=1777 \
     --security-opt no-new-privileges:true \
+    --entrypoint sh \
     nexo:production \
-    node scripts/tareas-diarias.mjs
+    -c 'CLAVE=$$(node -e "process.stdout.write(encodeURIComponent(process.env.POSTGRES_PASSWORD))"); export DATABASE_URL="postgresql://$${POSTGRES_USER}:$${CLAVE}@nexo-postgres:5432/$${POSTGRES_DB}"; exec node scripts/tareas-diarias.mjs'
 
 # Media hora. Verifica el Mayor entero y la cadena de auditoría completa, que
 # crecen con los datos: el tope de cinco minutos de las otras dos la mataría a

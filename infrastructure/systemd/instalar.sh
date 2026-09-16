@@ -113,35 +113,60 @@ else
   mal "la imagen no tiene pg: los scripts no van a poder conectarse"
 fi
 
-titulo "3 · Una tarea de verdad, con el entorno real del timer"
+titulo "3 · Una tarea de verdad, con la credencial real del timer"
 
 # La prueba de verdad: **una de las tareas**, en modo de solo lectura, con el
-# mismo `docker run`, el mismo `--env-file`, la misma red y el mismo
-# `NODE_ENV=production` que van a usar las unidades.
+# mismo `docker run`, el mismo `--env-file`, la misma red, el mismo
+# `NODE_ENV=production` y —lo que faltaba— **la misma cadena de conexión** que
+# van a armar las unidades.
 #
 # Antes acá había un `pg.connect()` escrito a mano. Probaba menos de lo que
 # parecía: no importaba `config.js`, así que una instalación a la que le faltara
-# `MFA_ENCRYPTION_KEY` pasaba esta comprobación en verde y después fallaba en
-# cada corrida. Correr la tarea la importa entera.
+# `MFA_ENCRYPTION_KEY` pasaba en verde y después fallaba en cada corrida.
+#
+# Y después probaba con la credencial equivocada. El `DATABASE_URL` del
+# `--env-file` conecta como `nexo_app` —el rol de la aplicación— que no tiene
+# `SELECT` sobre `email_outbox` ni sobre `payment_webhook_inbox`. Las tareas son
+# del operador. Medido el 2026-09-16: las tres fallaban con `permission denied`.
+#
+# Por eso esta comprobación **repite el guion de las unidades**, con los dólares
+# sin doblar porque acá no hay systemd en el medio. Que las cuatro copias digan
+# lo mismo lo comprueba `tests/unit/tareas-agendadas.test.ts`, que es lo que
+# impide que se separen.
 #
 # `--ver` no escribe nada y no llama a ninguna pasarela: lista lo que hay en la
-# bandeja y sale. Es seguro correrlo en producción, y prueba las cuatro cosas de
-# una vez: que el script está, que sus módulos resuelven, que la configuración
-# carga y que la base contesta.
+# bandeja y sale. Es seguro correrlo en producción, y prueba cinco cosas de una
+# vez: que el script está, que sus módulos resuelven, que la configuración
+# carga, que la cadena se arma bien —incluida una contraseña con `/` o `+`— y
+# que la base contesta a ese rol.
 #
 # `docker run --env-file` y el `env_file` de Compose **no parsean igual**
 # —Compose saca las comillas y docker no—, así que una variable entrecomillada
 # anda en la aplicación y falla acá. Leer el archivo no lo habría encontrado.
+readonly GUION_CREDENCIAL='CLAVE=$(node -e "process.stdout.write(encodeURIComponent(process.env.POSTGRES_PASSWORD))"); export DATABASE_URL="postgresql://${POSTGRES_USER}:${CLAVE}@nexo-postgres:5432/${POSTGRES_DB}";'
+
 salida=$(docker run --rm --network "$RED" --env-file "$ENV_FILE" \
-           --env NODE_ENV=production "$IMAGEN" \
-           node scripts/pagos-bandeja.mjs --ver 2>&1)
+           --env NODE_ENV=production --entrypoint sh "$IMAGEN" \
+           -c "${GUION_CREDENCIAL} exec node scripts/pagos-bandeja.mjs --ver" 2>&1)
 if [[ $? -eq 0 ]]; then
-  ok "una tarea real corre dentro de la imagen con --env-file"
+  ok "una tarea real corre con la credencial operatoria"
 else
-  mal "una tarea real NO corre dentro de la imagen"
+  mal "una tarea real NO corre con la credencial operatoria"
   # Se imprimen las últimas líneas del error. Ninguna tarea imprime
   # credenciales; lo que sale acá son nombres de variables y mensajes de pg.
   while IFS= read -r linea; do info "$linea"; done <<< "$(tail -5 <<< "$salida")"
+fi
+
+# Y la contracara: que la credencial de la **aplicación** siga sin poder. Si
+# esto pasara en verde, significaría que alguien le amplió los privilegios a
+# `aai_app` —o que el `.env` cambió de rol— y el candado que impide que una
+# empresa cliente se marque un cargo como pagado ya no está.
+if docker run --rm --network "$RED" --env-file "$ENV_FILE" \
+     --env NODE_ENV=production "$IMAGEN" \
+     node scripts/correo-bandeja.mjs --ver >/dev/null 2>&1; then
+  mal "el rol de la aplicación PUEDE leer la bandeja de correo: se le ampliaron privilegios"
+else
+  ok "el rol de la aplicación sigue sin poder leer email_outbox (correcto)"
 fi
 
 if [[ "$FALLOS" -gt 0 ]]; then
