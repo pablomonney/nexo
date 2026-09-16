@@ -198,7 +198,8 @@ describe('prorrateo', () => {
 describe('cobranza', () => {
   const politica: PoliticaDeCobranza = {
     reintentosEnDias: [3, 7],
-    avisoEnDias: 10,
+    avisoEnDias: [10],
+    diasDeMora: null,
     diasDeGracia: 14,
   };
 
@@ -207,7 +208,7 @@ describe('cobranza', () => {
     expect(plan).toEqual([
       { tipo: 'REINTENTO', el: '2026-03-04', numero: 1 },
       { tipo: 'REINTENTO', el: '2026-03-08', numero: 2 },
-      { tipo: 'AVISO', el: '2026-03-11' },
+      { tipo: 'AVISO', el: '2026-03-11', numero: 1 },
       { tipo: 'SUSPENSION', el: '2026-03-15' },
     ]);
   });
@@ -231,7 +232,8 @@ describe('cobranza', () => {
     // peor que no avisar.
     const plan = planDeCobranza(f('2026-03-01'), {
       reintentosEnDias: [5],
-      avisoEnDias: 5,
+      avisoEnDias: [5],
+      diasDeMora: null,
       diasDeGracia: 9,
     });
     expect(plan.map((p) => p.tipo)).toEqual(['REINTENTO', 'AVISO', 'SUSPENSION']);
@@ -240,7 +242,8 @@ describe('cobranza', () => {
   it('una política sin reintentos es válida: suspende y ya', () => {
     const plan = planDeCobranza(f('2026-03-01'), {
       reintentosEnDias: [],
-      avisoEnDias: 0,
+      avisoEnDias: [0],
+      diasDeMora: null,
       diasDeGracia: 0,
     });
     expect(plan.map((p) => p.tipo)).toEqual(['AVISO', 'SUSPENSION']);
@@ -248,22 +251,22 @@ describe('cobranza', () => {
 
   it('rechaza suspender antes del último reintento', () => {
     // Cobraría bien y el cliente seguiría afuera.
-    expect(revisarPolitica({ reintentosEnDias: [3, 20], avisoEnDias: 5, diasDeGracia: 10 })).toContain(
+    expect(revisarPolitica({ reintentosEnDias: [3, 20], avisoEnDias: [5], diasDeMora: null, diasDeGracia: 10 })).toContain(
       'GRACIA_ANTES_DEL_ULTIMO_REINTENTO',
     );
   });
 
   it('rechaza avisar después de suspender', () => {
-    expect(revisarPolitica({ reintentosEnDias: [3], avisoEnDias: 20, diasDeGracia: 10 })).toContain(
+    expect(revisarPolitica({ reintentosEnDias: [3], avisoEnDias: [20], diasDeMora: null, diasDeGracia: 10 })).toContain(
       'AVISO_DESPUES_DE_LA_SUSPENSION',
     );
   });
 
   it('rechaza días negativos y reintentos desordenados', () => {
-    expect(revisarPolitica({ reintentosEnDias: [-1], avisoEnDias: 1, diasDeGracia: 2 })).toContain(
+    expect(revisarPolitica({ reintentosEnDias: [-1], avisoEnDias: [1], diasDeMora: null, diasDeGracia: 2 })).toContain(
       'DIAS_NEGATIVOS',
     );
-    expect(revisarPolitica({ reintentosEnDias: [7, 3], avisoEnDias: 8, diasDeGracia: 9 })).toContain(
+    expect(revisarPolitica({ reintentosEnDias: [7, 3], avisoEnDias: [8], diasDeMora: null, diasDeGracia: 9 })).toContain(
       'REINTENTOS_DESORDENADOS',
     );
   });
@@ -273,7 +276,8 @@ describe('cobranza', () => {
     // descubrir el segundo problema después de corregir el primero.
     const motivos = revisarPolitica({
       reintentosEnDias: [-5, -9],
-      avisoEnDias: 30,
+      avisoEnDias: [30],
+      diasDeMora: null,
       diasDeGracia: 1,
     });
     expect(motivos.length).toBeGreaterThan(1);
@@ -281,7 +285,12 @@ describe('cobranza', () => {
 
   it('planDeCobranza se niega con una política inconsistente', () => {
     expect(() =>
-      planDeCobranza(f('2026-03-01'), { reintentosEnDias: [30], avisoEnDias: 1, diasDeGracia: 2 }),
+      planDeCobranza(f('2026-03-01'), {
+        reintentosEnDias: [30],
+        avisoEnDias: [1],
+        diasDeMora: null,
+        diasDeGracia: 2,
+      }),
     ).toThrow(/inconsistente/u);
   });
 
@@ -306,12 +315,183 @@ describe('cobranza', () => {
   });
 });
 
+describe('cobranza · el calendario con mora', () => {
+  /**
+   * La política de NEXO, tal como se va a declarar.
+   *
+   * **Sin reintentos a propósito.** En un esquema de suscripción el débito lo
+   * ejecuta la pasarela y es ella la que reintenta con su propio calendario. Un
+   * reintento nuestro no puede cobrar —no existe la operación— así que lo único
+   * que haría es registrar un paso que no hizo nada.
+   */
+  const conMora: PoliticaDeCobranza = {
+    reintentosEnDias: [],
+    avisoEnDias: [0, 2, 5],
+    diasDeMora: 7,
+    diasDeGracia: 10,
+  };
+
+  it('el calendario completo, día por día', () => {
+    expect(planDeCobranza(f('2026-03-01'), conMora)).toEqual([
+      { tipo: 'AVISO', el: '2026-03-01', numero: 1 },
+      { tipo: 'AVISO', el: '2026-03-03', numero: 2 },
+      { tipo: 'AVISO', el: '2026-03-06', numero: 3 },
+      { tipo: 'MORA', el: '2026-03-08' },
+      { tipo: 'SUSPENSION', el: '2026-03-11' },
+    ]);
+  });
+
+  it('no hay ningún REINTENTO: los hace la pasarela', () => {
+    expect(planDeCobranza(f('2026-03-01'), conMora).some((p) => p.tipo === 'REINTENTO')).toBe(false);
+  });
+
+  it('los avisos van numerados, para no repetirlos cuando el ciclo corre tarde', () => {
+    // Sin número, `collection_steps_unico` los colapsaría en uno solo
+    // —`NULLS NOT DISTINCT`— y el segundo y el tercero no se podrían registrar.
+    const avisos = planDeCobranza(f('2026-03-01'), conMora).filter((p) => p.tipo === 'AVISO');
+    expect(avisos.map((p) => p.numero)).toEqual([1, 2, 3]);
+  });
+
+  it('sin diasDeMora el calendario va de ACTIVA a SUSPENDIDA, sin escalón', () => {
+    // `null` es «esta política no declara un paso de mora». No es cero: cero
+    // sería «la mora empieza el día del fallo», que es otra decisión.
+    const plan = planDeCobranza(f('2026-03-01'), { ...conMora, diasDeMora: null });
+    expect(plan.some((p) => p.tipo === 'MORA')).toBe(false);
+    expect(plan.at(-1)).toEqual({ tipo: 'SUSPENSION', el: '2026-03-11' });
+  });
+
+  it('diasDeMora en 0 SÍ produce un paso, el mismo día del fallo', () => {
+    // La diferencia con `null`, medida. Si cero se tratara como «sin mora», una
+    // decisión comercial legítima sería indeclarable.
+    const plan = planDeCobranza(f('2026-03-01'), { ...conMora, diasDeMora: 0 });
+    expect(plan.find((p) => p.tipo === 'MORA')).toEqual({ tipo: 'MORA', el: '2026-03-01' });
+  });
+
+  it('a igual fecha, primero se degrada y después se avisa', () => {
+    // El aviso del día tiene que poder describir el estado verdadero. Al revés,
+    // el correo diría «tu acceso sigue completo» una hora antes de degradarlo.
+    const plan = planDeCobranza(f('2026-03-01'), {
+      reintentosEnDias: [],
+      avisoEnDias: [3],
+      diasDeMora: 3,
+      diasDeGracia: 5,
+    });
+    expect(plan.map((p) => p.tipo)).toEqual(['MORA', 'AVISO', 'SUSPENSION']);
+  });
+
+  it('rechaza degradar después de haber suspendido', () => {
+    expect(revisarPolitica({ ...conMora, diasDeMora: 11 })).toContain(
+      'MORA_DESPUES_DE_LA_SUSPENSION',
+    );
+  });
+
+  it('admite degradar el mismo día que se suspende: es una política sin escalón', () => {
+    expect(revisarPolitica({ ...conMora, diasDeMora: 10 })).toEqual([]);
+  });
+
+  it('rechaza avisos desordenados y avisos repetidos', () => {
+    // Estrictamente ascendente cubre las dos cosas. Dos avisos el mismo día son
+    // dos correos idénticos con un minuto de diferencia.
+    expect(revisarPolitica({ ...conMora, avisoEnDias: [0, 5, 2] })).toContain(
+      'AVISOS_DESORDENADOS',
+    );
+    expect(revisarPolitica({ ...conMora, avisoEnDias: [0, 2, 2] })).toContain(
+      'AVISOS_DESORDENADOS',
+    );
+  });
+
+  it('mira el ÚLTIMO aviso contra la gracia, no el primero', () => {
+    // Con el primero, `{0, 2, 99}` con gracia 10 pasaría: el aviso número 3
+    // saldría ochenta y nueve días después de haber cortado el servicio.
+    expect(revisarPolitica({ ...conMora, avisoEnDias: [0, 2, 99] })).toContain(
+      'AVISO_DESPUES_DE_LA_SUSPENSION',
+    );
+  });
+
+  it('una política sin avisos es válida: es una decisión, no un olvido', () => {
+    const plan = planDeCobranza(f('2026-03-01'), { ...conMora, avisoEnDias: [] });
+    expect(plan.map((p) => p.tipo)).toEqual(['MORA', 'SUSPENSION']);
+  });
+
+  it('un día de mora negativo se rechaza', () => {
+    expect(revisarPolitica({ ...conMora, diasDeMora: -1 })).toContain('DIAS_NEGATIVOS');
+  });
+
+  it('el ciclo que corre tarde hace el aviso 1, no salta a la suspensión', () => {
+    const plan = planDeCobranza(f('2026-03-01'), conMora);
+    expect(pasoPendiente(plan, [], f('2026-03-20'))).toEqual({
+      tipo: 'AVISO',
+      el: '2026-03-01',
+      numero: 1,
+    });
+  });
+
+  it('con los tres avisos hechos, lo pendiente es la mora', () => {
+    const plan = planDeCobranza(f('2026-03-01'), conMora);
+    const hechos = plan.filter((p) => p.tipo === 'AVISO');
+    expect(pasoPendiente(plan, hechos, f('2026-03-20'))).toEqual({
+      tipo: 'MORA',
+      el: '2026-03-08',
+    });
+  });
+
+  it('con la mora hecha, lo pendiente es la suspensión', () => {
+    const plan = planDeCobranza(f('2026-03-01'), conMora);
+    const hechos = plan.filter((p) => p.tipo !== 'SUSPENSION');
+    expect(pasoPendiente(plan, hechos, f('2026-03-20'))).toEqual({
+      tipo: 'SUSPENSION',
+      el: '2026-03-11',
+    });
+  });
+
+  it('con todo hecho no queda nada pendiente, aunque el ciclo corra mil veces', () => {
+    const plan = planDeCobranza(f('2026-03-01'), conMora);
+    expect(pasoPendiente(plan, plan, f('2027-01-01'))).toBeNull();
+  });
+});
+
 describe('estados', () => {
   it('de CANCELADA no se vuelve, a ningún lado', () => {
     // Reactivar dejaría un período sin cobertura que ningún documento explica.
-    for (const destino of ['PRUEBA', 'ACTIVA', 'SUSPENDIDA', 'CANCELADA'] as const) {
+    for (const destino of ['PRUEBA', 'ACTIVA', 'MOROSA', 'SUSPENDIDA', 'CANCELADA'] as const) {
       expect(puedeTransicionar('CANCELADA', destino), destino).toBe(false);
     }
+  });
+
+  it('de ACTIVA se puede degradar a MOROSA', () => {
+    expect(puedeTransicionar('ACTIVA', 'MOROSA')).toBe(true);
+  });
+
+  it('de ACTIVA se sigue pudiendo suspender sin pasar por MOROSA', () => {
+    // La mora la decide el calendario de cobranza; la suspensión directa la
+    // decide una persona, o la pasarela cuando el cliente cancela el medio de
+    // pago. Obligar a pasar por MOROSA le pondría un escalón de cobranza a una
+    // baja que no tiene nada que ver con una deuda.
+    expect(puedeTransicionar('ACTIVA', 'SUSPENDIDA')).toBe(true);
+  });
+
+  it('de MOROSA se vuelve pagando, y también se puede cortar o dar de baja', () => {
+    expect(puedeTransicionar('MOROSA', 'ACTIVA')).toBe(true);
+    expect(puedeTransicionar('MOROSA', 'SUSPENDIDA')).toBe(true);
+    expect(puedeTransicionar('MOROSA', 'CANCELADA')).toBe(true);
+  });
+
+  it('de MOROSA NO se vuelve a PRUEBA', () => {
+    // Quien ya contrató no puede volver a probar el producto gratis, y una
+    // prueba después de una deuda sería exactamente eso.
+    expect(puedeTransicionar('MOROSA', 'PRUEBA')).toBe(false);
+  });
+
+  it('una PRUEBA no entra en mora: no genera deuda', () => {
+    // Lo que le pasa a una prueba que se acaba es que se vence, y eso ya tiene
+    // nombre. Modelarlo como mora diría que alguien que nunca contrató debe.
+    expect(puedeTransicionar('PRUEBA', 'MOROSA')).toBe(false);
+  });
+
+  it('una SUSPENDIDA no se degrada a MOROSA', () => {
+    // Degradar a alguien que ya está cortado no le devuelve nada: sería mover
+    // hacia atrás un estado que solo se levanta pagando, y ese camino ya está.
+    expect(puedeTransicionar('SUSPENDIDA', 'MOROSA')).toBe(false);
   });
 
   it('de SUSPENDIDA sí se vuelve: se levanta pagando', () => {

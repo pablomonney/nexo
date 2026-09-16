@@ -1,0 +1,53 @@
+[Unit]
+Description=NEXO · tareas diarias (facturación, cobranza, verificaciones)
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+
+# Esta es la que importa, y conviene decir por qué con todas las letras.
+#
+# La prueba de catorce días **solo termina si esto corre**: `vencerPruebas` se
+# llama desde `correrCiclo`, `correrCiclo` desde `facturacion-ciclo.mjs`, y
+# `facturacion-ciclo.mjs` desde acá y desde ningún otro lado. Sin este timer, la
+# prueba no vence, la suscripción nunca pasa a SUSPENDIDA y el producto es
+# gratis por tiempo indefinido — sin que ninguna pantalla lo diga, porque desde
+# adentro todo está funcionando bien.
+#
+# Lo mismo vale para la cobranza entera: los avisos, la mora y la suspensión son
+# pasos de `avanzarCobranza`, que corre en la misma llamada. Una política de
+# cobranza declarada y sin este timer agendado es una política que no se ejecuta.
+#
+# `--env-file` es el MISMO archivo que usa docker-compose.prod.yml. La imagen no
+# lleva `.env` a propósito —S-43 lo comprueba— así que las credenciales entran
+# por el entorno del contenedor y nunca por la línea de comandos.
+#
+# Sin `-d`: la salida de la tarea es la salida de la unidad y va al journal. Es
+# lo que hace que `journalctl -u nexo-diario` muestre qué se emitió y qué se
+# omitió, que es el informe que alguien tiene que poder leer al día siguiente.
+ExecStart=/usr/bin/docker run --rm \
+    --name nexo-tarea-diaria \
+    --network nexo \
+    --env-file /opt/nexo/.env \
+    --env NODE_ENV=production \
+    --read-only --tmpfs /tmp:size=64m,mode=1777 \
+    --security-opt no-new-privileges:true \
+    nexo:production \
+    node scripts/tareas-diarias.mjs
+
+# Media hora. Verifica el Mayor entero y la cadena de auditoría completa, que
+# crecen con los datos: el tope de cinco minutos de las otras dos la mataría a
+# mitad de camino en cuanto la instalación tenga volumen.
+TimeoutStartSec=1800
+
+ExecStartPre=-/usr/bin/docker rm -f nexo-tarea-diaria
+
+# No se reintenta: `tareas-diarias.mjs` ya sigue adelante cuando un paso falla
+# —son tareas independientes— y devuelve 1 con el resumen. Reintentar la tanda
+# entera volvería a correr lo que sí anduvo.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -16,12 +16,22 @@
  * uno decidido, y el día que suspenda a un cliente nadie va a saber de dónde
  * salió.
  *
- * ## Suspender no es cancelar
+ * ## Deber, estar degradado y estar cortado son tres cosas
  *
- * Suspender corta el acceso y **conserva todo**: los datos, la contabilidad, el
- * historial y la suscripción. Es reversible con un pago. Cancelar es la baja, y
- * es una decisión de la empresa cliente, no una consecuencia automática de no
- * haber pagado. Ninguna función de acá produce una cancelación.
+ * El calendario tiene cuatro clases de paso y conviene no confundir las dos del
+ * medio:
+ *
+ *     REINTENTO   se vuelve a intentar el cobro.
+ *     AVISO       sale un mensaje. No cambia nada del estado.
+ *     MORA        la suscripción pasa a `MOROSA`: el servicio sigue y parte
+ *                 del producto deja de estar disponible.
+ *     SUSPENSION  se corta el acceso.
+ *
+ * `MORA` y `SUSPENSION` conservan **todo**: los datos, la contabilidad, el
+ * historial y la suscripción. Las dos son reversibles con un pago. Cancelar es
+ * la baja, es una decisión de la empresa cliente y no una consecuencia
+ * automática de no haber pagado: ninguna función de acá produce una
+ * cancelación.
  */
 
 import { addDays, compareDates, type CalendarDate } from '@aai/shared';
@@ -38,16 +48,38 @@ export interface PoliticaDeCobranza {
   readonly reintentosEnDias: readonly number[];
   /** Días desde el fallo hasta la suspensión. Debe ser posterior al último reintento. */
   readonly diasDeGracia: number;
-  /** Días desde el fallo en que se avisa que se viene la suspensión. */
-  readonly avisoEnDias: number;
+  /**
+   * Días desde el fallo en que se avisa, ascendente y sin repetidos.
+   *
+   * Era **un** número hasta la 0126. Un solo mensaje entre el rechazo de la
+   * tarjeta y el corte del servicio, y ninguna forma de declarar más: la única
+   * alternativa que dejaba el modelo era mandar el mismo correo tres veces, que
+   * es peor que no mandarlo.
+   *
+   * Un arreglo vacío es «no se avisa», y es una decisión declarable. No es lo
+   * mismo que no tener política.
+   */
+  readonly avisoEnDias: readonly number[];
+  /**
+   * Días desde el fallo en que la suscripción pasa a `MOROSA`.
+   *
+   * `null` es «esta política no declara un paso de mora»: el calendario va de
+   * `ACTIVA` a `SUSPENDIDA` directo, como antes de la 0124. **No es cero** —
+   * cero sería «la mora empieza el día del fallo», que es otra decisión y
+   * perfectamente declarable.
+   */
+  readonly diasDeMora: number | null;
 }
 
-export type TipoDePaso = 'REINTENTO' | 'AVISO' | 'SUSPENSION';
+export type TipoDePaso = 'REINTENTO' | 'AVISO' | 'MORA' | 'SUSPENSION';
 
 export interface PasoDeCobranza {
   readonly tipo: TipoDePaso;
   readonly el: CalendarDate;
-  /** Solo en los reintentos: 1, 2, 3… Sirve para no repetir uno ya hecho. */
+  /**
+   * Solo en los reintentos y los avisos: 1, 2, 3… Sirve para no repetir uno ya
+   * hecho. `MORA` y `SUSPENSION` ocurren una vez por documento y no lo llevan.
+   */
   readonly numero?: number;
 }
 
@@ -55,7 +87,9 @@ export type MotivoDePoliticaInvalida =
   | 'GRACIA_ANTES_DEL_ULTIMO_REINTENTO'
   | 'AVISO_DESPUES_DE_LA_SUSPENSION'
   | 'DIAS_NEGATIVOS'
-  | 'REINTENTOS_DESORDENADOS';
+  | 'REINTENTOS_DESORDENADOS'
+  | 'AVISOS_DESORDENADOS'
+  | 'MORA_DESPUES_DE_LA_SUSPENSION';
 
 /**
  * Comprueba que la política pueda ejecutarse.
@@ -71,23 +105,38 @@ export function revisarPolitica(
 
   if (
     politica.diasDeGracia < 0 ||
-    politica.avisoEnDias < 0 ||
+    (politica.diasDeMora !== null && politica.diasDeMora < 0) ||
+    politica.avisoEnDias.some((d) => d < 0) ||
     politica.reintentosEnDias.some((d) => d < 0)
   ) {
     motivos.push('DIAS_NEGATIVOS');
   }
 
-  const ordenados = politica.reintentosEnDias.every(
-    (d, i) => i === 0 || d > politica.reintentosEnDias[i - 1]!,
-  );
-  if (!ordenados) motivos.push('REINTENTOS_DESORDENADOS');
+  // Estrictamente ascendente: cubre el orden **y** los repetidos de una vez.
+  // Dos avisos el mismo día son dos correos idénticos con un minuto de
+  // diferencia. La misma función para los dos arreglos, porque es la misma
+  // pregunta y tenerla dos veces escrita es tenerla dos veces para equivocarse.
+  const ascendente = (dias: readonly number[]): boolean =>
+    dias.every((d, i) => i === 0 || d > dias[i - 1]!);
+
+  if (!ascendente(politica.reintentosEnDias)) motivos.push('REINTENTOS_DESORDENADOS');
+  if (!ascendente(politica.avisoEnDias)) motivos.push('AVISOS_DESORDENADOS');
 
   const ultimo = politica.reintentosEnDias.at(-1) ?? 0;
   // Suspender antes del último reintento haría que el reintento corriera sobre
   // una suscripción ya suspendida: cobraría bien y el cliente seguiría afuera.
   if (politica.diasDeGracia < ultimo) motivos.push('GRACIA_ANTES_DEL_ULTIMO_REINTENTO');
 
-  if (politica.avisoEnDias > politica.diasDeGracia) motivos.push('AVISO_DESPUES_DE_LA_SUSPENSION');
+  // El último aviso, no el primero: avisar después de haber cortado es
+  // explicarle a alguien que se le viene algo que ya le pasó.
+  const ultimoAviso = politica.avisoEnDias.at(-1) ?? 0;
+  if (ultimoAviso > politica.diasDeGracia) motivos.push('AVISO_DESPUES_DE_LA_SUSPENSION');
+
+  // Degradar el mismo día que se corta se admite —es una política sin escalón
+  // intermedio— pero degradar después no: el acceso ya no está.
+  if (politica.diasDeMora !== null && politica.diasDeMora > politica.diasDeGracia) {
+    motivos.push('MORA_DESPUES_DE_LA_SUSPENSION');
+  }
 
   return motivos;
 }
@@ -115,14 +164,30 @@ export function planDeCobranza(
     numero: i + 1,
   }));
 
-  pasos.push({ tipo: 'AVISO', el: addDays(falloEl, politica.avisoEnDias) });
+  // El paso de mora se genera **antes** que los avisos, y en un empate de fechas
+  // eso lo pone primero. Es deliberado: la mora cambia el estado, y un aviso que
+  // sale el mismo día tiene que poder describir el estado verdadero. Al revés,
+  // el correo del día 7 diría «tu acceso sigue completo» una hora antes de
+  // degradarlo.
+  if (politica.diasDeMora !== null) {
+    pasos.push({ tipo: 'MORA', el: addDays(falloEl, politica.diasDeMora) });
+  }
+
+  pasos.push(
+    ...politica.avisoEnDias.map((dias, i) => ({
+      tipo: 'AVISO' as const,
+      el: addDays(falloEl, dias),
+      numero: i + 1,
+    })),
+  );
+
   pasos.push({ tipo: 'SUSPENSION', el: addDays(falloEl, politica.diasDeGracia) });
 
   // Estable por fecha, y a igual fecha en el orden en que se generaron: primero
-  // los reintentos, después el aviso, después la suspensión. Un aviso que cae el
-  // mismo día que el último reintento tiene que salir después de intentarlo, no
-  // antes — avisar de una suspensión que el reintento va a evitar es peor que no
-  // avisar.
+  // los reintentos, después la mora, después los avisos, después la suspensión.
+  // Un aviso que cae el mismo día que el último reintento tiene que salir
+  // después de intentarlo, no antes — avisar de una suspensión que el reintento
+  // va a evitar es peor que no avisar.
   return pasos
     .map((paso, orden) => ({ paso, orden }))
     .sort((a, b) => {

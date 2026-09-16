@@ -43,6 +43,22 @@
  * deuda y se vuelve a contratar. Una puerta que deja al cliente afuera de la
  * caja no cobra: enoja.
  *
+ * ## La mora degrada, no corta
+ *
+ * Desde la 0124 hay un estado entre `ACTIVA` y `SUSPENDIDA`. `MOROSA` dice que
+ * la empresa debe, que el servicio se sigue prestando, y que **parte** del
+ * producto dejó de estar disponible.
+ *
+ * Cuál parte lo dice `product_features.sobrevive_la_mora` (0125), y el criterio
+ * es uno solo: se conserva lo que sostiene una obligación con plazo y con multa
+ * —facturar, asentar, cerrar un período, presentar ante ARCA— y se apaga lo que
+ * sirve para mejorar el negocio. Cortarle a un cliente que debe dos semanas de
+ * abono la posibilidad de emitir una factura no es cobrar: es causarle un
+ * perjuicio que no guarda ninguna proporción con la deuda, y que encima no lo
+ * ayuda a pagar.
+ *
+ * Nada se borra. Lo apagado vuelve entero al pagar.
+ *
  * ## El mapa sale de la base, no de una lista acá
  *
  * `product_features.dominios` dice qué prefijo de ruta cubre cada
@@ -69,7 +85,23 @@ interface Cacheado<T> {
   readonly hasta: number;
 }
 
-let dominios: Cacheado<ReadonlyMap<string, string>> | undefined;
+/**
+ * Las dos cosas que dice el catálogo, cacheadas juntas.
+ *
+ * Juntas y no en dos entradas: salen de la misma consulta y de la misma tabla,
+ * y dos caches con vencimientos propios pueden quedar describiendo catálogos
+ * distintos durante hasta un minuto. El síntoma sería un dominio que existe en
+ * el mapa y no en el conjunto —o al revés—, que se lee como «esta
+ * funcionalidad sobrevive a la mora» sin que nadie lo haya decidido.
+ */
+interface Catalogo {
+  /** Dominio de ruta → funcionalidad que lo cubre. */
+  readonly dominios: ReadonlyMap<string, string>;
+  /** Las funcionalidades que dejan de estar disponibles con la suscripción en mora. */
+  readonly noSobrevivenLaMora: ReadonlySet<string>;
+}
+
+let catalogo: Cacheado<Catalogo> | undefined;
 const porEmpresa = new Map<string, Cacheado<ReadonlySet<string> | null>>();
 const estadoPorEmpresa = new Map<string, Cacheado<EstadoComercial | null>>();
 
@@ -79,7 +111,7 @@ const estadoPorEmpresa = new Map<string, Cacheado<EstadoComercial | null>>();
  * `null` es «no hay ninguna suscripción», que es distinto de todas las demás:
  * es el único caso en que no se sabe nada, y el único que deja pasar.
  */
-export type EstadoComercial = 'PRUEBA' | 'ACTIVA' | 'SUSPENDIDA' | 'CANCELADA';
+export type EstadoComercial = 'PRUEBA' | 'ACTIVA' | 'MOROSA' | 'SUSPENDIDA' | 'CANCELADA';
 
 /**
  * Los estados en los que la empresa no llega a los módulos que un plan gobierna.
@@ -94,6 +126,35 @@ const CORTAN_EL_ACCESO: ReadonlySet<EstadoComercial> = new Set<EstadoComercial>(
   'CANCELADA',
 ]);
 
+// `MOROSA` **no está acá**, y la ausencia es la decisión completa: la mora no
+// corta, degrada. Meterla en esta lista habría sido la forma más corta de
+// implementar la 0124 y también la de borrar la única diferencia que justifica
+// que el estado exista. Lo que hace la mora está en `alcanzaElPlan`, en su
+// propia rama, contra `product_features.sobrevive_la_mora`.
+
+/** El catálogo entero, de una consulta, cacheado un minuto. */
+async function catalogoDeFuncionalidades(tx: Tx): Promise<Catalogo> {
+  const ahora = Date.now();
+  if (catalogo !== undefined && catalogo.hasta > ahora) return catalogo.valor;
+
+  const { rows } = await tx.query<{
+    code: string;
+    dominios: string[];
+    sobrevive_la_mora: boolean;
+  }>('SELECT code, dominios, sobrevive_la_mora FROM product_features');
+
+  const mapa = new Map<string, string>();
+  const noSobreviven = new Set<string>();
+  for (const f of rows) {
+    for (const d of f.dominios) mapa.set(d, f.code);
+    if (!f.sobrevive_la_mora) noSobreviven.add(f.code);
+  }
+
+  const valor: Catalogo = { dominios: mapa, noSobrevivenLaMora: noSobreviven };
+  catalogo = { valor, hasta: ahora + VIDA_DEL_CACHE };
+  return valor;
+}
+
 /**
  * Dominio de ruta → funcionalidad que lo cubre.
  *
@@ -101,18 +162,20 @@ const CORTAN_EL_ACCESO: ReadonlySet<EstadoComercial> = new Set<EstadoComercial>(
  * ningún plan lo puede excluir.
  */
 export async function mapaDeDominios(tx: Tx): Promise<ReadonlyMap<string, string>> {
-  const ahora = Date.now();
-  if (dominios !== undefined && dominios.hasta > ahora) return dominios.valor;
+  return (await catalogoDeFuncionalidades(tx)).dominios;
+}
 
-  const { rows } = await tx.query<{ code: string; dominios: string[] }>(
-    'SELECT code, dominios FROM product_features',
-  );
-  const mapa = new Map<string, string>();
-  for (const f of rows) {
-    for (const d of f.dominios) mapa.set(d, f.code);
-  }
-  dominios = { valor: mapa, hasta: ahora + VIDA_DEL_CACHE };
-  return mapa;
+/**
+ * Las funcionalidades que dejan de estar disponibles con la suscripción en mora.
+ *
+ * Sale de `product_features.sobrevive_la_mora` (0125) y **no del plan**: el CRM
+ * del plan más caro se degrada igual que el del más barato. La lista completa y
+ * el criterio están en esa migración.
+ */
+export async function funcionalidadesQueNoSobrevivenLaMora(
+  tx: Tx,
+): Promise<ReadonlySet<string>> {
+  return (await catalogoDeFuncionalidades(tx)).noSobrevivenLaMora;
 }
 
 /**
@@ -136,8 +199,12 @@ export async function funcionalidadesDe(
     `SELECT pf.feature_code
        FROM company_subscriptions s
        JOIN plan_features pf ON pf.plan_id = s.plan_id
+      -- MOROSA está en la lista, y omitirla habría recreado exactamente el
+      -- defecto que cuenta el encabezado de este archivo: una morosa devolvería
+      -- cero filas, cero filas se colapsa en "no hay suscripción con plan", y
+      -- eso se deja pasar. Deber la cuota le habría abierto el producto entero.
       WHERE s.company_id = $1
-        AND s.estado IN ('ACTIVA', 'PRUEBA')
+        AND s.estado IN ('ACTIVA', 'PRUEBA', 'MOROSA')
         AND s.vigencia_desde <= CURRENT_DATE
         AND (s.vigencia_hasta IS NULL OR s.vigencia_hasta >= CURRENT_DATE)`,
     [companyId],
@@ -199,8 +266,14 @@ export interface Veredicto {
    * contrataste y está cortado». Contestar lo mismo en los dos casos mandaría a
    * comprar un módulo que la empresa ya tiene al cliente que solo tiene que
    * ponerse al día.
+   *
+   * `DEGRADADA_POR_MORA` es el tercero y dice la cosa más precisa de los tres:
+   * «lo contrataste, tenés una deuda, y **este** módulo es de los que se
+   * apagan mientras dure». No es una suspensión —el resto del sistema anda— y
+   * decirlo como suspensión asustaría a alguien que sigue pudiendo facturar,
+   * asentar y presentar.
    */
-  readonly motivo: 'FUERA_DEL_PLAN' | 'SUSCRIPCION_SUSPENDIDA' | null;
+  readonly motivo: 'FUERA_DEL_PLAN' | 'SUSCRIPCION_SUSPENDIDA' | 'DEGRADADA_POR_MORA' | null;
 }
 
 /**
@@ -231,6 +304,29 @@ export async function alcanzaElPlan(
     return { permitido: false, feature, motivo: 'SUSCRIPCION_SUSPENDIDA' };
   }
 
+  /**
+   * La mora: una sola rama, y va acá.
+   *
+   * **Antes de mirar lo contratado**, por el mismo motivo por el que el estado
+   * se pregunta antes: `MOROSA` es información —dice que no— y lo contratado
+   * puede ser silencio. Un plan sin funcionalidades cargadas devuelve `null`,
+   * `null` deja pasar, y poner esta rama después haría que la degradación
+   * dependiera de que el catálogo comercial estuviera completo.
+   *
+   * La consecuencia se acepta a sabiendas: a una empresa en mora que nunca
+   * contrató el CRM se le contesta `DEGRADADA_POR_MORA` en vez de
+   * `FUERA_DEL_PLAN`. Las dos son ciertas y la que se dice es la accionable —
+   * la deuda vence antes que la decisión de comprar un módulo—, y en cuanto
+   * pague pasa a recibir la otra, que es la exacta.
+   *
+   * **No mira el método.** No hay «leer sí, escribir no»: la puerta comercial
+   * nunca supo de verbos y enseñarle uno ahora significaría dos reglas donde
+   * hoy hay una, con la garantía de que en algún momento discrepen.
+   */
+  if (estado === 'MOROSA' && (await funcionalidadesQueNoSobrevivenLaMora(tx)).has(feature)) {
+    return { permitido: false, feature, motivo: 'DEGRADADA_POR_MORA' };
+  }
+
   const contratadas = await funcionalidadesDe(tx, companyId);
   if (contratadas === null) return { permitido: true, feature, motivo: null };
 
@@ -256,5 +352,5 @@ export function olvidarPlanDe(companyId: string): void {
 export function olvidarTodosLosPlanes(): void {
   porEmpresa.clear();
   estadoPorEmpresa.clear();
-  dominios = undefined;
+  catalogo = undefined;
 }

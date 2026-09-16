@@ -39,6 +39,7 @@
  */
 
 import { recordAudit, type Tx } from '@aai/db';
+import { encolarAvisoDeCobranza, modulosEnPausaPorMora } from './avisos.js';
 import { vencerPruebas, type InformeDePruebas } from './prueba.js';
 import { config } from '../config.js';
 import { crearProveedorDePagos } from '../pagos/fabrica.js';
@@ -163,7 +164,7 @@ export async function emitirVencidos(
             proxima_facturacion::text AS proxima_facturacion,
             vigencia_desde::text AS vigencia_desde
        FROM company_subscriptions
-      WHERE estado IN ('ACTIVA', 'SUSPENDIDA')
+      WHERE estado IN ('ACTIVA', 'MOROSA', 'SUSPENDIDA')
         AND proxima_facturacion IS NOT NULL
         AND proxima_facturacion <= $1::date
       ORDER BY proxima_facturacion, id`,
@@ -174,9 +175,10 @@ export async function emitirVencidos(
   const omitidos: Omision[] = [];
 
   for (const s of rows) {
-    // Suspendida se sigue facturando: la deuda corre igual. Lo que se corta es
-    // el acceso, no el contrato — y si se dejara de facturar, levantar la
-    // suspensión dejaría un hueco de servicio que ningún documento explica.
+    // Morosa y suspendida se siguen facturando: la deuda corre igual. Lo que se
+    // corta o se degrada es el acceso, no el contrato — y si se dejara de
+    // facturar, levantar el corte dejaría un hueco de servicio que ningún
+    // documento explica.
     if (
       s.periodicidad === null ||
       s.moneda === null ||
@@ -443,8 +445,15 @@ export async function registrarCobro(
     },
   });
 
-  // Pagar levanta la suspensión, y solo si no queda otra deuda emitida. Levantar
-  // con deuda abierta dejaría entrar a quien pagó una de tres facturas.
+  // Pagar levanta la suspensión **y la mora**, y solo si no queda otra deuda
+  // emitida. Levantar con deuda abierta dejaría entrar a quien pagó una de tres
+  // facturas.
+  //
+  // La condición es la misma para los dos estados y eso es lo correcto: son dos
+  // grados del mismo hecho, y la vuelta de los dos es la misma —no deber nada—.
+  // Tratar la mora con una regla más blanda —«pagó algo, devolvele los
+  // módulos»— dejaría a alguien con el producto completo y dos facturas
+  // abiertas, que es exactamente lo que la mora existe para no permitir.
   const deuda = await tx.query<{ n: string }>(
     `SELECT count(*)::text AS n FROM billing_documents
       WHERE subscription_id = $1 AND estado = 'EMITIDO'`,
@@ -452,16 +461,23 @@ export async function registrarCobro(
   );
   const sinDeuda = deuda.rows[0]!.n === '0';
 
-  const sub = await tx.query<{ estado: string }>(
+  const sub = await tx.query<{ estado: EstadoDeSuscripcion }>(
     'SELECT estado FROM company_subscriptions WHERE id = $1',
     [d.subscription_id],
   );
-  const reactivar = sinDeuda && sub.rows[0]?.estado === 'SUSPENDIDA';
+  const estadoPrevio = sub.rows[0]?.estado;
+  const reactivar =
+    sinDeuda && (estadoPrevio === 'SUSPENDIDA' || estadoPrevio === 'MOROSA');
 
   if (reactivar) {
+    // Las tres columnas se limpian juntas. `cs_morosa_con_fecha` y
+    // `cs_baja_con_motivo` no lo exigen —solo aprietan sobre los estados que
+    // las necesitan— pero dejar `morosa_desde` con fecha sobre una suscripción
+    // activa haría que la próxima lectura contara días de mora de una deuda que
+    // ya se pagó.
     await tx.query(
       `UPDATE company_subscriptions
-          SET estado = 'ACTIVA', suspendida_el = NULL, motivo = NULL
+          SET estado = 'ACTIVA', suspendida_el = NULL, morosa_desde = NULL, motivo = NULL
         WHERE id = $1`,
       [d.subscription_id],
     );
@@ -471,7 +487,12 @@ export async function registrarCobro(
       action: 'REACTIVAR_POR_PAGO',
       objectType: 'company_subscription',
       objectId: d.subscription_id,
-      newValue: { documento: d.id },
+      // Desde dónde volvió, y no solo que volvió: «reactivada» sobre una morosa
+      // y sobre una suspendida son dos recuperaciones distintas —una perdió
+      // módulos, la otra perdió el acceso entero— y la bitácora es de donde
+      // sale `saas_movimientos`.
+      oldValue: { estado: estadoPrevio },
+      newValue: { documento: d.id, estado: 'ACTIVA' },
     });
   }
 
@@ -491,10 +512,11 @@ export async function politicaVigente(
 ): Promise<PoliticaDeCobranza | null> {
   const { rows } = await tx.query<{
     reintentos_en_dias: number[];
-    aviso_en_dias: number;
+    aviso_en_dias: number[];
     dias_de_gracia: number;
+    dias_de_mora: number | null;
   }>(
-    `SELECT reintentos_en_dias, aviso_en_dias, dias_de_gracia
+    `SELECT reintentos_en_dias, aviso_en_dias, dias_de_gracia, dias_de_mora
        FROM collection_policies
       WHERE vigente_desde <= $1::date
         AND (vigente_hasta IS NULL OR vigente_hasta > $1::date)
@@ -509,6 +531,10 @@ export async function politicaVigente(
     reintentosEnDias: p.reintentos_en_dias,
     avisoEnDias: p.aviso_en_dias,
     diasDeGracia: p.dias_de_gracia,
+    // `null` es «esta política no declara un paso de mora», y entonces el
+    // calendario va de ACTIVA a SUSPENDIDA directo. No se traduce a cero: cero
+    // sería «la mora empieza el día del fallo», que es otra decisión.
+    diasDeMora: p.dias_de_mora,
   };
   // Los `CHECK` de la 0096 ya la validan al insertarla. Esto es la segunda
   // lectura, y existe porque las dos reglas se escribieron por separado: si
@@ -532,6 +558,35 @@ export async function politicaVigente(
 export interface OpcionesDeCobranza {
   readonly proveedor?: ProveedorDePagos;
   readonly ambienteConfigurado?: string;
+  /**
+   * Avanzar la cobranza **de una sola empresa**.
+   *
+   * En producción no se pasa: el ciclo es global a propósito, porque una
+   * cobranza que hay que acordarse de correr por cliente no se corre.
+   *
+   * Existe por lo mismo que los dos campos de arriba —este tipo entero es el
+   * punto de inyección de esta función— y lo pidió un defecto concreto de las
+   * pruebas, que vale la pena dejar escrito porque describe el comportamiento
+   * real: **`avanzarCobranza` no recibe una empresa, así que toma todos los
+   * documentos impagos que existan**, y les aplica la política vigente al día
+   * que se le pasa. Dos suites corriendo en paralelo contra la misma base
+   * hacen que la política de una le escriba pasos a los documentos de la otra.
+   *
+   * Eso no es un artefacto del entorno de pruebas: es lo que la función hace.
+   * Lo que el entorno de pruebas agrega es **dos calendarios vigentes a la
+   * vez**, que en una instalación real no puede pasar porque
+   * `collection_policies_una_vigente` lo impide.
+   */
+  readonly soloEmpresa?: string;
+}
+
+/** Un documento impago con su empresa, tal como lo ve la cobranza. */
+interface FilaEnCobranza {
+  readonly document_id: string;
+  readonly company_id: string;
+  readonly subscription_id: string;
+  readonly empresa: string;
+  readonly fallo_el: string;
 }
 
 export async function avanzarCobranza(
@@ -542,19 +597,17 @@ export async function avanzarCobranza(
 ): Promise<PasoEjecutado[]> {
   const politica = await politicaVigente(tx, hoy);
 
-  const { rows } = await tx.query<{
-    document_id: string;
-    company_id: string;
-    subscription_id: string;
-    fallo_el: string;
-  }>(
-    `SELECT d.id AS document_id, d.company_id, d.subscription_id,
+  const { rows } = await tx.query<FilaEnCobranza>(
+    `SELECT d.id AS document_id, d.company_id, d.subscription_id, c.legal_name AS empresa,
             min(i.created_at)::date::text AS fallo_el
        FROM billing_documents d
        JOIN payment_intents i ON i.document_id = d.id AND i.estado = 'FALLIDO'
+       JOIN companies c ON c.id = d.company_id
       WHERE d.estado = 'EMITIDO'
-      GROUP BY d.id, d.company_id, d.subscription_id
-      ORDER BY 4, 1`,
+        AND ($1::uuid IS NULL OR d.company_id = $1::uuid)
+      GROUP BY d.id, d.company_id, d.subscription_id, c.legal_name
+      ORDER BY 5, 1`,
+    [opciones.soloEmpresa ?? null],
   );
 
   const hechos: PasoEjecutado[] = [];
@@ -588,22 +641,61 @@ export async function avanzarCobranza(
     const paso = pasoPendiente(plan, yaHechos, hoy);
     if (paso === null) continue;
 
-    const ejecutado = await ejecutarPaso(tx, fila, paso, actorId, opciones);
+    const ejecutado = await ejecutarPaso(tx, fila, paso, politica, actorId, opciones);
     hechos.push(ejecutado);
   }
 
   return hechos;
 }
 
+/**
+ * Ejecuta un paso del calendario y lo deja registrado.
+ *
+ * ## El registro se escribe siempre, salga como salga
+ *
+ * Incluso cuando el paso se omite. Sin la fila, `pasoPendiente` lo encontraría
+ * pendiente de nuevo mañana, y pasado, y el ciclo intentaría todos los días lo
+ * mismo que no se puede hacer. Un paso omitido con su motivo es información; un
+ * paso que no se registró es un bucle silencioso.
+ */
 async function ejecutarPaso(
   tx: Tx,
-  fila: { document_id: string; company_id: string; subscription_id: string },
+  fila: FilaEnCobranza,
   paso: PasoDeCobranza,
+  politica: PoliticaDeCobranza,
   actorId: string,
   opciones: OpcionesDeCobranza,
 ): Promise<PasoEjecutado> {
   let resultado: 'HECHO' | 'FALLIDO' | 'OMITIDO' = 'HECHO';
   let detalle = '';
+
+  /** Deja el paso escrito y arma la respuesta. Un solo lugar, para los cinco cierres. */
+  const registrar = async (
+    estado: 'HECHO' | 'FALLIDO' | 'OMITIDO',
+    porque: string,
+  ): Promise<PasoEjecutado> => {
+    await tx.query(
+      `INSERT INTO collection_steps
+         (company_id, document_id, tipo, numero, programado_para, resultado, detalle)
+       VALUES ($1, $2, $3, $4, $5::date, $6, $7)`,
+      [
+        fila.company_id,
+        fila.document_id,
+        paso.tipo,
+        paso.numero ?? null,
+        paso.el,
+        estado,
+        porque,
+      ],
+    );
+    return {
+      documentId: fila.document_id,
+      companyId: fila.company_id,
+      paso,
+      resultado: estado,
+      detalle: porque,
+    };
+  };
 
   if (paso.tipo === 'REINTENTO') {
     const intento = await intentarCobro(tx, { subscriptionId: fila.subscription_id }, opciones);
@@ -620,23 +712,139 @@ async function ejecutarPaso(
           : 'FALLIDO';
     detalle = intento.detalle;
   } else if (paso.tipo === 'AVISO') {
-    // El aviso de cobranza **todavía no está cableado al puerto de correo**, y
-    // eso es cierto aunque haya proveedor configurado.
-    //
-    // Hasta B2.5.1 el motivo era que no había proveedor, y el detalle lo decía
-    // así. Ahora que `EMAIL_PROVIDER=resend` es posible, ese texto pasaría a
-    // ser falso: diría «falta contratar algo» sobre una instalación que ya lo
-    // contrató, y mandaría a quien lo lea a revisar una configuración que está
-    // bien. Lo que falta acá es el cableado, no el proveedor.
-    //
-    // No se conectó en B2.5.1 a propósito: mandar el aviso es una decisión de
-    // cobranza —a quién, con qué texto, cuántas veces— y no una del transporte.
-    // Se registra el paso igual: sin registro, el ciclo lo volvería a intentar
-    // todos los días y el cliente no se enteraría lo mismo.
-    resultado = 'OMITIDO';
+    /**
+     * El aviso **se encola, no se manda**.
+     *
+     * Hasta acá este paso no hacía nada: se registraba `OMITIDO` con un texto
+     * que explicaba que el correo no estaba cableado. Ahora lo está, y lo está
+     * de la única forma que se puede desde adentro de esta transacción — que
+     * además tiene abierto un `UPDATE` sobre `company_subscriptions`—: la fila
+     * va a `email_outbox` en `PENDIENTE` y la entrega la hace `correo:bandeja`
+     * después, con su propio reloj.
+     *
+     * Mandarlo acá tendría un problema que no se puede arreglar: si la
+     * transacción se revierte después de que el proveedor aceptó el mensaje, el
+     * cliente ya recibió un correo sobre algo que no pasó. El motivo completo
+     * está en `encolarSinEnviar`.
+     *
+     * El primer aviso y los siguientes dicen cosas distintas. El primero es «se
+     * rechazó el cobro» y no anuncia ninguna consecuencia, porque todavía no hay
+     * ninguna; los demás son «faltan N días», con el número, porque «pronto» no
+     * le sirve a nadie para decidir cuándo pagar.
+     */
+    const numero = paso.numero ?? 1;
+    const diasDelAviso = politica.avisoEnDias[numero - 1];
+    const aviso = await encolarAvisoDeCobranza(
+      tx,
+      fila.company_id,
+      numero === 1 ? 'RECHAZO_INICIAL' : 'SUSPENSION_PROXIMA',
+      {
+        empresa: fila.empresa,
+        // `null` cuando no se puede afirmar. No cero: un correo que diga «te
+        // quedan 0 días» a quien no está por ser suspendido es peor que uno que
+        // no diga el número.
+        diasParaLaSuspension:
+          diasDelAviso === undefined ? null : politica.diasDeGracia - diasDelAviso,
+      },
+    );
+
+    if (aviso.estado === 'SIN_DESTINATARIOS') {
+      // Esto **no** es un problema del correo, y decirlo como uno mandaría a
+      // revisar el proveedor. Es una empresa sin ningún administrador vigente y
+      // activo, y lo que hay que arreglar está en otra pantalla.
+      return registrar(
+        'OMITIDO',
+        'La empresa no tiene ningún administrador vigente y activo: no hay a quién ' +
+          'avisarle. El aviso no salió y la cobranza sigue su curso igual.',
+      );
+    }
+
+    resultado = 'HECHO';
     detalle =
-      'El aviso de cobranza no está conectado al envío de correo: el paso quedó registrado ' +
-      'y el mensaje no salió.';
+      `Aviso ${numero} encolado para ${aviso.destinatarios} destinatario(s). ` +
+      'Sale cuando se drene la bandeja de correo: `npm run correo:bandeja`.';
+
+    await recordAudit(tx, fila.company_id, {
+      actorType: 'SYSTEM',
+      actorId,
+      action: 'AVISAR_DE_COBRANZA',
+      objectType: 'billing_document',
+      objectId: fila.document_id,
+      newValue: { aviso: numero, destinatarios: aviso.destinatarios, el: paso.el },
+    });
+  } else if (paso.tipo === 'MORA') {
+    /**
+     * El escalón que faltaba: la suscripción se degrada y el servicio sigue.
+     *
+     * Las dos comprobaciones de abajo no son ceremonia. La transición se
+     * pregunta antes de intentarla —el `WHERE estado = 'ACTIVA'` la impediría
+     * igual, pero en silencio: la suscripción quedaría sin degradar y el paso
+     * registrado como hecho—. Y la deuda se vuelve a mirar porque entre que se
+     * armó la lista y se llegó acá pudo entrar un pago: degradarle el acceso a
+     * alguien que acaba de pagar es el error más caro que este paso puede
+     * cometer, y el que más tarda en descubrirse.
+     */
+    const actual = await tx.query<{ estado: EstadoDeSuscripcion }>(
+      'SELECT estado FROM company_subscriptions WHERE id = $1',
+      [fila.subscription_id],
+    );
+    const desde = actual.rows[0]?.estado;
+    if (desde === undefined || !puedeTransicionar(desde, 'MOROSA')) {
+      return registrar(
+        'OMITIDO',
+        `La suscripción está ${desde ?? 'ausente'}: de ahí no se pasa a MOROSA.`,
+      );
+    }
+
+    const deuda = await tx.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM billing_documents
+        WHERE subscription_id = $1 AND estado = 'EMITIDO' AND vence_el <= $2::date`,
+      [fila.subscription_id, paso.el],
+    );
+    if (deuda.rows[0]!.n === '0') {
+      return registrar(
+        'OMITIDO',
+        'Ya no hay deuda vencida en esta suscripción: no corresponde degradar el acceso.',
+      );
+    }
+
+    const motivo = 'Falta de pago: acceso degradado';
+    // El `WHERE` repite el estado que se acaba de leer, por lo mismo que abajo
+    // en la suspensión: la guarda contra una escritura concurrente tiene que
+    // decir lo mismo que `puedeTransicionar`, no una lista paralela.
+    await tx.query(
+      `UPDATE company_subscriptions
+          SET estado = 'MOROSA', morosa_desde = $1::date, motivo = $2
+        WHERE id = $3 AND estado = $4`,
+      [paso.el, motivo, fila.subscription_id, desde],
+    );
+    await recordAudit(tx, fila.company_id, {
+      actorType: 'SYSTEM',
+      actorId,
+      action: 'MARCAR_EN_MORA',
+      objectType: 'company_subscription',
+      objectId: fila.subscription_id,
+      motivo: `Documento ${fila.document_id} impago según la política de cobranza vigente`,
+      oldValue: { estado: desde },
+      newValue: { estado: 'MOROSA', morosaDesde: paso.el },
+    });
+
+    // El aviso va **después** del `UPDATE`, en la misma transacción: describe un
+    // hecho que ya está escrito. Que no haya a quién avisarle no revierte la
+    // degradación —el acceso se degrada por la deuda, no por el correo— y por
+    // eso este caso no devuelve `OMITIDO` como el del paso de AVISO.
+    const aviso = await encolarAvisoDeCobranza(tx, fila.company_id, 'ACCESO_DEGRADADO', {
+      empresa: fila.empresa,
+      diasParaLaSuspension: politica.diasDeGracia - (politica.diasDeMora ?? 0),
+      modulosEnPausa: await modulosEnPausaPorMora(tx),
+    });
+
+    detalle =
+      'En mora: se apagaron los módulos que no sobreviven a la mora. El servicio sigue ' +
+      'prestándose, los datos y la contabilidad quedan intactos, y todo vuelve al pagar. ' +
+      (aviso.estado === 'ENCOLADO'
+        ? `Aviso encolado para ${aviso.destinatarios} destinatario(s).`
+        : 'Sin administradores vigentes: no se pudo avisar.');
   } else {
     // La transición se pregunta antes de intentarla. El `WHERE estado = 'ACTIVA'`
     // de abajo la impediría igual, pero en silencio: la suscripción quedaría sin
@@ -648,26 +856,10 @@ async function ejecutarPaso(
     );
     const desde = actual.rows[0]?.estado;
     if (desde === undefined || !puedeTransicionar(desde, 'SUSPENDIDA')) {
-      await tx.query(
-        `INSERT INTO collection_steps
-           (company_id, document_id, tipo, numero, programado_para, resultado, detalle)
-         VALUES ($1, $2, $3, $4, $5::date, 'OMITIDO', $6)`,
-        [
-          fila.company_id,
-          fila.document_id,
-          paso.tipo,
-          paso.numero ?? null,
-          paso.el,
-          `La suscripción está ${desde ?? 'ausente'}: de ahí no se pasa a SUSPENDIDA.`,
-        ],
+      return registrar(
+        'OMITIDO',
+        `La suscripción está ${desde ?? 'ausente'}: de ahí no se pasa a SUSPENDIDA.`,
       );
-      return {
-        documentId: fila.document_id,
-        companyId: fila.company_id,
-        paso,
-        resultado: 'OMITIDO',
-        detalle: `La suscripción está ${desde ?? 'ausente'}: de ahí no se pasa a SUSPENDIDA.`,
-      };
     }
 
     /**
@@ -686,11 +878,20 @@ async function ejecutarPaso(
      * suspendido mientras le cobran **sin que corresponda**— no se viola: acá
      * corresponde, porque la deuda existe y el ciclo la sigue emitiendo.
      */
+    // El `WHERE` repite **el estado que se acaba de leer**, no una lista escrita
+    // a mano. Es una guarda contra una escritura concurrente, y tiene que decir
+    // exactamente lo mismo que `puedeTransicionar` para no ser otra regla.
+    //
+    // Con una lista aparte se separan: la versión anterior comprobaba la
+    // transición —que admite `PRUEBA → SUSPENDIDA`— y después actualizaba solo
+    // `estado = 'ACTIVA'`. Una suscripción en prueba habría pasado el control,
+    // no habría cambiado nada, y el paso habría quedado registrado como HECHO:
+    // el silencio que el propio comentario de arriba dice querer evitar.
     await tx.query(
       `UPDATE company_subscriptions
           SET estado = 'SUSPENDIDA', suspendida_el = $1::date, motivo = $2
-        WHERE id = $3 AND estado = 'ACTIVA'`,
-      [paso.el, 'Falta de pago', fila.subscription_id],
+        WHERE id = $3 AND estado = $4`,
+      [paso.el, 'Falta de pago', fila.subscription_id, desde],
     );
     await recordAudit(tx, fila.company_id, {
       actorType: 'SYSTEM',
@@ -699,35 +900,29 @@ async function ejecutarPaso(
       objectType: 'company_subscription',
       objectId: fila.subscription_id,
       motivo: `Documento ${fila.document_id} impago según la política de cobranza vigente`,
-      newValue: { documento: fila.document_id, suspendidaEl: paso.el },
+      // Desde dónde se suspendió. Una suspensión que vino de MOROSA recorrió el
+      // calendario entero; una que vino de ACTIVA es una política sin escalón
+      // intermedio, y las dos se ven igual si solo se guarda el estado nuevo.
+      oldValue: { estado: desde },
+      newValue: { documento: fila.document_id, suspendidaEl: paso.el, estado: 'SUSPENDIDA' },
     });
-    detalle = 'Suspendida por falta de pago. Los datos y la contabilidad quedan intactos.';
+
+    const aviso = await encolarAvisoDeCobranza(tx, fila.company_id, 'SUSPENSION_APLICADA', {
+      empresa: fila.empresa,
+      // Ya se suspendió: no faltan días para nada. `null` es «no corresponde
+      // decir un número acá», y el texto de este aviso no lo usa.
+      diasParaLaSuspension: null,
+    });
+
+    detalle =
+      'Suspendida por falta de pago. Los datos y la contabilidad quedan intactos. ' +
+      (aviso.estado === 'ENCOLADO'
+        ? `Aviso encolado para ${aviso.destinatarios} destinatario(s).`
+        : 'Sin administradores vigentes: no se pudo avisar.');
   }
 
-  await tx.query(
-    `INSERT INTO collection_steps
-       (company_id, document_id, tipo, numero, programado_para, resultado, detalle)
-     VALUES ($1, $2, $3, $4, $5::date, $6, $7)`,
-    [
-      fila.company_id,
-      fila.document_id,
-      paso.tipo,
-      paso.numero ?? null,
-      paso.el,
-      resultado,
-      detalle,
-    ],
-  );
-
-  return {
-    documentId: fila.document_id,
-    companyId: fila.company_id,
-    paso,
-    resultado,
-    detalle,
-  };
+  return registrar(resultado, detalle);
 }
-
 /**
  * El paso de reintento de la política de cobranza, contra la pasarela.
  *

@@ -1,0 +1,29 @@
+[Unit]
+Description=NEXO · cada 5 minutos, aplica lo que informó la pasarela
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+
+[Timer]
+# Cada cinco minutos en punto. La ruta pública del webhook solo **guarda** la
+# notificación; esto es lo que la aplica, así que el retraso entre que la
+# pasarela avisa y NEXO reacciona es, como mucho, este intervalo.
+#
+# Cinco y no uno: un pago que se acredita cuatro minutos más tarde no le cambia
+# el día a nadie, y sesenta contenedores por hora contra la misma base es ruido
+# que hay que mirar todos los días en los logs.
+OnCalendar=*:0/5
+
+# Si la máquina estuvo apagada y se perdieron corridas, se ejecuta una vez al
+# arrancar en vez de esperar al próximo múltiplo de cinco. Sin esto, un reinicio
+# a las 03:04 deja los webhooks sin aplicar hasta las 03:05 — trivial acá, y no
+# tanto en `nexo-diario`, donde la corrida perdida es la del día.
+Persistent=true
+
+# Que las tres tareas no arranquen todas en el mismo segundo. Sin esto,
+# `nexo-pagos` y `nexo-correo` compiten por la misma base cada cinco minutos.
+RandomizedDelaySec=30
+
+# Arranca 2 minutos después del boot: le da tiempo a Docker y a PostgreSQL.
+OnBootSec=2min
+
+[Install]
+WantedBy=timers.target

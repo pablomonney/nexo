@@ -452,7 +452,7 @@ suite('Facturación — cobranza sin política y con política', () => {
     await db.query(
       `INSERT INTO collection_policies
          (reintentos_en_dias, aviso_en_dias, dias_de_gracia, vigente_desde, declarado_por, motivo)
-       VALUES ('{3,7}'::integer[], 9, 12, '2026-01-01'::date, 'test:cobranza',
+       VALUES ('{3,7}'::integer[], '{9}'::integer[], 12, '2026-01-01'::date, 'test:cobranza',
                'Política sintética para el test de cobranza')`,
     );
 
@@ -646,7 +646,7 @@ suite('Facturación — aislamiento y esquema', () => {
       await db.query(
         `INSERT INTO collection_policies
            (reintentos_en_dias, aviso_en_dias, dias_de_gracia, vigente_desde, declarado_por, motivo)
-         VALUES ('{3,30}'::integer[], 5, 10, '2027-01-01'::date, 'test', 'imposible a proposito')`,
+         VALUES ('{3,30}'::integer[], '{5}'::integer[], 10, '2027-01-01'::date, 'test', 'imposible a proposito')`,
       );
     } catch (error) {
       code = (error as { code?: string }).code ?? '';

@@ -133,10 +133,12 @@ suite('Métricas SaaS', () => {
       arpu: string | null;
       activas: string;
       prueba: string;
+      morosas: string;
       suspendidas: string;
     }>(`SELECT mrr::text, arr::text, arpu::text,
                suscripciones_activas::text AS activas,
                en_prueba::text AS prueba,
+               morosas::text AS morosas,
                suspendidas::text AS suspendidas
           FROM saas_ingreso_recurrente WHERE moneda = 'ARS'`);
 
@@ -146,7 +148,15 @@ suite('Métricas SaaS', () => {
 
     // Los contadores vuelven como texto: `pg` no convierte `bigint` a `number`
     // por su cuenta, y con razón — un bigint no siempre entra en un number.
-    const n = Number(m.activas) + Number(m.prueba) + Number(m.suspendidas);
+    //
+    // **Los cuatro estados, y sumarlos tiene que dar el denominador del ARPU.**
+    // `morosas` se agregó con la 0124 y esta línea es la que lo detectó: sin
+    // ella la identidad se rompía en cuanto había una morosa en la base, porque
+    // el ARPU divide por `count(*)` y la cuenta de acá se quedaba corta. Un
+    // contador nuevo que no entre en esta suma es un estado que desaparece del
+    // tablero sin que nada falle.
+    const n =
+      Number(m.activas) + Number(m.prueba) + Number(m.morosas) + Number(m.suspendidas);
     expect(n).toBeGreaterThan(0);
     expect(Number(m.arpu)).toBeCloseTo(Number(m.mrr) / n, 2);
   });

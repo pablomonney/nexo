@@ -3759,6 +3759,31 @@ const ESTADO_DEL_TOPE = new Proxy(ESTADO_DEL_TOPE_CONOCIDO, {
       : '<span class="p p-neu">' + escapar(String(estado)) + '</span>',
 });
 
+/**
+ * Cómo se lee el estado de la suscripción.
+ *
+ * Texto plano, no HTML: `fila()` escapa lo que recibe —y hace bien— así que un
+ * `<span>` acá se vería como un `<span>`.
+ *
+ * Mapa cerrado y con la misma guarda que el de los topes, por el mismo motivo:
+ * un estado nuevo del backend tiene que salir con su nombre crudo y no
+ * disfrazado de otro. `MOROSA` entró por la 0124 y es el que más necesita una
+ * frase y no una palabra — «morosa» sola no dice que el servicio sigue
+ * prestándose, que es justo lo que la distingue de una suspensión.
+ */
+const ESTADO_DE_SUSCRIPCION_CONOCIDO = {
+  PRUEBA: 'en prueba',
+  ACTIVA: 'activa',
+  MOROSA: 'en mora — el servicio sigue, algunos módulos quedaron en pausa',
+  SUSPENDIDA: 'suspendida — el acceso a los módulos está cortado',
+  CANCELADA: 'dada de baja',
+};
+
+const ESTADO_DE_SUSCRIPCION = new Proxy(ESTADO_DE_SUSCRIPCION_CONOCIDO, {
+  get: (mapa, estado) =>
+    Object.prototype.hasOwnProperty.call(mapa, estado) ? mapa[estado] : String(estado),
+});
+
 const nombreDelTope = (recurso, tope, ilimitado) => {
   // SIN_TOPE declarado no es SIN_TOPE_DECLARADO. Uno es una decisión escrita
   // —«este plan no tiene tope de esto»— y el otro es que nadie lo escribió.
@@ -4295,10 +4320,44 @@ function aplicarPermisosANav() {
  * Por eso el cartel dice las tres cosas que hacen falta, en este orden: que
  * está suspendida, que **los datos están**, y adónde ir. Suscripciones no está
  * gobernada por ningún plan, así que ese botón sigue estando.
+ *
+ * ## La mora tiene su propio cartel, y no es una versión suave de este
+ *
+ * Una morosa **no está cortada**: sigue pudiendo facturar, asentar, cerrar el
+ * período y presentar ante ARCA. Lo que pierde son los módulos que no
+ * sobreviven a la mora (0125), y el menú los esconde igual que a los que no
+ * están en el plan — porque el backend va a decir que no y la regla de esta
+ * consola es que un botón que termina en 403 le enseña a la persona que el
+ * sistema falla al azar.
+ *
+ * Mostrar el cartel rojo acá sería mentir en la dirección cara: alguien que lee
+ * «el acceso está cortado» el día que le vence una presentación va a ir a
+ * buscar un problema que no tiene. Por eso es un aviso distinto, en otro tono,
+ * y **nombra lo que se apagó** — si no los nombra, la persona ve botones que
+ * faltan y no sabe cuáles.
  */
 function mostrarSuspension() {
   const caja = E('suspension');
   const s = estado.suscripcion;
+
+  if (s && s.enMora && !s.suspendida) {
+    const apagados = s.degradados || [];
+    caja.hidden = false;
+    caja.innerHTML =
+      '<div class="aviso"><strong>Hay una factura impaga.</strong> ' +
+      (apagados.length === 0
+        ? 'Algunos módulos quedaron en pausa'
+        : 'Quedaron en pausa ' + apagados.length + ' módulo(s): <em>' +
+          apagados.map(escapar).join(', ') + '</em>') +
+      ' hasta que se registre el pago. ' +
+      '<em>Todo lo que tiene plazo legal sigue disponible</em>: podés emitir comprobantes, ' +
+      'registrar asientos, cerrar el período y presentar ante ARCA con normalidad. ' +
+      'Nada se borró, y lo que está en pausa vuelve entero al pagar.' +
+      ' <button type="button" class="sec" onclick="ir(\'suscripcion\')">Ver suscripción</button>' +
+      '</div>';
+    return;
+  }
+
   if (!s || !s.suspendida) { caja.hidden = true; caja.innerHTML = ''; return; }
 
   const cancelada = s.estado === 'CANCELADA';
@@ -11240,7 +11299,7 @@ async function cargarSuscripcion() {
   const p = r.datos.plan;
   E('sub-plan').innerHTML = p === null
     ? fila('Plan', 'sin plan vigente')
-    : fila('Plan', p.nombre) + fila('Estado', p.estado) +
+    : fila('Plan', p.nombre) + fila('Estado', ESTADO_DE_SUSCRIPCION[p.estado]) +
       fila('Desde', p.vigenciaDesde) + fila('Hasta', p.vigenciaHasta || 'sin fin') +
       (p.motivo ? fila('Motivo', p.motivo) : '');
 

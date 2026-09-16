@@ -35,6 +35,12 @@ COPY apps ./apps
 # acá primero es la dependencia circular que ya se cometió una vez.
 COPY infrastructure ./infrastructure
 
+# Misma regla que la línea de arriba, y por la misma lección: lo que la etapa de
+# runtime trae con `--from=build` tiene que haber entrado acá primero. Los
+# scripts son las tareas periódicas; el motivo de que estén en la imagen está en
+# la etapa de runtime.
+COPY scripts ./scripts
+
 # `npm ci` respeta el lockfile exacto. `npm install` podría traer una versión
 # distinta de la que se probó, que es la peor forma de que producción y CI dejen
 # de ser lo mismo.
@@ -61,6 +67,21 @@ COPY --from=build --chown=node:node /app/apps ./apps
 COPY --from=build --chown=node:node /app/package.json ./package.json
 # El preflight las lee al arrancar. Ver la nota de la etapa de build.
 COPY --from=build --chown=node:node /app/infrastructure ./infrastructure
+
+# Las tareas periódicas viven acá, y por eso `scripts/` entra a la imagen.
+#
+# No estaba, y la ausencia era invisible mientras nadie las corriera: el
+# despliegue monta el repo (`-v ${RAIZ}:/repo`) para migrar, y con eso alcanzaba.
+# El agendador no puede depender de eso. Un timer que corre cada cinco minutos
+# contra un checkout del host se rompe —en silencio— el día que alguien mueva el
+# directorio, haga un `git pull` a medias o despliegue una imagen que ya no
+# coincide con lo que hay en disco. Peor: correría **código de otra versión**
+# contra la base de esta.
+#
+# Con los scripts adentro, `docker run --rm nexo:production node
+# scripts/<tarea>.mjs` corre exactamente el código de la imagen desplegada, que
+# es la propiedad que hace que el agendado sea reproducible.
+COPY --from=build --chown=node:node /app/scripts ./scripts
 
 # El almacén de documentos es un volumen: si vive adentro del contenedor, se
 # pierde en el primer redespliegue.

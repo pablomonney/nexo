@@ -1,0 +1,20 @@
+[Unit]
+Description=NEXO · cada 5 minutos, entrega el correo encolado
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+
+[Timer]
+# Cada cinco minutos, desfasado dos respecto de `nexo-pagos`. El desfase no es
+# estético: las dos tareas tocan la misma base y arrancarlas juntas no gana nada.
+OnCalendar=*:2/5
+
+# Una corrida perdida se recupera al arrancar. Acá importa distinto que en
+# pagos: lo que quedó `PENDIENTE` es un aviso de cobranza que alguien está
+# esperando, y esperar al próximo múltiplo de cinco después de un reinicio largo
+# significa un correo que sale tarde.
+Persistent=true
+
+RandomizedDelaySec=30
+OnBootSec=3min
+
+[Install]
+WantedBy=timers.target

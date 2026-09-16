@@ -201,6 +201,21 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
           'Podés ver la situación en Suscripciones.',
       );
     }
+    // La mora no es una suspensión y el mensaje no puede sonar a una. Quien lo
+    // lee sigue pudiendo facturar, asentar y presentar: decirle «tu acceso está
+    // cortado» lo mandaría a buscar un problema que no tiene, el día que quizá
+    // le vence una obligación.
+    if (alcance.motivo === 'DEGRADADA_POR_MORA') {
+      throw new HttpError(
+        403,
+        'DEGRADADA_POR_MORA',
+        `Hay una factura impaga y este módulo (${alcance.feature ?? 'sin identificar'}) queda ` +
+          'en pausa mientras dure. El resto del sistema sigue funcionando: podés facturar, ' +
+          'asentar, cerrar el período y presentar ante ARCA con normalidad, y nada de lo que ' +
+          'cargaste se borró. Al registrarse el pago vuelve solo. La situación está en ' +
+          'Suscripciones.',
+      );
+    }
     throw new HttpError(
       403,
       'FUERA_DEL_PLAN',

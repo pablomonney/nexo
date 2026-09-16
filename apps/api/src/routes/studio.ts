@@ -17,7 +17,12 @@ import {
   ROLES_REQUIRING_MFA,
 } from '../http/context.js';
 import { conflict, forbidden, HttpError } from '../http/errors.js';
-import { estadoComercialDe, funcionalidadesDe, mapaDeDominios } from '../planes/alcance.js';
+import {
+  estadoComercialDe,
+  funcionalidadesDe,
+  funcionalidadesQueNoSobrevivenLaMora,
+  mapaDeDominios,
+} from '../planes/alcance.js';
 
 const ENTITY_TYPES = [
   'SA', 'SA_299', 'SRL', 'SAS', 'SOCIEDAD_SIMPLE', 'ASOC_CIVIL', 'FUNDACION',
@@ -325,6 +330,21 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         const estado = await estadoComercialDe(tx, tenant.companyId);
         const suspendida = estado === 'SUSPENDIDA' || estado === 'CANCELADA';
 
+        // La mora apaga **algunos** dominios, así que se resuelve como una
+        // tercera lista y no ensanchando `suspendida`. Sin esto, una empresa
+        // morosa vería el menú entero y siete botones terminarían en 403: es
+        // H-5 recreada por un tercer motivo, y la regla de la consola —«si el
+        // backend va a decir que no, la consola no pregunta»— vale igual.
+        const degradados =
+          estado === 'MOROSA'
+            ? await (async () => {
+                const apagadas = await funcionalidadesQueNoSobrevivenLaMora(tx);
+                return [...mapa.entries()]
+                  .filter(([, feature]) => apagadas.has(feature))
+                  .map(([dominio]) => dominio);
+              })()
+            : [];
+
         // Una suspensión corta **todos** los dominios que un plan gobierna, así
         // que todos salen como excluidos. Sin esta rama, la consola dibujaba el
         // menú entero y cada botón terminaba en 403: es H-5 de la auditoría del
@@ -334,14 +354,25 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         // `null` sin suspensión es «no hay suscripción con plan», que la puerta
         // deja pasar entera. Devolver todos los dominios como excluidos ahí
         // dejaría la consola sin menú por no tener nada que decir.
+        //
+        // Los degradados por mora se suman a `fueraDelPlan` **y además** viajan
+        // aparte. A la consola le sirven en la misma lista —lo que no se puede
+        // abrir no se dibuja, sea por el motivo que sea— y el motivo verdadero
+        // tiene que poder decirse: «no está en tu plan» sobre un módulo que la
+        // empresa contrató y solo tiene en pausa manda a comprar dos veces lo
+        // mismo.
         const fueraDelPlan = suspendida
           ? [...new Set(mapa.keys())].sort()
-          : contratadas === null
-            ? []
-            : [...mapa.entries()]
-                .filter(([, feature]) => !contratadas.has(feature))
-                .map(([dominio]) => dominio)
-                .sort();
+          : [
+              ...new Set([
+                ...(contratadas === null
+                  ? []
+                  : [...mapa.entries()]
+                      .filter(([, feature]) => !contratadas.has(feature))
+                      .map(([dominio]) => dominio)),
+                ...degradados,
+              ]),
+            ].sort();
 
         return {
           company: company.rows[0] ?? null,
@@ -353,7 +384,16 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
           // tu plan» sobre módulos que la empresa sí contrató y solo tiene
           // cortados, y mandaría a comprar de nuevo a quien tiene que pagar
           // una factura.
-          suscripcion: { estado, suspendida },
+          suscripcion: {
+            estado,
+            suspendida,
+            // `enMora` y `degradados` por separado: el primero dice qué le pasa
+            // a la suscripción, el segundo qué se apagó. Con un solo booleano,
+            // la consola tendría que adivinar cuáles de los dominios de
+            // `fueraDelPlan` vuelven pagando y cuáles hay que comprar.
+            enMora: estado === 'MOROSA',
+            degradados: [...degradados].sort(),
+          },
         };
       },
     );

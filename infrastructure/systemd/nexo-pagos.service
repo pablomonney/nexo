@@ -1,0 +1,51 @@
+[Unit]
+Description=NEXO · aplica las notificaciones de la pasarela de pagos
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+# Sin Docker no hay nada que correr. `Requires` además lo levanta si está parado.
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+
+# Un contenedor por corrida, y se borra al terminar. No hay proceso residente:
+# lo que esta tarea hace dura segundos y tener un worker vivo para eso significa
+# un proceso más que puede morirse en silencio y que nadie mira.
+#
+# `--env-file` es el MISMO archivo que usa docker-compose.prod.yml. La imagen no
+# lleva `.env` a propósito —S-43 lo comprueba— así que las credenciales entran
+# por el entorno del contenedor y nunca por la línea de comandos: no aparecen en
+# `argv`, ni en `ps`, ni en el journal.
+#
+# `--network nexo` es cómo se llega a `nexo-postgres`, que no publica puerto.
+#
+# Sin `-d`: el contenedor corre en primer plano y su salida es la salida de la
+# unidad, así que va al journal. Es lo que hace que `journalctl -u <unidad>`
+# muestre lo que la tarea dijo, y no solo que terminó. Con `--rm`, el log
+# propio de Docker se borra al salir; el del journal queda.
+ExecStart=/usr/bin/docker run --rm \
+    --name nexo-tarea-pagos \
+    --network nexo \
+    --env-file /opt/nexo/.env \
+    --env NODE_ENV=production \
+    --read-only --tmpfs /tmp:size=64m,mode=1777 \
+    --security-opt no-new-privileges:true \
+    nexo:production \
+    node scripts/pagos-bandeja.mjs
+
+# Si tarda más que esto, algo está mal: la tarea normal termina en segundos.
+# Sin tope, un contenedor colgado bloquearía todas las corridas siguientes.
+TimeoutStartSec=300
+
+# Un contenedor huérfano —la corrida anterior se mató y quedó el nombre tomado—
+# impediría arrancar la siguiente con un error que no explica nada.
+ExecStartPre=-/usr/bin/docker rm -f nexo-tarea-pagos
+
+# NO se reintenta acá. El script es idempotente y el timer vuelve en cinco
+# minutos: reintentar en bucle contra una base caída llena el journal y no
+# arregla nada. Que el fallo quede registrado es lo que importa, y eso lo hace
+# systemd solo.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

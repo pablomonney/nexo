@@ -136,10 +136,24 @@ const CHECKS = [
     '0096: anular un cargo exige decir por qué'],
   ['collection_policies', 'collection_policies_gracia_despues_del_ultimo_reintento',
     '0096: suspender antes del último reintento lo dejaría corriendo sobre una suscripción ya suspendida'],
-  ['collection_policies', 'collection_policies_aviso_antes_de_suspender',
-    '0096: avisar después de suspender no es avisar'],
+  // Reemplaza a `collection_policies_aviso_antes_de_suspender` de la 0096, que
+  // miraba **un** número. Desde la 0126 los avisos son un arreglo y lo que se
+  // compara contra la gracia es el último: con el primero, `{0, 2, 99}` con
+  // gracia 10 pasaría, y el tercer aviso saldría ochenta y nueve días después
+  // de haber cortado el servicio.
+  ['collection_policies', 'collection_policies_avisos_antes_de_suspender',
+    '0126: avisar después de suspender no es avisar'],
+  ['collection_policies', 'collection_policies_avisos_ordenados',
+    '0126: avisos desordenados o repetidos son dos correos iguales con un minuto de diferencia'],
+  ['collection_policies', 'collection_policies_mora_antes_de_suspender',
+    '0126: degradar el acceso después de haberlo cortado es imposible: ya no está'],
   ['company_subscriptions', 'company_subscriptions_condiciones_completas',
     '0096: importe sin moneda o moneda sin periodicidad no es una condición acordada'],
+  // 0124 · La mora. Los dos candados que impiden un estado a medio escribir.
+  ['company_subscriptions', 'cs_morosa_con_fecha',
+    '0124: sin morosa_desde no se puede contar cuánto lleva debiendo'],
+  ['collection_steps', 'collection_steps_paso_numerado',
+    '0126: los pasos que pueden repetirse llevan número; sin él no se sabe cuál falta'],
   ['payment_intents', 'payment_intents_fallo_con_detalle',
     '0096: un cobro fallido dice por qué falló'],
   // 0101 · Registro de decisiones. Los cuatro candados que separan una decisión

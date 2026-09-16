@@ -47,6 +47,11 @@ export const ACTIONS_REQUIRING_REASON = [
   // Cortarle el acceso a una empresa es la consecuencia mas grave del ciclo.
   // Tiene que poder explicarse sin reconstruirla desde los intentos de pago.
   'SUSPENDER_POR_FALTA_DE_PAGO',
+  // Entrar en mora apaga modulos que el cliente estaba usando. Los ve
+  // desaparecer, y sin motivo la pantalla le dice que algo cambio y no por que.
+  // Ademas es el paso que explica una suspension posterior: sin el, el
+  // historial salta de activa a cortada sin nada en el medio.
+  'MARCAR_EN_MORA',
   // Conectar una suscripcion a una pasarela es lo que habilita que a una
   // empresa se le debite todos los meses. Sin motivo, dentro de un ano nadie
   // sabe de donde salio ese debito ni quien lo autorizo.

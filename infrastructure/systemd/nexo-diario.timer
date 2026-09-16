@@ -1,0 +1,32 @@
+[Unit]
+Description=NEXO · una vez por día, el ciclo de facturación y cobranza
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+
+[Timer]
+# 03:15, hora del servidor.
+#
+# **La hora del servidor importa acá y no en las otras dos.** El ciclo factura
+# «lo que vence hoy», y qué día es hoy lo decide el reloj de esta máquina. Si el
+# servidor está en UTC y la empresa en Buenos Aires, una corrida a las 00:30 UTC
+# es el día anterior a las 21:30 local: un cargo del día 1 se emitiría el 31.
+# A las 03:15 hay tres horas de margen contra un huso de -3, que es el de toda
+# la base de clientes de NEXO.
+#
+# Correrlo una vez al día y no varias es a propósito. El ciclo es idempotente
+# —un período ya facturado se informa omitido en vez de duplicarse— así que
+# correrlo de más no rompe nada; lo que sí hace es dividir el informe del día en
+# pedazos y volver más difícil contestar «¿qué pasó ayer?».
+OnCalendar=*-*-* 03:15:00
+
+# La corrida perdida es la del día, y la del día es la que vence pruebas y emite
+# cargos. Un servidor apagado entre las 03:00 y las 04:00 dejaría un día sin
+# facturar que nadie notaría hasta la conciliación del mes.
+Persistent=true
+
+# Hasta diez minutos de desfase. No hay nada más agendado a esa hora en esta
+# máquina, pero una copia de resguardo que se agende después —y que se va a
+# agendar, `docs/DESPLIEGUE.md` §4— no tiene por qué competir con esto.
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

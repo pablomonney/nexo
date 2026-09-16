@@ -9,8 +9,8 @@
  * cualquier texto; sin esto, escribe un estado válido en un momento imposible.
  */
 
-/** Los cuatro estados de la 0067, tal como los declara el `CHECK`. */
-export type EstadoDeSuscripcion = 'PRUEBA' | 'ACTIVA' | 'SUSPENDIDA' | 'CANCELADA';
+/** Los cinco estados de la 0124, tal como los declara el `CHECK`. */
+export type EstadoDeSuscripcion = 'PRUEBA' | 'ACTIVA' | 'MOROSA' | 'SUSPENDIDA' | 'CANCELADA';
 
 /**
  * Qué puede seguir a cada estado.
@@ -28,9 +28,36 @@ const SIGUIENTES: Readonly<Record<EstadoDeSuscripcion, readonly EstadoDeSuscripc
   // `CANCELADA`, y la diferencia importa: cancelar es una decisión del cliente,
   // y de CANCELADA no se vuelve. Quien dejó vencer una prueba no decidió nada
   // —se le acabó el tiempo— y va a poder contratar mañana sin empezar de cero.
+  //
+  // `PRUEBA → MOROSA` **no existe**: una prueba no genera deuda. Lo que le pasa
+  // a una prueba que se acaba es que se vence, y eso ya tiene nombre.
   PRUEBA: ['ACTIVA', 'SUSPENDIDA', 'CANCELADA'],
-  ACTIVA: ['SUSPENDIDA', 'CANCELADA'],
+
+  // `ACTIVA → SUSPENDIDA` sigue existiendo al lado de `ACTIVA → MOROSA`, y no
+  // es una duplicación: la mora la decide el calendario de cobranza, y la
+  // suspensión directa la decide una persona —o la pasarela, cuando el cliente
+  // cancela el medio de pago del otro lado—. Obligar a pasar por MOROSA para
+  // cortar le pondría un escalón de cobranza a una baja que no tiene nada que
+  // ver con una deuda.
+  ACTIVA: ['MOROSA', 'SUSPENDIDA', 'CANCELADA'],
+
+  // Las tres salidas de la mora, y ninguna vuelve a PRUEBA: quien ya contrató
+  // no puede volver a probar el producto gratis, y una prueba después de una
+  // deuda sería exactamente eso.
+  //
+  //   ACTIVA       pagó. Es la salida esperada y la que hace que la mora valga
+  //                la pena: se recupera todo sin haber perdido nada.
+  //   SUSPENDIDA   no pagó y se acabó la gracia.
+  //   CANCELADA    se dio de baja debiendo. La deuda emitida no desaparece —los
+  //                documentos quedan— pero la suscripción se termina.
+  MOROSA: ['ACTIVA', 'SUSPENDIDA', 'CANCELADA'],
+
+  // `SUSPENDIDA → MOROSA` **no existe**, y es la única de las cuatro ausencias
+  // que puede sorprender. Degradar a alguien que ya está cortado no le devuelve
+  // nada: sería mover hacia atrás un estado que solo se levanta pagando, y el
+  // camino de vuelta ya está —`SUSPENDIDA → ACTIVA`, con la deuda saldada—.
   SUSPENDIDA: ['ACTIVA', 'CANCELADA'],
+
   CANCELADA: [],
 };
 

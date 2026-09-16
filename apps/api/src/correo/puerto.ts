@@ -147,3 +147,50 @@ export async function encolar(
 
   return resultado;
 }
+
+/**
+ * Deja el mensaje en la bandeja y **no intenta mandarlo**.
+ *
+ * ## Por qué hace falta una segunda función
+ *
+ * `encolar` —la de arriba— manda primero y escribe después. Para el alta está
+ * bien: hay una persona esperando el correo con la pantalla abierta, y un
+ * segundo de latencia a cambio de que el token le llegue ya es un buen
+ * negocio.
+ *
+ * La cobranza no se parece en nada a eso. Corre sola, de noche, adentro de una
+ * transacción que además **cambia el estado de la suscripción**, y le escribe a
+ * varias empresas por corrida. Mandar desde ahí adentro tiene tres problemas, y
+ * el tercero es el que decide:
+ *
+ *   · un proveedor lento le pone su latencia a una transacción que tiene
+ *     abierto un `UPDATE` sobre `company_subscriptions`;
+ *   · un proveedor caído convierte «avisar» en «fallar», y el ciclo entero se
+ *     va atrás por un correo;
+ *   · y al revés —lo grave—: si la transacción se revierte **después** de que
+ *     el proveedor aceptó el mensaje, el cliente recibe «tu acceso quedó
+ *     degradado» sobre una degradación que no ocurrió. Eso no se puede
+ *     deshacer, porque el correo ya está en su bandeja de entrada.
+ *
+ * Con esta función el mensaje es una fila más de la misma transacción: si el
+ * ciclo se revierte, el aviso se revierte con él. Sale después, cuando
+ * `correo:bandeja` drene la cola, y para entonces el hecho que describe ya está
+ * confirmado.
+ *
+ * ## `PENDIENTE` no es `SIN_PROVEEDOR`
+ *
+ * Los cuatro estados de la tabla siguen significando lo mismo y esta función
+ * escribe el único que faltaba usar. `PENDIENTE` es «todavía no se intentó» —
+ * lo que hay que hacer es drenar la cola—. `SIN_PROVEEDOR` es «se intentó y no
+ * hay a quién pedírselo» — lo que hay que hacer es configurar el proveedor—.
+ * Escribir `SIN_PROVEEDOR` acá, «porque total puede que no haya», sería afirmar
+ * el resultado de un intento que no ocurrió.
+ */
+export async function encolarSinEnviar(tx: Tx, mensaje: Mensaje): Promise<void> {
+  await tx.query(
+    `INSERT INTO email_outbox
+       (destinatario, asunto, cuerpo, tipo, estado, intentos)
+     VALUES ($1, $2, $3, $4, 'PENDIENTE', 0)`,
+    [mensaje.destinatario, mensaje.asunto, mensaje.cuerpo, mensaje.tipo],
+  );
+}

@@ -140,11 +140,28 @@ info "creada $(docker image inspect "$IMAGEN" --format '{{.Created}}' | cut -c1-
 # de la imagen.
 titulo "3.1 · Contenido real de la imagen"
 
-for ruta in /app/apps /app/packages /app/node_modules /app/package.json /app/infrastructure; do
+for ruta in /app/apps /app/packages /app/node_modules /app/package.json /app/infrastructure \
+            /app/scripts; do
   if docker run --rm --entrypoint sh "$IMAGEN" -c "[ -e '$ruta' ]" 2>/dev/null; then
     ok "$ruta"
   else
     mal "$ruta — FALTA en la imagen"
+  fi
+done
+
+# `/app/scripts` entró en la 0124–0126 y su ausencia es **invisible desde la
+# aplicación**: la API arranca y sirve igual sin él. Lo que no funciona son los
+# timers, que fallan cada cinco minutos con «Cannot find module» y que en
+# `systemctl list-timers` se ven idénticos a unos que andan.
+#
+# Se comprueban los tres archivos por nombre, no solo el directorio: un
+# `.dockerignore` que excluyera uno dejaría el directorio presente y la tarea
+# rota.
+for tarea in pagos-bandeja correo-bandeja tareas-diarias; do
+  if docker run --rm --entrypoint sh "$IMAGEN" -c "[ -f '/app/scripts/${tarea}.mjs' ]" 2>/dev/null; then
+    ok "/app/scripts/${tarea}.mjs"
+  else
+    mal "/app/scripts/${tarea}.mjs — FALTA: el timer de esa tarea no va a correr"
   fi
 done
 
