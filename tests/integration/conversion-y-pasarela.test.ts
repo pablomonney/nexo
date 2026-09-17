@@ -42,7 +42,7 @@ import { SinPasarela, type EstadoExternoDeSuscripcion } from '@aai/api/pagos/pue
 import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { connect, hasDatabase, type Client } from './helpers/db.js';
+import { connect, hasDatabase, organizacionDe, type Client } from './helpers/db.js';
 import { sufijoUnico } from './helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
@@ -911,7 +911,12 @@ suite('De la prueba al cobro', () => {
     let docEstado: string | undefined;
     let docImporte: string | undefined;
     try {
-      informe = await emitirVencidos(txDe(db), FECHA_APARCADA as never, 'test:ciclo');
+      // Acotado a la organización de esta empresa: sin esto, la emisión
+      // global alcanza las suscripciones de las demás suites.
+      const organizacion = await organizacionDe(db, empresa);
+      informe = await emitirVencidos(txDe(db), FECHA_APARCADA as never, 'test:ciclo', {
+        soloOrganizacion: organizacion,
+      });
       const doc = await db.query<{ estado: string; importe_total: string }>(
         `SELECT estado, importe_total::text AS importe_total
            FROM billing_documents WHERE company_id = $1`,

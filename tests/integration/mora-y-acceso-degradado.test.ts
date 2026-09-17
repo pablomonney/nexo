@@ -32,7 +32,7 @@
  *      fechas de las demás no existe.
  *   2. **Las aserciones filtran por el documento propio** (`mio`). No evita el
  *      cruce: lo hace visible.
- *   3. **Las llamadas van acotadas a su empresa** (`cobrar`). Este fue el que
+ *   3. **Las llamadas van acotadas a su organización** (`cobrar`). Este fue el que
  *      faltaba, y el que rompía: sin él, las corridas de este archivo en 2028
  *      le escribían pasos de aviso a los documentos de `facturacion.test.ts`,
  *      que espera el calendario de **su** política. El fallo aparecía allá, no
@@ -189,7 +189,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     pasos.find((p) => p.documentId === documentId);
 
   /**
-   * Avanza la cobranza **de una empresa**, y no la de toda la base.
+   * Avanza la cobranza **de esta suite**, y no la de toda la base.
    *
    * `avanzarCobranza` no recibe una empresa: toma todos los documentos impagos
    * que existan y les aplica la política vigente al día que se le pasa. Es lo
@@ -201,9 +201,13 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
    * aviso a los documentos de `facturacion.test.ts`, que espera el calendario
    * de **su** política. No era un test frágil: era este archivo rompiendo el
    * otro, y el fallo aparecía en el otro.
+   *
+   * El alcance es la organización que `seed()` creó para este archivo, no cada
+   * empresa suelta: todas las de acá cuelgan de ella, y un solo valor no se
+   * puede olvidar en una llamada.
    */
-  const cobrar = (hoy: string, companyId: string) =>
-    avanzarCobranza(txDe(db), hoy, 'test:mora', { soloEmpresa: companyId });
+  const cobrar = (hoy: string) =>
+    avanzarCobranza(txDe(db), hoy, 'test:mora', { soloOrganizacion: fx.organizationId });
 
   // ══ La política ═══════════════════════════════════════════════════════════
 
@@ -230,7 +234,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const dias = ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08', '2028-03-11'];
     const ejecutados: (PasoEjecutado | undefined)[] = [];
     for (const dia of dias) {
-      ejecutados.push(mio(await cobrar(dia, empresa), doc));
+      ejecutados.push(mio(await cobrar(dia), doc));
     }
 
     expect(ejecutados.map((e) => e?.paso.tipo)).toEqual([
@@ -250,11 +254,11 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const doc = await deudaFallida(empresa, sub);
 
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     expect((await estadoDe(sub)).estado).toBe('ACTIVA');
 
-    const paso = mio(await cobrar('2028-03-08', empresa), doc);
+    const paso = mio(await cobrar('2028-03-08'), doc);
     expect(paso?.paso.tipo).toBe('MORA');
     expect(paso?.resultado).toBe('HECHO');
 
@@ -271,7 +275,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
 
     const log = await db.query<{ action: string; motivo: string | null; new_value: unknown }>(
@@ -290,11 +294,11 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     expect((await estadoDe(sub)).estado).toBe('MOROSA');
 
-    const paso = mio(await cobrar('2028-03-11', empresa), doc);
+    const paso = mio(await cobrar('2028-03-11'), doc);
     expect(paso?.paso.tipo).toBe('SUSPENSION');
     expect(paso?.resultado).toBe('HECHO');
     expect((await estadoDe(sub)).estado).toBe('SUSPENDIDA');
@@ -308,7 +312,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const doc = await deudaFallida(empresa, sub);
 
     for (let i = 0; i < 4; i += 1) {
-      await cobrar('2028-03-01', empresa);
+      await cobrar('2028-03-01');
     }
     expect(await pasosDe(doc)).toHaveLength(1);
   });
@@ -318,13 +322,13 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     const desde = (await estadoDe(sub)).morosa_desde;
 
     // Otra corrida el mismo día, y otra más tarde: ninguna vuelve a degradar.
-    await cobrar('2028-03-08', empresa);
-    await cobrar('2028-03-09', empresa);
+    await cobrar('2028-03-08');
+    await cobrar('2028-03-09');
 
     expect((await pasosDe(doc)).filter((p) => p.tipo === 'MORA')).toHaveLength(1);
     expect((await estadoDe(sub)).morosa_desde).toBe(desde);
@@ -338,7 +342,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     await db.query(
       `UPDATE company_subscriptions SET estado = 'CANCELADA', motivo = 'Baja del test'
@@ -346,7 +350,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       [sub],
     );
 
-    const paso = mio(await cobrar('2028-03-08', empresa), doc);
+    const paso = mio(await cobrar('2028-03-08'), doc);
     expect(paso?.resultado).toBe('OMITIDO');
     expect(paso?.detalle).toContain('CANCELADA');
     expect((await pasosDe(doc)).filter((p) => p.tipo === 'MORA')).toHaveLength(1);
@@ -359,7 +363,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     // El documento se mueve al futuro: sigue EMITIDO —así la cobranza lo levanta
     // igual— pero ya no está vencido al día del paso.
@@ -367,7 +371,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       doc,
     ]);
 
-    const paso = mio(await cobrar('2028-03-08', empresa), doc);
+    const paso = mio(await cobrar('2028-03-08'), doc);
     expect(paso?.resultado).toBe('OMITIDO');
     expect(paso?.detalle).toContain('deuda vencida');
     expect((await estadoDe(sub)).estado).toBe('ACTIVA');
@@ -406,11 +410,11 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       // `estado = 'ACTIVA'`: la prueba pasaba el control, no cambiaba nada, y el
       // paso quedaba registrado como HECHO. Un registro que afirma un corte que
       // no ocurrió es peor que no tener registro: nadie va a volver a mirarlo.
-      const { sub, doc, empresa } = await pruebaConDeuda();
+      const { sub, doc } = await pruebaConDeuda();
       for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-        await cobrar(dia, empresa);
+        await cobrar(dia);
       }
-      const paso = mio(await cobrar('2028-03-11', empresa), doc);
+      const paso = mio(await cobrar('2028-03-11'), doc);
 
       expect(paso?.paso.tipo).toBe('SUSPENSION');
       expect(paso?.resultado).toBe('HECHO');
@@ -421,11 +425,11 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       // Una prueba no genera deuda propia. `puedeTransicionar('PRUEBA','MOROSA')`
       // es false, así que el paso se omite **y se registra**: sin la fila, el
       // ciclo lo encontraría pendiente todos los días para siempre.
-      const { sub, doc, empresa } = await pruebaConDeuda();
+      const { sub, doc } = await pruebaConDeuda();
       for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06']) {
-        await cobrar(dia, empresa);
+        await cobrar(dia);
       }
-      const paso = mio(await cobrar('2028-03-08', empresa), doc);
+      const paso = mio(await cobrar('2028-03-08'), doc);
 
       expect(paso?.paso.tipo).toBe('MORA');
       expect(paso?.resultado).toBe('OMITIDO');
@@ -471,7 +475,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     expect((await estadoDe(sub)).estado).toBe('MOROSA');
 
@@ -498,7 +502,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc1 = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     expect((await estadoDe(sub)).estado).toBe('MOROSA');
 
@@ -556,7 +560,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
     const sub = await suscribir(empresa);
     const doc = await deudaFallida(empresa, sub);
     for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-      await cobrar(dia, empresa);
+      await cobrar(dia);
     }
     await registrarCobro(txDe(db), {
       documentId: doc,
@@ -830,7 +834,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       const doc = await deudaFallida(empresa, sub);
       await conAdministrador(empresa);
 
-      const paso = mio(await cobrar('2028-03-01', empresa), doc);
+      const paso = mio(await cobrar('2028-03-01'), doc);
       expect(paso?.resultado).toBe('HECHO');
 
       const bandeja = await encolados(empresa);
@@ -845,8 +849,8 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       await deudaFallida(empresa, sub);
       await conAdministrador(empresa);
 
-      await cobrar('2028-03-01', empresa);
-      await cobrar('2028-03-03', empresa);
+      await cobrar('2028-03-01');
+      await cobrar('2028-03-03');
 
       const bandeja = await encolados(empresa);
       expect(bandeja).toHaveLength(2);
@@ -861,7 +865,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       await conAdministrador(empresa);
 
       for (const dia of ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08']) {
-        await cobrar(dia, empresa);
+        await cobrar(dia);
       }
       const cuerpo = (
         await db.query<{ cuerpo: string }>(
@@ -890,12 +894,12 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       const sub = await suscribir(empresa);
       const doc = await deudaFallida(empresa, sub);
 
-      const paso = mio(await cobrar('2028-03-01', empresa), doc);
+      const paso = mio(await cobrar('2028-03-01'), doc);
       expect(paso?.resultado).toBe('OMITIDO');
       expect(paso?.detalle).toContain('administrador');
 
       // Y el calendario no se detiene: al día siguiente sigue el aviso 2.
-      const siguiente = mio(await cobrar('2028-03-03', empresa), doc);
+      const siguiente = mio(await cobrar('2028-03-03'), doc);
       expect(siguiente?.paso).toMatchObject({ tipo: 'AVISO', numero: 2 });
     });
 
@@ -955,7 +959,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       await conAdministrador(empresa);
 
       for (let i = 0; i < 5; i += 1) {
-        await cobrar('2028-03-01', empresa);
+        await cobrar('2028-03-01');
       }
       expect(await encolados(empresa)).toHaveLength(1);
     });
@@ -969,10 +973,10 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       await conAdministrador(empresa);
 
       const dias = ['2028-03-01', '2028-03-03', '2028-03-06', '2028-03-08', '2028-03-11'];
-      for (const dia of dias) await cobrar(dia, empresa);
+      for (const dia of dias) await cobrar(dia);
       expect(await encolados(empresa)).toHaveLength(5);
 
-      for (const dia of dias) await cobrar(dia, empresa);
+      for (const dia of dias) await cobrar(dia);
       expect(await encolados(empresa)).toHaveLength(5);
     });
 
@@ -986,12 +990,12 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       await conAdministrador(empresa);
       await conAdministrador(empresa);
 
-      await cobrar('2028-03-01', empresa);
+      await cobrar('2028-03-01');
       const primera = await encolados(empresa);
       expect(primera).toHaveLength(2);
       expect(new Set(primera.map((m) => m.destinatario)).size).toBe(2);
 
-      await cobrar('2028-03-01', empresa);
+      await cobrar('2028-03-01');
       expect(await encolados(empresa)).toHaveLength(2);
     });
 

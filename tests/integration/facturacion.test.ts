@@ -30,7 +30,15 @@ import { correrCiclo, registrarCobro, politicaVigente } from '@aai/api/billing/c
 import { totp, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { asCompany, connect, hasDatabase, seed, type Client, type Fixture } from './helpers/db.js';
+import {
+  asCompany,
+  connect,
+  hasDatabase,
+  organizacionDe,
+  seed,
+  type Client,
+  type Fixture,
+} from './helpers/db.js';
 import { sufijoUnico } from './helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
@@ -126,7 +134,7 @@ suite('Facturación — el ciclo', () => {
 
   it('emite un cargo por el período que vence', async () => {
     const sub = await suscribir(fx.companyA, { desde: '2026-01-01', proxima: '2026-01-01' });
-    const informe = await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo');
+    const informe = await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     const mios = informe.emitidos.filter((d) => d.companyId === fx.companyA);
     expect(mios).toHaveLength(1);
@@ -142,8 +150,8 @@ suite('Facturación — el ciclo', () => {
   it('correrlo dos veces el mismo día no cobra dos veces', async () => {
     const empresa = await nuevaEmpresa();
     const sub = await suscribir(empresa, { desde: '2026-02-01', proxima: '2026-02-01' });
-    await correrCiclo(txDe(db), '2026-02-01', 'test:ciclo');
-    const segunda = await correrCiclo(txDe(db), '2026-02-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-02-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
+    const segunda = await correrCiclo(txDe(db), '2026-02-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     expect(segunda.emitidos.filter((d) => d.companyId === empresa)).toHaveLength(0);
     expect(await documentosDe(sub)).toHaveLength(1);
@@ -153,7 +161,7 @@ suite('Facturación — el ciclo', () => {
     // Si el ciclo no corrió el lunes, el martes emite el del lunes. Emitir solo
     // el de hoy dejaría un mes de servicio sin cobrar.
     const sub = await suscribir(await nuevaEmpresa(), { desde: '2026-03-01', proxima: '2026-03-01' });
-    await correrCiclo(txDe(db), '2026-03-20', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-03-20', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     expect(await documentosDe(sub)).toHaveLength(1);
 
@@ -170,7 +178,7 @@ suite('Facturación — el ciclo', () => {
       proxima: '2026-04-01',
       importe: '100.00',
     });
-    await correrCiclo(txDe(db), '2026-04-16', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-04-16', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     const docs = await documentosDe(sub);
     // Abril tiene 30 días; del 16 al 30 son 15. La mitad exacta.
@@ -185,7 +193,7 @@ suite('Facturación — el ciclo', () => {
     );
     const sub = r.rows[0]!.id;
 
-    const informe = await correrCiclo(txDe(db), '2026-05-01', 'test:ciclo');
+    const informe = await correrCiclo(txDe(db), '2026-05-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     // No aparece ni como emitida ni como omitida: sin `proxima_facturacion` la
     // consulta no la levanta. Lo que importa es que no se emitió un cargo de
     // cero, que se vería igual que un cliente que no debe nada.
@@ -195,7 +203,7 @@ suite('Facturación — el ciclo', () => {
 
   it('la próxima facturación avanza al día siguiente del período cerrado', async () => {
     const sub = await suscribir(await nuevaEmpresa(), { desde: '2026-06-01', proxima: '2026-06-01' });
-    await correrCiclo(txDe(db), '2026-06-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-06-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     const s = await db.query<{ proxima_facturacion: string }>(
       'SELECT proxima_facturacion::text FROM company_subscriptions WHERE id = $1',
@@ -206,11 +214,11 @@ suite('Facturación — el ciclo', () => {
 
   it('dos períodos consecutivos no dejan hueco', async () => {
     const sub = await suscribir(await nuevaEmpresa(), { desde: '2026-08-31', proxima: '2026-08-31' });
-    await correrCiclo(txDe(db), '2026-08-31', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-08-31', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     // El 30, no el 28: el período que arranca un 31 de agosto termina el 29 de
     // septiembre, así que el siguiente recién vence el 30. Correrlo el 28 no
     // emitía nada, y el test lo dijo.
-    await correrCiclo(txDe(db), '2026-09-30', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-09-30', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     const periodos = await db.query<{ desde: string; hasta: string }>(
       'SELECT desde::text, hasta::text FROM billing_periods WHERE subscription_id = $1 ORDER BY desde',
@@ -229,7 +237,7 @@ suite('Facturación — el ciclo', () => {
       proxima: '2026-10-01',
       estado: 'SUSPENDIDA',
     });
-    await correrCiclo(txDe(db), '2026-10-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-10-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     expect(await documentosDe(sub)).toHaveLength(1);
   });
 });
@@ -260,7 +268,7 @@ suite('Facturación — cobros', () => {
       )
     ).rows[0]!.id;
 
-    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     documento = (
       await db.query<{ id: string }>(
         'SELECT id FROM billing_documents WHERE subscription_id = $1',
@@ -339,12 +347,12 @@ suite('Facturación — cobros', () => {
         WHERE id = $1`,
       [sub],
     );
-    await correrCiclo(txDe(db), '2026-02-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-02-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     await db.query(
       `UPDATE company_subscriptions SET proxima_facturacion = '2026-03-01'::date WHERE id = $1`,
       [sub],
     );
-    await correrCiclo(txDe(db), '2026-03-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-03-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     const impagos = (
       await db.query<{ id: string }>(
@@ -406,7 +414,7 @@ suite('Facturación — cobranza sin política y con política', () => {
       )
     ).rows[0]!.id;
 
-    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     documento = (
       await db.query<{ id: string }>(
         'SELECT id FROM billing_documents WHERE subscription_id = $1',
@@ -435,7 +443,7 @@ suite('Facturación — cobranza sin política y con política', () => {
   it('sin política declarada no se suspende a nadie, y se dice por qué', async () => {
     expect(await politicaVigente(txDe(db), '2026-01-15')).toBeNull();
 
-    const informe = await correrCiclo(txDe(db), '2026-01-15', 'test:ciclo');
+    const informe = await correrCiclo(txDe(db), '2026-01-15', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     const mio = informe.cobranza.find((p) => p.documentId === documento);
 
     expect(mio?.resultado).toBe('OMITIDO');
@@ -458,7 +466,7 @@ suite('Facturación — cobranza sin política y con política', () => {
 
     // El fallo fue el 10 y estamos a 30: hay cuatro pasos vencidos. Ejecuta el
     // primer reintento, no la suspensión.
-    const informe = await correrCiclo(txDe(db), '2026-01-30', 'test:ciclo');
+    const informe = await correrCiclo(txDe(db), '2026-01-30', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     const mio = informe.cobranza.find((p) => p.documentId === documento);
 
     expect(mio?.paso).toMatchObject({ tipo: 'REINTENTO', numero: 1 });
@@ -478,7 +486,7 @@ suite('Facturación — cobranza sin política y con política', () => {
     // Tres corridas más: el ciclo avanza **un** paso por vez aunque haya cuatro
     // vencidos, para que ninguno se saltee.
     for (let corrida = 0; corrida < 3; corrida += 1) {
-      await correrCiclo(txDe(db), '2026-01-30', 'test:ciclo');
+      await correrCiclo(txDe(db), '2026-01-30', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     }
 
     const pasos = await db.query<{ tipo: string; numero: number | null; resultado: string }>(
@@ -518,7 +526,7 @@ suite('Facturación — cobranza sin política y con política', () => {
       'SELECT count(*)::text AS n FROM collection_steps WHERE document_id = $1',
       [documento],
     );
-    await correrCiclo(txDe(db), '2026-02-15', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-02-15', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     const despues = await db.query<{ n: string }>(
       'SELECT count(*)::text AS n FROM collection_steps WHERE document_id = $1',
       [documento],
@@ -547,7 +555,7 @@ suite('Facturación — aislamiento y esquema', () => {
        VALUES ($1, $2, 'ACTIVA', '2026-01-01'::date, 'test', 'MENSUAL', 'ARS', 777.00, '2026-01-01'::date)`,
       [fx.companyA, planId],
     );
-    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     documentoDeA = (
       await db.query<{ id: string }>(
         'SELECT id FROM billing_documents WHERE company_id = $1',
@@ -810,7 +818,12 @@ suite('Facturación — lo que ve la empresa', () => {
        VALUES ($1, $2, 'ACTIVA', '2026-01-01'::date, 'test', 'MENSUAL', 'ARS', 12345.67, '2026-01-01'::date)`,
       [empresa, planId],
     );
-    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo');
+    // El ciclo es global: se lo acota a la organización de esta empresa para
+    // que no emita sobre las filas de las otras suites, que corren a la par.
+    // Esta suite arma su empresa a mano y no tiene fixture, así que la
+    // organización se pide por el identificador que sí tiene.
+    const organizacion = await organizacionDe(db, empresa);
+    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo', { soloOrganizacion: organizacion });
     documento = (
       await db.query<{ id: string }>('SELECT id FROM billing_documents WHERE company_id = $1', [
         empresa,

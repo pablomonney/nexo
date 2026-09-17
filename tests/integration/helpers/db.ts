@@ -167,3 +167,25 @@ export async function seed(client: pg.Client, label: string): Promise<Fixture> {
     salesA,
   };
 }
+
+/**
+ * La organización a la que pertenece una empresa.
+ *
+ * Existe para acotar el ciclo de facturación. `correrCiclo` y sus tres fases
+ * recorren **toda la instalación**, que es lo correcto en producción y un
+ * problema en una suite que corre en paralelo con otras ciento setenta y siete
+ * contra la misma base: el ciclo de un archivo emite sobre las filas de otro.
+ *
+ * Las suites que usan `seed()` ya tienen su `organizationId` en el fixture. Las
+ * que arman su empresa a mano no, y para esas está esto: pedirlo por el
+ * identificador que sí tienen.
+ */
+export async function organizacionDe(client: pg.Client, companyId: string): Promise<string> {
+  const { rows } = await client.query<{ organization_id: string }>(
+    'SELECT organization_id FROM companies WHERE id = $1',
+    [companyId],
+  );
+  const org = rows[0]?.organization_id;
+  if (org === undefined) throw new Error(`No existe la empresa ${companyId}`);
+  return org;
+}

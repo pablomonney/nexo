@@ -27,6 +27,7 @@
  */
 
 import { recordAudit, type Tx } from '@aai/db';
+import { filtroDeOrganizacion, type OpcionesDelCiclo } from './alcance.js';
 import { puedeTransicionar, type EstadoDeSuscripcion } from '@aai/billing-engine';
 import { addDays, parseCalendarDate, type CalendarDate } from '@aai/shared';
 
@@ -301,13 +302,16 @@ export async function vencerPruebas(
   tx: Tx,
   hoy: CalendarDate,
   actorId: string,
+  opciones: OpcionesDelCiclo = {},
 ): Promise<InformeDePruebas> {
+  const alcance = filtroDeOrganizacion(opciones, 2);
   const { rows } = await tx.query<{ id: string; company_id: string; termina: string }>(
     `SELECT id, company_id, vigencia_hasta::text AS termina
        FROM company_subscriptions
       WHERE estado = 'PRUEBA' AND vigencia_hasta < $1::date
+        ${alcance.sql}
       ORDER BY vigencia_hasta`,
-    [hoy],
+    [hoy, alcance.valor],
   );
 
   const vencidas: { companyId: string; subscriptionId: string }[] = [];

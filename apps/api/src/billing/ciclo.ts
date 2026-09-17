@@ -39,6 +39,7 @@
  */
 
 import { recordAudit, type Tx } from '@aai/db';
+import { filtroDeOrganizacion, type OpcionesDelCiclo } from './alcance.js';
 import { encolarAvisoDeCobranza, modulosEnPausaPorMora } from './avisos.js';
 import { vencerPruebas, type InformeDePruebas } from './prueba.js';
 import { config } from '../config.js';
@@ -157,7 +158,9 @@ export async function emitirVencidos(
   tx: Tx,
   hoy: CalendarDate,
   actorId: string,
+  opciones: OpcionesDelCiclo = {},
 ): Promise<{ emitidos: DocumentoEmitido[]; omitidos: Omision[] }> {
+  const alcance = filtroDeOrganizacion(opciones, 2);
   const { rows } = await tx.query<FilaDeSuscripcion>(
     `SELECT id, company_id, plan_id, estado, periodicidad, moneda,
             importe_acordado::text AS importe_acordado,
@@ -167,8 +170,9 @@ export async function emitirVencidos(
       WHERE estado IN ('ACTIVA', 'MOROSA', 'SUSPENDIDA')
         AND proxima_facturacion IS NOT NULL
         AND proxima_facturacion <= $1::date
+        ${alcance.sql}
       ORDER BY proxima_facturacion, id`,
-    [hoy],
+    [hoy, alcance.valor],
   );
 
   const emitidos: DocumentoEmitido[] = [];
@@ -555,29 +559,9 @@ export async function politicaVigente(
  * producción aparecen una vez cada mil cobros— sin cuenta de pasarela y sin red.
  * En producción no se pasa nada y sale de `config`.
  */
-export interface OpcionesDeCobranza {
+export interface OpcionesDeCobranza extends OpcionesDelCiclo {
   readonly proveedor?: ProveedorDePagos;
   readonly ambienteConfigurado?: string;
-  /**
-   * Avanzar la cobranza **de una sola empresa**.
-   *
-   * En producción no se pasa: el ciclo es global a propósito, porque una
-   * cobranza que hay que acordarse de correr por cliente no se corre.
-   *
-   * Existe por lo mismo que los dos campos de arriba —este tipo entero es el
-   * punto de inyección de esta función— y lo pidió un defecto concreto de las
-   * pruebas, que vale la pena dejar escrito porque describe el comportamiento
-   * real: **`avanzarCobranza` no recibe una empresa, así que toma todos los
-   * documentos impagos que existan**, y les aplica la política vigente al día
-   * que se le pasa. Dos suites corriendo en paralelo contra la misma base
-   * hacen que la política de una le escriba pasos a los documentos de la otra.
-   *
-   * Eso no es un artefacto del entorno de pruebas: es lo que la función hace.
-   * Lo que el entorno de pruebas agrega es **dos calendarios vigentes a la
-   * vez**, que en una instalación real no puede pasar porque
-   * `collection_policies_una_vigente` lo impide.
-   */
-  readonly soloEmpresa?: string;
 }
 
 /** Un documento impago con su empresa, tal como lo ve la cobranza. */
@@ -604,10 +588,10 @@ export async function avanzarCobranza(
        JOIN payment_intents i ON i.document_id = d.id AND i.estado = 'FALLIDO'
        JOIN companies c ON c.id = d.company_id
       WHERE d.estado = 'EMITIDO'
-        AND ($1::uuid IS NULL OR d.company_id = $1::uuid)
+        AND ($1::uuid IS NULL OR c.organization_id = $1::uuid)
       GROUP BY d.id, d.company_id, d.subscription_id, c.legal_name
       ORDER BY 5, 1`,
-    [opciones.soloEmpresa ?? null],
+    [opciones.soloOrganizacion ?? null],
   );
 
   const hechos: PasoEjecutado[] = [];
@@ -1411,13 +1395,17 @@ export async function correrCiclo(
   tx: Tx,
   hoy: CalendarDate,
   actorId: string,
+  opciones: OpcionesDeCobranza = {},
 ): Promise<InformeDeCiclo> {
   // Las pruebas se vencen **antes** de emitir. Una prueba que venció hoy no
   // debe recibir un cargo hoy: quien no contrató nada no debe nada, y emitirle
   // un documento para anularlo después ensucia su historial con un cargo que
   // nunca correspondió.
-  const pruebas = await vencerPruebas(tx, hoy, actorId);
-  const { emitidos, omitidos } = await emitirVencidos(tx, hoy, actorId);
-  const cobranza = await avanzarCobranza(tx, hoy, actorId);
+  // El alcance viaja a las tres fases. Pasárselo a dos de tres dejaría un ciclo
+  // que vence las pruebas de una organización y emite las de todas, que es
+  // peor que no acotarlo: parecería acotado.
+  const pruebas = await vencerPruebas(tx, hoy, actorId, opciones);
+  const { emitidos, omitidos } = await emitirVencidos(tx, hoy, actorId, opciones);
+  const cobranza = await avanzarCobranza(tx, hoy, actorId, opciones);
   return { hoy, emitidos, omitidos, cobranza, pruebas };
 }

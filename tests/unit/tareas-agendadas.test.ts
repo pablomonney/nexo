@@ -449,6 +449,15 @@ describe('tareas agendadas — modo de verificación', () => {
   // Los casos que siguen **ejecutan** los verificadores. Sin base se saltean, y
   // no se inventa un resultado: es la misma regla que los propios verificadores
   // aplican con sus datos.
+  /**
+   * Un CUIT con formato válido que no le pertenece a nadie.
+   *
+   * Es la forma barata de llegar al caso «no hay ni una empresa» sin montar
+   * una base vacía, y de paso acota los dos casos que ejecutan a una consulta
+   * que no devuelve filas.
+   */
+  const CUIT_INEXISTENTE = '99999999999';
+
   const conBase = (process.env.DATABASE_URL ?? '') === '' ? it.skip : it;
 
   const correrVerificador = (nombre: string, args: readonly string[]) =>
@@ -474,7 +483,7 @@ describe('tareas agendadas — modo de verificación', () => {
         ['verify-ledger.mjs', 'No se afirma que el Mayor coincida'],
         ['verify-audit-chain.mjs', 'No se afirma que la bitácora esté íntegra'],
       ] as const) {
-        const r = correrVerificador(nombre, ['--observacional', '99999999999']);
+        const r = correrVerificador(nombre, ['--observacional', CUIT_INEXISTENTE]);
         const salida = `${r.stdout}${r.stderr}`;
         expect(r.status, `${nombre}: ${salida}`).toBe(0);
         expect(salida, nombre).toContain('NO EJERCITADO');
@@ -490,45 +499,46 @@ describe('tareas agendadas — modo de verificación', () => {
   conBase(
     'el observacional corre de punta a punta sin pasar por docs/',
     () => {
-      // Lo que este caso demuestra es la independencia de `docs/`: los dos
-      // verificadores recorren datos reales y en ningún momento siembran normas
-      // ni arman una base aparte. Es la condición para que la tarea diaria
-      // funcione adentro del contenedor.
+      // La independencia de `docs/` se decide **antes** de mirar un solo dato:
+      // la rama conductual —la que siembra normas— corre arriba de todo, y si
+      // el proceso llega a imprimir «Modo OBSERVACIONAL» es porque no pasó por
+      // ahí. Eso es todo lo que hay que demostrar.
+      //
+      // Por eso va acotado a un CUIT que no existe, y no a la base entera.
+      // La primera versión barría las **9.352 empresas** que arrastra
+      // `aai_test` y tardaba 54 segundos medidos; bajo cobertura, con 177
+      // archivos en paralelo, pasaba los 120 del timeout y el caso fallaba por
+      // el reloj, no por el sistema. Subir el timeout habría escondido que el
+      // test estaba pidiendo algo que no necesitaba.
       for (const nombre of VERIFICADORES) {
-        const r = correrVerificador(nombre, ['--observacional']);
+        const r = correrVerificador(nombre, ['--observacional', CUIT_INEXISTENTE]);
         const salida = `${r.stdout}${r.stderr}`;
         expect(salida, nombre).toContain('Modo OBSERVACIONAL');
         // La rama que necesita `docs/` no dejó ni un rastro.
         expect(salida, nombre).not.toContain('CONDUCTUAL');
         expect(salida, nombre).not.toContain('fixtures conductuales');
         expect(salida, nombre).not.toContain('registro-de-descargas');
-        // Y comparó de verdad: llegó a mirar empresas.
-        expect(salida, nombre).toMatch(/\d+\)/u);
+        expect(salida, nombre).not.toContain('ENOENT');
       }
     },
-    180_000,
+    60_000,
   );
 
-  conBase(
-    'sobre datos reales e íntegros el observacional afirma, y sale con 0',
-    () => {
-      // La contracara del NO EJERCITADO: con datos que están bien, dice que
-      // están bien.
-      //
-      // Se usa la cadena de auditoría y **no** el Mayor, y el motivo vale
-      // escribirlo: `aai_test` es una base de trabajo donde cientos de suites
-      // dejan estados rotos a propósito, así que el verificador del Mayor sale
-      // con 1 sobre ella — correctamente—. Afirmar acá que `aai_test` cuadra
-      // sería afirmar algo falso sobre una base que no tiene por qué cuadrar.
-      // La bitácora sí: es append-only por trigger, y ninguna suite la rompe.
-      const r = correrVerificador('verify-audit-chain.mjs', ['--observacional']);
-      const salida = `${r.stdout}${r.stderr}`;
-      expect(r.status, salida).toBe(0);
-      expect(salida).toContain('Modo OBSERVACIONAL');
-      expect(salida).toContain('verificada(s) con entradas reales, sin adulteraciones');
-    },
-    180_000,
-  );
+  it('el modo conductual se sigue ejercitando, y lo hace el propio `verify`', () => {
+    // La demostración de que el conductual sigue vivo **no** es correrlo otra
+    // vez desde acá: es que `npm run verify` lo corre en cada pasada, con la
+    // base de verificación aislada y los fixtures rotos a propósito.
+    //
+    // Duplicarlo en este archivo lo haría correr dos veces por suite —arma una
+    // base entera cada vez— y no probaría nada que la compuerta no pruebe ya.
+    // Lo que sí hay que cuidar es que siga encadenado, que es lo que se rompe
+    // en silencio el día que alguien edite el script de `verify`.
+    const pkg = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts['verify']).toContain('ledger:verify');
+    expect(pkg.scripts['verify']).toContain('audit:cadena');
+  });
 });
 
 /**

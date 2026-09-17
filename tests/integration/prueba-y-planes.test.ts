@@ -185,7 +185,7 @@ suite('Prueba de 14 días', () => {
       desde: (await hoyMenos(DIAS_DE_PRUEBA + 2)) as never, actorId: 'test:alta',
     });
 
-    const informe = await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo');
+    const informe = await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo', { soloOrganizacion: fx.organizationId });
     expect(informe.vencidas.some((v) => v.companyId === empresa)).toBe(true);
 
     const s = await db.query<{ estado: string; motivo: string }>(
@@ -210,7 +210,7 @@ suite('Prueba de 14 días', () => {
     const antes = await db.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_logs WHERE action = 'VENCER_PRUEBA'`,
     );
-    await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo');
+    await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo', { soloOrganizacion: fx.organizationId });
     const despues = await db.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_logs WHERE action = 'VENCER_PRUEBA'`,
     );
@@ -261,7 +261,7 @@ suite('Prueba de 14 días', () => {
       companyId: empresa, planCode: 'GESTION',
       desde: (await hoyMenos(DIAS_DE_PRUEBA + 4)) as never, actorId: 'test:alta',
     });
-    await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo');
+    await vencerPruebas(txDe(db), (await hoyMenos(0)) as never, 'test:ciclo', { soloOrganizacion: fx.organizationId });
 
     const r = await convertirPrueba(txDe(db), {
       companyId: empresa, planCode: 'GESTION', periodicidad: 'MENSUAL', moneda: 'ARS',

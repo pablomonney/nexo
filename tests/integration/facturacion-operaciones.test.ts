@@ -49,7 +49,7 @@ suite('Facturación — eventos, anulación y cambio de plan', () => {
     ).rows[0]!.id;
 
     sub = await suscribir(fx.companyA, '2026-01-01', '3000.00');
-    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-01-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     documento = (
       await db.query<{ id: string }>(
         'SELECT id FROM billing_documents WHERE subscription_id = $1',
@@ -225,7 +225,7 @@ suite('Facturación — eventos, anulación y cambio de plan', () => {
   it('un documento pagado no se anula: se acredita', async () => {
     const empresa = await nuevaEmpresa('pagada');
     const s = await suscribir(empresa, '2026-05-01', '500.00');
-    await correrCiclo(txDe(db), '2026-05-01', 'test:ciclo');
+    await correrCiclo(txDe(db), '2026-05-01', 'test:ciclo', { soloOrganizacion: fx.organizationId });
     const doc = (
       await db.query<{ id: string }>(
         'SELECT id FROM billing_documents WHERE subscription_id = $1',
