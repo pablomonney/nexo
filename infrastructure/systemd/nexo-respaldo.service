@@ -1,0 +1,46 @@
+[Unit]
+Description=NEXO · copia de resguardo diaria de la base
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+
+# ## Por qué esta unidad no corre la imagen de NEXO
+#
+# Las otras tres arrancan `nexo:production` porque ejecutan código de NEXO. Esta
+# ejecuta `pg_dump`, que es una herramienta de PostgreSQL, y la corre desde la
+# imagen de PostgreSQL —la misma versión mayor que el servidor, que es lo que
+# `pg_dump` exige para poder leer el catálogo—.
+#
+# Meter el cliente de PostgreSQL en `nexo:production` para esto engordaría la
+# imagen que atiende los pedidos por un script que corre una vez al día.
+#
+# ## Por qué el guion está en un archivo y no acá
+#
+# Porque saca la copia, **la abre para comprobar que se puede leer** y poda las
+# viejas con una regla que hay que poder revisar. Un `ExecStart` con eso adentro
+# sería una línea que nadie lee, y la parte que nadie lee sería justamente la que
+# borra archivos.
+#
+# `respaldar.sh` corre en el host —necesita `docker`— y lee `/opt/nexo/.env` para
+# las credenciales. La contraseña se pasa con `-e PGPASSWORD` sin valor, así que
+# no aparece en `argv` de ningún proceso ni en el journal.
+ExecStart=/usr/bin/bash /opt/nexo/infrastructure/systemd/respaldar.sh
+
+# Una hora. El volcado de hoy tarda segundos, pero crece con los datos y hay un
+# `pg_restore --list` de verificación detrás. Sin tope, un volcado colgado
+# bloquearía las corridas siguientes; con uno corto, la primera instalación con
+# volumen real moriría a mitad de camino y dejaría un archivo incompleto —que el
+# propio script borra, pero sin copia del día.
+TimeoutStartSec=3600
+
+# No se reintenta. El script es idempotente en el sentido que importa —cada
+# corrida escribe su propio archivo con su sello— pero reintentar en bucle
+# contra un disco lleno llena el journal y no consigue la copia. El timer
+# vuelve mañana, y `estado-de-tareas.sh` muestra que la de hoy falló.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -70,7 +70,7 @@
 
 set -uo pipefail
 
-readonly UNIDADES=(nexo-pagos nexo-correo nexo-diario)
+readonly UNIDADES=(nexo-pagos nexo-correo nexo-diario nexo-respaldo)
 
 JSON=0
 [[ "${1:-}" == "--json" ]] && JSON=1

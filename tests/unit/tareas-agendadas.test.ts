@@ -30,12 +30,22 @@ const UNIDADES = join(RAIZ, 'infrastructure', 'systemd');
 
 const leer = (archivo: string): string => readFileSync(join(UNIDADES, archivo), 'utf8');
 
-/** Las tres, con el script que cada una manda a correr. */
+/**
+ * Las tres que corren código de NEXO, con el script que cada una manda a correr.
+ *
+ * `nexo-respaldo` no está acá y tiene su propio bloque: corre `pg_dump` desde la
+ * imagen de PostgreSQL, no `node` desde la de NEXO, así que casi ninguna de las
+ * comprobaciones de abajo le aplica. Meterla en esta lista con excepciones
+ * dejaría una tabla de casos especiales en vez de dos grupos claros.
+ */
 const TAREAS = [
   { unidad: 'nexo-pagos', script: 'pagos-bandeja.mjs' },
   { unidad: 'nexo-correo', script: 'correo-bandeja.mjs' },
   { unidad: 'nexo-diario', script: 'tareas-diarias.mjs' },
 ] as const;
+
+/** Las cuatro unidades instaladas. */
+const UNIDADES_TODAS = [...TAREAS.map((t) => t.unidad), 'nexo-respaldo'] as const;
 
 describe('tareas agendadas — las unidades de systemd', () => {
   it('cada tarea tiene su servicio y su timer', () => {
@@ -575,6 +585,13 @@ describe('tareas agendadas — el lector de estado', () => {
     expect(codigo).not.toMatch(/(^|[|;&(\s])jq[\s|]/mu);
   });
 
+  it('el lector cubre las cuatro unidades, no tres', () => {
+    // Una unidad instalada que el lector no nombra es una tarea que puede
+    // fallar todos los días sin figurar en la única pantalla que se mira.
+    const s = estado();
+    for (const unidad of UNIDADES_TODAS) expect(s, unidad).toContain(unidad);
+  });
+
   it('las dos salidas traen los seis datos', () => {
     const s = estado();
     for (const campo of ['última corrida', 'última exitosa', 'último resultado', 'próxima']) {
@@ -591,5 +608,127 @@ describe('tareas agendadas — el lector de estado', () => {
     ]) {
       expect(s, clave).toContain(`"${clave}"`);
     }
+  });
+});
+
+/**
+ * La copia de resguardo, que es la cuarta unidad y la distinta.
+ *
+ * Corre `pg_dump` desde la imagen de PostgreSQL y no `node` desde la de NEXO:
+ * `pg_dump` es una herramienta de PostgreSQL y tiene que ser la misma versión
+ * mayor que el servidor. Meter el cliente en `nexo:production` engordaría la
+ * imagen que atiende los pedidos por un script que corre una vez al día.
+ */
+describe('tareas agendadas — la copia de resguardo', () => {
+  const servicio = (): string => leer('nexo-respaldo.service');
+  const timer = (): string => leer('nexo-respaldo.timer');
+  const guion = (): string => leer('respaldar.sh');
+
+  it('la unidad existe, es oneshot y no se reintenta', () => {
+    expect(existsSync(join(UNIDADES, 'nexo-respaldo.service'))).toBe(true);
+    expect(existsSync(join(UNIDADES, 'nexo-respaldo.timer'))).toBe(true);
+    expect(servicio()).toMatch(/^Type=oneshot$/mu);
+    expect(servicio()).toMatch(/^Restart=no$/mu);
+  });
+
+  it('ejecuta el guion que existe en el repositorio', () => {
+    // El mismo eslabón que faltó con `scripts/`: la unidad nombra un archivo y
+    // el archivo tiene que estar. Acá vive en el checkout del servidor, no en
+    // la imagen, porque necesita `docker` y corre en el host.
+    expect(servicio()).toContain('/opt/nexo/infrastructure/systemd/respaldar.sh');
+    expect(existsSync(join(UNIDADES, 'respaldar.sh'))).toBe(true);
+  });
+
+  it('corre a diario, es Persistent y no se pisa con el ciclo', () => {
+    // Una copia perdida es la del día, y es exactamente el día que después
+    // nadie puede recuperar.
+    expect(timer()).toMatch(/^Persistent=true$/mu);
+
+    const cuando = /^OnCalendar=\*-\*-\* (\d{2}):(\d{2}):00$/mu.exec(timer());
+    expect(cuando, 'la copia tiene que ser diaria y a una hora fija').not.toBeNull();
+
+    const copia = Number(cuando![1]) * 60 + Number(cuando![2]);
+    const ciclo = /^OnCalendar=\*-\*-\* (\d{2}):(\d{2}):00$/mu.exec(leer('nexo-diario.timer'))!;
+    const diario = Number(ciclo[1]) * 60 + Number(ciclo[2]);
+
+    // **Antes** del ciclo, y con margen. El ciclo es lo único agendado que
+    // modifica el estado comercial de un cliente: si una corrida hace algo mal,
+    // la copia que sirve es la de antes. Con la copia después, el día del
+    // incidente la única reciente ya tendría el daño adentro.
+    expect(copia, 'la copia va antes del ciclo').toBeLessThan(diario);
+    expect(diario - copia, 'con margen suficiente').toBeGreaterThanOrEqual(30);
+  });
+
+  it('usa la imagen de PostgreSQL, no la de NEXO', () => {
+    expect(guion()).toContain('postgres:18-alpine');
+    // Sobre el `ExecStart` y no sobre el archivo entero: el comentario de la
+    // unidad **nombra** `nexo:production` para explicar por qué no la usa, y
+    // prohibir la palabra rompería el caso con su propia explicación.
+    expect(execStartDe('nexo-respaldo')).not.toContain('nexo:production');
+  });
+
+  it('verifica el volcado antes de darlo por bueno, y lo borra si no se puede leer', () => {
+    // El paso que convierte un archivo en una copia. Un volcado que `pg_dump`
+    // dejó a medias pesa, existe y se ve igual que uno bueno hasta el día que
+    // hace falta.
+    const s = guion();
+    expect(s).toContain('pg_restore --list');
+    // Y si no se puede leer, no queda: un archivo ilegible que parece una copia
+    // da una seguridad que no da.
+    const verificacion = /no se puede leer[\s\S]{0,400}?rm -f "\$ARCHIVO"/u;
+    expect(s, 'el volcado ilegible tiene que borrarse').toMatch(verificacion);
+    expect(s).toMatch(/exit 1/u);
+  });
+
+  it('la retención es explícita, se cuenta en copias y no toca las manuales', () => {
+    const s = guion();
+    // Declarada con un número, no heredada de una variable sin valor por
+    // defecto: una decisión de conservación que vive solo en el entorno del
+    // servidor no se puede revisar leyendo el repositorio.
+    expect(s).toMatch(/RETENER="\$\{NEXO_BACKUP_RETENER:-\d+\}"/u);
+
+    // La poda mira SOLO lo automático. Las copias que una persona saca antes de
+    // un despliegue son las más valiosas el día del incidente, y serían las
+    // primeras en caer bajo una retención por antigüedad.
+    const podas = [...s.matchAll(/^\s*(?:rm -f|find .*-delete)/gmu)];
+    expect(podas.length, 'toda poda pasa por un solo lugar').toBeGreaterThan(0);
+    expect(s).toContain("-name '*-auto.dump'");
+    expect(s, 'nunca un borrado recursivo').not.toMatch(/rm -rf/u);
+  });
+
+  it('nunca sobrescribe una copia existente', () => {
+    // Dos corridas en el mismo segundo es lo único que puede chocar. Una copia
+    // de resguardo que pisa otra es lo contrario de una copia de resguardo.
+    expect(guion()).toMatch(/\[\[ -e "\$ARCHIVO" \]\].*no se sobrescribe/su);
+  });
+
+  it('no deja la contraseña en la línea de comandos', () => {
+    // `-e PGPASSWORD` sin valor pasa la del entorno. Con `PGPASSWORD=secreto` el
+    // secreto quedaría en `argv`, que `ps` muestra a cualquiera que pueda leerlo.
+    const s = guion();
+    expect(s).toContain('-e PGPASSWORD ');
+    expect(s).not.toMatch(/-e PGPASSWORD=\S/u);
+    expect(s).not.toMatch(/postgres(ql)?:\/\/[^$]/u);
+  });
+
+  it('tiene un modo que no escribe ni borra', () => {
+    // Es el que corre el instalador para comprobar sin efectos, y el que una
+    // persona corre para ver qué podaría antes de dejarlo agendado.
+    const s = guion();
+    expect(s).toContain("--ver");
+    expect(s).toContain('no se escribió ni se borró nada');
+  });
+
+  it('el instalador comprueba las condiciones propias de la copia', () => {
+    const instalar = readFileSync(join(UNIDADES, 'instalar.sh'), 'utf8');
+    // La versión mayor tiene que coincidir: `pg_dump` se niega a volcar una base
+    // de un servidor más nuevo, y el error aparecería a las 02:30 sin testigos.
+    expect(instalar).toContain('pg_dump --version');
+    expect(instalar).toContain('postgres --version');
+    for (const v of ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB']) {
+      expect(instalar, v).toContain(v);
+    }
+    // Y prueba corriendo el script de verdad, en el modo que no escribe.
+    expect(instalar).toContain('respaldar.sh" --ver');
   });
 });

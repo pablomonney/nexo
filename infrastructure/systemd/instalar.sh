@@ -9,10 +9,14 @@
 #
 # ## Qué instala
 #
-# Tres timers y sus servicios. Cada uno arranca un contenedor, corre una tarea y
-# se borra. **No hay ningún proceso residente**: un worker vivo para tareas que
+# Cuatro timers y sus servicios. Cada uno arranca un contenedor, corre una tarea
+# y se borra. **No hay ningún proceso residente**: un worker vivo para tareas que
 # duran segundos es un proceso más que se puede morir en silencio, y descubrirlo
 # requiere mirar algo que nadie mira.
+#
+# Tres corren `nexo:production` porque ejecutan código de NEXO. El cuarto
+# —`nexo-respaldo`— corre `pg_dump` desde la imagen de PostgreSQL, que es de
+# donde sale esa herramienta. Ver `nexo-respaldo.service`.
 #
 # ## Por qué comprueba antes de habilitar
 #
@@ -30,7 +34,10 @@ readonly DESTINO=/etc/systemd/system
 readonly IMAGEN="nexo:production"
 readonly RED="nexo"
 readonly ENV_FILE=/opt/nexo/.env
-readonly UNIDADES=(nexo-pagos nexo-correo nexo-diario)
+readonly CONTENEDOR_DB="nexo-postgres"
+# La misma version mayor que el servidor, que es lo que pg_dump exige.
+readonly IMAGEN_PG="postgres:18-alpine"
+readonly UNIDADES=(nexo-pagos nexo-correo nexo-diario nexo-respaldo)
 
 FALLOS=0
 ok()    { printf '  \033[32m✔\033[0m %s\n' "$*"; }
@@ -167,6 +174,41 @@ if docker run --rm --network "$RED" --env-file "$ENV_FILE" \
   mal "el rol de la aplicación PUEDE leer la bandeja de correo: se le ampliaron privilegios"
 else
   ok "el rol de la aplicación sigue sin poder leer email_outbox (correcto)"
+fi
+
+titulo "3.1 · La copia de resguardo"
+
+# El cuarto timer no usa la imagen de NEXO ni la red `nexo`: usa la imagen de
+# PostgreSQL y `docker exec` contra el contenedor de la base. Tiene sus propias
+# condiciones, y todas se comprueban corriendo algo, no leyendo un archivo.
+
+[[ -x "${ORIGEN}/respaldar.sh" || -r "${ORIGEN}/respaldar.sh" ]] \
+  && ok "respaldar.sh está en ${ORIGEN}" \
+  || mal "falta ${ORIGEN}/respaldar.sh — la unidad apunta ahí"
+
+# La imagen tiene que ser la misma versión mayor que el servidor: `pg_dump` se
+# niega a volcar una base de un servidor más nuevo que él, y el error aparecería
+# a las 02:30 sin que nadie lo mire.
+mayor_servidor=$(docker exec "$CONTENEDOR_DB" postgres --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
+mayor_imagen=$(docker run --rm "$IMAGEN_PG" pg_dump --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
+if [[ -n "$mayor_servidor" && "$mayor_servidor" == "$mayor_imagen" ]]; then
+  ok "pg_dump $mayor_imagen coincide con el servidor $mayor_servidor"
+else
+  mal "pg_dump ${mayor_imagen:-?} contra servidor ${mayor_servidor:-?}: no coinciden"
+fi
+
+for variable in POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
+  grep -q "^${variable}=" "$ENV_FILE" 2>/dev/null \
+    && ok "declara $variable" || mal "$ENV_FILE no declara $variable"
+done
+
+# Y la prueba de verdad, que no escribe ni borra: el propio script en `--ver`.
+if bash "${ORIGEN}/respaldar.sh" --ver >/dev/null 2>&1; then
+  ok "respaldar.sh --ver corre (destino accesible, credenciales legibles)"
+else
+  mal "respaldar.sh --ver falló"
+  while IFS= read -r linea; do info "$linea"; done \
+    <<< "$(bash "${ORIGEN}/respaldar.sh" --ver 2>&1 | tail -4)"
 fi
 
 if [[ "$FALLOS" -gt 0 ]]; then

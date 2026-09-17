@@ -1,0 +1,36 @@
+[Unit]
+Description=NEXO · una vez por día, la copia de resguardo
+Documentation=file:/opt/nexo/infrastructure/systemd/README.md
+
+[Timer]
+# 02:30, cuarenta y cinco minutos ANTES de `nexo-diario`.
+#
+# El orden es la decisión, y va en esta dirección por el escenario que hay que
+# poder deshacer: el ciclo de facturación escribe —emite cargos, vence pruebas,
+# degrada y suspende accesos— y es lo único agendado que modifica el estado
+# comercial de un cliente. Si una corrida hace algo mal, la copia que sirve es
+# **la de antes**, no la de después.
+#
+# Al revés, con la copia después del ciclo, el día del incidente la única copia
+# reciente ya tendría el daño adentro.
+#
+# El costo de este orden es que la copia no incluye lo que el ciclo escribió esa
+# madrugada. Con cadencia diaria la ventana de pérdida es la misma en los dos
+# órdenes —hasta veinticuatro horas— así que se elige por el escenario que se
+# puede deshacer, no por el tamaño de la ventana.
+#
+# Y no se pisa con ninguna de las otras tres: `nexo-pagos` corre en los minutos
+# 0/5, `nexo-correo` en los 2/5 —tardan segundos— y `nexo-diario` a las 03:15.
+OnCalendar=*-*-* 02:30:00
+
+# La copia perdida es la del día. Un servidor apagado entre las 02:00 y las
+# 03:00 dejaría un día sin resguardo, que es exactamente el día que después nadie
+# puede recuperar.
+Persistent=true
+
+# Hasta cinco minutos de desfase, para no arrancar clavado en el mismo segundo
+# que cualquier otra cosa que el proveedor agende a las 02:30 en punto.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
