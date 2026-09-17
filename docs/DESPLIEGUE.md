@@ -72,6 +72,10 @@ como si hubiera mirado.
 > prueba una conexión es una llamada que volvió, y eso lo dice
 > `ai_predictions`, no una variable de entorno.
 
+El procedimiento completo del correo —qué hay que hacer en Resend, dónde van las
+tres variables, cómo se comprueba que quedaron bien y qué prueba end-to-end se
+corre después— está en `docs/CORREO_RESEND.md`.
+
 ## 3 · El orden de un despliegue
 
 Las migraciones **no corren al arrancar el contenedor**. Con dos réplicas, cada
