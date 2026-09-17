@@ -37,6 +37,8 @@ readonly ENV_FILE=/opt/nexo/.env
 readonly CONTENEDOR_DB="nexo-postgres"
 # La misma version mayor que el servidor, que es lo que pg_dump exige.
 readonly IMAGEN_PG="postgres:18-alpine"
+# Solo para el mensaje final: la retencion de verdad la decide respaldar.sh.
+readonly RETENER_DOC="14"
 readonly UNIDADES=(nexo-pagos nexo-correo nexo-diario nexo-respaldo)
 
 FALLOS=0
@@ -262,5 +264,8 @@ if [[ "$FALLOS" -gt 0 ]]; then
 fi
 
 printf '\033[32mListo.\033[0m El estado, cuando quieras:  %s/estado-de-tareas.sh\n\n' "$ORIGEN"
-printf '  La copia de resguardo NO está acá: se agenda aparte, a sabiendas.\n'
-printf '  Ver docs/DESPLIEGUE.md §4.\n\n'
+printf '  La copia de resguardo SÍ está acá ahora: nexo-respaldo, a las 02:30, con\n'
+printf '  verificación y retención de %s copias. Lo que sigue sin estar es sacarla\n' "$RETENER_DOC"
+printf '  fuera del servidor: vive en el mismo disco que la base.\n\n'
+printf '  Y una copia que nunca se restauró es una hipótesis. El ensayo está en\n'
+printf '  docs/DESPLIEGUE.md §7.7.\n\n'

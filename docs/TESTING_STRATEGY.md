@@ -338,6 +338,40 @@ CUIT sin habilitación → el sistema debe marcar `NO_VERIFICABLE`, jamás "OK".
   comprobantes coherentes.
 - El corpus de OCR se anonimiza en origen y su uso se documenta.
 
+### 3.1 La base de pruebas se acumula, y pasado cierto punto `verify` falla por el reloj
+
+`aai_test` **no se limpia entre corridas**, y es a propósito: los candados de
+este esquema —`forbid_delete`, la bitácora append-only, el `CONSTRAINT TRIGGER`
+diferido de `Debe = Haber`— existen para que nada se borre, y envolver cada test
+en `BEGIN`/`ROLLBACK` haría que el candado más importante nunca dispare (ver
+`scripts/test-db.mjs`).
+
+La consecuencia es que **cada corrida deja empresas, asientos y bitácora**.
+Medido el 2026-09-17, después de varias semanas de corridas:
+
+```
+299 MB · 10.736 empresas · 5.421 organizaciones · 106.480 entradas de bitácora
+```
+
+Con ese volumen, `npm run verify` empezó a fallar por **timeout**, no por una
+regresión: `navegacion-e2e.test.ts` pide `/work-queue` para una empresa, y la
+vista recorre lo que haya. La misma corrida pasó de 168 s a 261 s.
+
+**El síntoma engaña**, y por eso está escrito acá: un test que se pasa de los
+20 s de su timeout se lee como código lento o como flake, y lo que hay debajo es
+una base de trabajo que creció. Subirle el timeout compra unas semanas y
+después vuelve.
+
+**El remedio es una línea, y conviene correrla antes de creerle a `verify`:**
+
+```bash
+npm run test:db -- --reset    # la borra, la rehace, migra y siembra
+```
+
+Desde cero, la misma suite corre en ~185 s y pasa. La limpieza periódica es
+trabajo de quien mantiene el entorno; no hay —todavía— nada que la haga sola ni
+que avise cuando hace falta.
+
 ---
 
 ## 4. Sandbox (§34)

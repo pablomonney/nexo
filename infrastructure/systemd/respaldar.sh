@@ -168,4 +168,4 @@ printf '\n'
 ok "copia del día lista"
 info "$ARCHIVO"
 printf '\n  Una copia que nunca se restauró sigue siendo una hipótesis.\n'
-printf '  El ensayo de restauración se hace aparte: docs/OPERACION.md\n\n'
+printf '  El ensayo de restauración se hace aparte: docs/DESPLIEGUE.md §7.7\n\n'

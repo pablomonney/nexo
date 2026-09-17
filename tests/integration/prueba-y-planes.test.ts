@@ -469,6 +469,19 @@ suite('La puerta comercial de los planes', () => {
   });
 
   it('el catálogo de planes se ve sin sesión: es la página de precios', async () => {
+    // ## Por qué acá no hay ni un importe escrito a mano
+    //
+    // Este caso afirmaba `29900.00` e `incluyeImpuestos: false`. Los dos valores
+    // dejaron de ser ciertos el 2026-09-15, cuando se cargó la lista comercial
+    // definitiva —CONTABLE pasó a 59900 y a importes FINALES con IVA— y el test
+    // **siguió pasando durante dos días**: la base de pruebas nunca se resetea,
+    // así que conservaba las filas de `plan_prices` viejas. Lo destapó el primer
+    // `test:db --reset`.
+    //
+    // Un precio escrito en un test convierte una decisión comercial en un cambio
+    // de código, y encima la afirma sobre datos arrastrados. Lo que este caso
+    // tiene que defender es **el contrato**: que la página pública se ve sin
+    // sesión y que dice lo que la base declara, sea lo que sea.
     const r = await app.inject({ method: 'GET', url: '/planes' });
     expect(r.statusCode, r.body).toBe(200);
     const cuerpo = r.json<{
@@ -478,12 +491,55 @@ suite('La puerta comercial de los planes', () => {
     }>();
 
     expect(cuerpo.prueba).toMatchObject({ dias: 14, pideTarjeta: false });
-    const contable = cuerpo.planes.find((p) => p.code === 'CONTABLE');
-    expect(contable?.precio?.importe).toBe('29900.00');
-    // Neto: la lista comercial dice «+ IVA». Guardar el final y llamarlo neto
-    // sería equivocarse por un 21 % en cada cargo.
-    expect(contable?.precio?.incluyeImpuestos).toBe(false);
-    expect(cuerpo.alcance).toContain('NETOS');
+    expect(cuerpo.planes.length).toBeGreaterThan(0);
+
+    // Lo declarado, tal como está en la base.
+    const declarado = await db.query<{
+      code: string;
+      importe: string | null;
+      incluye_impuestos: boolean | null;
+    }>(
+      `SELECT p.code, pr.importe::text AS importe, pr.incluye_impuestos
+         FROM subscription_plans p
+         LEFT JOIN plan_prices pr
+           ON pr.plan_id = p.id
+          AND pr.periodicidad = 'MENSUAL'
+          AND pr.vigente_desde <= CURRENT_DATE
+          AND (pr.vigente_hasta IS NULL OR pr.vigente_hasta > CURRENT_DATE)
+        WHERE p.status = 'DISPONIBLE'`,
+    );
+
+    let comparados = 0;
+    for (const fila of declarado.rows) {
+      const publicado = cuerpo.planes.find((p) => p.code === fila.code);
+      if (publicado === undefined) continue;
+      comparados += 1;
+      // Un plan sin precio declarado se publica con `precio: null`, no con cero:
+      // cero se ve igual que gratis, y gratis nadie lo decidió.
+      if (fila.importe === null) {
+        expect(publicado.precio, `${fila.code} sin precio declarado`).toBeNull();
+      } else {
+        expect(publicado.precio?.importe, fila.code).toBe(fila.importe);
+        expect(publicado.precio?.incluyeImpuestos, fila.code).toBe(fila.incluye_impuestos);
+      }
+    }
+    // Sin esto, un catálogo vacío pasaría el bucle sin comparar nada.
+    expect(comparados, 'no se comparó ni un plan').toBeGreaterThan(0);
+
+    // El texto que acompaña a la lista tiene que explicar el tratamiento fiscal:
+    // un importe sin decir si lleva IVA se lee mal por un 21 %.
+    expect(cuerpo.alcance).toMatch(/IVA/u);
+
+    // ⚠ **Lo que este caso NO afirma, y hay que arreglar en el bloque comercial.**
+    //
+    // `alcance` dice hoy «Los importes son NETOS: la lista dice "+ IVA"», y los
+    // precios cargados tienen `incluye_impuestos = true` —o sea FINALES, con IVA
+    // adentro—. El texto de la página pública contradice al dato que la misma
+    // respuesta trae al lado.
+    //
+    // No se afirma acá porque corregirlo es una decisión comercial —qué dice la
+    // lista de precios— y no de este archivo. Queda escrito para que no se
+    // pierda: está en producción, en la página que ve quien evalúa comprar.
   });
 
   it('alcanzaElPlan resuelve el dominio del primer segmento de la ruta', async () => {

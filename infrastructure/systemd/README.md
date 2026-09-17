@@ -149,7 +149,8 @@ software o una migración mala, no contra la pérdida del VPS. Sacarla fuera del
 servidor es una decisión aparte, con su costo.
 
 **Una copia que nunca se restauró es una hipótesis.** El ensayo de restauración
-se hace aparte y está en `docs/OPERACION.md`.
+se hace aparte y está en `docs/DESPLIEGUE.md` §7.7, con lo que contestó la
+primera vez.
 
 ## Lo que hay que mirar, y cuándo
 

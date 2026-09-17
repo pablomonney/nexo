@@ -110,10 +110,20 @@ miedo.
 > nada lo indique, porque desde adentro todo funciona. Lo encontró la auditoría
 > B-2 siguiendo la cadena de llamadas.
 
-La **copia de resguardo queda afuera a propósito** (`npm run db:backup`): cada
-cuánto correrla y cuánto retener tienen atrás una obligación legal de
-conservación, y ponerla acá con una frecuencia elegida por un script sería tomar
-esa decisión sin decirlo.
+**Esto ya está agendado** desde el 2026-09-16: `nexo-diario`, a las 03:15 UTC.
+Las cuatro unidades y su instalador están en `infrastructure/systemd/`, con su
+propio README.
+
+La **copia de resguardo también**, desde el 2026-09-17: `nexo-respaldo`, a las
+02:30 UTC, cuarenta y cinco minutos antes del ciclo. Durante meses quedó afuera
+a propósito —cada cuánto correrla y cuánto retener tienen atrás una obligación
+legal de conservación— y la decisión finalmente se tomó: **catorce copias**,
+verificadas al escribirlas, con la poda limitada a las automáticas. El
+razonamiento completo está en `infrastructure/systemd/README.md`.
+
+Lo que **sigue** sin decidirse es sacar la copia fuera del servidor: hoy vive en
+el mismo disco que la base, lo que alcanza para deshacer un error de software y
+no para perder el VPS.
 
 ## 3.2 · La forma del despliegue, y por qué es la que es
 
@@ -180,8 +190,8 @@ cuando haya un proxy delante, hay que declarar `TRUST_PROXY=true` (§6).
 | **Proveedor de hosting** | Tiene costo, contrato y jurisdicción. La jurisdicción no es un detalle: los datos son contabilidad de terceros. La **forma** ya está decidida en §3.2. |
 | **Terminación TLS** | Depende del proveedor. La aplicación **no** termina TLS; el proxy que la exponga tiene que reescribir `X-Forwarded-For` y no dejar pasar la de afuera, y entonces se declara `TRUST_PROXY=true` (§6). |
 | **Gestor de secretos** | `MFA_ENCRYPTION_KEY` y las credenciales de ARCA no pueden vivir en un `.env` de producción. Cuál gestor es una decisión de infraestructura — **la única que falta**: el código ya está del otro lado de la interfaz (ver §4.1). |
-| **Programación de copias** | Los scripts existen y nadie los agenda. Cada cuánto y cuánto se retiene es una decisión con costo y con obligación legal de conservación detrás. |
-| **Agendador de las tareas diarias** | Lo que hay que agendar ya es **una sola línea** —`npm run diario`, ver §3.1—. Lo que falta es dónde: cron, un timer de systemd o el programador del proveedor es una decisión que depende del hosting. |
+| ~~**Programación de copias**~~ | **Decidido el 2026-09-17**: `nexo-respaldo`, diaria a las 02:30 UTC, catorce copias, verificadas al escribirlas. Lo que sigue abierto es **dónde guardarlas afuera del servidor**: hoy comparten disco con la base. |
+| ~~**Agendador de las tareas diarias**~~ | **Decidido el 2026-09-16**: timers de systemd en el host, arrancando la imagen desplegada. Ver `infrastructure/systemd/README.md`. |
 | **Destino de los logs** | Hoy salen por la salida estándar, que es lo correcto para un contenedor. A dónde van después lo decide el proveedor. |
 | **Escalado horizontal** | La aplicación guarda dos cosas en memoria y las dos son por proceso: los contadores de métricas y la ventana del límite de intentos. Con varias réplicas, el recolector tiene que sumar las primeras, y el límite efectivo de la segunda se multiplica por la cantidad de réplicas. Contarlo en la base agregaría una escritura por intento fallido en el camino más caliente del sistema, así que la decisión es del tamaño del despliegue. |
 
@@ -467,3 +477,71 @@ cookies antes de escribir (`apps/api/src/server.ts`).
 `GET /metrics` expone contadores en formato de exposición estándar y **solo si**
 se declaró `METRICS_TOKEN`; sin él contesta 404. Conectar un recolector es de
 B2.5.6, no de esta etapa.
+
+### 7.7 · El ensayo de restauración
+
+> **Una copia que nunca se restauró es una hipótesis, no una copia.**
+> `PROJECT_STATUS.md` lo decía desde que existe el backup, y durante meses fue
+> una deuda viva: el RPO y el RTO eran estimaciones porque nadie había recorrido
+> el camino de vuelta ni una vez.
+
+Se hizo por primera vez el **2026-09-17**, sobre el backup automático real.
+
+**En el servidor `db:restaurar` no corre**, y conviene saberlo antes de
+intentarlo: el script necesita Node y `pg_restore` en el host, y el host tiene
+Docker y nada más. Lo que sí corre es la secuencia equivalente, con `psql` y
+`pg_restore` desde el contenedor de PostgreSQL.
+
+```bash
+# 0 · el candado: el destino tiene que empezar con aai_restauracion.
+#     No se comprueba "que no sea producción": una lista negra siempre queda
+#     corta, y la primera vez que quede corta el error es irreversible.
+DESCARTABLE=aai_restauracion_ensayo
+AUTO=$(ls -1t /opt/nexo/var/backups/*-auto.dump | head -1)
+
+# 1 · crear la base descartable
+psql -d postgres -c "CREATE DATABASE $DESCARTABLE"
+
+# 2 · restaurar
+docker exec -e PGPASSWORD -i nexo-postgres \
+  pg_restore -U "$POSTGRES_USER" -d "$DESCARTABLE" --no-owner --no-password < "$AUTO"
+
+# 3 · comparar estructura y filas contra la base viva
+# 4 · correr los verificadores contra la restaurada
+# 5 · arrancar la aplicación contra la restaurada
+# 6 · borrar la base descartable
+```
+
+**Qué contestó, la primera vez:**
+
+| | |
+|---|---|
+| estructura | idéntica: 169 tablas, 109 vistas, **126 con RLS forzado**, 126 políticas, 666 `CHECK`, 176 triggers, 374 funciones, 126 migraciones |
+| contenido | 16 tablas con datos, **842 filas, idénticas tabla por tabla** |
+| `audit:estructura` | los 439 objetos declarados, presentes |
+| `audit:cadena` | `NO EJERCITADO` — la instalación no tiene empresas todavía |
+| `ledger:verify` | `NO EJERCITADO`, por lo mismo |
+| `migrate status` | las 126 aplicadas |
+| **la API** | **arrancó y quedó escuchando contra la base restaurada** |
+
+**Restaurar no es verificar, y el conteo es la mitad que suele faltar.**
+`pg_restore` puede terminar con código 0 y dejar un esquema a medio poblar. Un
+backup que perdió la mitad de las filas pasa las dos primeras comprobaciones sin
+ruido: el esquema está completo y un Mayor con menos asientos igual cuadra
+consigo mismo. Solo el conteo contra la base viva lo delata.
+
+**Dos cosas que el ensayo encontró, y las dos son candados funcionando:**
+
+1. **La API se negó a arrancar con la credencial operatoria.** El preflight
+   rechaza un `DATABASE_URL` superusuario —con un superusuario el aislamiento
+   entre empresas quedaría a merced de que ninguna consulta se escriba fuera de
+   `withCompany`—. Arrancó con la credencial de la aplicación, que es la
+   correcta. Ver §6.1.
+2. **`audit:invariants` no corre dentro del contenedor en modo conductual.**
+   Siembra con `seed-norms.mjs`, que lee `docs/normative-sources/`, y `docs`
+   está excluido de la imagen por `.dockerignore`. En modo `--observacional` sí
+   corre. Es el mismo motivo por el que la tarea diaria usa ese modo.
+
+**Lo que este ensayo no mide:** el RTO real de una restauración de producción.
+Corre en la misma máquina, sobre el mismo disco, sin red de por medio. Dice que
+el archivo es restaurable y completo, que es la mitad que no estaba probada.
