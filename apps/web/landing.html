@@ -479,13 +479,28 @@ const ajuste = (nombre) =>
   // una frase. La lista está duplicada con la de la consola a propósito — son
   // dos páginas sin build ni módulos compartidos, y un archivo común entre las
   // dos costaría más de lo que ahorra.
-  const nombreDelTope = (recurso, tope) => ({
-    COMPROBANTES_MES: tope + ' comprobantes por mes',
-    DOCUMENTOS_MES: tope + ' documentos por mes',
-    EMPRESAS: tope + (Number(tope) === 1 ? ' empresa' : ' empresas'),
-    INTEGRACIONES: tope + (Number(tope) === 1 ? ' integración' : ' integraciones'),
-    USUARIOS: tope + (Number(tope) === 1 ? ' usuario' : ' usuarios'),
-  })[recurso] ?? recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
+  const nombreDelTope = (recurso, tope, ilimitado) => {
+    // Un recurso declarado sin tope viene con `ilimitado: true` y `tope: null`.
+    // Sin esta rama la página publicaba «null integraciones» en el plan más
+    // caro: el campo llegaba y nadie lo leía, igual que pasaba con
+    // `incluyeImpuestos`. Y «sin tope» es lo que se está vendiendo, así que
+    // decirlo mal cuesta el doble.
+    if (ilimitado) return recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope';
+
+    // Sin tope declarado tampoco es ilimitado: es que nadie lo declaró. No se
+    // inventa un número ni se promete «sin límite».
+    if (tope === null || tope === undefined) {
+      return recurso.toLowerCase().replace(/_/g, ' ') + ': a convenir';
+    }
+
+    return ({
+      COMPROBANTES_MES: tope + ' comprobantes por mes',
+      DOCUMENTOS_MES: tope + ' documentos por mes',
+      EMPRESAS: tope + (Number(tope) === 1 ? ' empresa' : ' empresas'),
+      INTEGRACIONES: tope + (Number(tope) === 1 ? ' integración' : ' integraciones'),
+      USUARIOS: tope + (Number(tope) === 1 ? ' usuario' : ' usuarios'),
+    })[recurso] ?? recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
+  };
 
   try {
     const r = await fetch(ajuste('nexo-planes') || '/planes', { headers: { accept: 'application/json' } });
@@ -512,7 +527,7 @@ const ajuste = (nombre) =>
           : '<span class="neu">a consultar</span>') + '</td>' +
         '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
         '<td class="fina">' + escapar((p.topes || [])
-          .map((t) => nombreDelTope(t.recurso, t.tope))
+          .map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado))
           .join(' · ') || 'a convenir') + '</td>';
       cuerpo.appendChild(tr);
     }
