@@ -22,7 +22,7 @@ Lo que el sistema hace y el documento tiene que reflejar:
 |---|---|
 | La prueba dura 14 días y **no pide medio de pago** | `DIAS_DE_PRUEBA`, `POST /onboarding/empresa` |
 | Al vencer la prueba, la suscripción queda **suspendida**, no cancelada, y **no se borra nada** | `vencerPruebas`, `tests/integration/prueba-y-planes.test.ts` |
-| Los precios publicados son **netos**, sin IVA | `plan_prices.incluye_impuestos = false` |
+| Los precios publicados son **finales**, con IVA incluido | `plan_prices.incluye_impuestos = true`, y `GET /planes` lo deriva de ahí |
 | Exceder un tope del plan **no bloquea**: avisa | `routes/suscripciones.ts` |
 | Suspender por falta de pago conserva datos, contabilidad e historial | `avanzarCobranza` |
 | El cliente puede **exportar su empresa completa** | rutas de exportación |

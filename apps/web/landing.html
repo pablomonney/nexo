@@ -298,9 +298,21 @@ ul.limpia li { margin-bottom: var(--e1); }
 
   <section id="planes">
     <h2>Planes</h2>
+    <!--
+      El tratamiento del IVA **no se escribe acá**: lo completa `impuestos-leyenda`
+      con lo que contesta `GET /planes`, que a su vez lo deriva de
+      `plan_prices.incluye_impuestos`.
+
+      Acá decía «sin IVA» con los precios cargados como FINALES: la página
+      pública le sumaba un 21 % mental a cada precio que mostraba. Es el mismo
+      motivo por el que no hay un solo importe escrito en este archivo — ver el
+      comentario del encabezado— y vale igual para la frase que los describe.
+
+      Sin respuesta de la API queda vacío, no queda una suposición.
+    -->
     <p class="sub">
-      Precios en pesos, por mes, <strong>sin IVA</strong>. La prueba de 14 días es del plan que
-      elijas, completa y sin tarjeta.
+      Precios en pesos, por mes. <span id="impuestos-leyenda"></span> La prueba de 14 días es
+      del plan que elijas, completa y sin tarjeta.
     </p>
     <div class="tabla">
       <table>
@@ -395,8 +407,8 @@ ul.limpia li { margin-bottom: var(--e1); }
       <a href="/consola" data-cta="entrar">Entrar</a>
     </p>
     <p class="fina">
-      Los precios son netos y no incluyen IVA. Las funcionalidades listadas en «en qué estamos
-      trabajando» no están disponibles.
+      <span id="impuestos-pie"></span>
+      Las funcionalidades listadas en «en qué estamos trabajando» no están disponibles.
     </p>
   </footer>
 </div>
@@ -489,9 +501,14 @@ const ajuste = (nombre) =>
           escapar(p.descripcion || '') + '</div></td>' +
         // Sin precio declarado NO se muestra «gratis»: se dice que hay que
         // consultarlo. Mostrar cero regalaría el producto por una fila vacía.
+        // El «+ IVA» estaba escrito fijo y el precio venía con
+        // `incluyeImpuestos: true`: la fila decía que había que sumarle un 21 %
+        // a un importe que ya lo tenía. Ahora sale del mismo objeto que trae el
+        // número, como ya lo hacía la consola.
         '<td class="precio">' + (p.precio
           ? '$ ' + escapar(Number(p.precio.importe).toLocaleString('es-AR')) +
-            '<div class="fina" style="font-weight:400">por mes + IVA</div>'
+            '<div class="fina" style="font-weight:400">por mes' +
+            (p.precio.incluyeImpuestos ? ', IVA incluido' : ' + IVA') + '</div>'
           : '<span class="neu">a consultar</span>') + '</td>' +
         '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
         '<td class="fina">' + escapar((p.topes || [])
@@ -504,6 +521,16 @@ const ajuste = (nombre) =>
       cuerpo.innerHTML =
         '<tr><td colspan="4">Todavía no hay planes publicados. Escribinos y lo vemos.</td></tr>';
     }
+    // El tratamiento del IVA sale de la respuesta, que lo deriva de
+    // `plan_prices.incluye_impuestos`. Si la API no lo manda —una versión vieja
+    // sirviendo esta página— los dos huecos quedan **vacíos**: sin afirmación es
+    // peor que con una, pero con la equivocada es mucho peor que sin ninguna.
+    const leyendaIva = datos.impuestos ? datos.impuestos.leyenda : '';
+    for (const id of ['impuestos-leyenda', 'impuestos-pie']) {
+      const nodo = document.getElementById(id);
+      if (nodo) nodo.textContent = leyendaIva;
+    }
+
     const alDia = ajuste('nexo-precios-al');
     nota.textContent =
       'Prueba de ' + (datos.prueba ? datos.prueba.dias : 14) +
@@ -512,6 +539,10 @@ const ajuste = (nombre) =>
   } catch (e) {
     // No se muestran precios viejos ni de ejemplo: se dice que no se pudieron
     // cargar. Un precio equivocado en la página es peor que ninguno.
+    //
+    // Los dos huecos del IVA se quedan como nacieron, vacíos, y es a propósito:
+    // sin precios en pantalla, una frase sobre cómo se les suma el IVA no
+    // describe nada.
     cuerpo.innerHTML =
       '<tr><td colspan="4">No se pudieron cargar los planes en este momento. ' +
       'Probá de nuevo en un rato.</td></tr>';

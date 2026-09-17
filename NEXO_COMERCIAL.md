@@ -17,6 +17,17 @@ está al lado de cada afirmación:
 
 ## 1. Los planes
 
+> ⚠ **La tabla de abajo es la lista de B-1 y quedó superada.** El 2026-09-15 se
+> declaró la lista definitiva, con otros importes y **con IVA incluido** —
+> `declarado_por = 'comercial-2026-09'`, motivo «Lista comercial de septiembre
+> de 2026. Importes FINALES, con IVA incluido.»—.
+>
+> **La lista vigente está en `plan_prices`, no acá.** Se la ve sin sesión en
+> `GET /planes`, que además deriva el tratamiento del IVA de la propia fila en
+> vez de afirmarlo por su cuenta. Este documento no se reescribió porque cuál es
+> la lista canónica y cómo se comunica es una decisión comercial; la marca está
+> para que nadie copie de acá cinco números que ya no se cobran.
+
 **DECIDIDO** — precios de B-1, declarados el 2026-09-08 con
 `npm run comercial:b1 -- --aplicar`. Quedan en `plan_prices` con vigencia y
 motivo; una lista nueva cierra la anterior en vez de pisarla.

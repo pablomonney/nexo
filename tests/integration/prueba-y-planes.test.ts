@@ -487,6 +487,7 @@ suite('La puerta comercial de los planes', () => {
     const cuerpo = r.json<{
       planes: { code: string; precio: { importe: string; incluyeImpuestos: boolean } | null }[];
       prueba: { dias: number; pideTarjeta: boolean };
+      impuestos: { trato: string; leyenda: string };
       alcance: string;
     }>();
 
@@ -526,20 +527,40 @@ suite('La puerta comercial de los planes', () => {
     // Sin esto, un catálogo vacío pasaría el bucle sin comparar nada.
     expect(comparados, 'no se comparó ni un plan').toBeGreaterThan(0);
 
-    // El texto que acompaña a la lista tiene que explicar el tratamiento fiscal:
-    // un importe sin decir si lleva IVA se lee mal por un 21 %.
-    expect(cuerpo.alcance).toMatch(/IVA/u);
+    // ## El tratamiento del IVA tiene que coincidir con el dato, no con un texto
+    //
+    // Hasta el 2026-09-17 la respuesta traía una frase fija —«Los importes son
+    // NETOS: la lista dice “+ IVA”»— al lado de precios con
+    // `incluye_impuestos = true`. La diferencia entre las dos lecturas es **un
+    // 21 % sobre cada precio publicado**, en la página que ve quien evalúa
+    // comprar.
+    //
+    // Acá no se afirma cuál es el tratamiento: se afirma que la leyenda y las
+    // filas **dicen lo mismo**. Así el caso sigue valiendo el día que se decida
+    // pasar a netos, y se rompe el día que la frase y el dato se separen.
+    const conPrecio = cuerpo.planes.filter((p) => p.precio !== null);
+    const todosFinales = conPrecio.every((p) => p.precio!.incluyeImpuestos);
+    const todosNetos = conPrecio.every((p) => !p.precio!.incluyeImpuestos);
 
-    // ⚠ **Lo que este caso NO afirma, y hay que arreglar en el bloque comercial.**
-    //
-    // `alcance` dice hoy «Los importes son NETOS: la lista dice "+ IVA"», y los
-    // precios cargados tienen `incluye_impuestos = true` —o sea FINALES, con IVA
-    // adentro—. El texto de la página pública contradice al dato que la misma
-    // respuesta trae al lado.
-    //
-    // No se afirma acá porque corregirlo es una decisión comercial —qué dice la
-    // lista de precios— y no de este archivo. Queda escrito para que no se
-    // pierda: está en producción, en la página que ve quien evalúa comprar.
+    const esperado =
+      conPrecio.length === 0 ? 'SIN_PRECIOS' : todosFinales ? 'FINALES' : todosNetos ? 'NETOS' : 'MIXTO';
+    expect(cuerpo.impuestos.trato).toBe(esperado);
+
+    // Y la leyenda tiene que decir lo que el código dice, no lo contrario: con
+    // importes finales no puede aparecer un «se le suma».
+    if (cuerpo.impuestos.trato === 'FINALES') {
+      expect(cuerpo.impuestos.leyenda).toMatch(/incluyen el IVA/u);
+      expect(cuerpo.impuestos.leyenda).not.toMatch(/se le suma|NETOS/u);
+    }
+    if (cuerpo.impuestos.trato === 'NETOS') {
+      expect(cuerpo.impuestos.leyenda).toMatch(/se le suma el IVA/u);
+      expect(cuerpo.impuestos.leyenda).not.toMatch(/ya incluyen/u);
+    }
+
+    // `alcance` es el texto sobre precios ausentes y topes: ya no opina de IVA.
+    // Dos frases sobre lo mismo en la misma respuesta es la forma de que una
+    // quede vieja.
+    expect(cuerpo.alcance).not.toMatch(/IVA/u);
   });
 
   it('alcanzaElPlan resuelve el dominio del primer segmento de la ruta', async () => {

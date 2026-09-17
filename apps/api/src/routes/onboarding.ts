@@ -37,6 +37,69 @@ import { badRequest, conflict } from '../http/errors.js';
 import { iniciarPrueba, pruebaDe, DIAS_DE_PRUEBA } from '../billing/prueba.js';
 import { olvidarPlanDe } from '../planes/alcance.js';
 
+/**
+ * Qué hay que decirle a quien mira la lista de precios sobre el IVA.
+ *
+ * ## Por qué esto se calcula y no se escribe
+ *
+ * Porque estuvo escrito, y estuvo mal. El texto de esta respuesta afirmaba
+ * «Los importes son NETOS: la lista dice “+ IVA”» mientras las cinco filas de
+ * `plan_prices` tenían `incluye_impuestos = true` —importes FINALES, declarados
+ * así el 2026-09-15 con el motivo escrito en la propia fila—. La misma
+ * respuesta traía el dato correcto al lado de la frase que lo contradecía, y la
+ * diferencia entre las dos lecturas es **un 21 % sobre cada precio publicado**.
+ *
+ * Una frase fija sobre un dato que se declara en la base se desincroniza el día
+ * que alguien cambia el dato, y nadie lo nota: no falla nada, solo queda una
+ * página mintiendo. Por eso sale de las filas.
+ *
+ * ## Por qué hay cuatro respuestas y no dos
+ *
+ *     FINALES      todos los precios publicados incluyen IVA
+ *     NETOS        ninguno lo incluye: la lista dice «+ IVA»
+ *     MIXTO        conviven los dos. `incluye_impuestos` es por fila de precio,
+ *                  así que es posible — y una frase global ahí sería falsa para
+ *                  la mitad de los planes. Se dice que hay que mirar cada uno.
+ *     SIN_PRECIOS  no hay ningún precio publicado. **No se afirma nada**: un
+ *                  tratamiento fiscal sobre cero precios no describe nada.
+ *
+ * `SIN_PRECIOS` no es «netos por defecto». Es la misma regla que el sistema
+ * aplica en los topes y en los cupos: lo que nadie declaró no se completa con
+ * una suposición.
+ */
+type TratamientoFiscal = 'FINALES' | 'NETOS' | 'MIXTO' | 'SIN_PRECIOS';
+
+const LEYENDA: Readonly<Record<TratamientoFiscal, string>> = {
+  FINALES: 'Los importes son FINALES: ya incluyen el IVA.',
+  NETOS: 'Los importes son NETOS: al precio de lista se le suma el IVA.',
+  MIXTO:
+    'Los planes no comparten tratamiento de IVA: cada precio dice si es final o neto. ' +
+    'Mirá el de tu plan.',
+  SIN_PRECIOS:
+    'Todavía no hay precios publicados, así que no se afirma nada sobre el IVA. ' +
+    'Un plan sin precio no es un plan gratis.',
+};
+
+function tratamientoFiscal(filas: readonly unknown[]): {
+  readonly trato: TratamientoFiscal;
+  readonly leyenda: string;
+} {
+  const conPrecio = filas
+    .map((f) => (f as { precio: { incluyeImpuestos: boolean } | null }).precio)
+    .filter((p): p is { incluyeImpuestos: boolean } => p !== null && p !== undefined);
+
+  const trato: TratamientoFiscal =
+    conPrecio.length === 0
+      ? 'SIN_PRECIOS'
+      : conPrecio.every((p) => p.incluyeImpuestos)
+        ? 'FINALES'
+        : conPrecio.every((p) => !p.incluyeImpuestos)
+          ? 'NETOS'
+          : 'MIXTO';
+
+  return { trato, leyenda: LEYENDA[trato] };
+}
+
 /** Los mismos valores que acepta `create_company`. */
 const alta = z.object({
   estudio: z.string().min(2).max(200),
@@ -98,11 +161,11 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
             'La suscripción queda suspendida. Los datos, la contabilidad y el historial ' +
             'quedan intactos, y se recupera el acceso contratando un plan.',
         },
+        impuestos: tratamientoFiscal(rows),
         alcance:
-          'Los importes son NETOS: la lista dice «+ IVA». Un plan sin precio es un plan ' +
-          'cuyo precio nadie declaró, no un plan gratis. Los topes miden y avisan: no ' +
-          'bloquean, porque un sistema contable que se niega a registrar un hecho por una ' +
-          'cuestión comercial deja los libros incompletos.',
+          'Un plan sin precio es un plan cuyo precio nadie declaró, no un plan gratis. ' +
+          'Los topes miden y avisan: no bloquean, porque un sistema contable que se niega ' +
+          'a registrar un hecho por una cuestión comercial deja los libros incompletos.',
       };
     });
   });
