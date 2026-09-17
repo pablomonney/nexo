@@ -490,10 +490,16 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <p class="ayuda">El alta crea la cuenta en estado <strong>pendiente</strong>: no entra hasta
       confirmar la dirección de correo. Sin ese paso, cualquiera podría registrarse con el
       correo de otro y quedarse esperando a que esa persona intente entrar.</p>
-    <p class="ayuda"><strong>Esta instalación no tiene proveedor de correo</strong>, así que el
-      mensaje de confirmación queda en la bandeja de salida del servidor y no llega a ningún
-      lado. Hasta que se contrate uno, el alta la completa el operador — se dice acá en vez de
-      dejar a alguien esperando un correo que nunca va a salir.</p>
+    <!-- Acá vivía una frase escrita a mano —«esta instalación no tiene proveedor de
+         correo»— que era cierta cuando se escribió y dejó de serlo al conectar Resend,
+         sin que nadie se enterara. En producción, el 2026-09-17, la leía justo quien
+         estaba por registrarse, contradiciendo lo que el servidor contestaba un segundo
+         después. Es el mismo defecto que la landing tenía con el IVA: una segunda
+         fuente de verdad sobre algo que solo el servidor sabe.
+
+         No se reemplaza por otra frase fija ni por una consulta nueva: qué pasó con el
+         mensaje lo dice la respuesta del alta, que se muestra tal cual debajo del
+         formulario y es la única que puede saberlo. -->
     <div class="fila">
       <div><label>Correo</label><input id="alta-email" type="email" autocomplete="email"></div>
       <div><label>Contraseña (12 o más)</label>

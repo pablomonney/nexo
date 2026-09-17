@@ -114,6 +114,14 @@ suite('Alta autoservicio', () => {
       primera.json<{ mensaje: string }>().mensaje,
     );
 
+    // Y el campo `correo` tampoco puede inventar. Con la dirección repetida no
+    // se intenta ningún envío, así que no hay nada que afirmar sobre el
+    // proveedor — y afirmarlo fue un defecto real: en producción, con Resend
+    // configurado y andando, esta rama contestaba «no hay proveedor de correo
+    // configurado en esta instalación». La suite no lo veía porque acá corre
+    // sin proveedor, donde esa frase es cierta por otro motivo.
+    expect(segunda.json<{ correo: string }>().correo).not.toContain('no hay proveedor');
+
     // Y no se pisó nada: sigue habiendo un solo usuario, con el nombre original.
     const u = await db.query<{ n: string; full_name: string }>(
       `SELECT count(*)::text AS n, min(full_name) AS full_name FROM users

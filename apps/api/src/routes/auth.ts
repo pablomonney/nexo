@@ -75,6 +75,64 @@ interface UserRow {
   locked_until: Date | null;
 }
 
+/**
+ * Qué le dice el alta a quien se registró sobre su correo.
+ *
+ * ## Son CUATRO desenlaces y había tres textos
+ *
+ * `POST /auth/signup` no siempre intenta mandar. Cuando la dirección **ya
+ * estaba registrada** no se toca nada —es lo que impide que alguien se apropie
+ * de una cuenta ajena registrándola de nuevo— y entonces no hay envío del que
+ * informar: el resultado es `null`, y no es ninguno de los tres estados.
+ *
+ * Ese cuarto caso caía en el `else` de una cadena de ternarios, que era el
+ * texto de `SIN_PROVEEDOR`. La consecuencia, medida en producción el
+ * 2026-09-17: con Resend conectado y andando, quien se registraba con una
+ * dirección ya existente leía **«no hay proveedor de correo configurado en esta
+ * instalación»**. El sistema afirmaba un hecho falso sobre su propia
+ * configuración, y mandaba a buscar el problema al lugar equivocado.
+ *
+ * Es exactamente lo que la doctrina del repositorio previene con mapas
+ * cerrados: un `else` contesta por todo lo que el autor no enumeró, y contesta
+ * con lo último que alguien escribió.
+ *
+ * ## Por qué `null` y `ENVIADO` comparten el texto, y es la misma constante
+ *
+ * No es economía de palabras: es lo que impide que esta ruta se vuelva un
+ * oráculo. Si el caso «ya existía» tuviera texto propio, cualquiera podría
+ * averiguar quién usa NEXO probando direcciones y mirando la respuesta. Las dos
+ * salen de `SALIO_O_YA_ESTABA` —la **misma** constante, no dos cadenas
+ * iguales— para que no puedan separarse por descuido en una edición futura.
+ *
+ * Y por eso el texto es condicional. «El mensaje de verificación salió» sería
+ * mentira en el caso de la dirección repetida, donde no salió ninguno.
+ *
+ * `FALLIDO` y `SIN_PROVEEDOR` sí llevan texto propio, y eso **revela que la
+ * dirección era nueva** —solo se llega ahí habiendo intentado un envío—. Es
+ * deliberado: las dos son condiciones que alguien tiene que poder resolver, y
+ * callarlas para no filtrar nada dejaría a una persona esperando un correo que
+ * nunca va a llegar. La protección que importa es la del camino sano.
+ */
+const SALIO_O_YA_ESTABA =
+  'Si esa dirección no estaba registrada, el mensaje de verificación ya salió.';
+
+const TEXTO_DEL_ENVIO: Readonly<Record<ResultadoDeEnvio['estado'], string>> = {
+  ENVIADO: SALIO_O_YA_ESTABA,
+  FALLIDO:
+    'El mensaje de verificación no se pudo entregar. Si la dirección es correcta, ' +
+    'pedí uno nuevo en unos minutos; si el problema sigue, avisale a quien administra ' +
+    'esta instalación.',
+  SIN_PROVEEDOR:
+    'ATENCIÓN: no hay proveedor de correo configurado en esta instalación, así que ' +
+    'el mensaje quedó en la bandeja de salida y no llegó a ningún lado. Hasta que se ' +
+    'contrate uno, el alta la completa el operador.',
+};
+
+/** `null` es «no se intentó porque la dirección ya estaba»: ver arriba. */
+export function textoDelEnvio(estado: ResultadoDeEnvio['estado'] | null): string {
+  return estado === null ? SALIO_O_YA_ESTABA : TEXTO_DEL_ENVIO[estado];
+}
+
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   /**
    * El proveedor de correo, resuelto **una vez** al registrar las rutas.
@@ -443,21 +501,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       estado: 'REGISTRADO',
       mensaje:
         'Si la dirección no estaba registrada, te mandamos un mensaje para confirmarla.',
-      // Tres desenlaces y tres textos. Antes eran dos, porque el único
-      // proveedor que había no podía fallar: todo lo que no era ENVIADO era
-      // «no hay proveedor». Con un proveedor real, decirle eso a quien se
-      // encontró con un rechazo de Resend lo mandaría a esperar a que el
-      // operador le acerque un mensaje que sí se intentó mandar y rebotó.
-      correo:
-        salida.enviado === 'ENVIADO'
-          ? 'El mensaje de verificación salió.'
-          : salida.enviado === 'FALLIDO'
-            ? 'El mensaje de verificación no se pudo entregar. Si la dirección es correcta, ' +
-              'pedí uno nuevo en unos minutos; si el problema sigue, avisale a quien administra ' +
-              'esta instalación.'
-            : 'ATENCIÓN: no hay proveedor de correo configurado en esta instalación, así que ' +
-              'el mensaje quedó en la bandeja de salida y no llegó a ningún lado. Hasta que se ' +
-              'contrate uno, el alta la completa el operador.',
+      correo: textoDelEnvio(salida.enviado),
     };
   });
 
