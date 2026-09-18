@@ -50,13 +50,23 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
-if (existsSync(join(RAIZ, '.env'))) process.loadEnvFile(join(RAIZ, '.env'));
+try {
+  process.loadEnvFile(join(RAIZ, '.env'));
+} catch {
+  // En CI y en el contenedor de producción las variables vienen del entorno.
+  //
+  // Esto no es defensa por las dudas: el `.env` del servidor es `rw-------` de
+  // root y el contenedor corre como `node`, así que el archivo **está y no se
+  // puede abrir**. Comprobar con `existsSync` antes de leerlo no alcanzaba —
+  // decía que sí y el `open` fallaba igual— y el despliegue se cortaba con el
+  // `DATABASE_URL` correcto ya puesto en el entorno. Es el mismo `try` que
+  // tienen `migrate.mjs` y los cinco sembradores; éste era el único que no.
+}
 
 if ((process.env.DATABASE_URL ?? '') === '') {
   console.error('Falta DATABASE_URL.');
