@@ -23,52 +23,24 @@
  */
 
 import { recordAudit, withCompany, type Tx } from '@aai/db';
-import { moneyFromDecimalString } from '@aai/shared';
+import {
+  DESCRIPCION_DE_ROL,
+  moneyFromDecimalString,
+  ROLES_CONTABLES,
+  ROLES_DE_COSTO,
+  type RolContable,
+} from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import {
-  armarRenglones,
-  type CuentaDelRol,
-  type RolContable,
-} from '../contabilidad/armar-renglones.js';
+import { armarRenglones, type CuentaDelRol } from '../contabilidad/armar-renglones.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { conflict, notFound, unprocessable } from '../http/errors.js';
 
-const ROLES = [
-  'CLIENTES',
-  'PROVEEDORES',
-  'IVA_DEBITO',
-  'IVA_CREDITO',
-  'VENTAS',
-  'COMPRAS',
-  // Agregados por la 0079: son los que permiten proponer el asiento de costo
-  // de mercadería vendida, que hasta entonces se calculaba y no llegaba al
-  // Mayor.
-  'MERCADERIA',
-  'COSTO_DE_VENTAS',
-] as const;
+const ROLES = ROLES_CONTABLES;
 
-/** Para qué se usa cada rol, dicho una vez y en un solo lugar. */
-const PARA_QUE: Readonly<Record<RolContable, string>> = {
-  CLIENTES: 'La contrapartida de una venta en cuenta corriente',
-  PROVEEDORES: 'La contrapartida de una compra en cuenta corriente',
-  IVA_DEBITO: 'El IVA que se le cobra al cliente y se le debe al fisco',
-  IVA_CREDITO: 'El IVA que paga la empresa y computa contra el débito',
-  VENTAS: 'El neto gravado de una venta, cuando el comprobante no tiene renglones con cuenta propia',
-  COMPRAS: 'El neto gravado de una compra, cuando el comprobante no tiene renglones con cuenta propia',
-  MERCADERIA: 'El activo que se da de baja al vender: lo que la empresa tiene hasta que lo vende',
-  COSTO_DE_VENTAS: 'El resultado negativo que se reconoce cuando la mercadería sale por venta',
-};
+const PARA_QUE = DESCRIPCION_DE_ROL;
 
-/**
- * Los dos roles que solo hacen falta con existencias.
- *
- * `accounting_map_status` —y con ella la rama de la bandeja— cuenta **solo los
- * seis primeros** a propósito: una empresa de servicios no tiene mercadería, y
- * decirle que le falta declarar dónde va su costo sería reclamarle algo que no
- * le corresponde.
- */
-const DE_COSTO = new Set<RolContable>(['MERCADERIA', 'COSTO_DE_VENTAS']);
+const DE_COSTO = new Set<RolContable>(ROLES_DE_COSTO);
 
 interface FilaMapeo {
   readonly rol: RolContable;

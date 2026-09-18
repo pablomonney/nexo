@@ -686,6 +686,23 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       <th>Área</th><th>Paso</th><th>Qué habilita</th><th>Qué queda afectado</th>
       <th>Hay</th><th>Estado</th>
     </tr></thead><tbody></tbody></table></div>
+
+    <!-- La puerta del plan modelo. Se ofrece solo cuando la empresa no tiene
+         ninguna cuenta: con un plan ya empezado, mezclarlo produciría códigos
+         repetidos, y por eso la API contesta 409 en vez de fusionar. -->
+    <div id="plan-modelo" hidden>
+      <h4>Empezar con el plan de cuentas modelo</h4>
+      <p class="ayuda">NEXO propone un plan para una PYME argentina, con los rubros de
+        exposición de la RT 54. <strong>No es un plan oficial ni obligatorio</strong>: la
+        norma no prescribe ninguno. Es un punto de partida — las cuentas quedan siendo
+        tuyas y se renombran, se agregan y se archivan sin pedirle permiso a nadie.</p>
+      <button id="b-plan-modelo-ver" class="sec">Ver las cuentas</button>
+      <button id="b-plan-modelo-usar">Usar este plan</button>
+      <div id="plan-modelo-msg"></div>
+      <div class="tabla" id="plan-modelo-tabla" hidden><table id="t-plan-modelo"><thead><tr>
+        <th>Código</th><th>Nombre</th><th>Tipo</th><th>Imputable</th><th>Nota</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
   </div>
 
   <details class="grupo" id="inicio-periodos-grupo">
@@ -4014,6 +4031,43 @@ async function cargarPlanes() {
 
 E('b-planes').onclick = () => cargarPlanes();
 
+// ── El plan de cuentas modelo ─────────────────────────────────────────────
+//
+// Dos botones y ninguna sorpresa: uno muestra las cuentas antes de crear nada
+// y el otro las crea. La API rechaza el segundo si la empresa ya tiene plan.
+E('b-plan-modelo-ver').onclick = async () => {
+  const r = await api('GET', '/chart-template');
+  if (!r.ok) return decir('plan-modelo-msg', r);
+
+  const cuerpo = E('t-plan-modelo').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.cuentas) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.codigo) + '</td>' +
+      '<td>' + escapar(c.nombre) + '</td>' +
+      '<td>' + escapar(c.tipo) + '</td>' +
+      '<td>' + (c.imputable ? 'sí' : 'no') + '</td>' +
+      '<td class="ayuda">' + escapar(c.nota || '') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+  E('plan-modelo-tabla').hidden = false;
+  E('plan-modelo-msg').innerHTML =
+    '<div class="aviso">' + r.datos.total + ' cuentas, ' + r.datos.imputables +
+    ' imputables. Modelo ' + escapar(r.datos.plantilla.templateId) + ' v' +
+    r.datos.plantilla.version + '.</div>';
+};
+
+E('b-plan-modelo-usar').onclick = async () => {
+  const r = await api('POST', '/chart-template', {});
+  decir('plan-modelo-msg', r, 'Plan creado');
+  if (!r.ok) return;
+  // Las cuentas nuevas tienen que aparecer en los desplegables que las usan, y
+  // el paso de la puesta en marcha deja de estar pendiente.
+  await usarEmpresa(estado.empresa);
+  await cargarInicio();
+};
+
 E('b-onboarding').onclick = async () => {
   const r = await api('POST', '/onboarding/empresa', {
     estudio: E('on-estudio').value.trim(),
@@ -4485,6 +4539,11 @@ async function cargarInicio() {
     const faltan = (arr.datos.pasos || []).filter(
       (p) => p.estado !== 'COMPLETO' && p.estado !== 'NO_APLICA');
     E('inicio-arranque').hidden = faltan.length === 0;
+
+    // El plan modelo se ofrece solo a quien no tiene ninguna cuenta. Con una
+    // sola cargada desaparece: el modelo es para empezar, no para mezclar.
+    const pasoDelPlan = (arr.datos.pasos || []).find((p) => p.paso === 'PLAN_DE_CUENTAS');
+    E('plan-modelo').hidden = !pasoDelPlan || pasoDelPlan.hechos > 0;
 
     // El veredicto nombraba los pasos por su código —PLAN_DE_CUENTAS,
     // EJERCICIO, PERIODO_ABIERTO—, que es lo primero que lee un cliente nuevo.

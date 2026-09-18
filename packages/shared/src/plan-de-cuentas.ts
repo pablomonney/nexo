@@ -76,6 +76,16 @@
  * el sistema sepa cuándo usarla.
  */
 
+import { ROLES_CONTABLES, type RolContable } from './roles-contables.js';
+
+/** Los tipos que admite `accounts.type` (migración 0003). */
+export type TipoDeCuenta = 'ACTIVO' | 'PASIVO' | 'PN' | 'INGRESO' | 'COSTO' | 'GASTO' | 'ORDEN';
+
+export type Naturaleza = 'DEUDORA' | 'ACREEDORA';
+
+/** Los valores que admite `accounts.tax_role`. */
+export type TaxRole = 'IVA_CF' | 'IVA_DF' | 'PERCEPCION' | 'RETENCION' | 'DIFERENCIA_CAMBIO';
+
 /** Los dominios del producto que van a imputar contra estas cuentas. */
 export const USOS = [
   'VENTAS',
@@ -89,9 +99,40 @@ export const USOS = [
   'SUELDOS',
   'CIERRE',
   'ESTADOS',
-];
+] as const;
 
-export const PLANTILLA = {
+export type UsoDeCuenta = (typeof USOS)[number];
+
+export interface CuentaDelPlan {
+  readonly codigo: string;
+  readonly nombre: string;
+  readonly tipo: TipoDeCuenta;
+  /** Una cuenta con hijas nunca lo es: lo garantiza además el trigger de la 0003. */
+  readonly imputable: boolean;
+  /** Lo que una PYME usa en su primer mes sin preguntarle nada a nadie. */
+  readonly nucleo: boolean;
+  readonly usos: readonly UsoDeCuenta[];
+  /** Solo cuando difiere de la que le corresponde al tipo: las regularizadoras. */
+  readonly naturaleza?: Naturaleza;
+  readonly regularizadora?: boolean;
+  /** Requiere criterio profesional. V1 no la automatiza aunque exista. */
+  readonly especializada?: boolean;
+  readonly rol?: RolContable;
+  readonly taxRole?: TaxRole;
+  readonly closingRole?: 'RESULTADO_DEL_EJERCICIO';
+  readonly nota?: string;
+}
+
+export interface PlantillaDePlan {
+  readonly templateId: string;
+  readonly version: number;
+  readonly nombre: string;
+  readonly descripcion: string;
+  readonly alcance: string;
+  readonly origen: string;
+}
+
+export const PLANTILLA: PlantillaDePlan = {
   templateId: 'NEXO_PYME_AR',
   version: 1,
   nombre: 'Plan de cuentas NEXO PYME Argentina',
@@ -105,7 +146,7 @@ export const PLANTILLA = {
 };
 
 /** La naturaleza que le corresponde a cada tipo cuando nadie la invierte. */
-export const NATURALEZA_POR_TIPO = {
+export const NATURALEZA_POR_TIPO: Readonly<Record<TipoDeCuenta, Naturaleza>> = {
   ACTIVO: 'DEUDORA',
   PASIVO: 'ACREEDORA',
   PN: 'ACREEDORA',
@@ -116,21 +157,26 @@ export const NATURALEZA_POR_TIPO = {
 };
 
 /** El padre de un código es todo lo que está antes del último punto. */
-export function padreDe(codigo) {
+export function padreDe(codigo: string): string | null {
   const corte = codigo.lastIndexOf('.');
   return corte === -1 ? null : codigo.slice(0, corte);
 }
 
-export function nivelDe(codigo) {
+export function nivelDe(codigo: string): number {
   return codigo.split('.').length;
 }
 
-export function naturalezaDe(cuenta) {
+export function naturalezaDe(cuenta: CuentaDelPlan): Naturaleza {
   return cuenta.naturaleza ?? NATURALEZA_POR_TIPO[cuenta.tipo];
 }
 
 /** Agrupadora: no recibe imputaciones. El trigger de la 0003 lo garantiza además. */
-const g = (codigo, nombre, tipo, extra = {}) => ({
+const g = (
+  codigo: string,
+  nombre: string,
+  tipo: TipoDeCuenta,
+  extra: Partial<CuentaDelPlan> = {},
+): CuentaDelPlan => ({
   codigo,
   nombre,
   tipo,
@@ -141,7 +187,12 @@ const g = (codigo, nombre, tipo, extra = {}) => ({
 });
 
 /** Imputable. `usos` vacío significa que ningún dominio la toca automáticamente. */
-const c = (codigo, nombre, tipo, extra = {}) => ({
+const c = (
+  codigo: string,
+  nombre: string,
+  tipo: TipoDeCuenta,
+  extra: Partial<CuentaDelPlan> = {},
+): CuentaDelPlan => ({
   codigo,
   nombre,
   tipo,
@@ -151,7 +202,7 @@ const c = (codigo, nombre, tipo, extra = {}) => ({
   ...extra,
 });
 
-export const CUENTAS = [
+export const CUENTAS: readonly CuentaDelPlan[] = [
   // ══ 1 · ACTIVO ═════════════════════════════════════════════════════════
   g('1', 'Activo', 'ACTIVO'),
   g('1.1', 'Activo corriente', 'ACTIVO'),
@@ -654,7 +705,7 @@ export const CUENTAS = [
  * comportamiento buscado. Si estuviera solo en la plantilla, agregar una cuenta
  * nueva la dejaría en el ESP y afuera del ER sin que nada avisara.
  */
-export const PREFIJOS_DE_RESULTADO = [
+export const PREFIJOS_DE_RESULTADO: readonly string[] = [
   '4.1',
   '4.2',
   '4.5',
@@ -674,8 +725,13 @@ export const PREFIJOS_DE_RESULTADO = [
   '6.4.03',
 ];
 
-/** Los ocho roles de `company_account_map`, con la cuenta que los cumple. */
-export const ROLES = {
+/**
+ * Los ocho roles de `company_account_map`, con la cuenta que los cumple.
+ *
+ * La lista de roles no se repite acá: sale de `ROLES_CONTABLES`, y el tipo del
+ * `Record` hace que agregar un rol sin darle cuenta no compile.
+ */
+export const ROLES: Readonly<Record<RolContable, string>> = {
   CLIENTES: '1.1.03.01',
   PROVEEDORES: '2.1.01.01',
   IVA_DEBITO: '2.1.04.01',
@@ -690,4 +746,7 @@ export const ROLES = {
 export const CUENTA_DE_CIERRE = '3.4.02';
 
 /** Las clases que NO integran el patrimonio ni el resultado. */
-export const CLASES_FUERA_DE_LOS_ESTADOS = ['7'];
+export const CLASES_FUERA_DE_LOS_ESTADOS: readonly string[] = ['7'];
+
+/** Que `ROLES_CONTABLES` se importe y se use: el catálogo declara los ocho. */
+export const ROLES_DECLARADOS: readonly RolContable[] = ROLES_CONTABLES;

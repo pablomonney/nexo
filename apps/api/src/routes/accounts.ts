@@ -5,6 +5,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { conflict, notFound } from '../http/errors.js';
+import { PLANTILLA as PLANTILLA_MODELO } from '@aai/shared';
+import { cuentasDelModelo, materializarPlanModelo } from '../contabilidad/materializar-plan.js';
 
 const ACCOUNT_TYPES = ['ACTIVO', 'PASIVO', 'PN', 'INGRESO', 'COSTO', 'GASTO', 'ORDEN'] as const;
 const TAX_ROLES = ['IVA_CF', 'IVA_DF', 'PERCEPCION', 'RETENCION', 'DIFERENCIA_CAMBIO'] as const;
@@ -129,6 +131,90 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       if (failure.code === '23503') throw notFound('La cuenta padre no existe en esta empresa');
       throw error;
     }
+  });
+
+  /**
+   * El plan de cuentas modelo, para mirarlo antes de decidir.
+   *
+   * Sin sesión de empresa no tendría sentido —es una decisión sobre una empresa
+   * concreta— pero no lee nada de ella: son las mismas 185 cuentas para todos.
+   */
+  app.get('/chart-template', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'account:read');
+
+    const cuentas = cuentasDelModelo();
+    return {
+      plantilla: PLANTILLA_MODELO,
+      cuentas: cuentas.map((cuenta) => ({
+        codigo: cuenta.codigo,
+        nombre: cuenta.nombre,
+        tipo: cuenta.tipo,
+        imputable: cuenta.imputable,
+        nucleo: cuenta.nucleo,
+        especializada: cuenta.especializada === true,
+        nota: cuenta.nota ?? null,
+      })),
+      total: cuentas.length,
+      imputables: cuentas.filter((cuenta) => cuenta.imputable).length,
+    };
+  });
+
+  /**
+   * Crea el plan modelo dentro de esta empresa.
+   *
+   * **Solo sobre una empresa sin cuentas.** Mezclarlo con un plan existente
+   * produciría códigos repetidos y un plan que no es ni el suyo ni el nuestro;
+   * por eso la respuesta a «ya tiene plan» es un 409 y no una fusión.
+   */
+  app.post('/chart-template', async (request, reply) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'account:write');
+    const auth = requireAuth(request);
+
+    const resultado = await withCompany(
+      { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
+      async (tx) => {
+        const salida = await materializarPlanModelo(tx, tenant.companyId);
+        if (salida.estado === 'MATERIALIZADO') {
+          await recordAudit(tx, tenant.companyId, {
+            actorType: 'USER',
+            actorId: `user:${auth.user.userId}`,
+            action: 'CAMBIAR_PLAN_CUENTAS',
+            objectType: 'account_chart',
+            objectId: salida.chartId,
+            newValue: {
+              plantilla: PLANTILLA_MODELO.templateId,
+              version: PLANTILLA_MODELO.version,
+              cuentas: salida.cuentas,
+            },
+            motivo: `Materialización del plan modelo ${PLANTILLA_MODELO.templateId}`,
+            ip: clientIp(request),
+            userAgent: request.headers['user-agent'] ?? null,
+          });
+        }
+        return salida;
+      },
+    );
+
+    if (resultado.estado === 'YA_TIENE_PLAN') {
+      throw conflict(
+        `Esta empresa ya tiene ${resultado.cuentas} cuenta(s). El plan modelo se ofrece ` +
+          'solo a una empresa sin plan: mezclarlo con uno existente produciría códigos ' +
+          'repetidos. Si querés partir del modelo, archivá el plan actual primero.',
+      );
+    }
+
+    reply.code(201);
+    return {
+      chartId: resultado.chartId,
+      cuentas: resultado.cuentas,
+      plantilla: PLANTILLA_MODELO.templateId,
+      version: PLANTILLA_MODELO.version,
+      siguiente:
+        'Las cuentas ya son tuyas: podés renombrarlas, agregar y archivar lo que no uses. ' +
+        'Lo que sigue es declarar el mapeo contable, que es lo que permite proponer asientos.',
+    };
   });
 
   app.patch('/accounts/:accountId', async (request) => {

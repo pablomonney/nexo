@@ -30,27 +30,13 @@
  * ahí ya habría hecho perder el tiempo a una persona.
  */
 
-import type { Money } from '@aai/shared';
+import type { Money, RolContable } from '@aai/shared';
 import { toDecimalString } from '@aai/shared';
 
-/**
- * Los roles que el mapeo declara.
- *
- * Los seis primeros arman el asiento de un comprobante. Los dos últimos los
- * agregó la 0079 para el asiento de costo de mercadería vendida: no participan
- * de esta función, pero viven en el mismo mapeo porque son la misma clase de
- * declaración —a qué cuenta va cada cosa— y separarlos habría dejado dos
- * lugares donde declarar lo mismo.
- */
-export type RolContable =
-  | 'CLIENTES'
-  | 'PROVEEDORES'
-  | 'IVA_DEBITO'
-  | 'IVA_CREDITO'
-  | 'VENTAS'
-  | 'COMPRAS'
-  | 'MERCADERIA'
-  | 'COSTO_DE_VENTAS';
+// Los roles viven en `@aai/shared`: estaban escritos cuatro veces -acá, en
+// `mapeo-contable.ts`, en el CHECK de la 0079 y en el catálogo de cuentas- y
+// cuatro copias de una decisión se desincronizan sin que nada avise.
+export type { RolContable } from '@aai/shared';
 
 export interface CuentaDelRol {
   readonly rol: RolContable;

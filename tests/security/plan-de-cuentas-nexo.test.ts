@@ -27,6 +27,9 @@
  * contador matriculado, no un test.
  */
 
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   CUENTAS,
@@ -37,8 +40,12 @@ import {
   PLANTILLA,
   PREFIJOS_DE_RESULTADO,
   ROLES,
+  ROLES_CONTABLES,
+  TIPOS_ADMITIDOS_POR_ROL,
   USOS,
-} from '../../scripts/plan-de-cuentas-nexo-pyme-ar.mjs';
+} from '@aai/shared';
+
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** Los tipos que admite `accounts.type` en la migración 0003. */
 const TIPOS_DE_LA_BASE = ['ACTIVO', 'PASIVO', 'PN', 'INGRESO', 'COSTO', 'GASTO', 'ORDEN'];
@@ -52,17 +59,13 @@ const TAX_ROLES_DE_LA_BASE = [
   'DIFERENCIA_CAMBIO',
 ];
 
-/** El tipo que `assert_cuenta_del_rol` (0074/0079) espera para cada rol. */
-const TIPO_ESPERADO_POR_ROL: Record<string, string[]> = {
-  CLIENTES: ['ACTIVO'],
-  PROVEEDORES: ['PASIVO'],
-  IVA_DEBITO: ['PASIVO'],
-  IVA_CREDITO: ['ACTIVO'],
-  VENTAS: ['INGRESO'],
-  COMPRAS: ['COSTO', 'GASTO'],
-  MERCADERIA: ['ACTIVO'],
-  COSTO_DE_VENTAS: ['COSTO'],
-};
+/**
+ * El tipo que `assert_cuenta_del_rol` (0074/0079) espera para cada rol.
+ *
+ * Sale de `@aai/shared`, no de una copia local: la lista de roles estaba escrita
+ * cuatro veces y este archivo era una de las cuatro.
+ */
+const TIPO_ESPERADO_POR_ROL = TIPOS_ADMITIDOS_POR_ROL;
 
 interface Cuenta {
   codigo: string;
@@ -297,6 +300,46 @@ describe('Plan de cuentas NEXO PYME Argentina — roles de automatización', () 
       }
       // Una agrupadora no recibe imputaciones: no puede tener uso.
       if (!cuenta.imputable) expect(cuenta.usos.length, cuenta.codigo).toBe(0);
+    }
+  });
+});
+
+describe('Los roles del mapeo no pueden divergir', () => {
+  it('el catálogo declara exactamente los ocho roles del runtime', () => {
+    expect(Object.keys(ROLES).sort()).toEqual([...ROLES_CONTABLES].sort());
+  });
+
+  it('el runtime y el CHECK de la migración 0079 dicen lo mismo', async () => {
+    // La cuarta copia es un CHECK y no se puede mover a TypeScript. Lo que sí se
+    // puede es leerla: si alguien agrega un rol en la base y no en `@aai/shared`
+    // —o al revés— este test lo dice antes de que un asiento salga mal.
+    const sql = await readFile(
+      join(RAIZ, 'infrastructure', 'db', 'migrations', '0079_asiento_de_costo_de_ventas.sql'),
+      'utf8',
+    );
+    const check = /rol IN \(([^)]+)\)/u.exec(sql);
+    expect(check, 'no se encontró el CHECK de company_account_map.rol').not.toBeNull();
+
+    const enLaBase = [...check![1]!.matchAll(/'([A-Z_]+)'/gu)].map((m) => m[1]!).sort();
+    expect(enLaBase).toEqual([...ROLES_CONTABLES].sort());
+  });
+
+  it('ningún archivo del runtime vuelve a escribir la lista a mano', async () => {
+    // El defecto no era que las listas difirieran: era que existieran. Este
+    // control mira los dos archivos que las tenían.
+    for (const archivo of [
+      join(RAIZ, 'apps', 'api', 'src', 'contabilidad', 'armar-renglones.ts'),
+      join(RAIZ, 'apps', 'api', 'src', 'routes', 'mapeo-contable.ts'),
+    ]) {
+      const texto = await readFile(archivo, 'utf8');
+      const literales = [...texto.matchAll(/'COSTO_DE_VENTAS'/gu)].length;
+      expect(literales, `${archivo} volvió a escribir los roles a mano`).toBe(0);
+    }
+  });
+
+  it('cada rol tiene descripción y tipo admitido, sin huecos', () => {
+    for (const rol of ROLES_CONTABLES) {
+      expect(TIPOS_ADMITIDOS_POR_ROL[rol].length, rol).toBeGreaterThan(0);
     }
   });
 });
