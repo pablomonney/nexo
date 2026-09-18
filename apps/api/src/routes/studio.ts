@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { recordAudit, withCompany, withoutCompany } from '@aai/db';
-import { isValidCuit, normalizeCuit } from '@aai/shared';
+import { isValidCuit, normalizeCuit, ORGANISMOS_DE_CONTRALOR } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { hashPassword } from '../auth/crypto.js';
@@ -166,7 +166,9 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         entityType: z.enum(ENTITY_TYPES),
         // ISO 3166-2:AR. Determina qué adopción normativa aplica (ADR-002).
         jurisdiction: z.string().regex(/^AR(-[A-Z])?$/),
-        regulator: z.enum(['IGJ', 'CNV', 'BCRA', 'INAES', 'PROVINCIAL']).optional(),
+        // La lista vive en un solo lugar: esta copia y la que faltaba en
+        // `onboarding.ts` son la razón de que exista `@aai/shared/organismo`.
+        regulator: z.enum(ORGANISMOS_DE_CONTRALOR).optional(),
         fiscalYearEnd: z.string().regex(/^\d{2}-\d{2}$/),
       })
       .parse(request.body);

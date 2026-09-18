@@ -31,7 +31,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { withCompany, withoutCompany, recordAudit } from '@aai/db';
-import { cuitCheckDigit } from '@aai/shared';
+import {
+  cuitCheckDigit,
+  esOrganismoDeContralor,
+  MENSAJE_DE_ORGANISMO,
+  normalizarOrganismo,
+} from '@aai/shared';
 import { requireAuth, requireCompany } from '../http/context.js';
 import { badRequest, conflict } from '../http/errors.js';
 import { iniciarPrueba, pruebaDe, DIAS_DE_PRUEBA } from '../billing/prueba.js';
@@ -113,7 +118,22 @@ const alta = z.object({
     ),
   tipoEntidad: z.enum(['SA', 'SRL', 'SAS', 'UNIPERSONAL', 'ASOCIACION', 'COOPERATIVA', 'OTRO']),
   jurisdiccion: z.string().min(2).max(10),
-  organismo: z.string().max(40).optional(),
+  /**
+   * El organismo de contralor, si la empresa tiene.
+   *
+   * Era `z.string().max(40)` —texto libre— mientras la base admite cinco
+   * valores en mayúsculas. `igj` pasaba la validación, llegaba al `INSERT` y
+   * volvía como **500 «Error interno»** en el primer formulario que completa un
+   * cliente. Ahora se normaliza lo que es descuido de tipeo (espacios de los
+   * extremos, minúsculas) y lo que no pertenece al conjunto se rechaza con 400
+   * diciendo cuáles son. El razonamiento completo está en `@aai/shared`.
+   */
+  organismo: z
+    .string()
+    .max(40)
+    .transform(normalizarOrganismo)
+    .refine((v) => v === '' || esOrganismoDeContralor(v), MENSAJE_DE_ORGANISMO)
+    .optional(),
   cierreEjercicio: z.string().regex(/^\d{2}-\d{2}$/u, 'Mes y día: 12-31'),
   plan: z.string().min(2).max(40),
 });
@@ -199,6 +219,29 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     const seCruzaConUnoQueYaEstaba = (error: unknown): boolean =>
       typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
 
+    /**
+     * Un valor que la base no acepta tampoco es una falla del servidor.
+     *
+     * Misma forma que la de arriba y por la misma razón, con una diferencia que
+     * importa: la unicidad la comprueba **solo** la base, mientras que acá la
+     * validación de la ruta ya rechaza lo que se sabe que no entra. Entonces,
+     * ¿para qué esto? Porque `companies` tiene más restricciones que la del
+     * organismo, y porque este defecto —un error de la base saliendo como 500 en
+     * la primera pantalla del producto— ya apareció dos veces: con el CUIT
+     * repetido el 2026-09-09 y con el organismo el 2026-09-18. Las dos veces se
+     * arregló el caso que se había visto.
+     *
+     * Es una red, no la validación: si algún día una columna suma un `CHECK`
+     * que la ruta no conoce, el cliente va a leer qué dato no entró en vez de
+     * «Error interno». La devuelve con 400 —el dato que mandó no sirve— y
+     * nombra la restricción, que es lo que permite pedir ayuda por algo
+     * concreto.
+     */
+    const violaUnaRestriccion = (error: unknown): string | null =>
+      typeof error === 'object' && error !== null && (error as { code?: string }).code === '23514'
+        ? ((error as { constraint?: string }).constraint ?? 'sin nombre')
+        : null;
+
     const resultado = await withoutCompany(actorId, async (tx) => {
       // Quien ya administra un estudio no pasa por acá: el alta normal sabe a
       // qué estudio agregar la empresa, y esta ruta crearía un segundo estudio
@@ -244,6 +287,8 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
         companyId = empresa.rows[0]!.create_company;
       } catch (error) {
         if (seCruzaConUnoQueYaEstaba(error)) return { estado: 'CUIT_REPETIDO' as const };
+        const restriccion = violaUnaRestriccion(error);
+        if (restriccion !== null) return { estado: 'FUERA_DE_RANGO' as const, restriccion };
         throw error;
       }
 
@@ -267,6 +312,19 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     }
     if (resultado.estado === 'PLAN_DESCONOCIDO') {
       throw badRequest(`No hay un plan disponible con el código ${body.plan}.`);
+    }
+    if (resultado.estado === 'FUERA_DE_RANGO') {
+      // Mapa de las restricciones que se saben leer. Lo que no está acá se
+      // contesta igual con 400 y con el nombre: es lo único honesto que se
+      // puede decir sobre una regla que este código no conoce.
+      const conocidas: Readonly<Record<string, string>> = {
+        companies_regulator_check: MENSAJE_DE_ORGANISMO,
+      };
+      throw badRequest(
+        conocidas[resultado.restriccion] ??
+          `Uno de los datos de la empresa no cumple una regla de la base (${resultado.restriccion}). ` +
+            'Revisá los valores del formulario; si no encontrás cuál es, escribinos con este mensaje.',
+      );
     }
     if (resultado.estado === 'CUIT_REPETIDO') {
       // No se dice quién lo registró: sería un oráculo para averiguar en qué

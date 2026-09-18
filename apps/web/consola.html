@@ -597,7 +597,18 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       <option>OTRO</option>
     </select></div>
     <div><label>Jurisdicción</label><input id="on-jurisdiccion" value="AR-C" maxlength="10"></div>
-    <div><label>Organismo</label><input id="on-organismo" maxlength="40" placeholder="IGJ"></div>
+    <!-- Era un `input` de texto libre con `IGJ` de placeholder, y la columna admite
+         cinco valores en mayúsculas: escribir `igj` devolvía «Error interno» en el
+         primer formulario que completa un cliente. Un desplegable no puede producir
+         un valor que la base rechace, y además muestra cuáles son sin que haya que
+         saberlos de memoria. La opción vacía es legítima: muchas sociedades no
+         tienen organismo, y eso se guarda como NULL. -->
+    <div><label>Organismo <span class="opcional">— si la empresa tiene</span></label>
+      <select id="on-organismo">
+      <option value="">(ninguno)</option>
+      <option>IGJ</option><option>CNV</option><option>BCRA</option>
+      <option>INAES</option><option>PROVINCIAL</option>
+    </select></div>
     <div><label>Cierre (MM-DD)</label><input id="on-cierre" value="12-31" maxlength="5"></div>
     <div><label>Plan</label><select id="on-plan"></select></div>
     <div><label>&nbsp;</label><button id="b-onboarding">Crear y empezar la prueba</button></div>
