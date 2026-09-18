@@ -43,6 +43,18 @@
  * configuración inválida no puede producir un renglón válido por accidente
  * porque nunca llega hasta acá.
  *
+ * ## La clase decide para qué lado va
+ *
+ * Una nota de crédito de ventas no es una venta con otro nombre: deshace una.
+ * La dirección económica sale de `signoDe`, el **mismo** mecanismo que usa el
+ * subdiario de IVA, alimentado por la clase que `arca_comprobante_types`
+ * resuelve por fecha. Acá no hay ninguna lista de códigos, y no hay un caso
+ * especial para notas de crédito: hay un signo, que las notas de débito y las
+ * facturas comparten porque económicamente hacen lo mismo.
+ *
+ * Si la clase no se puede resolver, no se propone nada. Suponer que suma tiene
+ * una chance en dos de invertir la operación, y el asiento invertido cuadra.
+ *
  * ## Y no arma lo que no sabe armar
  *
  * Se arma el caso que el mapeo cubre: neto gravado más IVA contra la cuenta
@@ -61,6 +73,7 @@
 
 import type { Money, RolContable } from '@aai/shared';
 import { money, moneyFromDecimalString, toDecimalString } from '@aai/shared';
+import { signoDe, type ClaseComprobante } from '@aai/tax-engine';
 
 // Los roles viven en `@aai/shared`: estaban escritos cuatro veces -acá, en
 // `mapeo-contable.ts`, en el CHECK de la 0079 y en el catálogo de cuentas- y
@@ -92,6 +105,21 @@ export interface LineaParaArmar {
 
 export interface ComprobanteParaArmar {
   readonly direccion: 'VENTAS' | 'COMPRAS';
+  /**
+   * La clase, resuelta desde `arca_comprobante_types` **por fecha**.
+   *
+   * De acá sale la dirección económica del asiento, y sale por el mismo camino
+   * que la del subdiario: `signoDe`. No hay una lista de códigos en este
+   * archivo, igual que no la hay allá — los tipos de comprobante son una tabla
+   * que ARCA versiona en el tiempo, y escribir «la nota de crédito es la 3»
+   * sería cablear una vigencia.
+   *
+   * `null` significa que el código no está en el catálogo a esa fecha, y
+   * entonces no se propone nada: sin saber la clase no se sabe para qué lado va
+   * el asiento, y elegir uno tendría una chance en dos de invertir la
+   * operación.
+   */
+  readonly clase: ClaseComprobante | null;
   readonly neto: Money;
   readonly iva: Money;
   readonly total: Money;
@@ -154,6 +182,39 @@ export function armarRenglones(
   const rolContraparte: RolContable = esVenta ? 'CLIENTES' : 'PROVEEDORES';
   const rolResultado: RolContable = esVenta ? 'VENTAS' : 'COMPRAS';
   const rolIva: RolContable = esVenta ? 'IVA_DEBITO' : 'IVA_CREDITO';
+
+  // -------------------------------------------------------------------------
+  // Para qué lado va el asiento
+  // -------------------------------------------------------------------------
+  // La dirección la da la dirección de la operación —venta o compra— corregida
+  // por la clase del comprobante. Son dos cosas distintas y se combinan una vez:
+  //
+  //     venta  + factura o nota de débito  → el cliente debe
+  //     venta  + nota de crédito           → el cliente ya no debe
+  //     compra + factura o nota de débito  → se le debe al proveedor
+  //     compra + nota de crédito           → ya no se le debe
+  //
+  // La nota de débito no lleva caso propio y no debería llevarlo: `signoDe` le
+  // da `1n`, igual que a una factura, porque económicamente hace lo mismo. Un
+  // `if` para notas de crédito habría dejado a la de débito adivinando.
+  //
+  // El signo se aplica **una sola vez**, acá. Los importes de `tax_transactions`
+  // se guardan sin signo —la 0021 lo dice y sus CHECK lo obligan— y el subdiario
+  // lo aplica por su cuenta sobre los suyos. Los dos consumidores parten del
+  // mismo dato sin signo y ninguno ve lo que hizo el otro.
+  const signo = signoDe(comprobante.clase);
+  if (signo === null) {
+    return vacia(
+      'No se sabe qué clase de comprobante es: su tipo no está en el catálogo de ARCA ' +
+        'vigente a esa fecha. De la clase depende para qué lado va el asiento —una nota de ' +
+        'crédito lo invierte— y suponerla tiene una chance en dos de dar vuelta la ' +
+        'operación. Sincronizá el catálogo desde ARCA.',
+    );
+  }
+
+  /** Una nota de crédito invierte los dos lados; nada más cambia. */
+  const invertido = signo === -1n;
+  const contraparteAlDebe = esVenta !== invertido;
 
   // -------------------------------------------------------------------------
   // Cuánto neto resuelve cada cuenta
@@ -236,37 +297,61 @@ export function armarRenglones(
   const importe = (bruto: bigint): string =>
     toDecimalString(money(bruto, comprobante.neto.currency));
 
+  /**
+   * Un renglón, del lado que le toca.
+   *
+   * `alDebe` se decide por contraste con la contraparte: el resultado y el IVA
+   * van siempre del lado opuesto al de ella, en las cuatro combinaciones de
+   * dirección y clase. Escribirlo así en vez de repetir el ternario en cada
+   * renglón es lo que hace que agregar la clase no haya multiplicado los casos.
+   */
+  const renglon = (
+    accountCode: string,
+    monto: string,
+    alDebe: boolean,
+    descripcion: string,
+    extra: { partyId?: string } = {},
+  ): RenglonPropuesto => ({
+    accountCode,
+    debit: alDebe ? monto : CERO,
+    credit: alDebe ? CERO : monto,
+    descripcion,
+    ...extra,
+  });
+
   // El resultado: un renglón por cuenta. Cuando ninguna línea resolvió por su
   // cuenta, el agrupamiento tiene un solo elemento —la genérica con todo el
   // neto— y estos renglones son exactamente los que este armador daba antes.
-  const deResultado: RenglonPropuesto[] = [...porCuenta].map(([codigo, monto]) => ({
-    accountCode: codigo,
-    debit: esVenta ? CERO : importe(monto),
-    credit: esVenta ? importe(monto) : CERO,
-    descripcion: comprobante.descripcion,
-  }));
+  const deResultado: RenglonPropuesto[] = [...porCuenta].map(([codigo, monto]) =>
+    renglon(codigo, importe(monto), !contraparteAlDebe, comprobante.descripcion),
+  );
 
-  const deContraparte: RenglonPropuesto = {
-    accountCode: contraparte.codigo,
-    debit: esVenta ? toDecimalString(comprobante.total) : CERO,
-    credit: esVenta ? CERO : toDecimalString(comprobante.total),
-    descripcion: comprobante.descripcion,
-    ...tercero,
-  };
+  const deContraparte = renglon(
+    contraparte.codigo,
+    toDecimalString(comprobante.total),
+    contraparteAlDebe,
+    comprobante.descripcion,
+    tercero,
+  );
 
+  // Débito o crédito fiscal es la dirección de la operación, no la clase: el IVA
+  // de una nota de crédito de ventas sigue siendo débito fiscal, lo que cambia
+  // es de qué lado del asiento cae.
   const deIva: readonly RenglonPropuesto[] =
     comprobante.iva.amount === 0n
       ? []
       : [
-          {
-            accountCode: mapeo.get(rolIva)!.codigo,
-            debit: esVenta ? CERO : toDecimalString(comprobante.iva),
-            credit: esVenta ? toDecimalString(comprobante.iva) : CERO,
-            descripcion: `IVA ${esVenta ? 'débito' : 'crédito'} fiscal`,
-          },
+          renglon(
+            mapeo.get(rolIva)!.codigo,
+            toDecimalString(comprobante.iva),
+            !contraparteAlDebe,
+            `IVA ${esVenta ? 'débito' : 'crédito'} fiscal`,
+          ),
         ];
 
-  const renglones: RenglonPropuesto[] = esVenta
+  // Los débitos primero, en los cuatro casos: cuando la contraparte está al debe
+  // encabeza, y cuando no, cierra.
+  const renglones: RenglonPropuesto[] = contraparteAlDebe
     ? [deContraparte, ...deResultado, ...deIva]
     : [...deResultado, ...deIva, deContraparte];
 

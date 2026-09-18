@@ -23,6 +23,7 @@
  */
 
 import { recordAudit, withCompany, type Tx } from '@aai/db';
+import type { ClaseComprobante } from '@aai/tax-engine';
 import {
   DESCRIPCION_DE_ROL,
   moneyFromDecimalString,
@@ -46,6 +47,28 @@ const PARA_QUE = DESCRIPCION_DE_ROL;
 
 const DE_COSTO = new Set<RolContable>(ROLES_DE_COSTO);
 
+/**
+ * Cómo se llama el comprobante en la descripción del asiento.
+ *
+ * Mapa cerrado, con `DESCONOCIDO` como clave propia en vez de un `else`: si
+ * mañana `arca_comprobante_types` trae una clase nueva, el compilador señala
+ * este objeto en lugar de dejarla cayendo en la etiqueta de otra cosa. Las
+ * clases que no dependen de la dirección la ignoran, y eso también se ve.
+ */
+const NOMBRE_DEL_COMPROBANTE: Readonly<
+  Record<ClaseComprobante | 'DESCONOCIDO', (direccion: 'VENTAS' | 'COMPRAS') => string>
+> = {
+  FACTURA: (d) => (d === 'VENTAS' ? 'Venta' : 'Compra'),
+  NOTA_DEBITO: (d) => `Nota de débito de ${d === 'VENTAS' ? 'venta' : 'compra'}`,
+  NOTA_CREDITO: (d) => `Nota de crédito de ${d === 'VENTAS' ? 'venta' : 'compra'}`,
+  RECIBO: () => 'Recibo',
+  LIQUIDACION: () => 'Liquidación',
+  // No se propone nada en este caso, pero la descripción viaja igual en la
+  // respuesta y decir «Venta» sobre un comprobante de clase desconocida sería
+  // afirmar justamente lo que no se pudo resolver.
+  DESCONOCIDO: () => 'Comprobante',
+};
+
 interface FilaMapeo {
   readonly rol: RolContable;
   readonly codigo: string;
@@ -53,23 +76,56 @@ interface FilaMapeo {
   readonly exige_tercero: boolean;
 }
 
-/** Lee el mapeo declarado como el diccionario que espera el armador. */
-export async function leerMapeo(
-  tx: Tx,
-  companyId: string,
-): Promise<Map<RolContable, CuentaDelRol>> {
-  const r = await tx.query<FilaMapeo>(
+export interface MapeoLeido {
+  readonly mapeo: Map<RolContable, CuentaDelRol>;
+  /** Roles declarados cuya cuenta ya no se puede imputar. Uno por rol. */
+  readonly inutilizables: readonly string[];
+}
+
+/**
+ * Lee el mapeo declarado como el diccionario que espera el armador.
+ *
+ * ## Por qué se filtra al leer y no alcanza con el disparador
+ *
+ * `assert_cuenta_del_rol` (0074/0079) comprueba tipo e imputabilidad **cuando se
+ * declara el mapeo**. No puede comprobar nada después, porque lo que cambia es
+ * la cuenta y no el mapeo: archivarla es un `UPDATE` sobre `accounts`, y
+ * colgarle una hija la vuelve de agrupación por el disparador de la 0003. En los
+ * dos casos la fila del mapeo queda intacta apuntando a una cuenta que ya no
+ * recibe imputaciones.
+ *
+ * Es exactamente el mismo agujero que la Fase 4 cerró para las cuentas de
+ * producto, y se cierra igual: las condiciones van en el `JOIN`. Un rol cuya
+ * cuenta dejó de servir sale del diccionario, y entonces el armador lo ve como
+ * un rol que falta —que es lo que es— y lo dice por el camino que ya existía.
+ *
+ * La diferencia entre «no lo declaraste» y «lo declaraste y ya no sirve» se
+ * conserva aparte, porque el remedio no es el mismo.
+ */
+export async function leerMapeo(tx: Tx, companyId: string): Promise<MapeoLeido> {
+  const r = await tx.query<FilaMapeo & { imputable: boolean }>(
     `SELECT m.rol, a.code AS codigo, a.name AS nombre,
-            a.requires_third_party AS exige_tercero
+            a.requires_third_party AS exige_tercero,
+            (a.status = 'ACTIVE' AND a.is_postable) AS imputable
        FROM company_account_map m
        JOIN accounts a ON a.id = m.account_id AND a.company_id = m.company_id
       WHERE m.company_id = $1`,
     [companyId],
   );
 
-  return new Map(
-    r.rows.map((f) => [f.rol, { rol: f.rol, codigo: f.codigo, exigeTercero: f.exige_tercero }]),
-  );
+  const utiles = r.rows.filter((f) => f.imputable);
+  return {
+    mapeo: new Map(
+      utiles.map((f) => [f.rol, { rol: f.rol, codigo: f.codigo, exigeTercero: f.exige_tercero }]),
+    ),
+    inutilizables: r.rows
+      .filter((f) => !f.imputable)
+      .map(
+        (f) =>
+          `El rol ${f.rol} está declarado contra ${f.codigo} «${f.nombre}», que ya no admite ` +
+          'imputación: está archivada o es de agrupación. Declará otra cuenta para ese rol.',
+      ),
+  };
 }
 
 interface FilaDeRenglon {
@@ -307,6 +363,8 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
       async (tx) => {
         const r = await tx.query<{
           direction: 'VENTAS' | 'COMPRAS';
+          cbte_tipo: number;
+          clase: ClaseComprobante | null;
           neto: string;
           iva: string;
           total: string;
@@ -324,7 +382,13 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
           // que la operación fiscal guarda y el que el asiento declara como
           // origen. Mirar uno solo diría «no tiene» sobre uno que sí tiene, y
           // ahí la consola invitaría a cargarlo de nuevo.
-          `SELECT t.direction, t.neto::text, t.iva::text, t.total::text,
+          //
+          // La clase sale del catálogo de ARCA **por la fecha del comprobante**,
+          // igual que en `tax/subdiario.ts`. Contra `now()` diría qué es hoy la
+          // 991 y no qué era cuando se emitió, y de eso depende para qué lado va
+          // el asiento.
+          `SELECT t.direction, t.cbte_tipo, ct.clase,
+                  t.neto::text, t.iva::text, t.total::text,
                   t.no_gravado::text, t.exento::text, t.percepciones::text,
                   t.party_id, t.cbte_fecha::text, t.punto_venta, t.cbte_numero::text,
                   t.razon_social,
@@ -336,22 +400,32 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
                         AND e.status <> 'ANULADO'
                       ORDER BY e.created_at LIMIT 1)
                   )                                       AS entry_id
-             FROM tax_transactions t WHERE t.id = $1 AND t.company_id = $2`,
+             FROM tax_transactions t
+             LEFT JOIN arca_comprobante_types ct
+                    ON ct.codigo = t.cbte_tipo
+                   AND (ct.valid_from IS NULL OR ct.valid_from <= t.cbte_fecha)
+                   AND (ct.valid_to   IS NULL OR ct.valid_to   >= t.cbte_fecha)
+            WHERE t.id = $1 AND t.company_id = $2`,
           [taxTransactionId, tenant.companyId],
         );
         if (r.rowCount === 0) throw notFound('Operación fiscal no encontrada');
         const o = r.rows[0]!;
 
-        const mapeo = await leerMapeo(tx, tenant.companyId);
+        const { mapeo, inutilizables } = await leerMapeo(tx, tenant.companyId);
         const detalle = await leerDetalle(tx, tenant.companyId, taxTransactionId, o.direction);
+
+        // La descripción nombra lo que el comprobante es, no la dirección de la
+        // operación. «Venta 1-0001» en el renglón de una nota de crédito se lee
+        // en el Diario dentro de tres años y dice otra cosa que la que pasó.
         const descripcion =
-          `${o.direction === 'VENTAS' ? 'Venta' : 'Compra'} ` +
+          `${NOMBRE_DEL_COMPROBANTE[o.clase ?? 'DESCONOCIDO'](o.direction)} ` +
           `${o.punto_venta}-${o.cbte_numero}` +
           (o.razon_social === null ? '' : ` — ${o.razon_social}`);
 
         const construccion = armarRenglones(
           {
             direccion: o.direction,
+            clase: o.clase,
             neto: moneyFromDecimalString(o.neto, 'ARS'),
             iva: moneyFromDecimalString(o.iva, 'ARS'),
             total: moneyFromDecimalString(o.total, 'ARS'),
@@ -375,7 +449,10 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
           // impiden la propuesta —el renglón cae en la genérica— y por eso hay
           // que decirlas: si no, el asiento sale bien y nadie se entera de que
           // la cuenta del producto quedó archivada.
-          advertenciasDeConfiguracion: detalle.advertencias,
+          // Las del detalle y las del mapeo: las dos son configuraciones que
+          // existen y no se pudieron usar, y para quien tiene que arreglarlas
+          // son el mismo problema.
+          advertenciasDeConfiguracion: [...inutilizables, ...detalle.advertencias],
           // §24: un asiento sin origen demostrable no se postea, y la propuesta
           // por sí sola no es un origen — es una cuenta que hizo el sistema.
           // Lo que funda el asiento es que una persona la haya mirado y la
@@ -417,6 +494,19 @@ function traducirMapeo(error: unknown): unknown {
       'CUENTA_NO_IMPUTABLE',
       'Esa cuenta es de agrupación y no recibe movimientos. Declará una imputable.',
     );
+  }
+  // La 0130. Va antes que nada del tipo porque una cuenta archivada puede ser
+  // del tipo correcto, y decirle a alguien que el tipo está mal cuando el tipo
+  // está bien lo manda a buscar el problema donde no está.
+  if (mensaje.includes('E_MAPEO_ARCHIVADA')) {
+    return unprocessable(
+      'CUENTA_ARCHIVADA',
+      'Esa cuenta está archivada: archivarla fue decir que ya no se usa. Declará otra, o ' +
+        'reactivala si fue un error.',
+    );
+  }
+  if (mensaje.includes('E_MAPEO_CUENTA_AJENA')) {
+    return conflict('La cuenta no existe en esta empresa');
   }
   if ((error as { code?: string }).code === '23503') {
     return conflict('La cuenta no existe en esta empresa');

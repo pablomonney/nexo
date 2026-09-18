@@ -362,12 +362,17 @@ export async function valuacionRoutes(app: FastifyInstance): Promise<void> {
           [tenant.companyId, mes],
         );
 
-        const mapeo = await leerMapeo(tx, tenant.companyId);
+        // `leerMapeo` deja afuera los roles cuya cuenta dejó de ser imputable
+        // —archivada, o vuelta de agrupación—, así que acá caen en «falta
+        // declarar», que es lo que son a los efectos de armar el asiento. El
+        // motivo exacto viaja en `advertenciasDeConfiguracion`.
+        const { mapeo, inutilizables } = await leerMapeo(tx, tenant.companyId);
         const faltan = (['COSTO_DE_VENTAS', 'MERCADERIA'] as const).filter(
           (rol) => !mapeo.has(rol),
         );
 
         const vacia = (motivo: string, rolesFaltantes: readonly string[] = []) => ({
+          advertenciasDeConfiguracion: inutilizables,
           mes: query.mes,
           renglones: [] as unknown[],
           motivoSinRenglones: motivo,
@@ -437,6 +442,7 @@ export async function valuacionRoutes(app: FastifyInstance): Promise<void> {
           ],
           motivoSinRenglones: null,
           rolesFaltantes: [] as string[],
+          advertenciasDeConfiguracion: inutilizables,
           costo,
           productos: f.productos,
           metodo: f.metodo,
