@@ -10,14 +10,20 @@
  * suficiente. Si trae de menos, el motor rechaza; nunca completa lo que falta.
  */
 
-import type { CalendarDate, Currency, RoundingMode } from '@aai/shared';
+import type {
+  CalendarDate,
+  Currency,
+  Naturaleza,
+  RoundingMode,
+  TipoDeCuenta,
+} from '@aai/shared';
 
 export interface AccountSnapshot {
   readonly id: string;
   readonly code: string;
   readonly name: string;
-  readonly type: 'ACTIVO' | 'PASIVO' | 'PN' | 'INGRESO' | 'COSTO' | 'GASTO' | 'ORDEN';
-  readonly nature: 'DEUDORA' | 'ACREEDORA';
+  readonly type: TipoDeCuenta;
+  readonly nature: Naturaleza;
   readonly isPostable: boolean;
   readonly status: 'ACTIVE' | 'ARCHIVED';
   readonly currency: Currency;

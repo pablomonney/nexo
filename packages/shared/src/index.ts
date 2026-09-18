@@ -4,6 +4,7 @@ export * from './cuit.js';
 export * from './organismo.js';
 export * from './entidad.js';
 export * from './jurisdiccion.js';
+export * from './tipos-contables.js';
 export * from './roles-contables.js';
 export * from './plan-de-cuentas.js';
 export * from './calendar-date.js';

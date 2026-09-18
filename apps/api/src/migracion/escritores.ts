@@ -29,6 +29,7 @@
 
 
 import type { Campo, Entidad, RegistroCanonico } from '@aai/migration-engine';
+import { NATURALEZA_POR_TIPO, type TipoDeCuenta } from '@aai/shared';
 import type { ContextoDeImportacion } from './contexto.js';
 
 export interface ResultadoDeEscritura {
@@ -357,7 +358,16 @@ const DEPOSITO: Escritor = {
 // Plan de cuentas
 // ---------------------------------------------------------------------------
 
-const TIPOS_DE_CUENTA = new Map<string, string>([
+/**
+ * Texto del sistema anterior → vocabulario de NEXO.
+ *
+ * Esto **no** es la lista de tipos de cuenta: es el contrato de la importación,
+ * qué formas acepta de un archivo ajeno. La lista vive en `@aai/shared`, y el
+ * valor de tipar el mapa contra ella es que si mañana se agrega o se quita un
+ * tipo, el compilador señala este archivo en vez de dejarlo produciendo un
+ * valor que la base rechaza.
+ */
+const TEXTO_A_TIPO = new Map<string, TipoDeCuenta>([
   ['activo', 'ACTIVO'],
   ['pasivo', 'PASIVO'],
   ['pn', 'PN'],
@@ -374,17 +384,6 @@ const TIPOS_DE_CUENTA = new Map<string, string>([
   ['orden', 'ORDEN'],
 ]);
 
-/** La naturaleza que le corresponde a cada tipo cuando el origen no la trae. */
-const NATURALEZA: Readonly<Record<string, 'DEUDORA' | 'ACREEDORA'>> = {
-  ACTIVO: 'DEUDORA',
-  PASIVO: 'ACREEDORA',
-  PN: 'ACREEDORA',
-  INGRESO: 'ACREEDORA',
-  COSTO: 'DEUDORA',
-  GASTO: 'DEUDORA',
-  ORDEN: 'DEUDORA',
-};
-
 /**
  * El primer dígito del código, cuando el origen no dice el tipo.
  *
@@ -392,7 +391,7 @@ const NATURALEZA: Readonly<Record<string, 'DEUDORA' | 'ACREEDORA'>> = {
  * aplica solo como último recurso y **queda dicho en una advertencia**: deducir
  * el tipo de una cuenta del número es una convención, no un dato.
  */
-const TIPO_POR_DIGITO: Readonly<Record<string, string>> = {
+const TIPO_POR_DIGITO: Readonly<Record<string, TipoDeCuenta>> = {
   '1': 'ACTIVO',
   '2': 'PASIVO',
   '3': 'PN',
@@ -427,7 +426,7 @@ const CUENTA: Escritor = {
     if (codigo === null) throw new NoSePuedeEscribir('La cuenta no trae código');
 
     const advertencias: string[] = [];
-    const declarado = TIPOS_DE_CUENTA.get(sinAcentos(texto(r.campos.tipo) ?? ''));
+    const declarado = TEXTO_A_TIPO.get(sinAcentos(texto(r.campos.tipo) ?? ''));
     let tipo = declarado;
     if (tipo === undefined) {
       const porDigito = TIPO_POR_DIGITO[codigo.trim()[0] ?? ''];
@@ -450,7 +449,7 @@ const CUENTA: Escritor = {
         ? 'DEUDORA'
         : naturalezaDeclarada === 'acreedora'
           ? 'ACREEDORA'
-          : NATURALEZA[tipo]!;
+          : NATURALEZA_POR_TIPO[tipo];
 
     // El padre por código. Si el archivo lo declara y no está, es un error: una
     // cuenta colgando de una cuenta que no existe rompe la jerarquía entera.

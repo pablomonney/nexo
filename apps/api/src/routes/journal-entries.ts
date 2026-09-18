@@ -42,6 +42,7 @@ import {
   type CalendarDate,
   type Currency,
   type Money,
+  type Naturaleza,
   type RoundingMode,
 } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
@@ -503,7 +504,7 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
           account_id: string;
           code: string;
           name: string;
-          nature: 'DEUDORA' | 'ACREEDORA';
+          nature: Naturaleza;
           debito: string;
           credito: string;
         }>(

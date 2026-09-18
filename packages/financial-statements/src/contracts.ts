@@ -30,7 +30,7 @@
  * `docs/normative-sources/originals/INFOLEG_LGS_19550_texto_actualizado.htm`.
  */
 
-import type { CalendarDate, Money, TipoDeEntidad } from '@aai/shared';
+import type { CalendarDate, Money, TipoDeCuenta, TipoDeEntidad } from '@aai/shared';
 
 export type TipoEstado = 'ESP' | 'ER';
 
@@ -92,7 +92,16 @@ export interface SelectorDeCuentas {
   readonly excluir?: readonly string[];
 }
 
-export type TipoCuenta = 'ACTIVO' | 'PASIVO' | 'PN' | 'INGRESO' | 'COSTO' | 'GASTO' | 'ORDEN';
+/**
+ * El nombre con el que este paquete publica los tipos de cuenta.
+ *
+ * Es un alias del vocabulario compartido, no una segunda definición: los valores
+ * de `SelectorDeCuentas.tipos` y de `alcance.tipos` se serializan a
+ * `statement_templates.scope_types`, así que cualquier divergencia con
+ * `accounts.type` dejaría plantillas que seleccionan cuentas que no existen. El
+ * nombre se conserva porque ya es parte del contrato público del paquete.
+ */
+export type TipoCuenta = TipoDeCuenta;
 
 /**
  * Cómo se presenta el importe del renglón.

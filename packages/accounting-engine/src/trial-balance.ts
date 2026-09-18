@@ -20,7 +20,7 @@
  * cuenta, que es exactamente el trabajo que un balance debería ahorrarle.
  */
 
-import type { Currency, Money } from '@aai/shared';
+import type { Currency, Money, Naturaleza } from '@aai/shared';
 import { add, money, subtract, zero } from '@aai/shared';
 import type { LibroMayor } from './libro-mayor.js';
 
@@ -28,7 +28,7 @@ export interface MovimientoDeMayor {
   readonly accountId: string;
   readonly accountCode: string;
   readonly accountName: string;
-  readonly nature: 'DEUDORA' | 'ACREEDORA';
+  readonly nature: Naturaleza;
   readonly debit: Money;
   readonly credit: Money;
 }
@@ -43,7 +43,7 @@ export interface LineaBalance {
   readonly accountId: string;
   readonly accountCode: string;
   readonly accountName: string;
-  readonly nature: 'DEUDORA' | 'ACREEDORA';
+  readonly nature: Naturaleza;
   readonly saldoInicial: Money;
   readonly debitos: Money;
   readonly creditos: Money;
@@ -182,7 +182,7 @@ interface LineaMutable {
   accountId: string;
   accountCode: string;
   accountName: string;
-  nature: 'DEUDORA' | 'ACREEDORA';
+  nature: Naturaleza;
   saldoInicial: Money;
   debitos: Money;
   creditos: Money;

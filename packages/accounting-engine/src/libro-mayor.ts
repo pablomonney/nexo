@@ -11,7 +11,7 @@
  * art. 330; el Mayor materializado es una tabla que existe por rendimiento.
  */
 
-import type { CalendarDate, Currency, Money } from '@aai/shared';
+import type { CalendarDate, Currency, Money, Naturaleza } from '@aai/shared';
 import { add, compareDates, money, subtract, zero } from '@aai/shared';
 import type { AsientoDelLibro, LineaDelLibro } from './libro-diario.js';
 
@@ -50,7 +50,7 @@ export interface CuentaDelMayor {
   readonly accountId: string;
   readonly accountCode: string;
   readonly accountName: string;
-  readonly nature: 'DEUDORA' | 'ACREEDORA';
+  readonly nature: Naturaleza;
   readonly saldoInicial: Money;
   readonly movimientos: readonly MovimientoDelMayor[];
   readonly totalDebe: Money;
@@ -72,7 +72,7 @@ export interface CuentaParaElMayor {
   readonly id: string;
   readonly code: string;
   readonly name: string;
-  readonly nature: 'DEUDORA' | 'ACREEDORA';
+  readonly nature: Naturaleza;
 }
 
 export interface SaldoDeApertura {

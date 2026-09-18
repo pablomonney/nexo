@@ -77,14 +77,18 @@
  */
 
 import { ROLES_CONTABLES, type RolContable } from './roles-contables.js';
+import {
+  NATURALEZA_POR_TIPO,
+  type Naturaleza,
+  type TaxRole,
+  type TipoDeCuenta,
+} from './tipos-contables.js';
 
-/** Los tipos que admite `accounts.type` (migración 0003). */
-export type TipoDeCuenta = 'ACTIVO' | 'PASIVO' | 'PN' | 'INGRESO' | 'COSTO' | 'GASTO' | 'ORDEN';
-
-export type Naturaleza = 'DEUDORA' | 'ACREEDORA';
-
-/** Los valores que admite `accounts.tax_role`. */
-export type TaxRole = 'IVA_CF' | 'IVA_DF' | 'PERCEPCION' | 'RETENCION' | 'DIFERENCIA_CAMBIO';
+// El vocabulario —tipos, naturalezas, roles fiscales— vive en `tipos-contables.ts`
+// y NO se vuelve a exportar desde acá: dos `export *` en el índice del paquete
+// exportando el mismo nombre es un error de compilación, y esa es justamente la
+// señal que queremos si alguien intenta redefinirlo. El catálogo usa el
+// vocabulario; no lo define.
 
 /** Los dominios del producto que van a imputar contra estas cuentas. */
 export const USOS = [
@@ -143,17 +147,6 @@ export const PLANTILLA: PlantillaDePlan = {
     'La RT 54 no prescribe un plan de cuentas: su ¶56 admite cambios de denominación, ' +
     'apertura y agrupamiento. La clase 7 (cuentas de orden) es funcionalidad de NEXO ' +
     'y no una exigencia de la norma.',
-};
-
-/** La naturaleza que le corresponde a cada tipo cuando nadie la invierte. */
-export const NATURALEZA_POR_TIPO: Readonly<Record<TipoDeCuenta, Naturaleza>> = {
-  ACTIVO: 'DEUDORA',
-  PASIVO: 'ACREEDORA',
-  PN: 'ACREEDORA',
-  INGRESO: 'ACREEDORA',
-  COSTO: 'DEUDORA',
-  GASTO: 'DEUDORA',
-  ORDEN: 'DEUDORA',
 };
 
 /** El padre de un código es todo lo que está antes del último punto. */

@@ -45,6 +45,7 @@ import {
   type CalendarDate,
   type Currency,
   type Money,
+  type Naturaleza,
 } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -769,7 +770,7 @@ async function resolverContexto(
     account_id: string;
     code: string;
     name: string;
-    nature: 'DEUDORA' | 'ACREEDORA';
+    nature: Naturaleza;
     debit: string;
     credit: string;
     currency: string;
@@ -815,7 +816,7 @@ async function resolverContexto(
     id: string;
     code: string;
     name: string;
-    nature: 'DEUDORA' | 'ACREEDORA';
+    nature: Naturaleza;
   }>('SELECT id, code, name, nature FROM accounts WHERE company_id = $1', [companyId]);
 
   const porAsiento = new Map<string, LineaDelLibro[]>();

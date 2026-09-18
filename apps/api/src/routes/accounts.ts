@@ -5,28 +5,24 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { conflict, notFound } from '../http/errors.js';
-import { PLANTILLA as PLANTILLA_MODELO } from '@aai/shared';
+import {
+  NATURALEZAS,
+  NATURALEZA_POR_TIPO,
+  PLANTILLA as PLANTILLA_MODELO,
+  TAX_ROLES,
+  TIPOS_DE_CUENTA,
+} from '@aai/shared';
 import { cuentasDelModelo, materializarPlanModelo } from '../contabilidad/materializar-plan.js';
 
-const ACCOUNT_TYPES = ['ACTIVO', 'PASIVO', 'PN', 'INGRESO', 'COSTO', 'GASTO', 'ORDEN'] as const;
-const TAX_ROLES = ['IVA_CF', 'IVA_DF', 'PERCEPCION', 'RETENCION', 'DIFERENCIA_CAMBIO'] as const;
-
 /**
- * Naturaleza esperada por tipo de cuenta.
+ * El vocabulario de una cuenta llega de `@aai/shared`.
  *
- * Se valida en el alta porque una cuenta de ingresos con naturaleza deudora
- * produce un Mayor que suma al revés, y el error aparece recién en el balance
- * —a veces meses después— cuando ya hay cientos de asientos imputados.
+ * Acá había tres copias —los siete tipos, los cinco roles fiscales y el mapa de
+ * naturaleza por tipo— idénticas a las del catálogo. La naturaleza se completa
+ * desde el mapa y no se valida contra él, porque una regularizadora tiene a
+ * propósito la naturaleza contraria a la de su tipo: lo que evita el Mayor que
+ * suma al revés es que el alta no la deje vacía.
  */
-const EXPECTED_NATURE: Record<(typeof ACCOUNT_TYPES)[number], 'DEUDORA' | 'ACREEDORA'> = {
-  ACTIVO: 'DEUDORA',
-  PASIVO: 'ACREEDORA',
-  PN: 'ACREEDORA',
-  INGRESO: 'ACREEDORA',
-  COSTO: 'DEUDORA',
-  GASTO: 'DEUDORA',
-  ORDEN: 'DEUDORA',
-};
 
 export async function accountRoutes(app: FastifyInstance): Promise<void> {
   app.get('/accounts', async (request) => {
@@ -65,8 +61,8 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         code: z.string().min(1).max(40).regex(/^[0-9.]+$/, 'El código admite dígitos y puntos'),
         name: z.string().min(1).max(200),
         parentId: z.string().uuid().nullish(),
-        type: z.enum(ACCOUNT_TYPES),
-        nature: z.enum(['DEUDORA', 'ACREEDORA']).optional(),
+        type: z.enum(TIPOS_DE_CUENTA),
+        nature: z.enum(NATURALEZAS).optional(),
         isPostable: z.boolean().default(true),
         currency: z.string().length(3).default('ARS'),
         taxRole: z.enum(TAX_ROLES).nullish(),
@@ -75,7 +71,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
       })
       .parse(request.body);
 
-    const nature = body.nature ?? EXPECTED_NATURE[body.type];
+    const nature = body.nature ?? NATURALEZA_POR_TIPO[body.type];
 
     try {
       const created = await withCompany(

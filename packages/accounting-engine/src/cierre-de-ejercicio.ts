@@ -42,10 +42,15 @@
  * ajena.
  */
 
-import type { AccountingError, Currency, Money } from '@aai/shared';
+import type { AccountingError, Currency, Money, TipoDeCuenta } from '@aai/shared';
 import { accountingError, add, isZero, money, negate, subtract, zero } from '@aai/shared';
 
-export type TipoDeCuenta = 'ACTIVO' | 'PASIVO' | 'PN' | 'INGRESO' | 'COSTO' | 'GASTO' | 'ORDEN';
+/**
+ * Se re-exporta para no romper a quien lo importa desde este paquete
+ * (`routes/closures.ts`), pero la definición es la del vocabulario compartido:
+ * acá había una segunda copia de los siete tipos.
+ */
+export type { TipoDeCuenta };
 
 /**
  * Las que se refunden. Sale del `type` de `accounts`, que es el modelo técnico
