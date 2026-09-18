@@ -33,9 +33,14 @@ import { z } from 'zod';
 import { withCompany, withoutCompany, recordAudit } from '@aai/db';
 import {
   cuitCheckDigit,
+  esJurisdiccion,
   esOrganismoDeContralor,
+  FORMA_DE_JURISDICCION,
+  MENSAJE_DE_JURISDICCION,
   MENSAJE_DE_ORGANISMO,
+  normalizarJurisdiccion,
   normalizarOrganismo,
+  TIPOS_DE_ENTIDAD,
 } from '@aai/shared';
 import { requireAuth, requireCompany } from '../http/context.js';
 import { badRequest, conflict } from '../http/errors.js';
@@ -116,8 +121,37 @@ const alta = z.object({
       (c) => cuitCheckDigit(c.slice(0, 10)) === Number(c[10]),
       'El dígito verificador del CUIT no cierra',
     ),
-  tipoEntidad: z.enum(['SA', 'SRL', 'SAS', 'UNIPERSONAL', 'ASOCIACION', 'COOPERATIVA', 'OTRO']),
-  jurisdiccion: z.string().min(2).max(10),
+  /**
+   * Los doce de `companies.entity_type`, importados de `@aai/shared`.
+   *
+   * Tenía siete, dos de ellos —`ASOCIACION` y `OTRO`— que la base **no
+   * admite**: elegirlos devolvía «Error interno». Y le faltaban siete que la
+   * base sí admite y que desde acá eran inalcanzables, porque esta es la única
+   * pantalla que crea empresas.
+   */
+  tipoEntidad: z.enum(TIPOS_DE_ENTIDAD),
+
+  /**
+   * La jurisdicción, con las dos barreras puestas en orden.
+   *
+   * Era `z.string().min(2).max(10)`: `XX` y —el caso realista— `ar-c` pasaban
+   * la validación y los rechazaba la columna, que exige `^AR(-[A-Z])?$`.
+   *
+   * Primero se normaliza, después se comprueba la **forma** —la que comparte
+   * con la base, la que impide un 23514— y recién después el **conjunto**, que
+   * es lo que NEXO ofrece hoy y puede crecer sin tocar la base. Los dos
+   * mensajes son distintos a propósito: una forma mal escrita y una
+   * jurisdicción que todavía no está disponible son dos problemas distintos.
+   */
+  jurisdiccion: z
+    .string()
+    .max(10)
+    .transform(normalizarJurisdiccion)
+    .refine(
+      (v) => FORMA_DE_JURISDICCION.test(v),
+      'La jurisdicción se escribe como AR (nacional) o AR seguido de un guion y una letra, como AR-C.',
+    )
+    .refine(esJurisdiccion, MENSAJE_DE_JURISDICCION),
   /**
    * El organismo de contralor, si la empresa tiene.
    *
@@ -137,6 +171,33 @@ const alta = z.object({
   cierreEjercicio: z.string().regex(/^\d{2}-\d{2}$/u, 'Mes y día: 12-31'),
   plan: z.string().min(2).max(40),
 });
+
+/**
+ * Cómo se lee una restricción de la base que llegó hasta el `INSERT`.
+ *
+ * Con los tres campos registrales alineados —tipo de entidad, jurisdicción y
+ * organismo salen del mismo catálogo que la columna—, **ninguna de las
+ * restricciones actuales debería alcanzarse desde esta ruta**. Esto existe para
+ * la restricción que todavía no se escribió: el día que una columna sume un
+ * `CHECK` que la validación no conozca, quien complete el formulario va a leer
+ * qué dato no entró en vez de «Error interno».
+ *
+ * Lo que está en el mapa se explica; lo que no, se contesta igual con 400 y con
+ * el nombre de la regla, que es lo único honesto que se puede decir de algo que
+ * este código no conoce —y lo que permite pedir ayuda por algo concreto—.
+ */
+const MENSAJE_POR_RESTRICCION: Readonly<Record<string, string>> = {
+  companies_regulator_check: MENSAJE_DE_ORGANISMO,
+  companies_jurisdiction_check: MENSAJE_DE_JURISDICCION,
+};
+
+export function mensajeDeRestriccion(nombre: string): string {
+  return (
+    MENSAJE_POR_RESTRICCION[nombre] ??
+    `Uno de los datos de la empresa no cumple una regla de la base (${nombre}). ` +
+      'Revisá los valores del formulario; si no encontrás cuál es, escribinos con este mensaje.'
+  );
+}
 
 export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -314,17 +375,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       throw badRequest(`No hay un plan disponible con el código ${body.plan}.`);
     }
     if (resultado.estado === 'FUERA_DE_RANGO') {
-      // Mapa de las restricciones que se saben leer. Lo que no está acá se
-      // contesta igual con 400 y con el nombre: es lo único honesto que se
-      // puede decir sobre una regla que este código no conoce.
-      const conocidas: Readonly<Record<string, string>> = {
-        companies_regulator_check: MENSAJE_DE_ORGANISMO,
-      };
-      throw badRequest(
-        conocidas[resultado.restriccion] ??
-          `Uno de los datos de la empresa no cumple una regla de la base (${resultado.restriccion}). ` +
-            'Revisá los valores del formulario; si no encontrás cuál es, escribinos con este mensaje.',
-      );
+      throw badRequest(mensajeDeRestriccion(resultado.restriccion));
     }
     if (resultado.estado === 'CUIT_REPETIDO') {
       // No se dice quién lo registró: sería un oráculo para averiguar en qué

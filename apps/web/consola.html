@@ -591,12 +591,35 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <div><label>CUIT (11 dígitos)</label><input id="on-cuit" maxlength="11" inputmode="numeric"></div>
   </div>
   <div class="fila">
+    <!-- Los doce de `companies.entity_type`, con el código como `value` y el nombre
+         como texto. Tenía siete, dos de los cuales —`ASOCIACION` y `OTRO`— la base
+         rechaza: elegirlos devolvía «Error interno». El orden es el de frecuencia
+         esperada, no el de la migración. La lista canónica vive en `@aai/shared` y
+         `consola-catalogos.test.ts` comprueba que estas opciones sean exactamente
+         esa lista: un valor de más acá sería otra vez un 500 esperando. -->
     <div><label>Tipo</label><select id="on-tipo">
-      <option>SA</option><option>SRL</option><option>SAS</option>
-      <option>UNIPERSONAL</option><option>ASOCIACION</option><option>COOPERATIVA</option>
-      <option>OTRO</option>
+      <option value="SA">Sociedad Anónima</option>
+      <option value="SRL">Sociedad de Responsabilidad Limitada</option>
+      <option value="SAS">Sociedad por Acciones Simplificada</option>
+      <option value="UNIPERSONAL">Unipersonal</option>
+      <option value="SA_299">Sociedad Anónima del art. 299 LGS</option>
+      <option value="SOCIEDAD_SIMPLE">Sociedad simple (Secc. IV LGS)</option>
+      <option value="ASOC_CIVIL">Asociación Civil</option>
+      <option value="FUNDACION">Fundación</option>
+      <option value="MUTUAL">Mutual</option>
+      <option value="COOPERATIVA">Cooperativa</option>
+      <option value="SUCURSAL_EXTRANJERA">Sucursal de sociedad extranjera</option>
+      <option value="FIDEICOMISO">Fideicomiso</option>
     </select></div>
-    <div><label>Jurisdicción</label><input id="on-jurisdiccion" value="AR-C" maxlength="10"></div>
+    <!-- Era un campo de texto libre con `AR-C` escrito: `ar-c` en minúsculas pasaba
+         la validación de la ruta y lo rechazaba la columna. Son tres y no
+         veinticuatro a propósito: son las jurisdicciones que el motor normativo
+         puede resolver hoy. -->
+    <div><label>Jurisdicción</label><select id="on-jurisdiccion">
+      <option value="AR">Nacional</option>
+      <option value="AR-C" selected>Ciudad Autónoma de Buenos Aires</option>
+      <option value="AR-B">Buenos Aires</option>
+    </select></div>
     <!-- Era un `input` de texto libre con `IGJ` de placeholder, y la columna admite
          cinco valores en mayúsculas: escribir `igj` devolvía «Error interno» en el
          primer formulario que completa un cliente. Un desplegable no puede producir

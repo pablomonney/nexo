@@ -30,7 +30,7 @@
  * `docs/normative-sources/originals/INFOLEG_LGS_19550_texto_actualizado.htm`.
  */
 
-import type { CalendarDate, Money } from '@aai/shared';
+import type { CalendarDate, Money, TipoDeEntidad } from '@aai/shared';
 
 export type TipoEstado = 'ESP' | 'ER';
 
@@ -45,20 +45,13 @@ export type MarcoContable = 'RT_FACPCE' | 'NIIF' | 'NIIF_PYMES' | 'ENTE_PEQUENO'
  * `FIDEICOMISO`—. Una plantilla no se habría podido cargar para media docena de
  * tipos de ente que la base sí admite, y el motor habría respondido "no hay
  * plantilla" para entes perfectamente normales.
+ *
+ * Los valores ya no se repiten acá: salen de `@aai/shared`, que es de donde los
+ * toman también las rutas y el desplegable de la consola. Aquella lista
+ * inventada sobrevivía en el alta de empresa —con un `OTRO` que la base no
+ * admite— y devolvía "Error interno" hasta el 2026-09-18.
  */
-export type TipoEnte =
-  | 'SA'
-  | 'SA_299'
-  | 'SRL'
-  | 'SAS'
-  | 'SOCIEDAD_SIMPLE'
-  | 'ASOC_CIVIL'
-  | 'FUNDACION'
-  | 'COOPERATIVA'
-  | 'MUTUAL'
-  | 'SUCURSAL_EXTRANJERA'
-  | 'UNIPERSONAL'
-  | 'FIDEICOMISO';
+export type TipoEnte = TipoDeEntidad;
 
 /**
  * Los de `companies.regulator`, más `NINGUNO`.

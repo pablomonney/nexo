@@ -4,7 +4,13 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { recordAudit, withCompany, withoutCompany } from '@aai/db';
-import { isValidCuit, normalizeCuit, ORGANISMOS_DE_CONTRALOR } from '@aai/shared';
+import {
+  isValidCuit,
+  normalizeCuit,
+  FORMA_DE_JURISDICCION,
+  ORGANISMOS_DE_CONTRALOR,
+  TIPOS_DE_ENTIDAD,
+} from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { hashPassword } from '../auth/crypto.js';
@@ -23,11 +29,6 @@ import {
   funcionalidadesQueNoSobrevivenLaMora,
   mapaDeDominios,
 } from '../planes/alcance.js';
-
-const ENTITY_TYPES = [
-  'SA', 'SA_299', 'SRL', 'SAS', 'SOCIEDAD_SIMPLE', 'ASOC_CIVIL', 'FUNDACION',
-  'COOPERATIVA', 'MUTUAL', 'SUCURSAL_EXTRANJERA', 'UNIPERSONAL', 'FIDEICOMISO',
-] as const;
 
 const cuitField = z
   .string()
@@ -163,9 +164,10 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
       .object({
         legalName: z.string().min(1).max(300),
         cuit: cuitField,
-        entityType: z.enum(ENTITY_TYPES),
+        entityType: z.enum(TIPOS_DE_ENTIDAD),
         // ISO 3166-2:AR. Determina qué adopción normativa aplica (ADR-002).
-        jurisdiction: z.string().regex(/^AR(-[A-Z])?$/),
+        // La forma es la de la columna, y vive en `@aai/shared` con el alta.
+        jurisdiction: z.string().regex(FORMA_DE_JURISDICCION),
         // La lista vive en un solo lugar: esta copia y la que faltaba en
         // `onboarding.ts` son la razón de que exista `@aai/shared/organismo`.
         regulator: z.enum(ORGANISMOS_DE_CONTRALOR).optional(),

@@ -1,5 +1,5 @@
 /**
- * El organismo de contralor en el alta de empresa, de punta a punta.
+ * Los tres datos registrales del alta de empresa, de punta a punta.
  *
  * ## El defecto que motiva este archivo
  *
@@ -13,21 +13,27 @@
  * mayúsculas** desde la migración 0002. El `INSERT` moría con un `23514` que
  * nadie traducía.
  *
+ * Investigando ese caso aparecieron los otros dos, idénticos en forma:
+ *
+ *   · `tipoEntidad` ofrecía siete valores, dos de ellos —`ASOCIACION` y
+ *     `OTRO`— que la columna no admite, y escondía siete que sí;
+ *   · `jurisdiccion` se validaba como texto de 2 a 10 caracteres contra una
+ *     columna que exige `^AR(-[A-Z])?$`: `ar-c` en minúsculas fallaba.
+ *
+ * Los tres campos salen ahora del mismo catálogo que la columna.
+ *
  * ## Qué se prueba acá y qué no
  *
- * `organismo.test.ts` —al lado del módulo— ya prueba la normalización y el
- * conjunto. Acá se prueba lo que solo se ve **contra la base**: que el valor
- * normalizado es el que queda guardado, que el rechazo llega como 400 con la
- * lista adentro, y —lo que más importa— que **ninguna violación de restricción
- * de este formulario vuelve a salir como 500**.
- *
- * Por eso los dos últimos casos mandan valores que la ruta NO conoce: son la
- * red, no la validación, y son los que demuestran que la red existe.
+ * Los tests al lado de cada módulo de `@aai/shared` ya prueban los conjuntos y
+ * la normalización. Acá se prueba lo que solo se ve **contra la base**: que el
+ * valor normalizado es el que queda guardado, que un rechazo llega como 400 con
+ * la lista adentro y sin crear nada a medias, y que **ningún valor inválido de
+ * este formulario termina en 500**.
  */
 
 import { closePool, initPool } from '@aai/db';
 import { buildServer } from '@aai/api/server';
-import { withCheckDigit } from '@aai/shared';
+import { JURISDICCIONES, TIPOS_DE_ENTIDAD, withCheckDigit } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from './helpers/db.js';
@@ -44,7 +50,7 @@ interface Respuesta {
   json: <T>() => T;
 }
 
-suite('El organismo de contralor en el alta de empresa', () => {
+suite('Los datos registrales en el alta de empresa', () => {
   let app: FastifyInstance;
   let raw: Client;
   let plan: string;
@@ -151,6 +157,22 @@ suite('El organismo de contralor en el alta de empresa', () => {
     return r.rows[0]?.regulator ?? null;
   };
 
+  const tipoDe = async (cuit: string): Promise<string | null> => {
+    const r = await raw.query<{ entity_type: string }>(
+      'SELECT entity_type FROM companies WHERE cuit = $1',
+      [cuit],
+    );
+    return r.rows[0]?.entity_type ?? null;
+  };
+
+  const jurisdiccionDe = async (cuit: string): Promise<string | null> => {
+    const r = await raw.query<{ jurisdiction: string }>(
+      'SELECT jurisdiction FROM companies WHERE cuit = $1',
+      [cuit],
+    );
+    return r.rows[0]?.jurisdiction ?? null;
+  };
+
   const cuantasEmpresas = async (cuit: string): Promise<number> => {
     const r = await raw.query<{ n: string }>(
       'SELECT count(*)::text AS n FROM companies WHERE cuit = $1',
@@ -214,25 +236,68 @@ suite('El organismo de contralor en el alta de empresa', () => {
     expect(await cuantasEmpresas(cuit)).toBe(0);
   });
 
-  it('una jurisdicción que la base rechaza sale como 400, no como 500', async () => {
-    // La red. `jurisdiccion` se valida como texto de 2 a 10 y la columna pide
-    // `^AR(-[A-Z])?$`: es la misma forma del defecto del organismo, en otra
-    // columna. Que conteste 400 con el nombre de la restricción es lo que
-    // impide que vuelva a aparecer un «Error interno» en esta pantalla.
-    const { respuesta, cuit } = await crear('jurisdiccion', { jurisdiccion: 'XX' });
+  // ── Tipo de entidad ───────────────────────────────────────────────────
+
+  it('acepta los doce tipos de entidad que admite la base', async () => {
+    // Uno por uno y contra la base: es la única forma de demostrar que ninguno
+    // de los doce rebota. Siete de estos eran inalcanzables desde esta ruta.
+    for (const tipo of TIPOS_DE_ENTIDAD) {
+      const { respuesta, cuit } = await crear(`tipo-${tipo.toLowerCase()}`, {
+        tipoEntidad: tipo,
+      });
+      expect(respuesta.statusCode, `${tipo}: ${respuesta.body}`).toBe(201);
+      expect(await tipoDe(cuit)).toBe(tipo);
+    }
+  });
+
+  it('«OTRO» y «ASOCIACION» ya no existen: 400 con la lista, nunca 500', async () => {
+    // Los dos valores inventados que devolvían «Error interno» en producción.
+    for (const tipo of ['OTRO', 'ASOCIACION']) {
+      const { respuesta, cuit } = await crear(`tipo-viejo-${tipo.toLowerCase()}`, {
+        tipoEntidad: tipo,
+      });
+      expect(respuesta.statusCode, respuesta.body).toBe(400);
+      expect(respuesta.body).not.toContain('INTERNAL_ERROR');
+      // El mensaje de zod para un enum enumera los valores que sí valen.
+      expect(respuesta.body).toContain('ASOC_CIVIL');
+      expect(await cuantasEmpresas(cuit)).toBe(0);
+    }
+  });
+
+  // ── Jurisdicción ──────────────────────────────────────────────────────
+
+  it('acepta las tres jurisdicciones ofrecidas', async () => {
+    for (const codigo of JURISDICCIONES) {
+      const { respuesta, cuit } = await crear(`jur-${codigo.toLowerCase()}`, {
+        jurisdiccion: codigo,
+      });
+      expect(respuesta.statusCode, `${codigo}: ${respuesta.body}`).toBe(201);
+      expect(await jurisdiccionDe(cuit)).toBe(codigo);
+    }
+  });
+
+  it('acepta «ar-c» en minúsculas y lo guarda como AR-C', async () => {
+    // El caso realista del campo de texto libre que había antes.
+    const { respuesta, cuit } = await crear('jur-minus', { jurisdiccion: '  ar-c ' });
+    expect(respuesta.statusCode, respuesta.body).toBe(201);
+    expect(await jurisdiccionDe(cuit)).toBe('AR-C');
+  });
+
+  it('una jurisdicción mal escrita se rechaza con 400, no con 500', async () => {
+    const { respuesta, cuit } = await crear('jur-forma', { jurisdiccion: 'XX' });
     expect(respuesta.statusCode, respuesta.body).toBe(400);
     expect(respuesta.body).not.toContain('INTERNAL_ERROR');
-    expect(respuesta.body).toContain('companies_jurisdiction_check');
     expect(await cuantasEmpresas(cuit)).toBe(0);
   });
 
-  it('un tipo de entidad que la base no conoce sale como 400, no como 500', async () => {
-    // `OTRO` está en el enum de esta ruta y NO está en el CHECK de la columna,
-    // que admite doce valores y ninguno se llama así. Es un segundo desajuste
-    // real, vivo en el mismo formulario: la red lo convierte en un 400.
-    const { respuesta, cuit } = await crear('tipo-otro', { tipoEntidad: 'OTRO' });
+  it('una jurisdicción válida para la base pero no ofrecida se rechaza con 400', async () => {
+    // `AR-Z` cumple la forma de la columna: la base la aceptaría. No se ofrece
+    // porque el motor normativo todavía no tiene nada que decir sobre ella, y
+    // eso es una decisión de producto — por eso el rechazo nombra las tres.
+    const { respuesta, cuit } = await crear('jur-ar-z', { jurisdiccion: 'AR-Z' });
     expect(respuesta.statusCode, respuesta.body).toBe(400);
     expect(respuesta.body).not.toContain('INTERNAL_ERROR');
+    expect(respuesta.body).toContain('AR-C');
     expect(await cuantasEmpresas(cuit)).toBe(0);
   });
 });
