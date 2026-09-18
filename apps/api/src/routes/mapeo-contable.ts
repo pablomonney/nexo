@@ -32,7 +32,11 @@ import {
 } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { armarRenglones, type CuentaDelRol } from '../contabilidad/armar-renglones.js';
+import {
+  armarRenglones,
+  type CuentaDelRol,
+  type LineaParaArmar,
+} from '../contabilidad/armar-renglones.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { conflict, notFound, unprocessable } from '../http/errors.js';
 
@@ -66,6 +70,95 @@ export async function leerMapeo(
   return new Map(
     r.rows.map((f) => [f.rol, { rol: f.rol, codigo: f.codigo, exigeTercero: f.exige_tercero }]),
   );
+}
+
+interface FilaDeRenglon {
+  readonly line_no: number;
+  readonly neto: string;
+  readonly descripcion: string;
+  readonly producto: string | null;
+  /** El código de la cuenta del producto, ya comprobada. `null` si no sirve. */
+  readonly cuenta: string | null;
+  /** El producto declaró una cuenta para esta dirección, sirva o no. */
+  readonly declaro_cuenta: boolean;
+}
+
+export interface DetalleResuelto {
+  readonly lineas: readonly LineaParaArmar[];
+  /** Configuraciones que existen y no se pudieron usar. Una por producto. */
+  readonly advertencias: readonly string[];
+}
+
+/**
+ * Los renglones del comprobante, con la cuenta de cada producto ya comprobada.
+ *
+ * ## Las cuatro condiciones se comprueban en el `JOIN`, no en TypeScript
+ *
+ * Existe, es de esta empresa, está activa y es imputable. Van en la consulta por
+ * el mismo motivo que en el aprendizaje (Fase 2): un `LEFT JOIN` que no
+ * encuentra devuelve `null`, y `null` es precisamente «no hay cuenta que usar».
+ * Traer la fila y filtrarla después deja abierta la posibilidad de que alguien
+ * agregue un camino que se saltee el filtro; acá no hay filtro que saltear,
+ * porque la cuenta inválida nunca llega a existir en el resultado.
+ *
+ * El `company_id` se repite en los dos `JOIN` aunque las claves foráneas de la
+ * 0048 ya sean compuestas. No es redundancia por las dudas: es que el
+ * aislamiento no puede depender de que la fila de arriba haya sido la correcta.
+ *
+ * ## Por qué se avisa
+ *
+ * Una cuenta archivada configurada en un producto cae en la genérica sin que
+ * nada se rompa, y ese es el problema: el asiento sale bien y la configuración
+ * sigue rota. Se dice cuál producto y qué pasó.
+ */
+export async function leerDetalle(
+  tx: Tx,
+  companyId: string,
+  taxTransactionId: string,
+  direccion: 'VENTAS' | 'COMPRAS',
+): Promise<DetalleResuelto> {
+  const columna = direccion === 'VENTAS' ? 'sales_account_id' : 'purchase_account_id';
+  const r = await tx.query<FilaDeRenglon>(
+    `SELECT l.line_no, l.neto::text, l.descripcion,
+            p.name                       AS producto,
+            a.code                       AS cuenta,
+            (p.${columna} IS NOT NULL)   AS declaro_cuenta
+       FROM tax_transaction_lines l
+       LEFT JOIN products p
+              ON p.id = l.product_id
+             AND p.company_id = l.company_id
+       LEFT JOIN accounts a
+              ON a.id = p.${columna}
+             AND a.company_id = p.company_id
+             AND a.status = 'ACTIVE'
+             AND a.is_postable
+      WHERE l.tax_transaction_id = $1 AND l.company_id = $2
+      ORDER BY l.line_no`,
+    [taxTransactionId, companyId],
+  );
+
+  const advertencias: string[] = [];
+  const vistos = new Set<string>();
+  for (const f of r.rows) {
+    if (!f.declaro_cuenta || f.cuenta !== null) continue;
+    const producto = f.producto ?? 'un producto';
+    if (vistos.has(producto)) continue;
+    vistos.add(producto);
+    advertencias.push(
+      `«${producto}» tiene una cuenta de ${direccion === 'VENTAS' ? 'venta' : 'compra'} ` +
+        'configurada que no se puede usar: está archivada o es de agrupación. Ese renglón ' +
+        'fue a la cuenta genérica. El asiento sale bien y la configuración sigue rota.',
+    );
+  }
+
+  return {
+    lineas: r.rows.map((f) => ({
+      lineNo: f.line_no,
+      neto: moneyFromDecimalString(f.neto, 'ARS'),
+      cuentaEspecifica: f.cuenta,
+    })),
+    advertencias,
+  };
 }
 
 export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
@@ -250,6 +343,7 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
         const o = r.rows[0]!;
 
         const mapeo = await leerMapeo(tx, tenant.companyId);
+        const detalle = await leerDetalle(tx, tenant.companyId, taxTransactionId, o.direction);
         const descripcion =
           `${o.direction === 'VENTAS' ? 'Venta' : 'Compra'} ` +
           `${o.punto_venta}-${o.cbte_numero}` +
@@ -266,6 +360,7 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
             percepciones: moneyFromDecimalString(o.percepciones, 'ARS'),
             terceroId: o.party_id,
             descripcion,
+            lineas: detalle.lineas,
           },
           mapeo,
         );
@@ -276,6 +371,11 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
           renglones: construccion.renglones,
           motivoSinRenglones: construccion.motivo,
           rolesFaltantes: construccion.rolesFaltantes,
+          // Configuraciones de producto que existen y no se pudieron usar. No
+          // impiden la propuesta —el renglón cae en la genérica— y por eso hay
+          // que decirlas: si no, el asiento sale bien y nadie se entera de que
+          // la cuenta del producto quedó archivada.
+          advertenciasDeConfiguracion: detalle.advertencias,
           // §24: un asiento sin origen demostrable no se postea, y la propuesta
           // por sí sola no es un origen — es una cuenta que hizo el sistema.
           // Lo que funda el asiento es que una persona la haya mirado y la

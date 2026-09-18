@@ -25,7 +25,7 @@ import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { conflict, notFound, unprocessable } from '../http/errors.js';
+import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
 const monto = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importe con hasta dos decimales');
@@ -78,11 +78,27 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
         async (tx) => {
           let accountId: string | null = null;
           if (body.cuenta !== null && body.cuenta !== undefined) {
-            const a = await tx.query<{ id: string }>(
-              'SELECT id FROM accounts WHERE company_id = $1 AND code = $2',
+            // Existencia no alcanzaba. Una caja apuntada a una agrupadora no
+            // tiene Mayor contra el cual arquear, que es el mismo defecto que
+            // `banks.ts` rechaza desde su alta; y una archivada ya fue dada de
+            // baja. Desde la 0129 el disparador lo impide igual: esto está para
+            // que el error sea este texto y no el crudo de PostgreSQL.
+            const a = await tx.query<{ id: string; is_postable: boolean; status: string }>(
+              'SELECT id, is_postable, status FROM accounts WHERE company_id = $1 AND code = $2',
               [tenant.companyId, body.cuenta],
             );
             if (a.rowCount === 0) throw notFound(`No existe la cuenta ${body.cuenta}`);
+            if (!a.rows[0]!.is_postable) {
+              throw badRequest(
+                `La cuenta ${body.cuenta} es de agrupación y no recibe movimientos: no hay ` +
+                  'Mayor contra el cual arquear la caja.',
+              );
+            }
+            if (a.rows[0]!.status !== 'ACTIVE') {
+              throw badRequest(
+                `La cuenta ${body.cuenta} está archivada: archivarla fue decir que ya no se usa.`,
+              );
+            }
             accountId = a.rows[0]!.id;
           }
 

@@ -497,6 +497,13 @@ const POR_CODIGO: ReadonlyArray<readonly [string, string, string]> = [
     'El bien y su amortización acumulada no pueden compartir cuenta: el activo quedaría neto ' +
       'y se perdería el costo de origen.',
   ],
+  [
+    'E_BIEN_CUENTA_ARCHIVADA',
+    'CUENTA_DEL_BIEN_ARCHIVADA',
+    'Una de las tres cuentas está archivada: archivarla fue decir que ya no se usa, y un bien ' +
+      'que se amortiza todos los ejercicios no puede apoyarse en ella. Elegí otra, o reactivala ' +
+      'si fue un error.',
+  ],
 ];
 
 function traducirActivo(error: unknown, codigo: string): unknown {

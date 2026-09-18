@@ -104,8 +104,13 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
       .parse(request.body);
 
     return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
-      const cuenta = await tx.query<{ id: string; is_postable: boolean; name: string }>(
-        'SELECT id, is_postable, name FROM accounts WHERE company_id = $1 AND code = $2',
+      const cuenta = await tx.query<{
+        id: string;
+        is_postable: boolean;
+        name: string;
+        status: string;
+      }>(
+        'SELECT id, is_postable, name, status FROM accounts WHERE company_id = $1 AND code = $2',
         [tenant.companyId, body.cuentaCodigo],
       );
       if (cuenta.rowCount === 0) {
@@ -116,6 +121,14 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
           `La cuenta ${body.cuentaCodigo} es de agrupación y no admite movimientos. ` +
             'Una cuenta bancaria tiene que apuntar a una cuenta imputable: si no, no hay Mayor ' +
             'contra el cual conciliar.',
+        );
+      }
+      // El candado equivalente está en la base desde la 0129. Acá se comprueba
+      // igual para que el error sea este texto y no el del disparador.
+      if (cuenta.rows[0]!.status !== 'ACTIVE') {
+        throw badRequest(
+          `La cuenta ${body.cuentaCodigo} está archivada, y archivarla fue decir que ya no se ` +
+            'usa. Una conciliación abierta contra una cuenta dada de baja no se puede cerrar.',
         );
       }
 

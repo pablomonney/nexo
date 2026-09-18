@@ -403,6 +403,18 @@ function traducir(error: unknown, codigo: string): unknown {
     return conflictoTipado('PRODUCTO_DUPLICADO', `Ya existe un producto con el código ${codigo}`);
   }
   const mensaje = fallo.message ?? '';
+  // La 0129 agregó el estado a las dos comprobaciones. Se distingue de las
+  // otras porque el remedio es otro: una cuenta archivada no está mal elegida,
+  // está dada de baja, y decir «tiene que ser de tipo INGRESO» sobre una cuenta
+  // que es de tipo INGRESO manda a buscar el problema donde no está.
+  if (fallo.code === '23514' && mensaje.includes('archivada')) {
+    const venta = mensaje.includes('cuenta de venta');
+    return unprocessable(
+      venta ? 'CUENTA_DE_VENTA_ARCHIVADA' : 'CUENTA_DE_COMPRA_ARCHIVADA',
+      `La cuenta de ${venta ? 'venta' : 'compra'} está archivada: archivarla fue decir que ya ` +
+        'no se usa. Elegí otra, o reactivala si fue un error.',
+    );
+  }
   if (fallo.code === '23514' && mensaje.includes('cuenta de venta')) {
     return unprocessable(
       'CUENTA_DE_VENTA_INVALIDA',
