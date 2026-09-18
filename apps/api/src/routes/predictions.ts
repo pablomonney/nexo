@@ -420,10 +420,20 @@ async function armarContexto(
     support_count: number;
     last_confirmed_at: Date | null;
   }>(
+    // El `JOIN` filtra por cuenta válida y no solo por existencia. Una
+    // preferencia puede sobrevivir a la cuenta que la originó —el contador la
+    // archiva, o la convierte en agrupadora agregándole una hija— y sugerirla
+    // sería proponer una imputación que la base va a rechazar. La condición va
+    // en la consulta y no en la pantalla: lo que no se puede imputar no tiene
+    // que llegar a ser candidato.
     `SELECT p.signal, p.suggested_account_id AS cuenta_id, a.code AS codigo,
             p.support_count, p.last_confirmed_at
        FROM classification_preferences p
-       JOIN accounts a ON a.id = p.suggested_account_id
+       JOIN accounts a
+         ON a.id = p.suggested_account_id
+        AND a.company_id = p.company_id
+        AND a.status = 'ACTIVE'
+        AND a.is_postable
       WHERE p.company_id = $1 AND p.support_count > 0
       ORDER BY p.support_count DESC`,
     [companyId],
@@ -740,15 +750,55 @@ function mapearSello(outcome: string | undefined): ResultadoSelloFiscal | null {
   return 'NO_VERIFICABLE';
 }
 
-async function aplicarCambio(
+/**
+ * Qué pasó al intentar aprender una cuenta.
+ *
+ * `CUENTA_INVALIDA` no es un error del sistema: es el aprendizaje negándose a
+ * guardar una correlación que no se va a poder imputar.
+ */
+export type ResultadoDelAprendizaje = 'APLICADO' | 'CUENTA_INVALIDA';
+
+/**
+ * Guarda —o se niega a guardar— una preferencia aprendida.
+ *
+ * ## Las cuatro condiciones, y por qué viven en el `INSERT`
+ *
+ * Una preferencia es una correlación entre una señal y una cuenta, y solo vale
+ * si esa cuenta se puede imputar **en esta empresa**: tiene que existir, ser
+ * suya, estar activa y admitir imputación directa. Una agrupadora aprendida
+ * sería una sugerencia que el trigger de la 0003 rechaza; una archivada, una
+ * que el contador ya decidió no usar más.
+ *
+ * Las cuatro son parte de la escritura y no un `if` previo: entre comprobar y
+ * escribir hay una ventana, y la comprobación tiene que ver exactamente la
+ * misma fila que el `INSERT`. El `company_id` va explícito aunque RLS ya limite
+ * `accounts` a la empresa en contexto — **la invariante no puede depender de
+ * que la capa de arriba haya puesto el contexto correcto**.
+ *
+ * ## Lo que esto NO cambia
+ *
+ * El algoritmo de frecuencia queda igual: mismo `delta`, mismo
+ * `greatest(0, …)`, mismo `last_confirmed_at`, mismo `ON CONFLICT`. Lo único
+ * que se agrega es de qué cuentas se puede aprender.
+ *
+ * Consecuencia conocida y aceptada: si una cuenta se archiva **después** de
+ * tener preferencia, un rechazo posterior tampoco puede restarle apoyo. No
+ * hace falta que pueda: el lector ya no la considera candidata.
+ */
+export async function aplicarCambio(
   tx: Tx,
   companyId: string,
   cambio: { signal: string; cuentaId: string; delta: number; confirmar: boolean },
-): Promise<void> {
-  await tx.query(
+): Promise<ResultadoDelAprendizaje> {
+  const escrito = await tx.query(
     `INSERT INTO classification_preferences
        (company_id, signal, suggested_account_id, support_count, last_confirmed_at)
-     VALUES ($1, $2, $3, greatest(0, $4), CASE WHEN $5 THEN now() ELSE NULL END)
+     SELECT $1, $2, a.id, greatest(0, $4), CASE WHEN $5 THEN now() ELSE NULL END
+       FROM accounts a
+      WHERE a.id = $3
+        AND a.company_id = $1
+        AND a.status = 'ACTIVE'
+        AND a.is_postable
      ON CONFLICT (company_id, signal, suggested_account_id) DO UPDATE
        SET support_count = greatest(0, classification_preferences.support_count + $4),
            last_confirmed_at = CASE
@@ -756,6 +806,8 @@ async function aplicarCambio(
            END`,
     [companyId, cambio.signal, cambio.cuentaId, cambio.delta, cambio.confirmar],
   );
+
+  return Number(escrito.rowCount) > 0 ? 'APLICADO' : 'CUENTA_INVALIDA';
 }
 
 // ---------------------------------------------------------------------------

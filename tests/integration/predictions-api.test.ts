@@ -326,6 +326,64 @@ suite('clasificación asistida por HTTP', () => {
     expect(sinCuenta.statusCode).toBe(400);
   });
 
+  // ── Fase 2: una preferencia no sobrevive a la cuenta que la originó ──────
+  //
+  // Estos dos van al final a propósito: dejan la cuenta `5.1.01` archivada y
+  // con una hija, y cualquier caso que corriera después vería otro plan.
+
+  it('una preferencia hacia una cuenta archivada deja de sugerirse', async () => {
+    // La preferencia sigue en la tabla —nadie la borra— y la cuenta existe.
+    // Lo único que cambió es que el contador la archivó, y con eso dejó de ser
+    // imputable para el futuro.
+    await raw.query(`UPDATE accounts SET status = 'ARCHIVED' WHERE id = $1`, [cuentaId]);
+
+    const respuesta = await app.inject({
+      method: 'POST',
+      url: `/documents/${documentId}/classify`,
+      headers: cabeceras(tokenContador),
+    });
+
+    expect(respuesta.statusCode, respuesta.body).toBe(200);
+    expect(respuesta.json<{ estado: string }>().estado).toBe('SIN_SUGERENCIA');
+
+    // Y la fila sigue ahí: el lector la descarta, nadie la borró.
+    const fila = await raw.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM classification_preferences
+        WHERE company_id = $1 AND suggested_account_id = $2`,
+      [companyId, cuentaId],
+    );
+    expect(Number(fila.rows[0]!.n)).toBe(1);
+  });
+
+  it('una preferencia hacia una cuenta que pasó a ser agrupadora deja de sugerirse', async () => {
+    // El trigger de la 0003 vuelve no imputable a la cuenta que recibe una
+    // hija. La preferencia apunta a una cuenta que ahora agrupa: proponerla
+    // sería proponer un asiento que la base rechaza.
+    await raw.query(`UPDATE accounts SET status = 'ACTIVE' WHERE id = $1`, [cuentaId]);
+
+    const hija = await app.inject({
+      method: 'POST',
+      url: '/accounts',
+      headers: cabeceras(tokenContador),
+      payload: { code: '5.1.01.01', name: 'Servicios varios', type: 'GASTO', parentId: cuentaId },
+    });
+    expect(hija.statusCode, hija.body).toBe(201);
+
+    const ahora = await raw.query<{ is_postable: boolean }>(
+      'SELECT is_postable FROM accounts WHERE id = $1',
+      [cuentaId],
+    );
+    expect(ahora.rows[0]!.is_postable).toBe(false);
+
+    const respuesta = await app.inject({
+      method: 'POST',
+      url: `/documents/${documentId}/classify`,
+      headers: cabeceras(tokenContador),
+    });
+    expect(respuesta.statusCode, respuesta.body).toBe(200);
+    expect(respuesta.json<{ estado: string }>().estado).toBe('SIN_SUGERENCIA');
+  });
+
   it('publica la deriva separando invención, error de criterio y rechazo humano', async () => {
     const respuesta = await app.inject({
       method: 'GET',
