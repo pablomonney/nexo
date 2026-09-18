@@ -128,6 +128,24 @@ export async function leerMapeo(tx: Tx, companyId: string): Promise<MapeoLeido> 
   };
 }
 
+/**
+ * Los códigos de cuenta de la empresa que tienen rol fiscal.
+ *
+ * Una línea sobre una de ellas tiene que referenciar su operación fiscal, o
+ * `validate.ts` rechaza el asiento entero con `E_TAX_LINK_MISSING`. El armador
+ * necesita saber cuáles son para poder ponérselo, y esto es lo que se lo dice.
+ */
+export async function cuentasConRolFiscal(
+  tx: Tx,
+  companyId: string,
+): Promise<ReadonlySet<string>> {
+  const r = await tx.query<{ code: string }>(
+    `SELECT code FROM accounts WHERE company_id = $1 AND tax_role IS NOT NULL`,
+    [companyId],
+  );
+  return new Set(r.rows.map((f) => f.code));
+}
+
 interface FilaDeRenglon {
   readonly line_no: number;
   readonly neto: string;
@@ -413,6 +431,7 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
 
         const { mapeo, inutilizables } = await leerMapeo(tx, tenant.companyId);
         const detalle = await leerDetalle(tx, tenant.companyId, taxTransactionId, o.direction);
+        const fiscales = await cuentasConRolFiscal(tx, tenant.companyId);
 
         // La descripción nombra lo que el comprobante es, no la dirección de la
         // operación. «Venta 1-0001» en el renglón de una nota de crédito se lee
@@ -424,6 +443,7 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
 
         const construccion = armarRenglones(
           {
+            id: taxTransactionId,
             direccion: o.direction,
             clase: o.clase,
             neto: moneyFromDecimalString(o.neto, 'ARS'),
@@ -437,6 +457,7 @@ export async function mapeoContableRoutes(app: FastifyInstance): Promise<void> {
             lineas: detalle.lineas,
           },
           mapeo,
+          fiscales,
         );
 
         return {

@@ -104,6 +104,8 @@ export interface LineaParaArmar {
 }
 
 export interface ComprobanteParaArmar {
+  /** El comprobante del que sale todo esto. Viaja a los renglones fiscales. */
+  readonly id: string;
   readonly direccion: 'VENTAS' | 'COMPRAS';
   /**
    * La clase, resuelta desde `arca_comprobante_types` **por fecha**.
@@ -143,6 +145,16 @@ export interface RenglonPropuesto {
   readonly credit: string;
   readonly descripcion: string;
   readonly partyId?: string;
+  /**
+   * De qué operación fiscal sale este renglón.
+   *
+   * Va en los renglones cuya cuenta tiene rol fiscal, porque `validate.ts`
+   * exige que toda línea con efecto fiscal referencie su comprobante
+   * (`E_TAX_LINK_MISSING`) y **rechaza el asiento entero si falta**. Sin esto la
+   * propuesta salía bien armada y no se podía cargar: el circuito se cortaba
+   * justo entre proponer y registrar.
+   */
+  readonly taxTransactionId?: string;
 }
 
 export interface Construccion {
@@ -168,6 +180,17 @@ function vacia(motivo: string, rolesFaltantes: readonly RolContable[] = []): Con
 export function armarRenglones(
   comprobante: ComprobanteParaArmar,
   mapeo: ReadonlyMap<RolContable, CuentaDelRol>,
+  /**
+   * Los códigos de cuenta de esta empresa que tienen rol fiscal.
+   *
+   * Llega como conjunto y no se deduce acá. La tentación era dar por sentado
+   * que la única cuenta con efecto fiscal es la del rol de IVA —es la única en
+   * cualquier plan sensato— pero nada impide que una empresa mapee `CLIENTES`
+   * contra una cuenta con `tax_role`, y el asiento entero se rechazaría al
+   * cargarlo. Preguntarle a la base cuáles son cuesta una consulta y no deja
+   * ningún caso afuera.
+   */
+  conRolFiscal: ReadonlySet<string> = new Set(),
 ): Construccion {
   const otros = [comprobante.noGravado, comprobante.exento, comprobante.percepciones];
   if (otros.some((m) => m.amount !== 0n)) {
@@ -317,6 +340,7 @@ export function armarRenglones(
     credit: alDebe ? CERO : monto,
     descripcion,
     ...extra,
+    ...(conRolFiscal.has(accountCode) ? { taxTransactionId: comprobante.id } : {}),
   });
 
   // El resultado: un renglón por cuenta. Cuando ninguna línea resolvió por su

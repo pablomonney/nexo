@@ -52,6 +52,7 @@ interface Renglon {
   readonly credit: string;
   readonly descripcion: string;
   readonly partyId?: string;
+  readonly taxTransactionId?: string;
 }
 
 interface Propuesta {
@@ -703,6 +704,7 @@ suite('El circuito contable, de la operación al Mayor', () => {
           debit: r.debit,
           credit: r.credit,
           ...(r.partyId === undefined ? {} : { partyId: r.partyId }),
+          ...(r.taxTransactionId === undefined ? {} : { taxTransactionId: r.taxTransactionId }),
           description: r.descripcion,
         })),
         source: { type: 'INVOICE', id },
@@ -752,6 +754,7 @@ suite('El circuito contable, de la operación al Mayor', () => {
           debit: r.debit,
           credit: r.credit,
           ...(r.partyId === undefined ? {} : { partyId: r.partyId }),
+          ...(r.taxTransactionId === undefined ? {} : { taxTransactionId: r.taxTransactionId }),
           description: r.descripcion,
         })),
         source: { type: 'INVOICE', id },

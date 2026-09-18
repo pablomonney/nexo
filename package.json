@@ -36,6 +36,7 @@
     "prompts:register": "node scripts/register-prompts.mjs",
     "test:coverage": "vitest run --coverage",
     "norms:seed": "node scripts/seed-norms.mjs",
+    "seed:base": "node scripts/seed-base.mjs",
     "ledger:verify": "node scripts/verify-ledger.mjs",
     "audit:cadena": "node scripts/verify-audit-chain.mjs",
     "statements:seed": "node scripts/seed-statement-templates.mjs",
