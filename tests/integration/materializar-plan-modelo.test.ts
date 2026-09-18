@@ -173,6 +173,114 @@ suite('La materialización del plan modelo', () => {
     expect((await cuentasDeLaEmpresa()).length).toBe(185);
   });
 
+  // ── Fase 1: los metadatos sobreviven a la copia ─────────────────────────
+
+  it('las tres propiedades de la cuenta se conservan al materializar', async () => {
+    const porCodigo = new Map(
+      (
+        await raw.query<{
+          code: string;
+          regularizadora: boolean;
+          especializada: boolean;
+          nota: string | null;
+        }>(
+          `SELECT code, regularizadora, especializada, nota
+             FROM accounts WHERE company_id = $1`,
+          [companyId],
+        )
+      ).rows.map((f) => [f.code, f]),
+    );
+
+    for (const cuenta of CUENTAS) {
+      const fila = porCodigo.get(cuenta.codigo)!;
+      expect(fila.regularizadora, cuenta.codigo).toBe(cuenta.regularizadora === true);
+      expect(fila.especializada, cuenta.codigo).toBe(cuenta.especializada === true);
+      expect(fila.nota, cuenta.codigo).toBe(cuenta.nota ?? null);
+    }
+
+    // Que el barrido esté midiendo algo: si las tres fueran siempre false y
+    // null, el test pasaría sin comprobar nada.
+    expect([...porCodigo.values()].filter((f) => f.regularizadora).length).toBe(12);
+    expect([...porCodigo.values()].filter((f) => f.especializada).length).toBe(22);
+    expect([...porCodigo.values()].filter((f) => f.nota !== null).length).toBeGreaterThan(5);
+  });
+
+  it('`regularizadora` no se deriva de la naturaleza', async () => {
+    // Las dos cuentas de orden acreedoras tienen la naturaleza invertida y NO
+    // regularizan nada: son el otro lado del par. Si alguien reemplazara la
+    // columna por un cálculo, estas dos filas darían al revés.
+    const r = await raw.query<{ code: string; nature: string; regularizadora: boolean }>(
+      `SELECT code, nature, regularizadora FROM accounts
+        WHERE company_id = $1 AND code IN ('7.2.01', '7.2.02')
+        ORDER BY code`,
+      [companyId],
+    );
+    expect(r.rows.length).toBe(2);
+    for (const fila of r.rows) {
+      expect(fila.nature, fila.code).toBe('ACREEDORA');
+      expect(fila.regularizadora, fila.code).toBe(false);
+    }
+
+    // Y el contraejemplo: una regularizadora de verdad, también acreedora.
+    const previsión = await raw.query<{ nature: string; regularizadora: boolean }>(
+      `SELECT nature, regularizadora FROM accounts WHERE company_id = $1 AND code = '1.1.03.90'`,
+      [companyId],
+    );
+    expect(previsión.rows[0]!.nature).toBe('ACREEDORA');
+    expect(previsión.rows[0]!.regularizadora).toBe(true);
+  });
+
+  it('`especializada` se conserva y no se interpreta como prohibición', async () => {
+    // La columna dice «requiere criterio profesional», nada más. No existe
+    // ninguna columna ni bandera que convierta eso en «no sugerible»: si
+    // apareciera, sería una política nueva y una decisión escrita.
+    const r = await raw.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM accounts WHERE company_id = $1 AND especializada`,
+      [companyId],
+    );
+    expect(Number(r.rows[0]!.n)).toBe(22);
+
+    const columnas = await raw.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'accounts'
+          AND column_name IN ('no_sugerible', 'auto_suggest', 'sugerible')`,
+    );
+    expect(columnas.rows.map((c) => c.column_name)).toEqual([]);
+  });
+
+  it('la advertencia contable llega a la cuenta materializada', async () => {
+    // El caso que justifica persistir `nota`: con inventario permanente el
+    // saldo correcto de esta cuenta es cero, y quien vaya a imputar tiene que
+    // poder leerlo donde está la cuenta, no en un archivo del repositorio.
+    const r = await raw.query<{ nota: string | null }>(
+      `SELECT nota FROM accounts WHERE company_id = $1 AND code = '5.1.03'`,
+      [companyId],
+    );
+    expect(r.rows[0]!.nota).not.toBeNull();
+    expect(r.rows[0]!.nota!.toUpperCase()).toContain('INVENTARIO PERMANENTE');
+  });
+
+  it('`nucleo` y `usos` NO se convirtieron en configuración de empresa', async () => {
+    // Las dos describen al modelo, no a la cuenta de esta empresa. Viven en el
+    // catálogo y no tienen que existir como columna, ni como tabla al costado.
+    const columnas = await raw.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'accounts' AND column_name IN ('nucleo', 'usos')`,
+    );
+    expect(columnas.rows.map((c) => c.column_name)).toEqual([]);
+
+    const tablas = await raw.query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name IN ('account_usos', 'account_nucleo', 'chart_template_accounts')`,
+    );
+    expect(tablas.rows.map((t) => t.table_name)).toEqual([]);
+
+    // Y siguen estando donde corresponde: en el catálogo.
+    expect(CUENTAS.filter((c) => c.nucleo).length).toBeGreaterThan(0);
+    expect(CUENTAS.filter((c) => c.usos.length > 0).length).toBeGreaterThan(0);
+  });
+
   it('la cuenta de cierre es única y la base la acepta como tal', async () => {
     const r = await raw.query<{ code: string; n: string }>(
       `SELECT code, count(*) OVER ()::text AS n FROM accounts

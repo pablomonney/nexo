@@ -88,8 +88,9 @@ export async function materializarPlanModelo(
     const fila = await tx.query<{ id: string }>(
       `INSERT INTO accounts
          (company_id, chart_id, code, name, parent_id, type, nature, is_postable,
-          currency, tax_role, closing_role, requires_cost_center, requires_third_party)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ARS', $9, $10, false, false)
+          currency, tax_role, closing_role, requires_cost_center, requires_third_party,
+          regularizadora, especializada, nota)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ARS', $9, $10, false, false, $11, $12, $13)
        RETURNING id`,
       [
         companyId,
@@ -102,6 +103,12 @@ export async function materializarPlanModelo(
         cuenta.imputable,
         cuenta.taxRole ?? null,
         cuenta.closingRole ?? null,
+        // Los tres metadatos que siguen describiendo a la cuenta después de la
+        // copia. `nucleo` y `usos` NO viajan: describen al modelo, no a la
+        // cuenta de esta empresa, y viven en el catálogo. Ver la 0128.
+        cuenta.regularizadora === true,
+        cuenta.especializada === true,
+        cuenta.nota ?? null,
       ],
     );
     idPorCodigo.set(cuenta.codigo, fila.rows[0]!.id);

@@ -40,7 +40,11 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
                 is_postable AS "isPostable", currency, tax_role AS "taxRole",
                 closing_role AS "closingRole",
                 requires_cost_center AS "requiresCostCenter",
-                requires_third_party AS "requiresThirdParty", status
+                requires_third_party AS "requiresThirdParty", status,
+                -- Los tres metadatos de la 0128. La nota es la que justifica
+                -- devolverlos: una advertencia contable que no llega a donde
+                -- alguien imputa no sirve de nada.
+                regularizadora, especializada, nota
            FROM accounts
           WHERE company_id = $1
           ORDER BY code`,
