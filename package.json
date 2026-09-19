@@ -55,6 +55,7 @@
     "reglas:cargar": "node scripts/cargar-reglas-contables.mjs",
     "reglas:aprobar": "node scripts/aprobar-regla.mjs",
     "circuito:demo": "node scripts/circuito-demo.mjs",
+    "factura:demo": "node scripts/factura-demo.mjs",
     "audit:estructura": "node scripts/check-structure.mjs",
     "verify:db": "node scripts/verification-db.mjs",
     "verify:arranque": "node scripts/verify-primer-arranque.mjs",
