@@ -372,7 +372,7 @@ export const config = {
    */
   metricsToken: process.env.METRICS_TOKEN ?? null,
 
-  issuer: process.env.MFA_ISSUER ?? 'Contabilidad AI',
+  issuer: process.env.MFA_ISSUER ?? 'NEXO',
 } as const;
 
 if (config.mfaEncryptionKey.length !== 32) {

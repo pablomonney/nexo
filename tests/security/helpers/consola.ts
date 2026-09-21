@@ -26,21 +26,53 @@ export const VARIABLE = '§';
 function reconstruir(expresion: string): string {
   let salida = '';
   let i = 0;
+  let pendiente = false; // hay un tramo no literal sin anotar todavía
+
   while (i < expresion.length) {
-    if (expresion[i] === "'") {
+    const c = expresion[i]!;
+
+    if (c === "'") {
       const fin = expresion.indexOf("'", i + 1);
       if (fin === -1) break;
+      if (pendiente) { salida += VARIABLE; pendiente = false; }
       salida += expresion.slice(i + 1, fin);
       i = fin + 1;
       continue;
     }
-    // Un tramo que no es literal: una variable, una llamada, un ternario.
-    const siguiente = expresion.indexOf("'", i);
-    const tramo = (siguiente === -1 ? expresion.slice(i) : expresion.slice(i, siguiente)).trim();
-    if (tramo !== '' && tramo !== '+') salida += VARIABLE;
-    if (siguiente === -1) break;
-    i = siguiente;
+
+    // Un grupo entre paréntesis o corchetes se salta entero.
+    //
+    // Sin esto, `'/predictions/' + E('iap-id').value + '/review'` se leía como
+    // `/predictions/§iap-id`: el literal de **adentro** de la llamada se tomaba
+    // por un tramo de la URL. La ruta quedaba irreconocible y el barrido la
+    // daba por inalcanzable teniendo botón — un falso rojo, que es lo único que
+    // este ayudante no se puede permitir.
+    if (c === '(' || c === '[') {
+      let profundidad = 0;
+      let comilla: string | null = null;
+      for (; i < expresion.length; i += 1) {
+        const d = expresion[i]!;
+        if (comilla !== null) {
+          if (d === '\\') i += 1;
+          else if (d === comilla) comilla = null;
+          continue;
+        }
+        if (d === "'" || d === '"' || d === '`') comilla = d;
+        else if (d === '(' || d === '[') profundidad += 1;
+        else if (d === ')' || d === ']') {
+          profundidad -= 1;
+          if (profundidad === 0) { i += 1; break; }
+        }
+      }
+      pendiente = true;
+      continue;
+    }
+
+    if (!/\s|\+/u.test(c)) pendiente = true;
+    i += 1;
   }
+  if (pendiente) salida += VARIABLE;
+
   // La query no forma parte de la ruta registrada.
   const corte = salida.indexOf('?');
   return corte === -1 ? salida : salida.slice(0, corte);
@@ -134,43 +166,226 @@ export function normalizar(url: string): string {
     .join('/');
 }
 
+// ── La puerta, con el método ────────────────────────────────────────────────
+//
+// ## Por qué esto cambió, y qué escondía antes
+//
+// Hasta el 2026-09-21 esta función recibía **la ruta y nada más**:
+//
+//     tienePuerta(ruta: string, html: string)
+//
+// Se hizo así a propósito y el motivo estaba escrito: la consola pasa URL por
+// ayudantes y ternarios, y un barrido que solo mirara `llamadasDe` habría
+// marcado como inalcanzables rutas **que tienen botón**. Un control con falsos
+// rojos dura hasta que alguien lo apaga.
+//
+// Lo que ese diseño no previó es lo que esconde. Si la consola hace
+// `GET /fiscal-years` para listar, la forma `/fiscal-years` aparece en el texto
+// y el `POST /fiscal-years` figura con puerta **sin que ningún botón lo llame**.
+// Fue exactamente lo que pasó: una empresa nueva no podía abrir su ejercicio
+// desde la consola, el paso estaba declarado como bloqueante en la puesta en
+// marcha, y este control daba verde. Lo encontró una persona usando el producto.
+//
+// ## Cómo se resuelve sin volver a los falsos rojos
+//
+// La respuesta al problema original no era soltar el método: era saber leer las
+// tres formas indirectas. Son **tres** en toda la consola, y las tres terminan
+// en un `api('POST', url)`:
+//
+//     1. const url = accion === 'confirm' ? '/a/' + id + '/confirm'
+//                                         : '/a/' + id + '/cancel';
+//     2. const url = accion === 'emit' ? … : … ? … : …        (cuatro ramas)
+//     3. async function actoSobreSolicitud(url, …) { api('POST', url) }
+//
+// Las dos primeras se resuelven partiendo la expresión por el ternario **al
+// nivel cero** y reconstruyendo cada rama; la tercera, atribuyendo el método a
+// los lugares que llaman al ayudante.
+//
+// ## Y si aparece una cuarta forma
+//
+// `puertasDe` devuelve también las que **no pudo resolver**. El control las
+// exige vacías. Así, el día que alguien escriba una forma nueva, lo que falla
+// dice «el instrumento no sabe leer esto» en vez de acusar a una pantalla de no
+// existir. Es la misma lección que dejó `bajarCsv`: el instrumento estaba
+// ciego, no la consola sin puerta.
+
+/** Una llamada que llega a `api()` con la URL en una variable. */
+interface Indirecta {
+  readonly metodo: string;
+  readonly identificador: string;
+  readonly posicion: number;
+}
+
+/** La función que contiene una posición del texto. */
+function funcionQueContiene(
+  html: string,
+  posicion: number,
+): { nombre: string; parametros: string[]; cuerpo: string } | null {
+  const declaracion = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/gu;
+  let ultima: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = declaracion.exec(html)) !== null) {
+    if (m.index > posicion) break;
+    ultima = m;
+  }
+  if (ultima === null) return null;
+
+  // Del `{` de la declaración hasta su llave de cierre.
+  let i = ultima.index + ultima[0].length;
+  let profundidad = 1;
+  let comilla: string | null = null;
+  for (; i < html.length && profundidad > 0; i += 1) {
+    const c = html[i]!;
+    if (comilla !== null) {
+      if (c === '\\') i += 1;
+      else if (c === comilla) comilla = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') comilla = c;
+    else if (c === '{') profundidad += 1;
+    else if (c === '}') profundidad -= 1;
+  }
+  if (posicion > i) return null;
+
+  return {
+    nombre: ultima[1]!,
+    parametros: ultima[2]!.split(',').map((p) => p.trim()).filter((p) => p !== ''),
+    cuerpo: html.slice(ultima.index, i),
+  };
+}
+
+/** Lo que hay hasta el `;` de nivel cero: el cuerpo de una asignación. */
+function hastaElPuntoYComa(texto: string): string {
+  let profundidad = 0;
+  let comilla: string | null = null;
+  for (let i = 0; i < texto.length; i += 1) {
+    const c = texto[i]!;
+    if (comilla !== null) {
+      if (c === '\\') i += 1;
+      else if (c === comilla) comilla = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') comilla = c;
+    else if (c === '(' || c === '[' || c === '{') profundidad += 1;
+    else if (c === ')' || c === ']' || c === '}') profundidad -= 1;
+    else if (c === ';' && profundidad === 0) return texto.slice(0, i);
+  }
+  return texto;
+}
+
+/** Parte una expresión por los `?` y `:` que están al nivel cero. */
+function ramasDelTernario(expresion: string): string[] {
+  const ramas: string[] = [];
+  let actual = '';
+  let profundidad = 0;
+  let comilla: string | null = null;
+  for (let i = 0; i < expresion.length; i += 1) {
+    const c = expresion[i]!;
+    if (comilla !== null) {
+      actual += c;
+      if (c === '\\') { actual += expresion[i + 1] ?? ''; i += 1; }
+      else if (c === comilla) comilla = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { comilla = c; actual += c; continue; }
+    if (c === '(' || c === '[' || c === '{') profundidad += 1;
+    if (c === ')' || c === ']' || c === '}') profundidad -= 1;
+    if ((c === '?' || c === ':') && profundidad === 0) {
+      ramas.push(actual);
+      actual = '';
+      continue;
+    }
+    actual += c;
+  }
+  ramas.push(actual);
+  return ramas;
+}
+
 /**
- * ¿Está esta ruta escrita en algún lado de la consola?
+ * Cada método, con las rutas que la consola sabe pedirle.
  *
- * `llamadasDe` sabe leer tres formas —`api(…)`, `fetch(…)` y `bajarCsv(…)`— y
- * con eso alcanza para la pregunta de S-12: qué pide la consola, y con qué
- * método. Para la pregunta contraria no alcanza, porque la consola pasa URL por
- * otros caminos:
- *
- *     actoSobreSolicitud('/purchase-requests/' + id + '/enviar', …)
- *     const url = accion === 'emit' ? '/commercial-documents/' + id + '/emit' : …
- *
- * Las dos llegan a `api` una función más adelante, y ninguna aparece al lado de
- * un literal de método. Un barrido inverso que solo mirara `llamadasDe` habría
- * marcado esas rutas como inalcanzables **teniendo botón**, y un control con
- * falsos rojos dura hasta que alguien lo apaga.
- *
- * Así que la pregunta se hace al revés: en vez de reconstruir lo que la consola
- * arma —imposible de hacer bien con ternarios de por medio—, se toma la ruta
- * registrada y se busca su forma en el texto. Un parámetro es cualquier cosa
- * que no cruce el renglón:
- *
- *     /commercial-documents/:id/emit  →  /commercial-documents/…/emit
- *
- * **Qué pierde:** el método. Una pantalla que lista sin botón de guardar cuenta
- * como puerta de las dos rutas. Es una pregunta más chica que la de S-12, y es
- * la que importa acá: que ninguna capacidad quede sin forma de entrarle.
+ * `sinResolver` son las llamadas indirectas que no se pudieron atribuir. El
+ * control las exige vacías: ver el bloque de arriba.
  */
-export function tienePuerta(ruta: string, html: string): boolean {
-  const patron = ruta
-    .split('/')
-    .map((parte) =>
-      parte.startsWith(':') ? '[^\\n]{0,80}' : parte.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'),
-    )
-    .join('/');
-  // Los dos cortes importan, y el de adelante lo enseñó un falso verde: sin él,
-  // `/predictions/metrics` contiene `/metrics` y el recolector de métricas
-  // figuraba con puerta. El de atrás impide que `/products` cuente como puerta
-  // de `/products-x`.
-  return new RegExp('(?<![A-Za-z0-9\\-_/])' + patron + '(?![A-Za-z0-9\\-_])', 'u').test(html);
+export function puertasDe(html: string): {
+  puertas: Map<string, Set<string>>;
+  sinResolver: string[];
+} {
+  const puertas = new Map<string, Set<string>>();
+  const sinResolver: string[] = [];
+
+  const anotar = (metodo: string, url: string): void => {
+    if (!url.startsWith('/')) return;
+    const corte = url.indexOf('?');
+    const limpia = normalizar(corte === -1 ? url : url.slice(0, corte));
+    if (!puertas.has(metodo)) puertas.set(metodo, new Set());
+    puertas.get(metodo)!.add(limpia);
+  };
+
+  for (const { metodo, url } of llamadasDe(html)) anotar(metodo, url);
+
+  // Las que llegan con la URL en una variable.
+  const indirectas: Indirecta[] = [];
+  const porVariable = /api\(\s*'(GET|POST|PATCH|PUT|DELETE)'\s*,\s*([A-Za-z_$][\w$]*)\s*[,)]/gu;
+  let m: RegExpExecArray | null;
+  while ((m = porVariable.exec(html)) !== null) {
+    indirectas.push({ metodo: m[1]!, identificador: m[2]!, posicion: m.index });
+  }
+
+  for (const { metodo, identificador, posicion } of indirectas) {
+    const fn = funcionQueContiene(html, posicion);
+    if (fn === null) {
+      sinResolver.push(`${metodo} <${identificador}> sin función que lo contenga`);
+      continue;
+    }
+
+    // Caso ayudante: la URL entra por parámetro. El método se atribuye a cada
+    // lugar que llama al ayudante.
+    if (fn.parametros.includes(identificador)) {
+      const llamadas = new RegExp(`(?<![\\w$.])${fn.nombre}\\(\\s*`, 'gu');
+      let encontradas = 0;
+      let c: RegExpExecArray | null;
+      while ((c = llamadas.exec(html)) !== null) {
+        if (c.index >= html.indexOf(fn.cuerpo) && c.index < html.indexOf(fn.cuerpo) + fn.cuerpo.length) {
+          continue; // la propia declaración
+        }
+        const url = reconstruir(leerArgumento(html, c.index + c[0].length).expresion);
+        if (url.startsWith('/')) { anotar(metodo, url); encontradas += 1; }
+      }
+      if (encontradas === 0) sinResolver.push(`${metodo} por ${fn.nombre}(): sin llamadas legibles`);
+      continue;
+    }
+
+    // Caso variable local: `const url = <ternario>;` dentro de la función.
+    const asignacion = new RegExp(`(?:const|let|var)\\s+${identificador}\\s*=\\s*`, 'u').exec(fn.cuerpo);
+    if (asignacion === null) {
+      sinResolver.push(`${metodo} <${identificador}> en ${fn.nombre}(): no se ve la asignación`);
+      continue;
+    }
+    // Hasta el `;` de la asignación y no más: `leerArgumento` corta en la coma
+    // o en la llave, y sin este corte la última rama del ternario se arrastraba
+    // el `const r = await api(…)` de la línea siguiente. La rama quedaba
+    // irreconocible y su ruta figuraba sin puerta teniéndola.
+    const expresion = hastaElPuntoYComa(
+      fn.cuerpo.slice(asignacion.index + asignacion[0].length),
+    );
+    let ramas = 0;
+    for (const rama of ramasDelTernario(expresion)) {
+      const url = reconstruir(rama.trim());
+      if (url.startsWith('/')) { anotar(metodo, url); ramas += 1; }
+    }
+    if (ramas === 0) sinResolver.push(`${metodo} <${identificador}> en ${fn.nombre}(): ninguna rama dio una ruta`);
+  }
+
+  return { puertas, sinResolver };
+}
+
+/**
+ * ¿Puede la consola pedir **esta ruta con este método**?
+ *
+ * La ruta registrada y la llamada de la consola se comparan normalizadas, que es
+ * lo que hace comparables `/documents/:documentId/extract` y `/documents/§/extract`.
+ */
+export function tienePuerta(metodo: string, ruta: string, html: string): boolean {
+  return puertasDe(html).puertas.get(metodo)?.has(normalizar(ruta)) === true;
 }

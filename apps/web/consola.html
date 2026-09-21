@@ -309,6 +309,10 @@ tr.aqui td{background:var(--acento-cl)}
 pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pre-wrap;
     word-break:break-word;max-height:22rem;overflow:auto;color:var(--tinta2)}
 .mono{font-family:var(--mono);font-size:.79rem;font-variant-numeric:tabular-nums}
+/* El QR del segundo factor: tamaño fijo y fondo claro, para que se escanee
+   igual con el tema oscuro puesto. */
+.qr{background:#fff;padding:10px;border-radius:6px;display:inline-block;margin:6px 0}
+.qr svg{display:block;width:196px;height:196px}
 
 .dos{display:grid;grid-template-columns:1fr 1fr;gap:var(--e4)}
 .tres{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--e4)}
@@ -550,6 +554,21 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       claro.</strong> Cargá el secreto en tu aplicación de códigos y guardá los de
       recuperación en otro lado: cada uno sirve una sola vez, y son la forma de entrar si
       perdés el teléfono.</p>
+
+    <!-- El QR.
+
+         Hasta el 2026-09-21 acá había el secreto y la `otpauth://` cruda, y nada
+         más. Quien no sabe qué es una URI de TOTP no tenía cómo seguir — y el
+         segundo factor es obligatorio para tres de los seis roles, así que ese
+         no era un rincón del producto: era la puerta. -->
+    <ol class="ayuda">
+      <li>Instalá una aplicación de códigos en el teléfono: Google Authenticator,
+        Microsoft Authenticator, Authy o 1Password sirven igual.</li>
+      <li>Escaneá este código con esa aplicación.</li>
+      <li>Escribí abajo los seis dígitos que muestre.</li>
+    </ol>
+    <div id="mfa-qr" class="qr"></div>
+    <p class="ayuda">¿No podés escanear? Cargá el secreto a mano en la aplicación:</p>
     <dl class="kv" id="mfa-kv"></dl>
     <h4>Códigos de recuperación</h4>
     <div class="mono" id="mfa-recuperacion"></div>
@@ -1127,8 +1146,40 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div id="pro-msg"></div>
   <div class="tabla"><table id="t-pro"><thead><tr>
     <th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Impuesto</th>
-    <th>Cuenta venta</th><th>Precio lista</th><th>Stock</th><th>Estado</th>
+    <th>Cuenta venta</th><th>Precio lista</th><th>Stock</th><th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
+
+  <!-- La ficha del producto. `GET` y `PATCH /products/:id` existían sin puerta:
+       un nombre o un precio mal cargado no se podía corregir desde la consola. -->
+  <div id="pro-ficha" hidden class="grupo">
+    <h3 id="pro-ficha-titulo">Ficha del producto</h3>
+    <p class="ayuda"><strong>El código no se edita.</strong> Es la referencia con la que el
+      producto ya figura en presupuestos, remitos y listas impresas: si está mal, se archiva
+      éste y se da de alta el correcto. El tratamiento impositivo y si lleva stock tampoco se
+      cambian acá — de eso dependen movimientos ya registrados.</p>
+    <dl class="kv" id="pro-ficha-fijo"></dl>
+    <div class="fila">
+      <div style="flex:2"><label>Nombre</label><input id="pf-nombre" maxlength="200" /></div>
+      <div><label>Unidad</label><select id="pf-unidad"></select></div>
+      <div><label>Estado</label><select id="pf-status">
+        <option>ACTIVO</option><option>ARCHIVADO</option></select></div>
+    </div>
+    <div class="fila">
+      <div style="flex:3"><label>Descripción</label><input id="pf-desc" maxlength="2000" /></div>
+    </div>
+    <div class="fila">
+      <div><label>Cuenta de venta</label><input id="pf-cta-venta" maxlength="40" /></div>
+      <div><label>Cuenta de compra</label><input id="pf-cta-compra" maxlength="40" /></div>
+      <div><label>Precio de lista</label><input id="pf-precio" inputmode="decimal" /></div>
+      <div><label>Stock mínimo</label><input id="pf-minimo" inputmode="decimal" /></div>
+    </div>
+    <div class="fila">
+      <div style="flex:3"><label>Por qué se cambia</label>
+        <input id="pf-motivo" maxlength="500" placeholder="queda en la bitácora" /></div>
+      <div><label>&nbsp;</label><button id="b-pf-guardar">Guardar los cambios</button></div>
+    </div>
+    <div id="pf-msg"></div>
+  </div>
 
   <details class="grupo" id="pro-alta" hidden><summary>Dar de alta un producto o servicio</summary><div>
     <p class="ayuda">Las cuentas son la imputación <em>sugerida</em> cuando este producto
@@ -1185,6 +1236,43 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <th>Razón social</th><th>Documento</th><th>Condición IVA</th><th>Roles</th>
     <th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
+
+  <!-- La ficha del tercero.
+
+       Hasta el 2026-09-21 la consola listaba terceros y no pedía ninguno por id:
+       `GET /parties/:partyId` y `PATCH /parties/:partyId` existían sin puerta.
+       Un dato de contacto mal tipeado no se podía arreglar desde la interfaz. -->
+  <div id="ter-ficha" hidden class="grupo">
+    <h3 id="ter-ficha-titulo">Ficha del tercero</h3>
+    <p class="ayuda"><strong>El documento no se edita.</strong> Cambiarlo convertiría esta
+      ficha en otra persona conservando sus movimientos: si el número está mal, se archiva
+      ésta y se da de alta la correcta. Lo mismo vale para el tipo de documento.</p>
+    <dl class="kv" id="ter-ficha-fijo"></dl>
+    <div class="fila">
+      <div style="flex:2"><label>Razón social</label><input id="tf-rs" maxlength="200" /></div>
+      <div><label>Condición IVA</label><select id="tf-iva"></select></div>
+      <div><label>Estado</label><select id="tf-status">
+        <option>ACTIVO</option><option>ARCHIVADO</option></select></div>
+    </div>
+    <div class="fila">
+      <div><label>Nombre de fantasía</label><input id="tf-fantasia" maxlength="200" /></div>
+      <div><label>Correo</label><input id="tf-email" maxlength="320" /></div>
+      <div><label>Teléfono</label><input id="tf-tel" maxlength="60" /></div>
+      <div><label>Días de pago</label><input id="tf-plazo" inputmode="numeric" /></div>
+    </div>
+    <div class="fila">
+      <div style="flex:2"><label>Domicilio</label><input id="tf-dom" maxlength="200" /></div>
+      <div><label>Localidad</label><input id="tf-loc" maxlength="120" /></div>
+      <div><label>Provincia</label><input id="tf-prov" maxlength="120" /></div>
+      <div><label>Código postal</label><input id="tf-cp" maxlength="20" /></div>
+    </div>
+    <div class="fila">
+      <div style="flex:3"><label>Por qué se cambia</label>
+        <input id="tf-motivo" maxlength="500" placeholder="queda en la bitácora" /></div>
+      <div><label>&nbsp;</label><button id="b-tf-guardar">Guardar los cambios</button></div>
+    </div>
+    <div id="tf-msg"></div>
+  </div>
 
   <h3>Antigüedad de saldos</h3>
   <p class="ayuda">Cuánto debe cada tercero y desde cuándo. Los tramos se cuentan desde el
@@ -3187,6 +3275,36 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div class="tabla"><table id="t-fy"><thead><tr>
     <th>Código</th><th>Desde</th><th>Hasta</th><th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
+
+  <!-- Abrir el ejercicio.
+
+       Hasta el 2026-09-21 esta pantalla tenía un solo botón: «Actualizar».
+       `POST /fiscal-years` existía desde la 0019, con su permiso y su auditoría,
+       y ningún botón lo llamaba: una empresa nueva no podía abrir su ejercicio
+       y por lo tanto no podía registrar nada. La puesta en marcha lo decía
+       —«hasta entonces no se puede registrar nada»— y mandaba justo acá. -->
+  <div id="fy-alta" hidden class="grupo">
+    <h3>Abrir un ejercicio</h3>
+    <p class="ayuda">El ejercicio es el que crea los períodos, y sin un período abierto que
+      contenga la fecha no entra ningún asiento. Las fechas vienen propuestas desde el mes y
+      día de cierre declarados para la empresa; se pueden cambiar.</p>
+    <div class="fila">
+      <div><label>Código</label><input id="fy-codigo" maxlength="40" /></div>
+      <div><label>Desde</label><input id="fy-desde" placeholder="AAAA-MM-DD" /></div>
+      <div><label>Hasta</label><input id="fy-hasta" placeholder="AAAA-MM-DD" /></div>
+      <div><label>Períodos</label>
+        <select id="fy-periodos">
+          <option value="si">generar los meses</option>
+          <option value="no">sin períodos</option>
+        </select></div>
+      <div><label>&nbsp;</label><button id="b-fy-abrir">Abrir el ejercicio</button></div>
+    </div>
+    <p class="ayuda">«Generar los meses» crea un período por mes recortado al ejercicio: si
+      empieza o termina a mitad de mes, el primero y el último son parciales. Sin períodos, el
+      ejercicio queda abierto y todavía no se puede registrar.</p>
+    <div id="fy-msg"></div>
+  </div>
+
   <div id="cierre-checklist"></div>
 </section>
 
@@ -3485,6 +3603,64 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div id="cfg-msg"></div>
   <div id="cfg-salida"></div>
 
+  <!-- El plan de cuentas.
+
+       La consola lo listaba para llenar los selectores de los asientos y no
+       tenía dónde crear ni corregir una cuenta: `POST /accounts` y
+       `PATCH /accounts/:id` existían sin puerta, y el plan entraba por la
+       siembra o por el plan modelo. Una cuenta con el nombre mal escrito se
+       quedaba así. -->
+  <div id="cta-bloque" hidden>
+    <h3>Plan de cuentas</h3>
+    <p class="ayuda">Lo que se corrige de una cuenta es <strong>su nombre y su
+      comportamiento</strong>. El código, el tipo y la naturaleza no se editan: son lo que
+      hace comparable un ejercicio con el anterior, y ya viajan en los asientos registrados.
+      Una cuenta con el código equivocado se archiva y se da de alta la correcta.</p>
+    <div class="fila">
+      <div style="flex:2"><label>Buscar</label><input id="cta-q" placeholder="código o nombre" /></div>
+      <div><label>&nbsp;</label><button id="b-cta-buscar" class="sec">Buscar</button></div>
+    </div>
+    <div class="tabla"><table id="t-cta"><thead><tr>
+      <th>Código</th><th>Nombre</th><th>Tipo</th><th>Imputable</th><th>Estado</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+    <div id="cta-msg"></div>
+
+    <div id="cta-ficha" hidden class="grupo">
+      <h4 id="cta-ficha-titulo">Cuenta</h4>
+      <dl class="kv" id="cta-ficha-fijo"></dl>
+      <div class="fila">
+        <div style="flex:2"><label>Nombre</label><input id="cf-nombre" maxlength="200" /></div>
+        <div><label>Estado</label><select id="cf-status">
+          <option>ACTIVE</option><option>ARCHIVED</option></select></div>
+        <div><label>Exige centro de costo</label><select id="cf-cc">
+          <option value="no">no</option><option value="si">sí</option></select></div>
+        <div><label>Exige tercero</label><select id="cf-ter">
+          <option value="no">no</option><option value="si">sí</option></select></div>
+      </div>
+      <div class="fila">
+        <div style="flex:3"><label>Por qué se cambia</label>
+          <input id="cf-motivo" maxlength="500" placeholder="queda en la bitácora" /></div>
+        <div><label>&nbsp;</label><button id="b-cf-guardar">Guardar los cambios</button></div>
+      </div>
+      <div id="cf-msg"></div>
+    </div>
+
+    <details class="grupo" id="cta-alta"><summary>Dar de alta una cuenta</summary><div>
+      <p class="ayuda">El código admite dígitos y puntos. Una cuenta imputable es la que
+        recibe asientos; una que agrupa no. El tipo decide de qué lado del balance cae y no
+        se puede cambiar después.</p>
+      <div class="fila">
+        <div><label>Código</label><input id="cn-codigo" maxlength="40" placeholder="1.1.01.02" /></div>
+        <div style="flex:2"><label>Nombre</label><input id="cn-nombre" maxlength="200" /></div>
+        <div><label>Tipo</label><select id="cn-tipo"></select></div>
+        <div><label>Imputable</label><select id="cn-imputable">
+          <option value="si">sí</option><option value="no">no</option></select></div>
+        <div><label>&nbsp;</label><button id="b-cn-crear">Dar de alta</button></div>
+      </div>
+      <div id="cn-msg"></div>
+    </div></details>
+  </div>
+
   <h3>Secretos de integraciones</h3>
   <p class="ayuda">Acá <strong>no hay ningún secreto</strong>. NEXO guarda <em>dónde está</em>
     cada credencial —una variable de entorno, una ruta de un gestor externo— y no su valor:
@@ -3734,6 +3910,18 @@ async function api(method, url, cuerpo, esForma) {
  * la frase, después los renglones de validación uno por uno, y el volcado queda
  * plegado en «Ver el detalle técnico»: **no se pierde nada, cambia el orden**.
  */
+/**
+ * Un reparo que no hizo falta preguntarle al servidor.
+ *
+ * No reemplaza a ninguna validación del backend —que sigue siendo la autoridad—:
+ * le ahorra a la persona el viaje para escuchar algo que ya se sabía de este
+ * lado, como que una fecha no tiene forma de fecha.
+ */
+function avisoMal(destino, texto) {
+  const caja = E(destino);
+  if (caja) caja.innerHTML = '<div class="aviso mal">' + escapar(texto) + '</div>';
+}
+
 function decir(destino, resultado, exito) {
   const caja = E(destino);
   if (!caja) return;
@@ -4205,7 +4393,16 @@ E('b-mfa-setup').onclick = async () => {
   if (!r.ok) return decir('mfa-alta-msg', r);
   E('mfa-secreto').hidden = false;
   limpiar('mfa-alta-msg');
-  E('mfa-kv').innerHTML = fila('Secreto', r.datos.secret) + fila('URI', r.datos.otpauthUri);
+  // El SVG lo dibuja `qrcode` en el servidor a partir de la misma URI que se
+  // muestra abajo: no hay dos fuentes que puedan discrepar. Va con `innerHTML`
+  // porque es un SVG —rectángulos, no texto— generado por nosotros; lo único
+  // que viaja adentro es el propio código, no nada que haya escrito una persona.
+  E('mfa-qr').innerHTML = r.datos.qrSvg || '';
+  // La URI cruda se guarda plegada: sirve para pegarla a mano y no es lo
+  // primero que tiene que leer alguien que solo quiere escanear.
+  E('mfa-kv').innerHTML = fila('Secreto', r.datos.secret) +
+    '<dt>URI</dt><dd><details class="tecnico"><summary>Ver la URI</summary>' +
+    '<pre>' + escapar(r.datos.otpauthUri) + '</pre></details></dd>';
   E('mfa-recuperacion').textContent = (r.datos.recoveryCodes || []).join('  ');
 };
 
@@ -4300,6 +4497,9 @@ async function usarEmpresa(id) {
   if (!c.ok) return decir('empresa-msg', c);
   estado.permisos = c.datos.permissions || [];
   estado.roles = c.datos.roles || [];
+  // Los datos de la empresa: de acá sale el mes y día de cierre con el que la
+  // pantalla de períodos propone las fechas del ejercicio.
+  estado.empresaDatos = c.datos.company || null;
   estado.fueraDelPlan = c.datos.fueraDelPlan || [];
   estado.suscripcion = c.datos.suscripcion || null;
   mostrarSuspension();
@@ -5914,13 +6114,70 @@ async function listarProductos(cursor) {
       '<td class="mono">' + escapar(p.cuentaVentaCodigo || '—') + '</td>' +
       '<td class="mono">' + escapar(p.precioLista || '—') + '</td>' +
       '<td>' + (p.llevaStock ? 'sí' : 'no') + '</td>' +
-      '<td>' + pastilla(p.status) + '</td>';
+      '<td>' + pastilla(p.status) + '</td>' +
+      '<td><span class="clic ficha">ficha</span></td>';
+    tr.querySelector('.ficha').onclick = () => abrirFichaDeProducto(p.id);
     cuerpo.appendChild(tr);
   }
 
   estado.cursores.pro = r.datos.cursor;
   E('b-pro-mas').hidden = !r.datos.cursor;
+  return undefined;
 }
+
+/** La ficha de un producto: lo corregible, y lo que no se toca. */
+async function abrirFichaDeProducto(id) {
+  const r = await api('GET', '/products/' + id);
+  if (!r.ok) return decir('pro-msg', r);
+  const p = r.datos.producto || r.datos;
+
+  estado.productoEnFicha = id;
+  E('pro-ficha').hidden = false;
+  E('pro-ficha-titulo').textContent = 'Ficha · ' + p.nombre;
+  E('pro-ficha-fijo').innerHTML =
+    fila('Código', p.codigo) +
+    fila('Tipo', p.tipo) +
+    fila('Tratamiento impositivo', p.tratamientoImpositivo +
+      (p.impuesto ? ' · ' + p.impuesto : '')) +
+    fila('Lleva stock', p.llevaStock ? 'sí' : 'no');
+
+  const poner = (campo, valor) => { E(campo).value = valor === null || valor === undefined ? '' : valor; };
+  poner('pf-nombre', p.nombre);
+  poner('pf-desc', p.descripcion);
+  E('pf-unidad').innerHTML = E('pro-unidad').innerHTML;
+  E('pf-unidad').value = p.unidad;
+  E('pf-status').value = p.status;
+  poner('pf-cta-venta', p.cuentaVentaCodigo);
+  poner('pf-cta-compra', p.cuentaCompraCodigo);
+  poner('pf-precio', p.precioLista);
+  poner('pf-minimo', p.stockMinimo);
+  poner('pf-motivo', '');
+  limpiar('pf-msg');
+  return undefined;
+}
+
+E('b-pf-guardar').onclick = async () => {
+  const motivo = E('pf-motivo').value.trim();
+  if (motivo.length < 3) return avisoMal('pf-msg', 'El motivo queda en la bitácora: escribí uno.');
+
+  const oNulo = (id) => { const v = E(id).value.trim(); return v === '' ? null : v; };
+  const r = await api('PATCH', '/products/' + estado.productoEnFicha, {
+    nombre: E('pf-nombre').value.trim(),
+    descripcion: oNulo('pf-desc'),
+    unidad: E('pf-unidad').value,
+    status: E('pf-status').value,
+    cuentaVenta: oNulo('pf-cta-venta'),
+    cuentaCompra: oNulo('pf-cta-compra'),
+    precioLista: oNulo('pf-precio'),
+    stockMinimo: oNulo('pf-minimo'),
+    motivo,
+  });
+  if (!r.ok) return decir('pf-msg', r);
+  await listarProductos();
+  await abrirFichaDeProducto(estado.productoEnFicha);
+  decir('pf-msg', r, 'Guardado.');
+  return undefined;
+};
 
 E('b-pro').onclick = () => listarProductos();
 E('b-pro-mas').onclick = () => listarProductos(estado.cursores.pro);
@@ -5976,14 +6233,86 @@ async function listarTerceros(cursor) {
       '<td>' + (t.roles || []).map((x) =>
         '<span class="p p-neu">' + escapar(x) + '</span>').join(' ') + '</td>' +
       '<td>' + pastilla(t.status) + '</td>' +
-      '<td><span class="clic">cuenta corriente</span></td>';
+      '<td><span class="clic">cuenta corriente</span> · <span class="clic ficha">ficha</span></td>';
     tr.querySelector('.clic').onclick = () => abrirTercero(t.id);
+    tr.querySelector('.ficha').onclick = () => abrirFichaDeTercero(t.id);
     cuerpo.appendChild(tr);
   }
 
   estado.cursores.ter = r.datos.cursor;
   E('b-ter-mas').hidden = !r.datos.cursor;
+  return undefined;
 }
+
+/**
+ * La ficha de un tercero, con lo que se puede corregir y lo que no.
+ *
+ * Lo inmutable se muestra igual —arriba, como dato fijo— en vez de esconderlo:
+ * quien busca el CUIT para cambiarlo tiene que encontrarlo y leer por qué no se
+ * cambia, no quedarse pensando que la pantalla está incompleta.
+ */
+async function abrirFichaDeTercero(id) {
+  const r = await api('GET', '/parties/' + id);
+  if (!r.ok) return decir('ter-msg', r);
+  const t = r.datos.tercero || r.datos;
+
+  estado.terceroEnFicha = id;
+  E('ter-ficha').hidden = false;
+  E('ter-ficha-titulo').textContent = 'Ficha · ' + t.razonSocial;
+  E('ter-ficha-fijo').innerHTML =
+    fila('Documento', t.tipoDocumento + ' ' + (t.numeroDocumento || '—')) +
+    fila('Roles', (t.roles || []).join(', ') || '—');
+
+  // Las condiciones de IVA salen del mismo selector del alta: una lista escrita
+  // dos veces se desincroniza a la primera que agregue el organismo.
+  E('tf-iva').innerHTML = E('ter-iva').innerHTML;
+  const poner = (campo, valor) => { E(campo).value = valor === null || valor === undefined ? '' : valor; };
+  poner('tf-rs', t.razonSocial);
+  E('tf-iva').value = t.condicionIva;
+  E('tf-status').value = t.status;
+  poner('tf-fantasia', t.nombreFantasia);
+  poner('tf-email', t.email);
+  poner('tf-tel', t.telefono);
+  poner('tf-plazo', t.diasDePago);
+  poner('tf-dom', t.domicilio);
+  poner('tf-loc', t.localidad);
+  poner('tf-prov', t.provincia);
+  poner('tf-cp', t.codigoPostal);
+  poner('tf-motivo', '');
+  limpiar('tf-msg');
+  return undefined;
+}
+
+E('b-tf-guardar').onclick = async () => {
+  const motivo = E('tf-motivo').value.trim();
+  if (motivo.length < 3) return avisoMal('tf-msg', 'El motivo queda en la bitácora: escribí uno.');
+
+  // Una casilla vacía significa **borrar el dato**, no «dejarlo como estaba»:
+  // es lo que el endpoint distingue, y por eso se mandan todos los campos.
+  const oNulo = (id) => { const v = E(id).value.trim(); return v === '' ? null : v; };
+  const plazo = E('tf-plazo').value.trim();
+  const r = await api('PATCH', '/parties/' + estado.terceroEnFicha, {
+    razonSocial: E('tf-rs').value.trim(),
+    condicionIva: E('tf-iva').value,
+    status: E('tf-status').value,
+    nombreFantasia: oNulo('tf-fantasia'),
+    email: oNulo('tf-email'),
+    telefono: oNulo('tf-tel'),
+    diasDePago: plazo === '' ? null : Number(plazo),
+    domicilio: oNulo('tf-dom'),
+    localidad: oNulo('tf-loc'),
+    provincia: oNulo('tf-prov'),
+    codigoPostal: oNulo('tf-cp'),
+    motivo,
+  });
+  if (!r.ok) return decir('tf-msg', r);
+  // Se avisa **después** de releer la ficha: al revés, el aviso lo borraba el
+  // propio refresco y el guardado parecía no haber pasado.
+  await listarTerceros();
+  await abrirFichaDeTercero(estado.terceroEnFicha);
+  decir('tf-msg', r, 'Guardado.');
+  return undefined;
+};
 
 async function abrirTercero(id, cursor) {
   // La query se arma aparte y siempre se concatena igual. Con un ternario
@@ -10595,8 +10924,89 @@ async function listarPeriodos() {
     }
     cuerpoFy.appendChild(tr);
   }
+
+  prepararAltaDeEjercicio((fy.datos && fy.datos.fiscalYears) || []);
 }
 E('b-per-listar').onclick = () => listarPeriodos();
+
+/**
+ * El formulario para abrir un ejercicio, con las fechas ya propuestas.
+ *
+ * Se propone y no se impone: el mes y día de cierre de la empresa alcanzan para
+ * saber dónde termina el ejercicio que contiene hoy, pero el primer ejercicio de
+ * una empresa que arrancó a mitad de año no empieza doce meses antes — empieza
+ * cuando la empresa empezó, y eso no lo sabe el sistema. Por eso las tres
+ * casillas quedan editables.
+ */
+function prepararAltaDeEjercicio(ejercicios) {
+  const caja = E('fy-alta');
+  // Si el backend va a decir que no, la consola no pregunta.
+  caja.hidden = !puede('period:write');
+  if (caja.hidden) return;
+
+  const cierre = (estado.empresaDatos && estado.empresaDatos.fiscalYearEnd) || '12-31';
+  const [mes, dia] = cierre.split('-').map(Number);
+  const hoy = new Date();
+  const anio = hoy.getUTCFullYear();
+
+  // El ejercicio que contiene hoy: termina en el próximo cierre que no pasó.
+  const cierreDeEsteAnio = new Date(Date.UTC(anio, mes - 1, dia));
+  const fin = hoy > cierreDeEsteAnio ? new Date(Date.UTC(anio + 1, mes - 1, dia)) : cierreDeEsteAnio;
+  const inicio = new Date(fin.getTime());
+  inicio.setUTCFullYear(inicio.getUTCFullYear() - 1);
+  inicio.setUTCDate(inicio.getUTCDate() + 1);
+
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const propuesto = String(fin.getUTCFullYear());
+
+  // No se pisa lo que la persona ya escribió, ni se propone un código repetido.
+  const usados = new Set(ejercicios.map((e) => e.code));
+  if (E('fy-codigo').value === '') {
+    let codigo = propuesto;
+    let n = 2;
+    while (usados.has(codigo)) codigo = propuesto + '-' + n++;
+    E('fy-codigo').value = codigo;
+  }
+  if (E('fy-desde').value === '') E('fy-desde').value = iso(inicio);
+  if (E('fy-hasta').value === '') E('fy-hasta').value = iso(fin);
+}
+
+E('b-fy-abrir').onclick = async () => {
+  const codigo = E('fy-codigo').value.trim();
+  const desde = E('fy-desde').value.trim();
+  const hasta = E('fy-hasta').value.trim();
+
+  // Lo que se puede decir sin ir al servidor se dice acá; lo demás lo contesta
+  // el backend, que es la autoridad. Esto no reemplaza sus validaciones: le
+  // ahorra a la persona un viaje para escuchar algo que ya se sabía.
+  const fecha = /^\d{4}-\d{2}-\d{2}$/;
+  if (codigo === '') return avisoMal('fy-msg', 'El ejercicio necesita un código.');
+  if (!fecha.test(desde) || !fecha.test(hasta)) {
+    return avisoMal('fy-msg', 'Las fechas van como AAAA-MM-DD.');
+  }
+  if (hasta <= desde) {
+    return avisoMal('fy-msg', 'El cierre tiene que ser posterior al inicio.');
+  }
+
+  const r = await api('POST', '/fiscal-years', {
+    code: codigo,
+    startDate: desde,
+    endDate: hasta,
+    generateMonthlyPeriods: E('fy-periodos').value === 'si',
+  });
+
+  const periodos = r.ok && r.datos ? r.datos.periods : 0;
+  decir('fy-msg', r, 'Ejercicio abierto, con ' + periodos + ' período(s).');
+  if (!r.ok) return;
+
+  E('fy-codigo').value = '';
+  E('fy-desde').value = '';
+  E('fy-hasta').value = '';
+  await listarPeriodos();
+  // La puesta en marcha cuenta ejercicios y períodos: sin esto seguiría
+  // diciendo que falta lo que se acaba de hacer.
+  await cargarInicio();
+};
 
 function botonPeriodo(texto, id, accion, pideMotivo, pideContrafirma) {
   const caja = document.createElement('div');
@@ -11850,7 +12260,102 @@ E('b-sub-pasarela').onclick = async () => {
   cargarSuscripcion();
 };
 
+// ── Plan de cuentas ────────────────────────────────────────────────────────
+//
+// `estado.cuentas` ya trae el plan: se carga al elegir empresa para llenar los
+// selectores de los asientos. Se reusa en vez de volver a pedirlo, y se refresca
+// después de cada cambio para que las dos vistas no discrepen.
+function dibujarCuentas() {
+  const bloque = E('cta-bloque');
+  bloque.hidden = !puede('account:read');
+  if (bloque.hidden) return;
+  E('cta-alta').hidden = !puede('account:write');
+
+  const filtro = E('cta-q').value.trim().toLowerCase();
+  const cuentas = estado.cuentas.filter(
+    (c) => filtro === '' || c.code.toLowerCase().includes(filtro) || c.name.toLowerCase().includes(filtro),
+  );
+
+  const cuerpo = E('t-cta').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  // Un plan entero son ciento ochenta y cinco renglones: se muestran los
+  // primeros y se pide buscar, en vez de dibujar una lista que nadie recorre.
+  for (const c of cuentas.slice(0, 40)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(c.code) + '</td>' +
+      '<td>' + escapar(c.name) + '</td>' +
+      '<td>' + escapar(c.type) + '</td>' +
+      '<td>' + (c.isPostable ? 'sí' : 'no') + '</td>' +
+      '<td>' + pastilla(c.status) + '</td>' +
+      '<td>' + (puede('account:write') ? '<span class="clic">editar</span>' : '') + '</td>';
+    const editar = tr.querySelector('.clic');
+    if (editar) editar.onclick = () => abrirFichaDeCuenta(c.id);
+    cuerpo.appendChild(tr);
+  }
+  E('cta-msg').innerHTML = cuentas.length > 40
+    ? '<div class="aviso">' + cuentas.length + ' cuentas: se muestran las primeras 40. Buscá para acotar.</div>'
+    : '';
+
+  const tipos = [...new Set(estado.cuentas.map((c) => c.type))].sort();
+  E('cn-tipo').innerHTML = tipos.map((t) => '<option>' + escapar(t) + '</option>').join('');
+}
+
+function abrirFichaDeCuenta(id) {
+  const c = estado.cuentas.find((x) => x.id === id);
+  if (!c) return;
+  estado.cuentaEnFicha = id;
+  E('cta-ficha').hidden = false;
+  E('cta-ficha-titulo').textContent = 'Cuenta ' + c.code;
+  E('cta-ficha-fijo').innerHTML =
+    fila('Código', c.code) + fila('Tipo', c.type) + fila('Imputable', c.isPostable ? 'sí' : 'no');
+  E('cf-nombre').value = c.name;
+  E('cf-status').value = c.status;
+  E('cf-cc').value = c.requiresCostCenter ? 'si' : 'no';
+  E('cf-ter').value = c.requiresThirdParty ? 'si' : 'no';
+  E('cf-motivo').value = '';
+  limpiar('cf-msg');
+}
+
+/** Relee el plan y redibuja: lo usan el alta y la edición. */
+async function refrescarCuentas() {
+  const r = await api('GET', '/accounts');
+  if (r.ok) estado.cuentas = r.datos.accounts || [];
+  dibujarCuentas();
+}
+
+E('b-cta-buscar').onclick = () => dibujarCuentas();
+
+E('b-cf-guardar').onclick = async () => {
+  const motivo = E('cf-motivo').value.trim();
+  if (motivo.length < 3) return avisoMal('cf-msg', 'El motivo queda en la bitácora: escribí uno.');
+  const r = await api('PATCH', '/accounts/' + estado.cuentaEnFicha, {
+    name: E('cf-nombre').value.trim(),
+    status: E('cf-status').value,
+    requiresCostCenter: E('cf-cc').value === 'si',
+    requiresThirdParty: E('cf-ter').value === 'si',
+    motivo,
+  });
+  if (!r.ok) return decir('cf-msg', r);
+  await refrescarCuentas();
+  abrirFichaDeCuenta(estado.cuentaEnFicha);
+  decir('cf-msg', r, 'Guardado.');
+  return undefined;
+};
+
+E('b-cn-crear').onclick = async () => {
+  const r = await api('POST', '/accounts', {
+    code: E('cn-codigo').value.trim(),
+    name: E('cn-nombre').value.trim(),
+    type: E('cn-tipo').value,
+    isPostable: E('cn-imputable').value === 'si',
+  });
+  decir('cn-msg', r, 'Cuenta creada.');
+  if (r.ok) { E('cn-codigo').value = ''; E('cn-nombre').value = ''; await refrescarCuentas(); }
+};
+
 async function cargarMapeoContable() {
+  dibujarCuentas();
   E('map-declarar').hidden = !puede('account:write');
 
   const r = await api('GET', '/accounting-map');
@@ -12012,9 +12517,68 @@ async function cargarConfig() {
   if (puede('user:read')) {
     const u = await api('GET', '/companies/current/users');
     if (u.ok) {
+      const personas = u.datos.users || u.datos.usuarios || [];
       caja.innerHTML += '<h3>Personas con acceso</h3>' +
-        tablaDe(u.datos.users || u.datos.usuarios || [],
+        tablaDe(personas,
           [['Nombre','fullName'],['Correo','email'],['Rol','role'],['Desde','validFrom']]);
+
+      // Dar un rol.
+      //
+      // `POST /companies/:companyId/roles` existía desde la 0011, con su permiso
+      // y su trigger de auditoría, y ningún botón lo llamaba: los roles los
+      // ponía la siembra. Para una empresa dada de alta por autoservicio eso no
+      // era un detalle — quien la crea recibe ADMINISTRADOR, que a propósito
+      // **no** firma la contabilidad («administrar el sistema no es firmar la
+      // contabilidad», 0011), y no tenía cómo darle CONTADOR a nadie. La empresa
+      // quedaba armada y sin poder registrar un asiento.
+      //
+      // Que un ADMINISTRADOR pueda asignar roles en su empresa no lo decide esta
+      // pantalla: lo dice `grant_company_role`, que acepta como actor al
+      // ADMINISTRADOR de esa misma empresa. Acá solo se le da por dónde.
+      if (puede('user:manage')) {
+        const opciones = personas
+          .filter((p, i) => personas.findIndex((q) => q.id === p.id) === i)
+          .map((p) => '<option value="' + escapar(p.id) + '">' +
+            escapar(p.fullName + ' · ' + p.email) + '</option>').join('');
+        caja.innerHTML +=
+          '<div class="grupo"><h4>Dar un rol</h4>' +
+          '<p class="ayuda">Los roles se suman: una misma persona puede administrar y llevar ' +
+          'la contabilidad. Lo que nunca se junta es proponer y aprobar un asiento — eso lo ' +
+          'impide la base, no esta pantalla.</p>' +
+          '<div class="fila">' +
+          '<div style="flex:2"><label>Persona</label><select id="rol-persona">' + opciones + '</select></div>' +
+          '<div><label>Rol</label><select id="rol-codigo">' +
+          ['ADMINISTRADOR','CONTADOR','AUDITOR','USUARIO_EMPRESA','CARGADOR','SOLO_LECTURA']
+            .map((r) => '<option>' + r + '</option>').join('') +
+          '</select></div>' +
+          '<div><label>&nbsp;</label><button id="b-rol-dar">Dar el rol</button></div>' +
+          '</div><div id="rol-msg"></div></div>';
+
+        // Por delegación y no con `onclick` sobre el botón.
+        //
+        // Esta pantalla se arma con `caja.innerHTML += …` varias veces seguidas,
+        // y cada `+=` vuelve a parsear el contenedor entero: los handlers que ya
+        // estaban enganchados a los hijos se pierden. El botón quedaba dibujado
+        // y muerto, que es peor que no estar — se aprieta, no pasa nada, y no
+        // hay ningún error que mirar. El contenedor sí sobrevive, así que el
+        // oyente va ahí.
+        if (!caja.dataset.rolEnganchado) {
+          caja.dataset.rolEnganchado = 'si';
+          caja.addEventListener('click', async (ev) => {
+            const boton = ev.target.closest && ev.target.closest('#b-rol-dar');
+            if (!boton) return;
+            const persona = E('rol-persona').value;
+            if (!persona) return avisoMal('rol-msg', 'Elegí a quién darle el rol.');
+            const r = await api('POST', '/companies/' + estado.empresa + '/roles', {
+              userId: persona,
+              role: E('rol-codigo').value,
+            });
+            decir('rol-msg', r, 'Rol otorgado.');
+            // Los permisos propios cambian en el acto si el rol es para uno mismo.
+            if (r.ok) await usarEmpresa(estado.empresa);
+          });
+        }
+      }
     }
   }
 

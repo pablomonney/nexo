@@ -467,7 +467,18 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'user:read');
 
-    return withoutCompany(`user:${requireAuth(request).user.userId}`, async (tx) => {
+    // CON la empresa en contexto, y no sin ella.
+    //
+    // `user_company_roles` está bajo RLS por `company_id`: consultada sin
+    // contexto devuelve **cero filas siempre**. Lo dice `http/context.ts` al
+    // resolver los permisos, y acá se había hecho al revés: esta ruta devolvía
+    // una lista vacía para toda empresa, y la pantalla de configuración mostraba
+    // «Personas con acceso» sin una sola persona. No fallaba: mentía en silencio,
+    // que es peor —una tabla vacía se lee como «no hay», no como «no pude ver»—.
+    //
+    // Fijar la empresa no debilita nada: RLS acota por empresa, no autoriza. El
+    // permiso ya lo exigió `requirePermission`.
+    return withCompany({ companyId: tenant.companyId, actorId: `user:${requireAuth(request).user.userId}` }, async (tx) => {
       const result = await tx.query(
         `SELECT u.id, u.email, u.full_name AS "fullName", u.mfa_enabled AS "mfaEnabled",
                 u.status, r.code AS role,

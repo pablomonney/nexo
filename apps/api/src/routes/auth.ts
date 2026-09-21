@@ -1,4 +1,5 @@
 import { withoutCompany, type Tx } from '@aai/db';
+import { toString } from 'qrcode';
 import { generateSecret, otpauthUri, verifyTotp } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -333,12 +334,31 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       }
     });
 
+    const uri = otpauthUri({ secret, accountName: user.email, issuer: config.issuer });
+
+    // El QR se dibuja acá y no en la consola.
+    //
+    // Hasta el 2026-09-21 la pantalla mostraba el secreto y la `otpauth://`
+    // cruda, y nada más: quien no sabe qué es una URI de TOTP no tiene forma de
+    // seguir, y el segundo factor es obligatorio para tres de los seis roles.
+    // El QR es la forma en que todo el mundo carga un autenticador.
+    //
+    // Se genera del lado del servidor porque la consola es una página sin
+    // dependencias ni build: meterle un codificador de QR sería su primera
+    // librería, y `qrcode` ya estaba en el repositorio. Va como SVG y no como
+    // PNG en base64 porque escala sin pesar y no necesita `img-src data:`.
+    //
+    // Lo que se codifica es la misma URI que se devuelve: no hay dos fuentes.
+    const qrSvg = await toString(uri, {
+      type: 'svg',
+      margin: 1,
+      // Tolerancia media: el QR se mira en pantalla, no impreso ni arrugado.
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
     // Única vez que estos valores salen del servidor en claro.
-    return {
-      secret,
-      otpauthUri: otpauthUri({ secret, accountName: user.email, issuer: config.issuer }),
-      recoveryCodes,
-    };
+    return { secret, otpauthUri: uri, qrSvg, recoveryCodes };
   });
 
   app.post('/auth/mfa/confirm', async (request) => {

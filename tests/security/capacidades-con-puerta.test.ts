@@ -34,7 +34,13 @@ import { buildServer } from '@aai/api/server';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hasDatabase } from '../integration/helpers/db.js';
-import { tienePuerta } from './helpers/consola.js';
+import { puertasDe, tienePuerta } from './helpers/consola.js';
+
+/** `'POST /fiscal-years'` → ¿la consola sabe pedirlo, con ese método? */
+const tienePuertaDe = (registrada: string, html: string): boolean => {
+  const corte = registrada.indexOf(' ');
+  return tienePuerta(registrada.slice(0, corte), registrada.slice(corte + 1), html);
+};
 
 const CONSOLA = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -81,24 +87,53 @@ const SIN_PUERTA = new Map<string, string>([
       'apretarlo. Hoy lo hace el script de siembra.',
   ],
   [
-    'POST /companies/:companyId/roles',
-    'Asignar un rol a alguien dentro de una empresa. Es del panel del estudio, y hoy lo hace ' +
-      'la siembra. La consola sí **lee** los permisos propios, para esconder lo que no se puede.',
-  ],
-  [
     'POST /subscription/:subscriptionId/estado',
     'Cambiar el estado de una suscripción es del lado del proveedor, no del cliente. La ' +
       'consola declara la suscripción y la lee; moverle el estado lo hará la pasarela cuando ' +
       'exista (NEXO_ROADMAP.md §P2).',
   ],
 
-  // ── El plan de cuentas, que solo se puede leer ─────────────────────────
+  // ── Lo que el barrido ve desde que mira el método (2026-09-21) ─────────
+  //
+  // Hasta esa fecha `tienePuerta` recibía la ruta y no el método, así que una
+  // escritura figuraba con puerta si la consola **leía** esa misma ruta. Estas
+  // cuatro estaban tapadas por su propio `GET`, y cada una dice de qué clase es.
   [
-    'PATCH /accounts/:accountId',
-    'FALTA PANTALLA. **El plan de cuentas es de solo lectura en la consola.** La única llamada ' +
-      'a `/accounts` es el listado; crear una cuenta y editarla no tienen dónde apretarse, y ' +
-      'hoy el plan entra por la siembra. `POST /accounts` no figura acá porque este barrido ' +
-      'pierde el método y el listado le hace de puerta: la ausencia es la misma.',
+    'GET /',
+    'EXCEPCIÓN LEGÍTIMA. Es la página pública, no una capacidad de la consola: se sirve a ' +
+      'quien entra al dominio. La consola vive en `/consola` y ya está exceptuada arriba.',
+  ],
+  [
+    'POST /companies/current/arca/credentials',
+    'FALTA PANTALLA. La configuración **lista** los certificados por huella y vigencia, y ' +
+      'revocarlos tiene botón; cargarlos no. Hoy entran por `arca:check` desde la línea de ' +
+      'comandos. Es trabajo pendiente, no una decisión: sin subir el certificado la empresa ' +
+      'no puede constatar comprobantes contra el organismo.',
+  ],
+  [
+    'PUT /salespeople/:salespersonId',
+    'FALTA PANTALLA. Es la misma clase que las fichas de tercero y de producto, que se ' +
+      'cerraron el 2026-09-21: la pantalla de comisiones da de alta un vendedor y no lo deja ' +
+      'corregir. Queda para el barrido siguiente.',
+  ],
+  [
+    'POST /comprobantes/:taxTransactionId/decision',
+    'FALTA PANTALLA. Declarar el tratamiento contable de un comprobante exige ' +
+      '`journal_entry:create`: es un acto contable, no de carga. La consola muestra la ' +
+      'decisión tomada y sus correcciones, y no tiene dónde tomarla — hoy el asiento se ' +
+      'carga entero a mano desde Asientos, que es el camino que sí existe.',
+  ],
+  [
+    'GET /documents/:documentId/tax-transaction',
+    'INTERNA. Devuelve el comprobante que salió de un documento. La consola llega al ' +
+      'comprobante por Operaciones, que es la pantalla donde se lo busca; este atajo por ' +
+      'documento lo usa quien integra contra la API.',
+  ],
+  [
+    'POST /integrations/:integrationId/records',
+    'INTERNA. Es la ingesta programática de registros de un sistema externo, con ' +
+      '`integration:ingest`. Lo que hace una persona desde la consola es subir el CSV ' +
+      '—`…/records/csv`, que sí tiene botón—; esta variante la llama otro sistema.',
   ],
 
   // ── Rutas que sobran ───────────────────────────────────────────────────
@@ -235,13 +270,44 @@ suite('S-25 — cada capacidad tiene puerta de entrada', () => {
     await closePool();
   });
 
+  it('el instrumento sabe leer todas las formas de llamada de la consola', () => {
+    // Si aparece una forma indirecta nueva, lo que falla dice «no sé leer esto»
+    // en vez de acusar a una pantalla de no existir. Es la lección de `bajarCsv`.
+    const { sinResolver } = puertasDe(html);
+    expect(
+      sinResolver,
+      'La consola llama a `api()` de una forma que este ayudante no sabe atribuir. Hasta ' +
+        'resolverla, el barrido produciría falsos rojos:\n  ' + sinResolver.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('leer una ruta no cuenta como puerta para escribirla', () => {
+    // El defecto que originó este cambio: la consola listaba los ejercicios con
+    // `GET /fiscal-years` y no tenía ningún botón que abriera uno. Con la
+    // versión anterior —que recibía la ruta y no el método— el POST figuraba
+    // con puerta, y una empresa nueva no podía abrir su ejercicio.
+    //
+    // Se comprueba sobre un caso armado a mano y no sobre la consola: así la
+    // propiedad se sigue probando el día que la pantalla exista, que es
+    // justamente cuando nadie se acordaría de volver a mirarla.
+    const soloLee = `<script>
+      async function listar() { const r = await api('GET', '/fiscal-years'); }
+      async function ver(id) { const r = await api('GET', '/accounts/' + id); }
+    </script>`;
+
+    expect(tienePuerta('GET', '/fiscal-years', soloLee)).toBe(true);
+    expect(tienePuerta('POST', '/fiscal-years', soloLee)).toBe(false);
+    expect(tienePuerta('GET', '/accounts/:accountId', soloLee)).toBe(true);
+    expect(tienePuerta('PATCH', '/accounts/:accountId', soloLee)).toBe(false);
+  });
+
   it('el barrido está mirando la consola y el inventario de verdad', () => {
     // Si cualquiera de los dos lados fallara, cero inalcanzables no probaría nada.
     expect(rutas.length, 'la API tiene que tener rutas').toBeGreaterThan(200);
     expect(html.length, 'la consola tiene que tener contenido').toBeGreaterThan(100_000);
-    expect(tienePuerta('/journal-entries', html), 'el Mayor tiene pantalla').toBe(true);
+    expect(tienePuerta('GET', '/journal-entries', html), 'el Mayor tiene pantalla').toBe(true);
     expect(
-      tienePuerta('/commercial-documents/:id/emit', html),
+      tienePuerta('POST', '/commercial-documents/:documentId/emit', html),
       'una URL armada con un ternario también cuenta: si esto diera falso, el barrido tendría ' +
         'falsos rojos y no serviría',
     ).toBe(true);
@@ -249,7 +315,7 @@ suite('S-25 — cada capacidad tiene puerta de entrada', () => {
 
   it('ninguna ruta queda sin forma de entrarle', () => {
     const inalcanzables = rutas.filter(
-      (ruta) => !SIN_PUERTA.has(ruta) && !tienePuerta(ruta.slice(ruta.indexOf(' ') + 1), html),
+      (ruta) => !SIN_PUERTA.has(ruta) && !tienePuertaDe(ruta, html),
     );
 
     expect(
@@ -264,7 +330,7 @@ suite('S-25 — cada capacidad tiene puerta de entrada', () => {
     // Es lo que impide que la lista se vuelva decoración: cuando alguien hace
     // la pantalla, este test lo obliga a borrar la línea.
     const resueltas = [...SIN_PUERTA.keys()].filter((ruta) =>
-      tienePuerta(ruta.slice(ruta.indexOf(' ') + 1), html),
+      tienePuertaDe(ruta, html),
     );
 
     expect(
