@@ -13,6 +13,17 @@ tres variables viven en `/opt/nexo/.env`, en el servidor, que no está versionad
 —lo excluye `.dockerignore` y lo comprueba S-43—. Cualquier afirmación sobre si
 Resend está conectado que salga de este repositorio es una suposición.
 
+> **Medido en el servidor el 2026-09-21: conectado, y andando.** El banner del
+> arranque imprime `correo resend` con su remitente, y `email_outbox` tiene dos
+> `VERIFICACION_DE_ALTA` en estado **`ENVIADO`** del 2026-09-17, cada una con un
+> solo intento — ninguna `FALLIDO`, ninguna `SIN_PROVEEDOR`. Una de las dos
+> corresponde a una cuenta que quedó **activa y con segundo factor**: la cadena
+> registro → correo → verificación → MFA se recorrió entera, en producción, con
+> una persona de verdad.
+>
+> Esto es una medición con fecha, no un estado del repositorio. Vuelve a
+> comprobarse con el comando de abajo; no se deduce de ningún archivo de acá.
+
 > La versión anterior de esta línea decía «no conectada», y unas horas más tarde
 > —el mismo 2026-09-17— un comentario de `routes/auth.ts` describía una medición
 > hecha **en producción con Resend andando**. Las dos no podían ser ciertas, y la
