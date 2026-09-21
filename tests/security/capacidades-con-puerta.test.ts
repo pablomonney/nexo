@@ -104,13 +104,6 @@ const SIN_PUERTA = new Map<string, string>([
       'quien entra al dominio. La consola vive en `/consola` y ya está exceptuada arriba.',
   ],
   [
-    'POST /companies/current/arca/credentials',
-    'FALTA PANTALLA. La configuración **lista** los certificados por huella y vigencia, y ' +
-      'revocarlos tiene botón; cargarlos no. Hoy entran por `arca:check` desde la línea de ' +
-      'comandos. Es trabajo pendiente, no una decisión: sin subir el certificado la empresa ' +
-      'no puede constatar comprobantes contra el organismo.',
-  ],
-  [
     'PUT /salespeople/:salespersonId',
     'FALTA PANTALLA. Es la misma clase que las fichas de tercero y de producto, que se ' +
       'cerraron el 2026-09-21: la pantalla de comisiones da de alta un vendedor y no lo deja ' +

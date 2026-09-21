@@ -12260,6 +12260,46 @@ E('b-sub-pasarela').onclick = async () => {
   cargarSuscripcion();
 };
 
+/**
+ * El botón de cargar el certificado, por delegación.
+ *
+ * La pantalla de configuración se arma con `caja.innerHTML += …` una decena de
+ * veces —secretos, ARCA, normativa, planes—, y **cada `+=` vuelve a parsear el
+ * contenedor entero**: cualquier handler enganchado a un hijo se pierde con el
+ * bloque que se dibuje después. El botón queda dibujado y muerto, que es peor
+ * que no estar: se aprieta, no pasa nada, y no hay ningún error que mirar.
+ *
+ * Ya mordió tres veces en este archivo. El contenedor sí sobrevive a los `+=`,
+ * así que el oyente va ahí y se engancha una sola vez.
+ */
+function engancharCargaDeCertificado(caja) {
+  if (caja.dataset.arcaEnganchado) return;
+  caja.dataset.arcaEnganchado = 'si';
+
+  caja.addEventListener('click', async (ev) => {
+    if (!ev.target.closest || !ev.target.closest('#b-arca-cargar')) return;
+
+    const cuit = E('arca-cuit').value.trim();
+    if (!/^\d{11}$/u.test(cuit)) {
+      avisoMal('arca-alta-msg', 'El CUIT va sin guiones, once dígitos.');
+      return;
+    }
+    const r = await api('POST', '/companies/current/arca/credentials', {
+      alias: E('arca-alias').value.trim(),
+      cuit,
+      environment: E('arca-amb').value,
+      certificatePem: E('arca-cert').value.trim(),
+      privateKeyPem: E('arca-key').value.trim(),
+    });
+    if (!r.ok) { decir('arca-alta-msg', r); return; }
+    // Lo pegado se borra apenas el servidor lo acepta: no hay motivo para que
+    // una clave privada siga viva en un campo de texto.
+    E('arca-cert').value = '';
+    E('arca-key').value = '';
+    await cargarConfig();
+  });
+}
+
 // ── Plan de cuentas ────────────────────────────────────────────────────────
 //
 // `estado.cuentas` ya trae el plan: se carga al elegir empresa para llenar los
@@ -12590,7 +12630,12 @@ async function cargarConfig() {
       ? (cred.datos.credenciales || cred.datos.credentials || [])
       : [];
     if (certificados.length === 0) {
-      caja.innerHTML += '<div class="aviso">Sin certificados cargados.</div>';
+      // Se dice qué se pierde, no solo que no hay. Sin certificado el sistema
+      // registra igual: lo que queda sin confirmar es la constatación contra el
+      // organismo, y eso es una diferencia que conviene entender antes.
+      caja.innerHTML += '<div class="aviso">Sin certificados cargados. Se puede operar igual: ' +
+        'lo que no se puede es <strong>constatar un comprobante contra ARCA</strong>, así que ' +
+        'la constatación queda declarada en vez de confirmada.</div>';
     } else {
       const tabla = document.createElement('div');
       tabla.className = 'tabla';
@@ -12625,10 +12670,58 @@ async function cargarConfig() {
       }
       caja.appendChild(tabla);
     }
+
+    // Los servicios habilitados se dibujan **antes** del formulario de carga.
+    //
+    // No es cosmético: abajo se engancha un `onclick`, y un `innerHTML +=`
+    // posterior vuelve a parsear el contenedor y se lleva el handler puesto. El
+    // botón quedaría dibujado y muerto — se aprieta, no pasa nada, y no hay
+    // ningún error que mirar. Ya ocurrió una vez en esta misma pantalla.
     if (cap.ok) {
       caja.innerHTML += '<h3>ARCA — servicios habilitados</h3><pre>' +
         escapar(JSON.stringify(cap.datos, null, 2)) + '</pre>';
     }
+
+    // Cargar el certificado.
+    //
+    // La pantalla listaba certificados y sabía revocarlos, y no tenía dónde
+    // cargar uno: `POST /companies/current/arca/credentials` existía sin puerta
+    // y el certificado entraba por la línea de comandos. Para una empresa que se
+    // da de alta sola eso es una pared — no puede constatar un comprobante
+    // contra el organismo sin pedirle a alguien que le toque el servidor.
+    //
+    // Las fechas de vigencia **no se piden**: las saca el servidor del X.509,
+    // que es el que manda. Pedirlas dejaría cargar un certificado vencido
+    // declarándolo vigente.
+    const alta = document.createElement('details');
+    alta.className = 'grupo';
+    alta.innerHTML =
+      '<summary>Cargar un certificado</summary><div>' +
+      '<p class="ayuda">Son los dos archivos que entrega ARCA: el <strong>certificado</strong> ' +
+      '(<span class="mono">.crt</span>) y su <strong>clave privada</strong> ' +
+      '(<span class="mono">.key</span>), pegados enteros con sus líneas ' +
+      '<span class="mono">BEGIN</span> y <span class="mono">END</span>. La clave privada se ' +
+      'guarda cifrada y no vuelve a salir del servidor: esta pantalla no puede mostrarla ' +
+      'después, y por eso no hay forma de «ver» un certificado ya cargado.</p>' +
+      '<p class="ayuda">El vencimiento no se escribe acá: lo lee el servidor del propio ' +
+      'certificado. Uno vencido se rechaza.</p>' +
+      '<div class="fila">' +
+      '<div><label>Alias</label><input id="arca-alias" maxlength="80" placeholder="con qué lo reconocés" /></div>' +
+      '<div><label>CUIT representado</label><input id="arca-cuit" maxlength="11" inputmode="numeric" /></div>' +
+      '<div><label>Ambiente</label><select id="arca-amb">' +
+      '<option value="homologacion">homologación</option>' +
+      '<option value="produccion">producción</option></select></div>' +
+      '</div>' +
+      '<div class="fila"><div style="flex:1"><label>Certificado (PEM)</label>' +
+      '<textarea id="arca-cert" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div></div>' +
+      '<div class="fila"><div style="flex:1"><label>Clave privada (PEM)</label>' +
+      '<textarea id="arca-key" rows="5" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div></div>' +
+      '<div class="fila"><div><label>&nbsp;</label>' +
+      '<button id="b-arca-cargar">Cargar el certificado</button></div></div>' +
+      '<div id="arca-alta-msg"></div></div>';
+    caja.appendChild(alta);
+
+    engancharCargaDeCertificado(caja);
   }
 
   if (puede('rule:read')) {

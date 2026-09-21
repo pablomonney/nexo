@@ -499,7 +499,7 @@ autoridad: está en la §19.
 |---|---|
 | Hosting / dominio / HTTPS | ✅ **funcionando** — `/`, `/consola` y `/health` responden 200 |
 | Base de datos | ✅ migración 130 aplicada |
-| **Correo (Resend)** | ❌ **código listo, no conectado** (2026-09-17). Sin esto **el alta autoservicio no se completa sola**, no hay recuperación de contraseña ni aviso previo a una suspensión |
+| **Correo (Resend)** | ⚠️ **código listo y probado; el estado de la conexión no se puede saber desde el repositorio.** Las variables viven en `/opt/nexo/.env`, fuera de git. En **local** el banner dice `correo none`: el alta autoservicio no se completa sola. Ver `docs/CORREO_RESEND.md` para averiguarlo en el servidor |
 | **Pasarela (Mercado Pago)** | ❌ **cerrada técnicamente, no conectada**. `intentarCobro` devuelve `SIN_PASARELA` |
 | **Certificado ARCA producción** | ❌ trámite del contribuyente; hoy anda homologación |
 | **Gestor de secretos** | ❌ sin contratar |

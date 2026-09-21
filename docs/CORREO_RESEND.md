@@ -1,7 +1,35 @@
 # Conectar Resend — la parte que hace el operador
 
 **Escrito:** 2026-09-17, al cerrar la revisión del código de correo.
-**Estado del código:** listo. **Estado de la conexión:** no conectada.
+**Revisado:** 2026-09-21.
+
+**Estado del código:** listo, y probado — 25 pruebas del adaptador cubren el
+envío, los reintentos de 429 y 5xx, el 422, el 401, el timeout que **no** se
+reintenta, y que ni la clave ni el token del mensaje se filtren a ningún
+resultado.
+
+**Estado de la conexión: el repositorio no lo sabe, y no puede saberlo.** Las
+tres variables viven en `/opt/nexo/.env`, en el servidor, que no está versionado
+—lo excluye `.dockerignore` y lo comprueba S-43—. Cualquier afirmación sobre si
+Resend está conectado que salga de este repositorio es una suposición.
+
+> La versión anterior de esta línea decía «no conectada», y unas horas más tarde
+> —el mismo 2026-09-17— un comentario de `routes/auth.ts` describía una medición
+> hecha **en producción con Resend andando**. Las dos no podían ser ciertas, y la
+> que estaba mal era ésta: un documento del repositorio no tiene cómo conocer el
+> `.env` de un servidor. Se reemplaza por la forma de averiguarlo.
+
+**Cómo se averigua, en el servidor:**
+
+```bash
+docker compose -f /opt/nexo/docker-compose.prod.yml logs api | grep -A1 '  correo'
+```
+
+El banner del arranque imprime una de tres cosas, y ninguna muestra la clave:
+
+    correo    none     · simulado o apagado          ← no hay proveedor
+    correo    resend   · preparado, no conectado     ← falta EMAIL_API_KEY o EMAIL_FROM
+    correo    resend   · <el remitente>              ← conectado
 
 Este documento **no conecta nada**. Dice qué falta hacer afuera del repositorio,
 qué variables hay que poner, dónde, cómo se comprueba que quedaron bien y qué
