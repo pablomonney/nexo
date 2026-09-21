@@ -895,6 +895,61 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
         <div id="doc-duplicados"></div>
       </div>
     </div>
+
+    <!-- De documento leído a operación fiscal.
+
+         `POST /documents/:id/tax-transaction` existía desde la 0035, con su
+         permiso, su idempotencia y su auditoría, y la consola no lo llamaba: un
+         documento subido y extraído se quedaba en EXTRAIDO para siempre. Lo
+         encontró una persona intentando registrar una factura de verdad.
+
+         El formulario **confirma**, no convierte sola. Los importes y el
+         comprobante vienen precargados de lo que leyó el motor; la dirección la
+         pone una persona, porque sin el CUIT de la empresa entre las partes no
+         hay de dónde deducirla —y deducirla mal cambia de signo el asiento—. -->
+    <div id="doc-comprobante" hidden class="grupo">
+      <h3>Registrar el comprobante</h3>
+      <p class="ayuda">Esto fija los importes con los que después se decide y se asienta.
+        Lo precargado sale de <strong>lo que leyó el motor</strong>: revisalo antes de
+        confirmar. Si algún número está mal, corregilo arriba en «Lo que se leyó» y volvé —
+        el servidor compara el total declarado contra el extraído y se niega si no coinciden.</p>
+      <div class="fila">
+        <div><label>Dirección</label><select id="tt-dir">
+          <option value="">elegí una</option>
+          <option value="COMPRAS">COMPRAS</option>
+          <option value="VENTAS">VENTAS</option>
+        </select></div>
+        <div><label>Tipo</label><input id="tt-tipo" inputmode="numeric" /></div>
+        <div><label>Punto de venta</label><input id="tt-pv" inputmode="numeric" /></div>
+        <div><label>Número</label><input id="tt-nro" inputmode="numeric" /></div>
+        <div><label>Fecha</label><input id="tt-fecha" placeholder="AAAA-MM-DD" /></div>
+      </div>
+      <div class="fila">
+        <div><label>Neto</label><input id="tt-neto" inputmode="decimal" /></div>
+        <div><label>IVA</label><input id="tt-iva" inputmode="decimal" /></div>
+        <div><label>No gravado</label><input id="tt-ngrav" inputmode="decimal" /></div>
+        <div><label>Exento</label><input id="tt-exento" inputmode="decimal" /></div>
+        <div><label>Percepciones</label><input id="tt-perc" inputmode="decimal" /></div>
+        <div><label>Total</label><input id="tt-total" inputmode="decimal" /></div>
+      </div>
+      <div class="fila">
+        <div style="flex:2"><label>CUIT de la contraparte</label><select id="tt-cuit"></select></div>
+        <div><label>Condición IVA</label><select id="tt-iva-cond">
+          <option value="DESCONOCIDA">desconocida</option>
+          <option value="RESPONSABLE_INSCRIPTO">responsable inscripto</option>
+          <option value="MONOTRIBUTO">monotributo</option>
+          <option value="EXENTO">exento</option>
+          <option value="CONSUMIDOR_FINAL">consumidor final</option>
+          <option value="NO_CATEGORIZADO">no categorizado</option>
+        </select></div>
+        <div><label>&nbsp;</label><button id="b-tt-crear">Registrar el comprobante</button></div>
+      </div>
+      <p class="ayuda">La condición de IVA y la contraparte <strong>no salen del documento</strong>
+        y el servidor no las exige: si no las sabés, dejalas como están. «Desconocida» es una
+        respuesta válida; inventar una condición no lo es.</p>
+      <div id="tt-msg"></div>
+    </div>
+
     <div id="doc-detalle-msg"></div>
   </div>
 </section>
@@ -1454,30 +1509,22 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <h3>Operación</h3>
     <dl class="kv" id="op-kv"></dl>
 
-    <details class="grupo"><summary>Registrar una operación desde un documento</summary><div>
-      <p class="ayuda">Los importes los declarás vos. Si hay una lectura del documento,
-        el sistema los cruza y corta si difieren: no elige uno en silencio.</p>
-      <div class="fila">
-        <div><label>Documento</label><select id="tt-doc"></select></div>
-        <div><label>Sentido</label><select id="tt-dir"><option>COMPRAS</option><option>VENTAS</option></select></div>
-        <div><label>Tipo cbte.</label><input id="tt-tipo" type="number" value="1"></div>
-        <div><label>Punto de venta</label><input id="tt-pv" type="number" value="1"></div>
-        <div><label>Número</label><input id="tt-nro" type="number"></div>
-        <div><label>Fecha</label><input id="tt-fecha" type="date"></div>
-        <div><label>CUIT contraparte</label><input id="tt-cuit" maxlength="11"></div>
-        <div><label>Razón social</label><input id="tt-rs"></div>
-      </div>
-      <div class="fila">
-        <div><label>Neto</label><input id="tt-neto" value="0"></div>
-        <div><label>IVA</label><input id="tt-iva" value="0"></div>
-        <div><label>No gravado</label><input id="tt-ng" value="0"></div>
-        <div><label>Exento</label><input id="tt-ex" value="0"></div>
-        <div><label>Percepciones</label><input id="tt-perc" value="0"></div>
-        <div><label>Total</label><input id="tt-total" value="0"></div>
-      </div>
-      <button id="b-tt">Registrar operación</button>
-      <div id="tt-msg"></div>
-    </div></details>
+    <!-- El formulario de «Registrar una operación desde un documento» vivía acá
+         y se fue el 2026-09-21, a la pantalla de Documentos.
+
+         Tenía tres problemas que sólo se ven usándolo. Vivía dentro de
+         `op-detalle`, que está oculto hasta **abrir una operación**: para crear
+         la primera había que tener una, que es imposible. No precargaba nada de
+         lo que el motor ya había leído, así que obligaba a tipear de nuevo
+         importes que estaban en la pantalla de al lado. Y mandaba
+         `condicionIva: 'RESPONSABLE_INSCRIPTO'` fijo —un hecho fiscal inventado
+         sobre la contraparte— cuando el endpoint tiene `DESCONOCIDA` por defecto
+         justamente para no tener que suponerlo.
+
+         Ahora está donde se mira el documento, que es donde están los datos con
+         los que se confirma. Una sola puerta para `POST /documents/:id/
+         tax-transaction`: dos formularios contra el mismo endpoint son dos
+         lugares donde arreglar el mismo error. -->
 
     <details class="grupo"><summary>Constatar contra ARCA</summary><div>
       <p class="ayuda">Lo que se le manda a ARCA sale de la <strong>fila guardada</strong>.
@@ -3772,7 +3819,7 @@ const estado = {
   vendedor: null, vendedorTitulo: '',
   sucursal: null, sucursalTitulo: '',
   propuesta: null, propuestaCmv: null, bienAAmortizar: null,
-  cuentas: [], documentosSinOperacion: [],
+  cuentas: [],
   cursores: { doc: null, ops: null, wq: null, as: null, au: null, ter: null, terCc: null, pro: null, com: null, rec: null, stk: null, ext: null },
   filtros: {},
 };
@@ -5311,7 +5358,7 @@ async function listarDocumentos(cursor) {
   limpiar('doc-msg');
 
   const cuerpo = E('t-doc').querySelector('tbody');
-  if (!cursor) { cuerpo.innerHTML = ''; estado.documentosSinOperacion = []; }
+  if (!cursor) cuerpo.innerHTML = '';
   if ((r.datos.documentos || []).length === 0 && !cursor) {
     E('doc-msg').innerHTML =
       '<div class="aviso">Todavía no subiste ningún documento. Acá van las facturas, ' +
@@ -5334,15 +5381,6 @@ async function listarDocumentos(cursor) {
       '<td><span class="clic">abrir</span></td>';
     tr.querySelector('.clic').onclick = () => abrirDocumento(d.id);
     cuerpo.appendChild(tr);
-    estado.documentosSinOperacion.push({ id: d.id, nombre: d.nombre });
-  }
-
-  const sel = E('tt-doc');
-  sel.innerHTML = '';
-  for (const d of estado.documentosSinOperacion) {
-    const o = document.createElement('option');
-    o.value = d.id; o.textContent = d.nombre;
-    sel.appendChild(o);
   }
 
   estado.cursores.doc = r.datos.cursor;
@@ -5359,6 +5397,141 @@ E('b-subir').onclick = async () => {
   const r = await api('POST', '/documents', forma, true);
   decir('doc-msg', r, 'Documento archivado');
   if (r.ok) { await listarDocumentos(); abrirDocumento(r.datos.id); }
+};
+
+/**
+ * El formulario del comprobante, precargado con lo que leyó el motor.
+ *
+ * ## Qué se precarga y qué no
+ *
+ * Los importes y la identificación del comprobante salen de la extracción, con
+ * su `field_path`. Lo que el documento **no dice** —la dirección, la condición
+ * de IVA— no se inventa: la dirección se pide, y la condición queda en
+ * `DESCONOCIDA`, que es el valor por defecto del propio endpoint.
+ *
+ * ## Por qué la dirección se pide y no se deduce
+ *
+ * Lo normal sería compararla con el CUIT de la empresa: si es el emisor, es una
+ * venta. Pero un documento puede no tener a la empresa entre sus partes —pasa
+ * con los de prueba, y pasa con un comprobante cargado por error—, y ahí la
+ * deducción sería una adivinanza. Equivocarla invierte el asiento.
+ */
+function prepararComprobante(documento) {
+  const caja = E('doc-comprobante');
+
+  // Mismo permiso que exige el endpoint: registrar la operación fiscal es un
+  // acto contable. Un botón que la API va a rechazar no es una funcionalidad.
+  const puedeRegistrar = puede('journal_entry:create');
+  caja.hidden = documento.status !== 'EXTRAIDO' || !puedeRegistrar;
+  if (caja.hidden) return;
+
+  /** `'importes.total'` → lo que leyó el motor, o `''`. */
+  const leido = (camino) => {
+    const c = (estado.campos || []).find((x) => x.fieldPath === camino);
+    return c && c.rawValue !== null && c.rawValue !== undefined ? String(c.rawValue) : '';
+  };
+
+  // `20260919` → `2026-09-19`. El endpoint pide AAAA-MM-DD y la extracción de un
+  // XML de ARCA entrega ocho dígitos pegados; traducirlo acá es lo único que
+  // esta pantalla hace con un dato leído, y es un formato, no un criterio.
+  const fecha = leido('comprobante.fecha');
+  const comoFecha = /^\d{8}$/u.test(fecha)
+    ? fecha.slice(0, 4) + '-' + fecha.slice(4, 6) + '-' + fecha.slice(6, 8)
+    : fecha;
+
+  E('tt-dir').value = '';
+  E('tt-tipo').value = leido('comprobante.tipo');
+  E('tt-pv').value = leido('comprobante.puntoVenta');
+  E('tt-nro').value = leido('comprobante.numero');
+  E('tt-fecha').value = comoFecha;
+  E('tt-neto').value = leido('importes.neto');
+  E('tt-iva').value = leido('importes.iva');
+  E('tt-exento').value = leido('importes.exento');
+  // Ninguno de los dos tiene campo propio en la extracción de ARCA. Se dejan en
+  // cero —que es el default del endpoint— y quedan editables.
+  E('tt-ngrav').value = '0.00';
+  E('tt-perc').value = leido('importes.tributos') || '0.00';
+  E('tt-total').value = leido('importes.total');
+  E('tt-iva-cond').value = 'DESCONOCIDA';
+
+  // Las dos partes del comprobante, más «ninguno»: cuál es la contraparte
+  // depende de la dirección, y eso lo sabe quien mira. Sin CUIT también se
+  // registra — el endpoint lo acepta nulo.
+  const partes = [
+    ['', 'sin declarar'],
+    [leido('emisor.cuit'), 'emisor'],
+    [leido('receptor.documento'), 'receptor'],
+  ].filter(([valor], i) => i === 0 || /^\d{11}$/u.test(valor));
+  E('tt-cuit').innerHTML = partes
+    .map(([valor, quien]) =>
+      '<option value="' + escapar(valor) + '">' +
+      escapar(valor === '' ? quien : quien + ' · ' + valor) + '</option>')
+    .join('');
+
+  limpiar('tt-msg');
+}
+
+E('b-tt-crear').onclick = async () => {
+  const direccion = E('tt-dir').value;
+  if (direccion === '') {
+    return avisoMal('tt-msg',
+      'Falta la dirección: sin saber si es una compra o una venta, el asiento saldría al revés.');
+  }
+  const fecha = E('tt-fecha').value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(fecha)) {
+    return avisoMal('tt-msg', 'La fecha va como AAAA-MM-DD.');
+  }
+
+  const cuit = E('tt-cuit').value;
+  const numero = (id) => {
+    const v = E(id).value.trim();
+    return v === '' ? 0 : Number(v);
+  };
+  const monto = (id) => {
+    const v = E(id).value.trim();
+    return v === '' ? '0' : v;
+  };
+
+  const r = await api('POST', '/documents/' + estado.documento + '/tax-transaction', {
+    direction: direccion,
+    cbteTipo: numero('tt-tipo'),
+    puntoVenta: numero('tt-pv'),
+    numero: numero('tt-nro'),
+    fecha,
+    cuitContraparte: cuit === '' ? null : cuit,
+    condicionIva: E('tt-iva-cond').value,
+    neto: monto('tt-neto'),
+    iva: monto('tt-iva'),
+    noGravado: monto('tt-ngrav'),
+    exento: monto('tt-exento'),
+    percepciones: monto('tt-perc'),
+    total: monto('tt-total'),
+  });
+
+  // Los cuatro desenlaces, cada uno dicho como lo que es. `yaExistia` **no es un
+  // error**: el endpoint es idempotente porque un documento produce una sola
+  // operación fiscal, y quien reintenta merece la que ya existe.
+  if (r.ok && r.datos && r.datos.yaExistia) {
+    E('tt-msg').innerHTML =
+      '<div class="aviso"><strong>Este documento ya tenía su comprobante.</strong> ' +
+      'No se creó otro: un documento archivado produce una sola operación fiscal. ' +
+      'Buscalo en <em>Operaciones</em>.</div>';
+    return undefined;
+  }
+  if (!r.ok) {
+    // 400, 409 y lo inesperado salen por el mismo camino a propósito: `decir`
+    // muestra la frase del servidor, que ya está escrita para una persona, y
+    // deja el volcado plegado. Traducirlas acá sería escribir por segunda vez
+    // un texto que el backend ya redactó mejor, y que cambiaría sin avisarnos.
+    return decir('tt-msg', r);
+  }
+
+  // Se relee **antes** de avisar. Al revés, `abrirDocumento` vuelve a preparar
+  // el bloque —y eso limpia `tt-msg`—, así que el aviso de éxito duraba lo que
+  // tardaba el refresco: el comprobante quedaba creado y la pantalla en blanco.
+  await abrirDocumento(estado.documento);
+  decir('tt-msg', r, 'Comprobante registrado.');
+  return undefined;
 };
 
 async function abrirDocumento(id) {
@@ -5395,6 +5568,8 @@ async function abrirDocumento(id) {
     if (clic) clic.onclick = () => pedirCorreccion(c.fieldPath, c.rawValue);
     cuerpo.appendChild(tr);
   }
+
+  prepararComprobante(d);
 
   const ext = (r.datos.extracciones || [])[0];
   E('doc-detalle-msg').innerHTML = ext && !ext.disponible
@@ -6866,24 +7041,6 @@ async function abrirOperacion(id) {
       '<td>' + escapar(h.justificacion || h.motivo || '—') + '</td></tr>').join('') +
     '</tbody></table></div>';
 }
-
-E('b-tt').onclick = async () => {
-  const r = await api('POST', '/documents/' + E('tt-doc').value + '/tax-transaction', {
-    direction: E('tt-dir').value,
-    cbteTipo: Number(E('tt-tipo').value),
-    puntoVenta: Number(E('tt-pv').value),
-    numero: Number(E('tt-nro').value),
-    fecha: E('tt-fecha').value,
-    cuitContraparte: E('tt-cuit').value,
-    razonSocial: E('tt-rs').value,
-    condicionIva: 'RESPONSABLE_INSCRIPTO',
-    neto: E('tt-neto').value, iva: E('tt-iva').value,
-    noGravado: E('tt-ng').value, exento: E('tt-ex').value,
-    percepciones: E('tt-perc').value, total: E('tt-total').value,
-  });
-  decir('tt-msg', r, 'Operación registrada, sin constatar');
-  if (r.ok) { estado.tt = r.datos.taxTransactionId; listarOperaciones(); }
-};
 
 E('b-constatar').onclick = async () => {
   const r = await api('POST', '/tax-transactions/' + estado.tt + '/constatar', {
