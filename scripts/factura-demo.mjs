@@ -89,6 +89,20 @@ const stamp = String(
   (await db.query("SELECT nextval('fixture_ids')::text AS v")).rows[0].v,
 ).slice(-8);
 
+/**
+ * El día de hoy, según la base.
+ *
+ * No `new Date().toISOString().slice(0,10)`. Esa es una fecha de calendario
+ * calculada en UTC, y el sistema la compara contra el período abierto: en
+ * Argentina, después de las nueve de la noche, «hoy» en UTC ya es mañana y el
+ * comprobante cae en un día que el período todavía no cubre. El ejercicio sale
+ * del mismo lugar para que los dos no puedan discrepar.
+ *
+ * Es el control S-37, que existe porque esto ya pasó con la siembra de precios.
+ */
+const hoy = (await db.query('SELECT CURRENT_DATE::text AS hoy')).rows[0].hoy;
+const anio = Number(hoy.slice(0, 4));
+
 let token = '';
 let empresa = '';
 const pedir = (method, url, payload) =>
@@ -216,7 +230,7 @@ const mapeo = exigir(
 ).json();
 dato('roles declarados', `${mapeo.declarados} de 8`);
 
-const anio = new Date().getUTCFullYear();
+
 exigir(
   await pedir('POST', '/companies/current/reporting-framework', {
     framework: 'RT_FACPCE',
@@ -274,7 +288,7 @@ paso('5', 'Factura A');
 // El módulo evita el 0. `cbte_numero >= 0` lo admitiría —la 0021 no exige más—
 // pero una Factura A número 0 no existe, y en una demo se lee como un error.
 const numero = (Number(stamp) % 99_999) + 1;
-const hoy = new Date().toISOString().slice(0, 10);
+
 
 const forma =
   `--X\r\nContent-Disposition: form-data; name="file"; filename="factura-${stamp}.xml"\r\n` +
