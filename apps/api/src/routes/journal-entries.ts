@@ -48,7 +48,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
-import { badRequest, conflict, notFound } from '../http/errors.js';
+import { badRequest, conflict, conflictoTipado, notFound } from '../http/errors.js';
 import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 
 const MODOS_REDONDEO = ['HALF_UP', 'HALF_EVEN', 'DOWN', 'UP'] as const;
@@ -115,6 +115,24 @@ const asientoSchema = z.object({
   status: z.enum(['BORRADOR', 'PROPUESTO']).default('PROPUESTO'),
 });
 
+/**
+ * ¿Este error de Postgres es la constraint `journal_entries_unique_source`?
+ *
+ * `armarContexto`/`prepararPosteo` ya rechazan con `E_DUPLICATE_SOURCE` (422)
+ * el caso secuencial: piden `postedSources` antes de insertar, y si el
+ * comprobante ya tiene un asiento vigente, ni llegan al INSERT. Lo que esta
+ * constraint atrapa es la carrera que esa lectura no puede ver — dos pedidos
+ * casi simultáneos que leyeron "no hay asiento todavía" cada uno antes de que
+ * el otro confirmara. Por eso se compara por nombre de constraint y no por
+ * código 23505 solo: otra violación de unicidad en el mismo INSERT —o en
+ * cualquier otro— no es este caso, y no tiene por qué volverse un 409.
+ */
+export function esConflictoDeFuenteDuplicada(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const pgError = error as { code?: string; constraint?: string };
+  return pgError.code === '23505' && pgError.constraint === 'journal_entries_unique_source';
+}
+
 export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
   app.post('/journal-entries', async (request, reply) => {
     const tenant = await requireCompany(request);
@@ -149,35 +167,52 @@ export async function journalEntryRoutes(app: FastifyInstance): Promise<void> {
       );
       const entryNumber = numero.rows[0]!.next_entry_number;
 
-      const cabecera = await tx.query<{ id: string }>(
-        `INSERT INTO journal_entries
-           (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
-            description, kind, status, currency, total_debit, total_credit,
-            source_type, source_id, ai_prediction_id, decision_id, manual_justification, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-         RETURNING id`,
-        [
-          tenant.companyId,
-          draft.journalCode,
-          asiento.periodId,
-          asiento.fiscalYearId,
-          entryNumber,
-          draft.entryDate,
-          draft.description,
-          draft.kind,
-          body.status,
-          draft.currency,
-          toDecimalString(asiento.totalDebit),
-          toDecimalString(asiento.totalCredit),
-          draft.source.type,
-          draft.source.id,
-          body.aiPredictionId ?? null,
-          body.decisionId ?? null,
-          draft.manualJustification ?? null,
-          actorId,
-        ],
-      );
-      const entryId = cabecera.rows[0]!.id;
+      // `journal_entries_unique_source` (migración 0005) impide que un mismo
+      // comprobante tenga dos asientos PROPUESTO/APROBADO vigentes. La consola
+      // no desactiva el botón mientras el pedido está en vuelo (auditoría
+      // integral de 2026-09-21), así que un doble clic legítimo puede pegarle
+      // a esa constraint — y sin este catch llegaba como 500 crudo en vez de
+      // avisar que el asiento ya existe.
+      let entryId: string;
+      try {
+        const cabecera = await tx.query<{ id: string }>(
+          `INSERT INTO journal_entries
+             (company_id, journal_code, period_id, fiscal_year_id, entry_number, entry_date,
+              description, kind, status, currency, total_debit, total_credit,
+              source_type, source_id, ai_prediction_id, decision_id, manual_justification, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+           RETURNING id`,
+          [
+            tenant.companyId,
+            draft.journalCode,
+            asiento.periodId,
+            asiento.fiscalYearId,
+            entryNumber,
+            draft.entryDate,
+            draft.description,
+            draft.kind,
+            body.status,
+            draft.currency,
+            toDecimalString(asiento.totalDebit),
+            toDecimalString(asiento.totalCredit),
+            draft.source.type,
+            draft.source.id,
+            body.aiPredictionId ?? null,
+            body.decisionId ?? null,
+            draft.manualJustification ?? null,
+            actorId,
+          ],
+        );
+        entryId = cabecera.rows[0]!.id;
+      } catch (error) {
+        if (esConflictoDeFuenteDuplicada(error)) {
+          throw conflictoTipado(
+            'E_DUPLICATE_SOURCE',
+            'Este comprobante ya tiene un asiento vigente.',
+          );
+        }
+        throw error;
+      }
 
       for (const linea of asiento.lines) {
         // Dos importes, dos columnas (migración 0020).

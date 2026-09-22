@@ -237,6 +237,63 @@ suite('Libro Diario por HTTP', () => {
     );
   });
 
+  it('dos posteos simultáneos sobre el mismo comprobante: nunca 500, y nunca dos asientos vigentes', async () => {
+    // El test de arriba prueba la lectura previa (`armarContexto`), que solo ve
+    // lo ya confirmado: dos POST en el mismo instante pueden leer los dos «no
+    // hay asiento todavía» antes de que cualquiera confirme, y ahí quien frena
+    // al segundo es la constraint de la base (23505 → 409, `E_DUPLICATE_SOURCE`)
+    // en vez de la validación del motor (422). Antes de esta corrección ese
+    // 23505 salía como 500 crudo.
+    //
+    // Ganar esa carrera de verdad depende del scheduler y de cuánta otra carga
+    // tenga la base en ese instante — corriendo solo, este archivo la gana
+    // siempre; corriendo dentro de la suite completa, con más contención, las
+    // dos lecturas a veces alcanzan a serializarse y el segundo POST llega por
+    // el camino de siempre (422). Afirmar 409 a ciegas volvía este test
+    // intermitente. Lo que sí es cierto en los dos casos —y lo único que hace
+    // falta demostrar acá— es que ninguno termina en 500 y que nunca queda más
+    // de un asiento vigente; `esConflictoDeFuenteDuplicada` (test unitario,
+    // `tests/unit/duplicado-de-asiento.test.ts`) es lo que fija, de forma
+    // determinística, que cuando sí se gana la carrera se traduce a 409.
+    const documento = await raw.query<{ id: string }>(
+      `INSERT INTO documents
+         (company_id, storage_key, sha256, bytes, mime, content_type, original_name, source, uploaded_by)
+       VALUES ($1, 'k', $2, 10, 'application/xml', 'XML', 'c2.xml', 'UPLOAD', 'user:test')
+       RETURNING id`,
+      [companyId, 'f'.repeat(64)],
+    );
+    const sourceId = documento.rows[0]!.id;
+
+    const [a, b] = await Promise.all([
+      postear(asiento({ description: 'Carrera A', source: { type: 'INVOICE', id: sourceId } })),
+      postear(asiento({ description: 'Carrera B', source: { type: 'INVOICE', id: sourceId } })),
+    ]);
+
+    for (const r of [a, b]) {
+      expect([201, 409, 422], `${r.statusCode}: ${r.body}`).toContain(r.statusCode);
+    }
+    expect([a.statusCode, b.statusCode], `${a.body} / ${b.body}`).toContain(201);
+
+    const perdedor = [a, b].find((r) => r.statusCode === 409);
+    if (perdedor) {
+      expect(perdedor.json<{ error: string; message: string }>()).toMatchObject({
+        error: 'E_DUPLICATE_SOURCE',
+        message: 'Este comprobante ya tiene un asiento vigente.',
+      });
+    }
+
+    // Pase por el camino que pase cada uno, nunca queda más de un asiento
+    // vigente para el mismo comprobante — es lo que ninguno de los dos caminos
+    // puede permitirse romper.
+    const vigentes = await raw.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM journal_entries
+        WHERE company_id = $1 AND source_type = 'INVOICE' AND source_id = $2
+          AND status IN ('PROPUESTO', 'APROBADO')`,
+      [companyId, sourceId],
+    );
+    expect(vigentes.rows[0]!.n).toBe('1');
+  });
+
   it('aprobar, contraponer, y el original conserva su número', async () => {
     const creado = (await postear(asiento({ description: 'A contraponer' }))).json<{
       id: string;

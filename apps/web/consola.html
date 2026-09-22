@@ -5251,6 +5251,108 @@ async function abrirPendiente(item) {
       ir('config', migas);
       await cargarConfig();
       return;
+    // Las 17 entidades de acá abajo ya tenían pantalla y cargador propios —
+    // igual que `company_account_map` arriba, lo único que faltaba era el
+    // tramo entre la bandeja y la pantalla. La auditoría integral de
+    // 2026-09-21 encontró el mismo síntoma (clic en «abrir», nada pasa) en
+    // las 18 entidades restantes de `PERMISO_POR_ENTIDAD`; `companies` es la
+    // única que no entra en el molde: agrupa cuatro faltantes de puesta en
+    // marcha distintos bajo la misma entidad, y cada uno va a una pantalla
+    // distinta según `item.rama` (ver migraciones 0075 y 0077).
+    case 'parties':
+      ir('terceros', migas);
+      await listarTerceros();
+      return;
+    case 'products':
+      ir('productos', migas);
+      await listarProductos();
+      return;
+    case 'checks':
+      ir('cheques', migas);
+      await listarCheques();
+      return;
+    case 'cash_sessions':
+      ir('caja', migas);
+      await listarCaja();
+      return;
+    case 'bank_reconciliations':
+      ir('bancos', migas);
+      await listarBancos();
+      return;
+    case 'payment_orders':
+      ir('pagos', migas);
+      await listarOrdenesDePago();
+      return;
+    case 'fixed_assets':
+      ir('activos', migas);
+      await listarActivos();
+      return;
+    case 'purchase_requests':
+      ir('solicitudes', migas);
+      await listarSolicitudes();
+      return;
+    case 'price_lists':
+      ir('precios', migas);
+      await listarPrecios();
+      return;
+    case 'stock_counts':
+      ir('stock', migas);
+      await listarStock();
+      await listarRecuentos();
+      return;
+    case 'crm_opportunities':
+      ir('crm', migas);
+      await listarCrm();
+      return;
+    case 'projects':
+      ir('proyectos', migas);
+      await listarProyectos();
+      return;
+    case 'salespeople':
+      ir('comisiones', migas);
+      await listarComisiones();
+      return;
+    case 'branches':
+      ir('sucursales', migas);
+      await listarSucursales();
+      return;
+    // `external_records` comparte pantalla con `company_integrations`: las dos
+    // ramas del hub de integraciones viven en la misma vista.
+    case 'company_integrations':
+    case 'external_records':
+      ir('integraciones', migas);
+      await listarIntegraciones();
+      return;
+    case 'company_subscriptions':
+      ir('suscripcion', migas);
+      await cargarSuscripcion();
+      if (puede('billing:read')) await cargarFacturacion();
+      return;
+    // Las cuatro ramas de puesta en marcha (0075/0077) comparten entidad
+    // `companies` pero no pantalla: cada una bloquea o habilita algo distinto,
+    // y `traza_ref` ya lo distingue por rama.
+    case 'companies':
+      switch (item.rama) {
+        case 'SIN_PLAN_DE_CUENTAS':
+          ir('config', migas);
+          await cargarConfig();
+          await refrescarCuentas();
+          return;
+        case 'SIN_EJERCICIO':
+        case 'SIN_PERIODO_ABIERTO':
+          ir('cierre', migas);
+          await listarPeriodos();
+          return;
+        case 'SIN_METODO_DE_VALUACION':
+          ir('stock', migas);
+          await listarStock();
+          await cargarValuacion();
+          return;
+        default:
+          E('wq-msg').innerHTML = '<div class="aviso">' + escapar(item.motivo) +
+            '<br>Esta entidad todavía no tiene pantalla propia.</div>';
+          return;
+      }
     default:
       E('wq-msg').innerHTML = '<div class="aviso">' + escapar(item.motivo) +
         '<br>Esta entidad todavía no tiene pantalla propia.</div>';
