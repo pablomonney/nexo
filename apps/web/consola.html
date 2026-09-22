@@ -5239,6 +5239,18 @@ async function abrirPendiente(item) {
       ir('propuestas', migas);
       await listarPropuestas();
       return;
+    // El mapeo contable no tiene pantalla propia: **se declara en
+    // Configuración**, que es donde vive el bloque «Mapeo contable». Se va ahí,
+    // y `cargarConfig` llama a `cargarMapeoContable` en su primera línea.
+    //
+    // Sin este caso el pendiente caía al `default` y contestaba «esta entidad
+    // todavía no tiene pantalla propia», que era falso: la pantalla existía y
+    // estaba enlazada en el menú. Lo que faltaba era el camino desde la bandeja
+    // — el aviso decía qué hacer y no llevaba a donde se hace.
+    case 'company_account_map':
+      ir('config', migas);
+      await cargarConfig();
+      return;
     default:
       E('wq-msg').innerHTML = '<div class="aviso">' + escapar(item.motivo) +
         '<br>Esta entidad todavía no tiene pantalla propia.</div>';
@@ -7091,7 +7103,7 @@ E('b-prop').onclick = async () => {
   // Con asiento ya cargado no se ofrece cargarlo otra vez: sería invitar a
   // duplicarlo, y el duplicado pasa todos los controles.
   const yaTiene = r.datos.asientoExistente !== null;
-  E('b-prop-cargar').hidden = !hay || yaTiene || !puede('journal_entry:write');
+  E('b-prop-cargar').hidden = !hay || yaTiene || !puede('journal_entry:create');
   estado.propuesta = hay ? r.datos : null;
 
   E('prop-msg').innerHTML = '<div class="aviso">' +
@@ -7313,7 +7325,7 @@ E('b-val-cmv').onclick = async () => {
   }
 
   const hay = (r.datos.renglones || []).length > 0;
-  E('b-val-cmv-cargar').hidden = !hay || !puede('journal_entry:write');
+  E('b-val-cmv-cargar').hidden = !hay || !puede('journal_entry:create');
   estado.propuestaCmv = hay ? r.datos : null;
   // Cuando no hay propuesta, lo que se muestra es el motivo: es más útil que
   // una tabla vacía, que se lee como «no pasó nada».
