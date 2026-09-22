@@ -39,16 +39,21 @@ Comprobado el 2026-09-21 leyendo el estado del servidor:
 | **Roles `ADMINISTRADOR` y `CONTADOR`** asignados | Consulta a la base |
 | La consola sirve las pantallas nuevas | Descarga de `/consola` |
 
-### Lo que todavía NO se ejecutó en producción
+### El tramo documento → Mayor, verificado en producción el 2026-09-22
 
-El tramo **documento → comprobante → propuesta → asiento aprobado → Mayor**
-está implementado, desplegado y probado por tests, y **nadie lo recorrió
-todavía en producción de punta a punta**. Va marcado como
-**DOCUMENTADO SEGÚN IMPLEMENTACIÓN** en cada sección.
+El tramo **documento → comprobante → mapeo contable → propuesta → asiento en
+borrador → aprobación → Mayor** se recorrió de punta a punta contra
+`nexointelligence.com.ar`, con una operación real: documento
+`factura-prueba-nexo-0001-00000102.xml`, comprobante VENTA 1-1-102 ($123.420),
+asiento `01a0c725-bc0d-7eea-944c-8cd1cf0fe3be` (`PROPUESTO` → `APROBADO`) y
+Mayor verificado. Va marcado como **VERIFICADO EN PRODUCCIÓN** en cada
+sección. Evidencia completa, con los tres renglones contables, en
+[`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md).
 
-El recorrido completo sí se hizo en una instalación local, con una empresa
-creada desde cero. Eso respalda que los pasos son correctos; no reemplaza a
-hacerlo en producción.
+Sobre esa misma operación quedaron tres pendientes sin resolver a propósito
+—constatación, decisión, afectación— y ninguno bloqueó el circuito. Aparte,
+la bandeja tenía 8 pendientes `REQUIERE_APROBACION` de períodos ya cerrados
+(enero-agosto de 2026): es deuda operativa previa, no parte de esta prueba.
 
 ---
 
@@ -355,11 +360,11 @@ cuentas de venta y compra, precio de lista y stock mínimo, con **motivo**.
 
 ## F · Documentos
 
-> **DOCUMENTADO SEGÚN IMPLEMENTACIÓN.** Subir, leer y corregir se recorrieron
-> en una instalación local. **«Registrar el comprobante» está desplegado en
-> producción desde el commit `d31fcb4` y todavía no lo ejecutó nadie ahí.** El
-> documento `factura-prueba-nexo-0001-00000102.xml` está esperando en estado
-> `EXTRAIDO`.
+> **VERIFICADO EN PRODUCCIÓN el 2026-09-22.** «Registrar el comprobante» se
+> ejecutó contra `nexointelligence.com.ar` con el documento
+> `factura-prueba-nexo-0001-00000102.xml` → comprobante VENTA 1-1-102.
+> Evidencia completa en
+> [`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md).
 
 **Dónde:** Operación → **Documentos**.
 
@@ -440,10 +445,11 @@ Apretá **«Registrar el comprobante»**.
 
 ## G · Comprobantes y operaciones
 
-> **DOCUMENTADO SEGÚN IMPLEMENTACIÓN.** El camino «Ver la propuesta» →
-> «Cargar como asiento en borrador» existe en Operaciones y está desplegado.
-> **La ejecución completa con un comprobante real en producción todavía no se
-> hizo.** En local se recorrió entero.
+> **VERIFICADO EN PRODUCCIÓN el 2026-09-22.** El camino «Ver la propuesta» →
+> «Cargar como asiento en borrador» se ejecutó con un comprobante real —VENTA
+> 1-1-102— y produjo el asiento `01a0c725-bc0d-7eea-944c-8cd1cf0fe3be`.
+> Evidencia completa en
+> [`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md).
 
 **Dónde:** Operación → **Operaciones**.
 
@@ -536,10 +542,12 @@ y usar «Anticipos a proveedores» para PROVEEDORES (es del activo; va
 
 ## I · Asientos
 
-> **DOCUMENTADO SEGÚN IMPLEMENTACIÓN.** El circuito propuesta → carga humana →
-> aprobación → Mayor se recorrió en una instalación local, y está cubierto por
-> `tests/integration/loop-de-decision.test.ts` (**VERIFICADO POR TEST**). En
-> producción todavía no hay ningún asiento.
+> **VERIFICADO EN PRODUCCIÓN el 2026-09-22** y **VERIFICADO POR TEST**
+> (`tests/integration/loop-de-decision.test.ts`). El circuito propuesta →
+> carga humana → aprobación → Mayor se ejecutó con el asiento
+> `01a0c725-bc0d-7eea-944c-8cd1cf0fe3be`, `PROPUESTO` → `APROBADO` y
+> proyectado al Mayor. Evidencia completa en
+> [`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md).
 
 **Dónde:** Libros → **Asientos**.
 

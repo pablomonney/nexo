@@ -8,12 +8,16 @@ registra y aprueba un asiento. Seguilo literalmente.
 > Si algo no coincide con lo que ves, **no sigas de largo**: la diferencia
 > importa. Al final de cada paso está qué hacer si falla.
 
-**Qué respalda esta guía.** Los pasos 1 a 6 están **verificados en
-producción**: hay una cuenta activa con su segundo factor, una empresa, el
-ejercicio 2026 abierto con sus doce períodos y el plan de cuentas cargado. Los
-pasos **7 a 12 están implementados y desplegados, y todavía no los ejecutó
-nadie en producción** — se recorrieron enteros en una instalación local. Si sos
-la primera persona en hacerlos ahí, avisá si algo no coincide.
+**Qué respalda esta guía.** Los pasos 1 a 12 están **verificados en
+producción**. Los pasos 1 a 6 (2026-09-21): hay una cuenta activa con su
+segundo factor, una empresa, el ejercicio 2026 abierto con sus doce períodos y
+el plan de cuentas cargado. Los pasos 7 a 12 (2026-09-22): el mapeo contable
+declarado produjo una propuesta balanceada sobre una operación real —VENTA
+1-1-102, $123.420— que se cargó como borrador, se aprobó (asiento
+`01a0c725-bc0d-7eea-944c-8cd1cf0fe3be`) y se verificó en el Mayor. Evidencia
+completa en [`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md).
+Sobre esa misma operación quedaron tres pendientes sin resolver a propósito
+—constatación, decisión, afectación— y ninguno bloqueó el circuito.
 
 **Lo que vas a necesitar a mano:** tu CUIT, el mes y día en que cierra tu
 ejercicio, y el teléfono con una aplicación de códigos.

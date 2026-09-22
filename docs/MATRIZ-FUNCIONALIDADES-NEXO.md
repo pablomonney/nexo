@@ -24,9 +24,32 @@ el registro con su correo y su MFA, la empresa creada, el **ejercicio 2026
 `ABIERTO` con 12 períodos** y el actual incluido, el **plan de cuentas con 185
 cuentas**, y los **roles `ADMINISTRADOR` y `CONTADOR`** asignados.
 
-**Todavía sin ejecutar en producción:** el tramo documento → comprobante →
-propuesta → asiento aprobado → Mayor. Está implementado, desplegado y cubierto
-por tests; nadie lo recorrió ahí. Se recorrió entero en una instalación local.
+**Verificado en producción el 2026-09-22.** El tramo Documento → Comprobante →
+Mapeo contable → Propuesta → Asiento en borrador → Aprobación → Mayor se
+recorrió por primera vez contra `nexointelligence.com.ar`, con una operación
+real de prueba:
+
+- Documento: `factura-prueba-nexo-0001-00000102.xml`.
+- Comprobante: VENTA 1-1-102, fecha 2026-09-19, total $123.420.
+- Propuesta, con el mapeo ya declarado: 1.1.03.01 Deudores por ventas (Debe
+  $123.420), 4.1.01 Ventas de mercaderías (Haber $102.000), 2.1.04.01 IVA
+  débito fiscal (Haber $21.420). Debe = Haber = $123.420.
+- Asiento `01a0c725-bc0d-7eea-944c-8cd1cf0fe3be`: cargado en `PROPUESTO`,
+  aprobado, estado final `APROBADO`.
+- Mayor verificado con los tres renglones proyectados: 1.1.03.01 Debe
+  $123.420; 4.1.01 Haber $102.000; 2.1.04.01 Haber $21.420.
+
+Sobre esa misma operación aparecieron tres pendientes —**CONSTATACION**,
+**DECISION**, **AFECTACION**— y **ninguno bloqueó el circuito**: llegó a
+Mayor con los tres todavía sin resolver. Se dejan así a propósito: no se
+inventó ninguna constatación, decisión ni afectación para destrabarlos, y
+siguen abiertos en la bandeja.
+
+Aparte de esta operación, la bandeja de producción tenía, al momento de esta
+prueba, **8 pendientes `REQUIERE_APROBACION`** de períodos ya terminados
+(enero a agosto de 2026). Es deuda operativa previa a esta prueba, no algo que
+generó: se deja anotada acá y sin tocar; esos períodos históricos no se
+cerraron ni se modificaron.
 
 **Los estados de disponibilidad:**
 
@@ -122,8 +145,9 @@ por tests; nadie lo recorrió ahí. Se recorrió entero en una instalación loca
 
 ## 6 · Documentos y comprobantes
 
-> **DOCUMENTADO SEGÚN IMPLEMENTACIÓN.** «Registrar el comprobante» está
-> desplegado desde `d31fcb4` y **todavía no se ejecutó en producción**.
+> **VERIFICADO EN PRODUCCIÓN el 2026-09-22.** «Registrar el comprobante» se
+> ejecutó contra `nexointelligence.com.ar` con el comprobante VENTA 1-1-102 —
+> evidencia completa arriba, en «Qué respalda cada fila».
 
 | Funcionalidad | Disponible | Dónde está | Cómo se usa | Requisitos | Estado |
 |---|---|---|---|---|---|
@@ -145,16 +169,17 @@ por tests; nadie lo recorrió ahí. Se recorrió entero en una instalación loca
 
 ## 7 · Mapeo contable y asientos
 
-> **DOCUMENTADO SEGÚN IMPLEMENTACIÓN** y **VERIFICADO POR TEST**
-> (`tests/integration/loop-de-decision.test.ts`). En producción el mapeo está
-> sin declarar y no hay ningún asiento todavía.
+> **VERIFICADO EN PRODUCCIÓN el 2026-09-22** y **VERIFICADO POR TEST**
+> (`tests/integration/loop-de-decision.test.ts`). El mapeo contable está
+> declarado y hay al menos un asiento aprobado y proyectado al Mayor —
+> evidencia completa arriba, en «Qué respalda cada fila».
 
 | Funcionalidad | Disponible | Dónde está | Cómo se usa | Requisitos | Estado |
 |---|---|---|---|---|---|
 | Ver el mapeo | sí | Configuración → Mapeo contable | — | `account:read` | OPERATIVO |
 | **Declarar un rol contable** | sí | Mapeo contable | Rol + cuenta → «Declarar» | `account:write` | OPERATIVO |
 | **Ver la propuesta de asiento** | sí | Operaciones → comprobante | «Ver la propuesta» | Mapeo declarado | OPERATIVO CON CONFIGURACIÓN |
-| **Cargar la propuesta como borrador** | sí | Operaciones | «Cargar como asiento en borrador» | `journal_entry:write` | OPERATIVO CON CONFIGURACIÓN |
+| **Cargar la propuesta como borrador** | sí | Operaciones | «Cargar como asiento en borrador» | `journal_entry:create` | OPERATIVO CON CONFIGURACIÓN |
 | Registrar un asiento a mano | sí | Libros → Asientos | Libro, fecha, cuentas, importe → «Registrar» | `journal_entry:create` | OPERATIVO |
 | Abrir un asiento | sí | Fila → «abrir» | — | `journal_entry:read` | OPERATIVO |
 | **Aprobar un asiento** | sí | Detalle → «Aprobar» | — | `journal_entry:approve` (rol CONTADOR) | OPERATIVO |

@@ -11,10 +11,18 @@ sin música sobre la explicación.
 
 **Qué respalda estos guiones.** Los rótulos salen de la consola publicada. Los
 videos **01 y 02** cubren tramos **verificados en producción** —registro,
-correo, MFA, empresa, roles, plan de cuentas y ejercicio—. Del **03 al 10** los
-pasos están **implementados y desplegados y todavía no se ejecutaron en
-producción**; se recorrieron en una instalación local. Al grabarlos vas a ser
-la primera persona en hacerlos ahí: si algo no coincide, es un hallazgo.
+correo, MFA, empresa, roles, plan de cuentas y ejercicio—. Los pasos de los
+videos **03, 04, 05, 06 y 07** (mapeo, subir documento, documento a
+comprobante, comprobante a asiento, aprobación y Mayor) también están
+**verificados en producción**,
+desde el 2026-09-22, con una operación real —VENTA 1-1-102, asiento
+`01a0c725-bc0d-7eea-944c-8cd1cf0fe3be`—; evidencia completa en
+[`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md). Grabarlos
+no es la primera vez que se recorren ahí, pero sigue siendo la primera vez que
+se graban: si algo no coincide con lo que ves en pantalla, es un hallazgo.
+Los videos **08 y 09** (terceros y productos) están implementados y
+desplegados, sin una ejecución de punta a punta registrada todavía en
+producción.
 
 **Una regla que atraviesa todos:** cuando NEXO se niegue a hacer algo, **no
 cortes**. Que se vea el mensaje. La mitad de lo que hay que enseñar es por qué
@@ -268,14 +276,14 @@ pero hasta entonces, no lo prometemos.»
 |---|---|---|
 | 01 Primer ingreso | **Sí** | — · verificado en producción |
 | 02 Configurar empresa | **Sí** | — · verificado en producción |
-| 03 Mapeo contable | **Sí** | En producción el mapeo está **sin declarar**: se graba declarándolo. **Sin ejecutar en producción** |
-| 04 Subir documento | **Parcial** | Con PDF o imagen sin OCR, la extracción responde `SIN_MOTOR_OCR`. **Grabar con XML** |
-| 05 Documento a comprobante | **Sí** | Desplegado; **sin ejecutar en producción** todavía |
-| 06 Comprobante a asiento | **Sí** | Requiere el mapeo del video 03. **Sin ejecutar en producción** |
-| 07 Aprobar y Mayor | **Sí** | Requiere rol Contador. **Sin ejecutar en producción** |
+| 03 Mapeo contable | **Sí** | En producción el mapeo ya está declarado. **Verificado en producción** (2026-09-22) |
+| 04 Subir documento | **Parcial** | Con PDF o imagen sin OCR, la extracción responde `SIN_MOTOR_OCR`. **Grabar con XML** · verificado en producción |
+| 05 Documento a comprobante | **Sí** | **Verificado en producción** (2026-09-22, VENTA 1-1-102) |
+| 06 Comprobante a asiento | **Sí** | Requiere el mapeo del video 03. **Verificado en producción** (asiento `01a0c725-bc0d-7eea-944c-8cd1cf0fe3be`) |
+| 07 Aprobar y Mayor | **Sí** | Requiere rol Contador. **Verificado en producción** |
 | 08 Terceros | **Sí** | — |
 | 09 Productos | **Sí** | — |
-| 10 Punta a punta | **Sí, salvo emisión** | No incluye emitir con CAE: está cerrado. **El circuito entero todavía no se recorrió en producción** |
+| 10 Punta a punta | **Sí, salvo emisión** | No incluye emitir con CAE: está cerrado. **El tramo documento → comprobante → mapeo → propuesta → asiento → Mayor se verificó en producción** (2026-09-22); terceros y productos, los otros tramos de este guion, no tienen todavía una ejecución de punta a punta registrada ahí |
 
 ---
 
