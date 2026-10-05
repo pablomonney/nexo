@@ -24,6 +24,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { parseCalendarDate } from '@aai/shared';
 import {
   CATALOGO,
   coincidencias,
@@ -123,25 +124,20 @@ describe('El catálogo de preguntas', () => {
   });
 
   it('reconoce el mes escrito de las dos formas', () => {
-    expect(mesDe('cuanto vendi en 2026-03')).toBe('2026-03');
-    expect(mesDe('cuanto vendi en marzo de 2025')).toBe('2025-03');
-    expect(mesDe('cuanto vendi')).toBeNull();
+    const hoy = parseCalendarDate('2026-06-15');
+    expect(mesDe('cuanto vendi en 2026-03', hoy)).toBe('2026-03');
+    expect(mesDe('cuanto vendi en marzo de 2025', hoy)).toBe('2025-03');
+    expect(mesDe('cuanto vendi', hoy)).toBeNull();
   });
 
   it('un mes que todavía no pasó se lee como el del año anterior', () => {
-    const hoy = new Date();
-    const mesQueViene = (hoy.getUTCMonth() + 2) % 12; // 0-11, dos meses adelante
-    const nombres = [
-      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-    ];
-    // Solo tiene sentido comprobarlo cuando ese mes cae después del corriente.
-    if (mesQueViene + 1 > hoy.getUTCMonth() + 1) {
-      const leido = mesDe(`cuanto vendi en ${nombres[mesQueViene]}`);
-      expect(leido).toBe(
-        `${hoy.getUTCFullYear() - 1}-${String(mesQueViene + 1).padStart(2, '0')}`,
-      );
-    }
+    // Fija, no `new Date()`: un `hoy` real convertía este caso en un test que
+    // solo corre —y solo prueba algo— dos meses al año (S-37: un control que
+    // depende del reloj es exactamente el que no estaba).
+    const hoy = parseCalendarDate('2026-03-15');
+    expect(mesDe('cuanto vendi en noviembre', hoy)).toBe('2025-11');
+    expect(mesDe('cuanto vendi en marzo', hoy)).toBe('2026-03');
+    expect(mesDe('cuanto vendi en enero', hoy)).toBe('2026-01');
   });
 
   it('los importes se escriben como los escribe una persona', () => {

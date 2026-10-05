@@ -40,6 +40,7 @@ import {
   MENSAJE_DE_ORGANISMO,
   normalizarJurisdiccion,
   normalizarOrganismo,
+  parseCalendarDate,
   TIPOS_DE_ENTIDAD,
 } from '@aai/shared';
 import { requireAuth, requireCompany } from '../http/context.js';
@@ -391,7 +392,13 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     const prueba = await withCompany(
       { companyId: resultado.companyId, actorId },
       async (tx) => {
-        const hoy = new Date().toISOString().slice(0, 10) as never;
+        // «Hoy» según la base, no según `new Date()`. Argentina es UTC−3 y
+        // después de las nueve de la noche una fecha calculada acá ya es la
+        // de mañana — el mismo defecto que dejó planes sin precio el
+        // 2026-09-09 (ver `suscripciones.ts`), repetido acá porque la
+        // prueba gratuita también depende de la fecha de inicio exacta.
+        const { rows } = await tx.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy');
+        const hoy = parseCalendarDate(rows[0]!.hoy);
         const r = await iniciarPrueba(tx, {
           companyId: resultado.companyId,
           planCode: resultado.plan,

@@ -35,7 +35,8 @@ import {
   type ContextoDeRespuesta,
   type ResultadoDelRespondedor,
 } from '@aai/ai-engine';
-import { recordAudit, withCompany } from '@aai/db';
+import { recordAudit, withCompany, type Tx } from '@aai/db';
+import { monthOf, parseCalendarDate, yearOf, type CalendarDate } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -66,7 +67,19 @@ function disponiblesPara(tenant: RequestTenant): PreguntaDelCatalogo[] {
   return preguntasPara(tenant.permissions);
 }
 
-const mesCorriente = (): string => new Date().toISOString().slice(0, 7);
+/**
+ * «Hoy» según la base, no según `new Date()`. Argentina es UTC−3 y después de
+ * las nueve de la noche un reloj de proceso ya está en el día siguiente — el
+ * defecto que S-37 (`fechas-en-hora-argentina.test.ts`) documenta y que
+ * `suscripciones.ts` ya corrige para la fecha de vigencia de precios.
+ */
+const hoyDeLaBase = async (tx: Tx): Promise<CalendarDate> => {
+  const { rows } = await tx.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy');
+  return parseCalendarDate(rows[0]!.hoy);
+};
+
+const mesCorrienteDe = (hoy: CalendarDate): string =>
+  `${String(yearOf(hoy))}-${String(monthOf(hoy)).padStart(2, '0')}`;
 
 /**
  * Corta antes de preguntar, no después.
@@ -309,13 +322,15 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
     return responder(candidatas[0]!.pregunta);
 
     async function responder(pregunta: PreguntaDelCatalogo) {
-      const mes = pregunta.admiteMes
-        ? (body.mes ?? mesDe(body.pregunta) ?? mesCorriente())
-        : mesCorriente();
-
       const respuesta = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
-        async (tx) => pregunta.responder(tx, tenant.companyId, mes),
+        async (tx) => {
+          const hoy = await hoyDeLaBase(tx);
+          const mes = pregunta.admiteMes
+            ? (body.mes ?? mesDe(body.pregunta, hoy) ?? mesCorrienteDe(hoy))
+            : mesCorrienteDe(hoy);
+          return pregunta.responder(tx, tenant.companyId, mes);
+        },
       );
 
       const narracion = await narrar(
@@ -352,10 +367,10 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
       .filter((p) => orden.includes(p.id))
       .sort((a, b) => orden.indexOf(a.id) - orden.indexOf(b.id));
 
-    const mes = mesCorriente();
     const tarjetas = await withCompany(
       { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
       async (tx) => {
+        const mes = mesCorrienteDe(await hoyDeLaBase(tx));
         const salida = [];
         for (const pregunta of disponibles) {
           const respuesta = await pregunta.responder(tx, tenant.companyId, mes);

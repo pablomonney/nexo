@@ -80,7 +80,6 @@ const SIN_PUERTA = new Map<string, string>([
   ['GET /organizations', 'Panel del estudio, anterior a elegir empresa.'],
   ['POST /organizations', 'Ídem: crear la organización pasa antes de esta pantalla.'],
   ['POST /organizations/:organizationId/companies', 'Ídem: alta de empresa en el estudio.'],
-  ['POST /organizations/:organizationId/users', 'Ídem: invitar a alguien al estudio.'],
   [
     'POST /auth/register-first-admin',
     'El arranque en frío del sistema: corre una vez, antes de que exista una consola donde ' +
@@ -102,12 +101,6 @@ const SIN_PUERTA = new Map<string, string>([
     'GET /',
     'EXCEPCIÓN LEGÍTIMA. Es la página pública, no una capacidad de la consola: se sirve a ' +
       'quien entra al dominio. La consola vive en `/consola` y ya está exceptuada arriba.',
-  ],
-  [
-    'PUT /salespeople/:salespersonId',
-    'FALTA PANTALLA. Es la misma clase que las fichas de tercero y de producto, que se ' +
-      'cerraron el 2026-09-21: la pantalla de comisiones da de alta un vendedor y no lo deja ' +
-      'corregir. Queda para el barrido siguiente.',
   ],
   [
     'POST /comprobantes/:taxTransactionId/decision',
@@ -140,47 +133,15 @@ const SIN_PUERTA = new Map<string, string>([
   // ── Falta la pantalla: linaje ──────────────────────────────────────────
   [
     'GET /statements/trace/:lineId',
-    'FALTA PANTALLA. De un renglón de un estado contable a los asientos que lo forman. La ' +
-      'pantalla de estados muestra las cifras y no deja abrirlas.',
+    'NO ALCANZABLE SIN BACKEND NUEVO. El renglón de un estado recién armado ya trae su ' +
+      '`origen` (cuentas y aporte) en la misma respuesta de `GET /statements` — la consola ' +
+      'ahora lo muestra ahí, sin necesidad de esta ruta. Esta ruta sirve para un renglón YA ' +
+      'EMITIDO, identificado por el `line_id` persistido en `financial_statement_lines` — y ' +
+      'ningún endpoint devuelve ese id: ni el paquete de notas, ni ninguna otra lectura de un ' +
+      'estado ya emitido. Construir el formulario igual sería pedirle a una persona un UUID ' +
+      'que no tiene de dónde sacar. Falta un endpoint que liste los renglones persistidos de ' +
+      'un estado emitido con su id antes de que esta pantalla tenga sentido.',
   ],
-  [
-    'GET /banks/trace/:matchId',
-    'FALTA PANTALLA. De una coincidencia conciliada al movimiento y al asiento que la sostienen.',
-  ],
-  [
-    'GET /vat/credito-fiscal/:txId',
-    'FALTA PANTALLA. Por qué un crédito fiscal se computa o no, comprobante por comprobante. ' +
-      'La pantalla de IVA muestra el total computable sin dejar abrir un caso.',
-  ],
-
-  // ── Falta la pantalla: el detalle de un comprobante ────────────────────
-  [
-    'GET /tax-transactions/:taxTransactionId/lines',
-    'FALTA PANTALLA. Los renglones de un comprobante fiscal.',
-  ],
-  [
-    'PUT /tax-transactions/:taxTransactionId/lines',
-    'Ídem: sin la pantalla que los muestre no hay dónde editarlos.',
-  ],
-  [
-    'GET /tax-transactions/:taxTransactionId/allocations',
-    'FALTA PANTALLA. Qué cobros imputaron a este comprobante. Se ve del lado del tercero ' +
-      '(`/parties/:id/saldo`) y no del lado del comprobante.',
-  ],
-  [
-    'GET /tax-transactions/:taxTransactionId/correcciones',
-    'FALTA PANTALLA. Las notas de crédito y débito que corrigen este comprobante.',
-  ],
-  [
-    'POST /tax-transactions/:taxTransactionId/party',
-    'FALTA BOTÓN. Vincular un comprobante a un tercero del padrón. Hoy queda con el CUIT y la ' +
-      'razón social del comprobante, sin cuenta corriente.',
-  ],
-  [
-    'POST /tax-transaction-corrections/:correccionId/cancel',
-    'Anular una corrección. Depende de la pantalla de correcciones, que es la de arriba.',
-  ],
-
   // ── Falta el botón: actos que existen y no tienen dónde apretarse ──────
   [
     'POST /documents/:documentId/classify',
@@ -190,50 +151,6 @@ const SIN_PUERTA = new Map<string, string>([
   [
     'POST /commercial-documents/:documentId/link-invoice',
     'FALTA BOTÓN. Vincular un remito o un pedido con la factura que lo cubre.',
-  ],
-  [
-    'POST /comprobantes/:taxTransactionId/decision/supersede',
-    'FALTA BOTÓN. Reemplazar una decisión de afectación por otra, conservando la anterior. La ' +
-      'pantalla decide una vez y no ofrece rectificar.',
-  ],
-  [
-    'POST /party-allocations/:allocationId/cancel',
-    'FALTA BOTÓN. Deshacer una imputación. Se imputa y no se desimputa.',
-  ],
-  [
-    'GET /parties/:partyId/price-lists',
-    'FALTA PANTALLA. Qué lista de precios tiene asignada un cliente.',
-  ],
-  ['POST /parties/:partyId/price-lists', 'Ídem: asignársela.'],
-  [
-    'POST /parties/:partyId/roles',
-    'FALTA BOTÓN. Marcar a un tercero como cliente, proveedor o las dos cosas. Hoy el rol se ' +
-      'fija al darlo de alta y no se puede agregar otro.',
-  ],
-  [
-    'GET /products/:productId/movimientos',
-    'FALTA PANTALLA. La ficha de movimientos de un producto. Se ve la existencia y no cómo ' +
-      'llegó a ese número.',
-  ],
-  ['PUT /crm/stages/:stageId', 'FALTA BOTÓN. Renombrar o reordenar una etapa del embudo.'],
-  [
-    'PUT /payment-orders/:ordenId/renglones',
-    'FALTA BOTÓN. Editar los renglones de una orden de pago en borrador.',
-  ],
-  [
-    'PUT /purchase-requests/:solicitudId/renglones',
-    'FALTA BOTÓN. Ídem para una solicitud de compra.',
-  ],
-
-  // ── Falta la pantalla: cierre de ejercicio ─────────────────────────────
-  //
-  // Lo más caro de la lista: la consola deja **pre-cerrar** y ahí se corta. El
-  // camino que sigue —cerrar, ver el acta, abrir el siguiente— existe, está
-  // probado, y no tiene un solo botón.
-        [
-    'POST /companies/current/reporting-framework',
-    'FALTA BOTÓN. Declarar el marco de información (RT 41 simplificado, RT 17 completo). Se ' +
-      'lee y no se puede cambiar.',
   ],
 
   // ── Falta la pantalla: la sesión misma ─────────────────────────────────

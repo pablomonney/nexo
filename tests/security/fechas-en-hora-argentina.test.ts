@@ -20,10 +20,22 @@
  * día menos tres horas**. Un control que solo falla entre las 21 y las 24 es
  * exactamente el que no estaba. Así que se mira lo que no depende de la hora:
  * que ningún script derive una fecha del calendario en UTC.
+ *
+ * ## El mismo defecto, fuera de `scripts/`
+ *
+ * El barrido de abajo solo miraba `scripts/*.mjs`. El 2026-10-01 aparecieron
+ * dos instancias reales del mismo defecto en `apps/api/src` — la fecha de
+ * inicio de la prueba gratuita (`onboarding.ts`, con un `new Date()` forzado
+ * a tipo con `as never`, que nadie había notado) y el año inferido al
+ * preguntarle al catálogo de NEXO Intelligence por un mes sin año
+ * (`intelligence/catalogo.ts`) — y el control no los vio porque no miraba esa
+ * carpeta. Se corrigieron los dos (preguntándole la fecha a la base, como ya
+ * hacía `suscripciones.ts`) y se extendió el barrido para que una tercera
+ * instancia, donde sea, no vuelva a pasar inadvertida.
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -110,6 +122,61 @@ describe('S-37 — ningún «hoy» se calcula en UTC', () => {
     }
 
     expect(sobran, `Sacá estos archivos de CON_MOTIVO:\n  ${sobran.join('\n  ')}`).toEqual([]);
+  });
+
+  it('ningún archivo de apps/api/src o de un paquete deriva una fecha de calendario del reloj de UTC', async () => {
+    // Mismo barrido que el de `scripts/`, llevado a donde el defecto real
+    // apareció esta vez: el código que corre en producción, no solo la
+    // siembra. `calendar-date.ts` es la única excepción legítima — hace
+    // aritmética de calendario sobre un `Date` que ella misma construye en
+    // UTC a partir de un año/mes/día explícitos, nunca deriva «hoy» del reloj.
+    const EXCEPCIONES = new Set(['packages/shared/src/calendar-date.ts']);
+
+    async function archivosDe(carpeta: string): Promise<string[]> {
+      const salida: string[] = [];
+      async function recorrer(directorio: string): Promise<void> {
+        const entradas = await readdir(directorio, { withFileTypes: true });
+        for (const entrada of entradas) {
+          const completo = join(directorio, entrada.name);
+          if (entrada.isDirectory()) {
+            if (entrada.name === 'node_modules' || entrada.name === 'dist') continue;
+            await recorrer(completo);
+            continue;
+          }
+          if (entrada.name.endsWith('.ts') && !entrada.name.endsWith('.test.ts')) {
+            salida.push(completo);
+          }
+        }
+      }
+      await recorrer(join(RAIZ, carpeta));
+      return salida;
+    }
+
+    const archivos = [
+      ...(await archivosDe('apps/api/src')),
+      ...(await archivosDe('packages')).filter((f) => f.includes(`${sep}src${sep}`)),
+    ];
+    expect(archivos.length).toBeGreaterThan(50);
+
+    const sospechosos: string[] = [];
+    for (const archivo of archivos) {
+      const relativo = relative(RAIZ, archivo).split(sep).join('/');
+      if (EXCEPCIONES.has(relativo)) continue;
+      const fuente = soloCodigo(await readFile(archivo, 'utf8'));
+      for (const patron of EN_UTC) {
+        if (patron.test(fuente)) sospechosos.push(`${relativo}: ${patron.source}`);
+      }
+    }
+
+    expect(
+      sospechosos,
+      'Estos archivos arman una fecha de calendario con el reloj de UTC. En Argentina eso es el ' +
+        'día siguiente después de las nueve de la noche. Si la fecha se compara contra la base, ' +
+        'pedísela a la base con `SELECT CURRENT_DATE` (ver `suscripciones.ts` o `intelligence.ts`, ' +
+        '`hoyDeLaBase`); si de verdad es aritmética de calendario sobre una fecha ya conocida, ' +
+        'sumalo a EXCEPCIONES con el motivo:\n  ' +
+        sospechosos.join('\n  '),
+    ).toEqual([]);
   });
 
   it('la siembra comercial le pregunta la fecha a la base', async () => {

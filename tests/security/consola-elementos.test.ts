@@ -48,7 +48,16 @@ const CONSOLA = join(
  * el HTML. Cada uno se declara con el motivo: la lista es la excepción, no el
  * filtro.
  */
-const ARMADOS_AL_VUELO = new Map<string, string>([]);
+const ARMADOS_AL_VUELO = new Map<string, string>([
+  [
+    'rec-deposito',
+    'El <select> de depósito de «Confirmar lo que llegó» se crea con ' +
+      "selDep.id = 'rec-deposito' (abrirRecepcion), solo cuando la recepción está " +
+      'BORRADOR y quien mira tiene receipt:write. accionRecepcion() lo busca con ' +
+      'E() guardado detrás de `if (deposito && ...)`, así que cuando el elemento no ' +
+      'se llegó a crear la llamada no manda depositoId, no explota.',
+  ],
+]);
 
 describe('S-15 — la consola escribe en el elemento que cree', () => {
   let html = '';

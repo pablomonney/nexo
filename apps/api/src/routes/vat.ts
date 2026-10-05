@@ -304,7 +304,12 @@ export async function vatRoutes(app: FastifyInstance): Promise<void> {
         if (comprobante === undefined) {
           throw notFound('No existe esa operación de IVA en esta empresa');
         }
-        return evaluarCreditoFiscal(comprobante, catalogo);
+        const evaluacion = evaluarCreditoFiscal(comprobante, catalogo);
+        // `ivaDiscriminado` es un Money con `amount: bigint` — JSON.stringify no
+        // sabe serializar un bigint y esta ruta no tiene schema que lo convierta
+        // solo. El resto del archivo ya pasa cada Money por `toDecimalString`
+        // antes de responder; acá faltaba.
+        return { ...evaluacion, ivaDiscriminado: toDecimalString(evaluacion.ivaDiscriminado) };
       },
     );
   });

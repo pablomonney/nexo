@@ -557,7 +557,23 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
               importe: toDecimalString(propuesta.importe),
               senales: propuesta.senales,
             })),
-            ambiguos: acta.ambiguos,
+            // Mismo motivo que `propuestas`: `candidatos[].importe` es un Money
+            // con `amount: bigint`, y sin pasarlo por `toDecimalString` la
+            // respuesta entera rompe al serializar — no en un caso de borde,
+            // sino en cualquier corrida donde el motor encuentre un movimiento
+            // con más de un candidato igual de puntuado, que es el caso que
+            // esta rama existe para atender.
+            ambiguos: acta.ambiguos.map((ambiguedad) => ({
+              movimientoId: ambiguedad.movimientoId,
+              candidatos: ambiguedad.candidatos.map((candidato) => ({
+                tipo: candidato.tipo,
+                movimientoIds: candidato.movimientoIds,
+                entryLineIds: candidato.entryLineIds,
+                score: candidato.score,
+                senales: candidato.senales,
+                importe: toDecimalString(candidato.importe),
+              })),
+            })),
             diferencias: acta.diferencias.map((diferencia) => ({
               ...diferencia,
               importe: toDecimalString(diferencia.importe),
@@ -595,31 +611,41 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
       const actorId = `user:${auth.user.userId}`;
 
       return withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
-        const guardado = await tx.query<{ id: string }>(
-          `INSERT INTO bank_reconciliation_matches
-             (company_id, reconciliation_id, bank_transaction_id, journal_entry_line_id,
-              match_type, score, senales, confirmed_by, confirmed_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, now())
-           RETURNING id`,
-          [
-            tenant.companyId,
-            params.reconciliationId,
-            body.bankTransactionId,
-            body.entryLineId,
-            body.matchType,
-            body.score,
-            JSON.stringify(body.senales),
-            actorId,
-          ],
-        );
+        try {
+          const guardado = await tx.query<{ id: string }>(
+            `INSERT INTO bank_reconciliation_matches
+               (company_id, reconciliation_id, bank_transaction_id, journal_entry_line_id,
+                match_type, score, senales, confirmed_by, confirmed_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, now())
+             RETURNING id`,
+            [
+              tenant.companyId,
+              params.reconciliationId,
+              body.bankTransactionId,
+              body.entryLineId,
+              body.matchType,
+              body.score,
+              JSON.stringify(body.senales),
+              actorId,
+            ],
+          );
 
-        await tx.query(
-          `UPDATE bank_transactions SET status = 'CONCILIADO' WHERE id = $1 AND company_id = $2`,
-          [body.bankTransactionId, tenant.companyId],
-        );
+          await tx.query(
+            `UPDATE bank_transactions SET status = 'CONCILIADO' WHERE id = $1 AND company_id = $2`,
+            [body.bankTransactionId, tenant.companyId],
+          );
 
-        reply.code(201);
-        return { matchId: guardado.rows[0]!.id, confirmadoPor: actorId };
+          reply.code(201);
+          return { matchId: guardado.rows[0]!.id, confirmadoPor: actorId };
+        } catch (error) {
+          if ((error as { code?: string }).code === '23505') {
+            throw conflict(
+              'Ese movimiento del banco ya tiene una coincidencia confirmada con esa línea del ' +
+                'Mayor en esta conciliación. Confirmarla de nuevo no agrega nada: ya está.',
+            );
+          }
+          throw error;
+        }
       });
     },
   );

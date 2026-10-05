@@ -1,5 +1,17 @@
 # FASE_4_OPERACION.md — de navegar el circuito a trabajar una empresa
 
+> **Nota (2026-10-01):** este documento es una foto fija del cierre de la
+> FASE 3 (1311 tests, 94 rutas, consola en el 23%) y quedó desactualizado
+> a propósito, como registro histórico de la auditoría que motivó el
+> trabajo — la mayoría de los "GAP UI" de abajo ya tienen pantalla hoy
+> (Diario/Mayor/Balance, períodos y ejercicios, usuarios de la empresa,
+> marco contable, entre otros). La lista viva y mantenida de lo que
+> **realmente** falta pantalla o botón, con su motivo cada uno, es
+> `tests/security/capacidades-con-puerta.test.ts` (mapa `SIN_PUERTA`) —
+> un test que falla solo si la lista se desactualiza. No se reescribió
+> este documento entero para no perder el registro de la auditoría
+> original.
+
 > **Estado: auditoría y diseño. Nada de lo que está acá está implementado.**
 >
 > Documento de FASE 4. Contesta una sola pregunta:

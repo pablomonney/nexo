@@ -35,6 +35,7 @@
 // empresa en contexto, que es la única forma de que el RLS lo filtre. Recibir
 // un cliente crudo dejaría abierta la puerta a consultar sin contexto.
 import type { Tx } from '@aai/db';
+import { monthOf, yearOf, type CalendarDate } from '@aai/shared';
 
 export interface DatoDeRespuesta {
   readonly etiqueta: string;
@@ -1181,8 +1182,17 @@ export function coincidencias(
   return puntuadas.filter((c) => c.puntaje === mejor);
 }
 
-/** El mes en `AAAA-MM` que menciona la pregunta, si menciona alguno. */
-export function mesDe(texto: string): string | null {
+/**
+ * El mes en `AAAA-MM` que menciona la pregunta, si menciona alguno.
+ *
+ * `hoy` llega de quien llama, nunca de `new Date()` acá adentro: Argentina es
+ * UTC−3, y después de las nueve de la noche un «hoy» calculado del reloj del
+ * proceso ya es mañana — el mismo defecto documentado en S-37
+ * (`fechas-en-hora-argentina.test.ts`) y corregido en `suscripciones.ts`, pero
+ * para una fecha de calendario que decide "¿el mes mencionado ya pasó o es
+ * del año que viene?" en vez de una fecha de vigencia de precios.
+ */
+export function mesDe(texto: string, hoy: CalendarDate): string | null {
   const iso = texto.match(/\b(20\d{2})[-/](0[1-9]|1[0-2])\b/u);
   if (iso !== null) return `${iso[1]}-${iso[2]}`;
 
@@ -1197,13 +1207,12 @@ export function mesDe(texto: string): string | null {
   // Sin año escrito, el año en curso. Un mes que todavía no pasó se entiende
   // como el del año anterior: nadie pregunta por ventas del futuro.
   const anioEscrito = texto.match(/\b(20\d{2})\b/u);
-  const hoy = new Date();
   const anio =
     anioEscrito !== null
       ? Number(anioEscrito[1])
-      : indice + 1 > hoy.getUTCMonth() + 1
-        ? hoy.getUTCFullYear() - 1
-        : hoy.getUTCFullYear();
+      : indice + 1 > monthOf(hoy)
+        ? yearOf(hoy) - 1
+        : yearOf(hoy);
   return `${anio}-${String(indice + 1).padStart(2, '0')}`;
 }
 

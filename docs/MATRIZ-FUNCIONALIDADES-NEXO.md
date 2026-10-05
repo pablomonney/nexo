@@ -3,6 +3,15 @@
 **Medido:** 2026-09-21, contra la consola publicada (commit `d31fcb4`), el
 inventario de rutas de Fastify y el control S-25.
 
+> **Nota (2026-10-01):** el propio control S-25
+> (`tests/security/capacidades-con-puerta.test.ts`) tenía desde entonces un
+> punto ciego real — no sabía leer URLs armadas dentro de manejadores
+> `onclick = async () => {...}` (el patrón que usan 157 pantallas) — y tres
+> excepciones obsoletas de rutas que ya tenían botón. Se corrigió el 2026-10-01;
+> esta matriz no se volvió a medir entera contra la versión corregida. Las
+> filas que dependían de ese punto ciego podrían estar desactualizadas; S-25 es
+> hoy la fuente viva para confirmar cualquiera puntual.
+
 Documentación objetiva. No es una evaluación comercial: cada fila dice qué se
 puede hacer y desde dónde, y nada más.
 

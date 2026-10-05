@@ -216,22 +216,47 @@ interface Indirecta {
   readonly posicion: number;
 }
 
-/** La función que contiene una posición del texto. */
+/**
+ * La función que contiene una posición del texto.
+ *
+ * Reconoce dos formas de declaración:
+ *
+ *   1. `function nombre(parámetros) { … }` — la de siempre.
+ *   2. `algo.onclick = async () => { … }` — el manejador inline, la forma que
+ *      usan las 157 pantallas de la consola que no pasan por una función con
+ *      nombre. Sin esto, un `const url = …` armado adentro de uno de esos
+ *      manejadores (como `b-mayor`, que arma `/books/mayor?...` así) no tenía
+ *      ninguna declaración que lo contuviera, y la ruta figuraba sin puerta
+ *      teniéndola — el mismo defecto de instrumento que ya documentó
+ *      `bajarCsv`, no una pantalla faltante.
+ *
+ * Entre las dos, se usa la que empieza más cerca (y antes) de `posicion`,
+ * igual que ya hacía la búsqueda de una sola forma.
+ */
 function funcionQueContiene(
   html: string,
   posicion: number,
 ): { nombre: string; parametros: string[]; cuerpo: string } | null {
   const declaracion = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/gu;
-  let ultima: RegExpExecArray | null = null;
+  const manejador = /\.on[a-z]+\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>\s*\{/gu;
+
+  let ultima: { index: number; largo: number; nombre: string; parametros: string } | null = null;
+
   let m: RegExpExecArray | null;
   while ((m = declaracion.exec(html)) !== null) {
     if (m.index > posicion) break;
-    ultima = m;
+    ultima = { index: m.index, largo: m[0].length, nombre: m[1]!, parametros: m[2]! };
+  }
+  while ((m = manejador.exec(html)) !== null) {
+    if (m.index > posicion) break;
+    if (ultima === null || m.index > ultima.index) {
+      ultima = { index: m.index, largo: m[0].length, nombre: '<manejador>', parametros: m[1]! };
+    }
   }
   if (ultima === null) return null;
 
   // Del `{` de la declaración hasta su llave de cierre.
-  let i = ultima.index + ultima[0].length;
+  let i = ultima.index + ultima.largo;
   let profundidad = 1;
   let comilla: string | null = null;
   for (; i < html.length && profundidad > 0; i += 1) {
@@ -248,8 +273,8 @@ function funcionQueContiene(
   if (posicion > i) return null;
 
   return {
-    nombre: ultima[1]!,
-    parametros: ultima[2]!.split(',').map((p) => p.trim()).filter((p) => p !== ''),
+    nombre: ultima.nombre,
+    parametros: ultima.parametros.split(',').map((p) => p.trim()).filter((p) => p !== ''),
     cuerpo: html.slice(ultima.index, i),
   };
 }

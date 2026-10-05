@@ -154,7 +154,6 @@ function llamadasDe(html: string): { metodo: string; url: string }[] {
 const SIN_PANTALLA = new Map<string, string>([
   ['health', 'Sondas de infraestructura, no vistas'],
   ['consola', 'Es la consola misma: se sirve, no se consume'],
-  ['organizations', 'Administración del estudio, anterior a elegir empresa'],
   // Lo lee un recolector, no una persona, y su token no puede estar en una
   // página que se sirve sin autenticación.
   ['metrics', 'Es para el recolector de métricas: exige un token que la consola no tiene'],
@@ -332,7 +331,14 @@ suite('S-12 — la consola solo llama a rutas que existen', () => {
       'el barrido tiene que encontrar referencias: no pasa por vacío',
     ).toBeGreaterThan(100);
 
-    const huerfanos = [...usados].filter((u) => !declarados.has(u));
+    // `rec-deposito` se arma en tiempo de ejecución (`selDep.id = 'rec-deposito'`,
+    // abrirRecepcion) y solo cuando la recepción está BORRADOR — nunca como
+    // `id="..."` literal. El riesgo que este test persigue (un `E(id).algo = …`
+    // a nivel de módulo que tira abajo la consola entera al cargar) no aplica:
+    // `accionRecepcion()` lo lee detrás de `if (deposito && …)`, dentro de un
+    // handler, no al cargar el script. Mismo caso ya documentado en
+    // `consola-elementos.test.ts` (`ARMADOS_AL_VUELO`).
+    const huerfanos = [...usados].filter((u) => !declarados.has(u) && u !== 'rec-deposito');
     expect(
       huerfanos,
       'Estos E(id) no tienen elemento. Cada uno mata la consola entera al cargar:\n  ' +

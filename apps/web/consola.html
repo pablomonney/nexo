@@ -886,6 +886,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
           <div class="fila">
             <div><label>Campo</label><input id="corr-campo" readonly></div>
             <div><label>Valor correcto</label><input id="corr-valor"></div>
+            <div><label>Motivo</label><input id="corr-motivo" maxlength="500"></div>
           </div>
           <button id="b-corr-campo">Guardar corrección</button>
           <button id="b-corr-cancelar" class="sec">Cancelar</button>
@@ -1303,6 +1304,30 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       ficha en otra persona conservando sus movimientos: si el número está mal, se archiva
       ésta y se da de alta la correcta. Lo mismo vale para el tipo de documento.</p>
     <dl class="kv" id="ter-ficha-fijo"></dl>
+    <div id="tf-rol-caja" class="fila">
+      <div><label>Agregar rol</label><select id="tf-rol">
+        <option value="CLIENTE">Cliente</option><option value="PROVEEDOR">Proveedor</option>
+      </select></div>
+      <div><label>&nbsp;</label><button id="b-tf-rol" class="sec">Agregar</button></div>
+    </div>
+    <div id="tf-rol-msg"></div>
+
+    <details class="grupo" id="tf-precios" hidden><summary>Lista de precios asignada</summary><div>
+      <p class="ayuda">Un tercero no puede tener dos listas el mismo día: sin eso el sistema no
+        tendría con qué elegir. No reemplaza traer o escribir el precio a mano al facturar —
+        sigue siendo posible — esto es solo para no tener que elegir la lista cada vez.</p>
+      <div class="tabla"><table id="t-tf-precios"><thead><tr>
+        <th>Lista</th><th>Desde</th><th>Hasta</th><th>Vigente hoy</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div id="tf-pre-asignar-caja" class="fila">
+        <div><label>Lista</label><select id="tf-pre-lista"></select></div>
+        <div><label>Desde</label><input id="tf-pre-desde" type="date"></div>
+        <div><label>Hasta (opcional)</label><input id="tf-pre-hasta" type="date"></div>
+        <div><label>&nbsp;</label><button id="b-tf-pre-asignar" class="sec">Asignar</button></div>
+      </div>
+      <div id="tf-pre-msg"></div>
+    </div></details>
+
     <div class="fila">
       <div style="flex:2"><label>Razón social</label><input id="tf-rs" maxlength="200" /></div>
       <div><label>Condición IVA</label><select id="tf-iva"></select></div>
@@ -1393,6 +1418,21 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
         <th>Pendiente</th><th>Vencimiento</th><th>Mora</th><th>Plan</th>
       </tr></thead><tbody></tbody></table></div>
 
+      <details class="grupo" id="ter-imp" hidden><summary>Imputaciones de un comprobante</summary><div>
+        <p class="ayuda">Cada fila es un cobro o pago real que se afectó contra este
+          comprobante. Anular una no borra nada: <strong>el asiento del cobro/pago
+          sigue existiendo</strong>, solo deja de contar como aplicado acá — el
+          comprobante vuelve a figurar con ese importe pendiente.</p>
+        <div class="fila">
+          <div style="flex:1"><label>Comprobante</label><select id="ter-imp-cbte"></select></div>
+          <div><label>&nbsp;</label><button id="b-ter-imp-ver" class="sec">Ver imputaciones</button></div>
+        </div>
+        <div class="tabla"><table id="t-ter-imp"><thead><tr>
+          <th>Fecha</th><th>Asiento</th><th>Importe</th><th>Estado</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+        <div id="ter-imp-msg"></div>
+      </div></details>
+
       <details class="grupo" id="ter-plan" hidden><summary>Condiciones de pago del comprobante</summary><div>
         <p class="ayuda">Una factura en tres cuotas <strong>no vence una sola vez</strong>.
           Mientras el plan no se declare, el vencimiento sale del plazo del tercero — y si
@@ -1472,6 +1512,21 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
         <button id="b-ter-aplicar-nota">Aplicar la nota</button>
         <div id="ter-n-msg"></div>
       </div></details>
+
+      <details class="grupo" id="ter-corr" hidden><summary>Correcciones de un comprobante</summary><div>
+        <p class="ayuda">Qué nota corrigió este comprobante, o a qué factura se aplicó si el
+          comprobante elegido es la nota. Anular una corrección no borra nada:
+          <strong>el total del tercero no cambia</strong>, solo deja de estar trasladado — la
+          factura vuelve a deber lo que debía y la nota vuelve a quedar sin aplicar.</p>
+        <div class="fila">
+          <div style="flex:1"><label>Comprobante</label><select id="ter-corr-cbte"></select></div>
+          <div><label>&nbsp;</label><button id="b-ter-corr-ver" class="sec">Ver correcciones</button></div>
+        </div>
+        <div class="tabla"><table id="t-ter-corr"><thead><tr>
+          <th>Nota</th><th>Factura corregida</th><th>Importe</th><th>Estado</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+        <div id="ter-corr-msg"></div>
+      </div></details>
     </div>
     <div id="ter-cc-msg"></div>
     <div class="tabla"><table id="t-ter-cc"><thead><tr>
@@ -1508,6 +1563,79 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div id="op-detalle" hidden>
     <h3>Operación</h3>
     <dl class="kv" id="op-kv"></dl>
+
+    <details class="grupo" id="op-party" hidden><summary>Vincular a un tercero del padrón</summary><div>
+      <p class="ayuda">El comprobante ya tiene el CUIT y la razón social del papel: esto afirma
+        <strong>a quién corresponden</strong> en el maestro, para que entre en su cuenta
+        corriente y su antigüedad de saldos. Si el CUIT elegido no coincide con el declarado,
+        el sistema lo rechaza — vincular al tercero equivocado es un error invisible que
+        después aparece como un saldo que crece sin motivo.</p>
+      <div class="fila">
+        <div style="flex:1"><label>Tercero</label><select id="op-party-sel">
+          <option value="">— ninguno (desvincular) —</option>
+        </select></div>
+        <div><label>&nbsp;</label><button id="b-op-party" class="sec">Vincular</button></div>
+      </div>
+      <div id="op-party-msg"></div>
+    </div></details>
+
+    <details class="grupo" id="op-lineas" hidden><summary>Renglones del comprobante</summary><div>
+      <p class="ayuda">Hace falta para margen y stock, no para el IVA: la cabecera ya es lo que
+        declara el papel. Si el comprobante ya fundó un asiento aprobado, el detalle no se
+        edita más — la corrección va por contraasiento.</p>
+      <dl class="kv" id="op-lin-cab"></dl>
+      <div class="tabla"><table id="t-op-lin"><thead><tr>
+        <th>#</th><th>Producto</th><th>Descripción</th><th>Cantidad</th><th>Precio unit.</th>
+        <th>Descuento</th><th>Tratamiento</th><th>Neto</th><th>IVA</th>
+      </tr></thead><tbody></tbody></table></div>
+
+      <div id="op-lin-editar" hidden>
+        <h4>Editar renglones (reemplaza la lista entera)</h4>
+        <div class="fila">
+          <div><label>Producto (opcional)</label><select id="op-lin-e-producto"></select></div>
+          <div style="flex:1"><label>Descripción</label><input id="op-lin-e-desc" maxlength="500"></div>
+          <div><label>Cantidad</label><input id="op-lin-e-cant" inputmode="decimal"></div>
+          <div><label>Precio unit.</label><input id="op-lin-e-precio" inputmode="decimal"></div>
+        </div>
+        <div class="fila">
+          <div><label>Descuento</label><input id="op-lin-e-desc-imp" inputmode="decimal" value="0"></div>
+          <div><label>Tratamiento</label><select id="op-lin-e-trat">
+            <option>GRAVADO</option><option>EXENTO</option><option>NO_GRAVADO</option></select></div>
+          <div><label>Neto</label><input id="op-lin-e-neto" inputmode="decimal"></div>
+          <div><label>IVA</label><input id="op-lin-e-iva" inputmode="decimal" value="0"></div>
+          <div><label>&nbsp;</label><button id="b-op-lin-agregar" class="sec">Agregar</button></div>
+        </div>
+        <div class="tabla"><table id="t-op-lin-borrador"><thead><tr>
+          <th>Descripción</th><th>Cantidad</th><th>Neto</th><th>IVA</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+        <button id="b-op-lin-guardar">Guardar el detalle</button>
+        <button id="b-op-lin-vaciar" class="sec">Vaciar el detalle</button>
+      </div>
+      <div id="op-lin-msg"></div>
+    </div></details>
+
+    <details class="grupo" id="op-credito" hidden><summary>Crédito fiscal (compras)</summary><div>
+      <p class="ayuda">Nunca dice "computable". Verifica la <strong>forma</strong> — constatación,
+        emisor, alícuotas, el tope del art. 12 — y después dice qué falta para la cuestión de
+        fondo, que es un hecho del negocio y lo decide el profesional.</p>
+      <button id="b-op-credito" class="sec">Evaluar</button>
+      <div id="op-credito-msg"></div>
+    </div></details>
+
+    <details class="grupo" id="op-supersede" hidden><summary>Corregir la decisión vigente</summary><div>
+      <p class="ayuda">No edita ni borra la decisión: emite una nueva y marca la anterior como
+        <strong>superada</strong>, conservando las dos. El motivo tiene que decir qué cambió —
+        "se corrigió" no sirve dentro de dos años.</p>
+      <div class="fila">
+        <div><label>Nuevo resultado</label><select id="op-sup-resultado">
+          <option>PROPUESTA_DE_ASIENTO</option><option>SIN_EFECTO</option>
+          <option>REQUIERE_REVISION</option></select></div>
+      </div>
+      <label>Motivo (mínimo 30 caracteres)</label>
+      <textarea id="op-sup-motivo" maxlength="2000"></textarea>
+      <button id="b-op-sup">Corregir</button>
+      <div id="op-sup-msg"></div>
+    </div></details>
 
     <!-- El formulario de «Registrar una operación desde un documento» vivía acá
          y se fue el 2026-09-21, a la pantalla de Documentos.
@@ -1606,6 +1734,15 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     </tr></thead><tbody></tbody></table></div>
     <button id="b-stk-mov-mas" class="sec" hidden>Ver más</button>
     <div id="stk-det-msg"></div>
+
+    <h3>Facturado</h3>
+    <p class="ayuda">Esto <strong>no es stock</strong>: es lo que pasó por comprobantes,
+      comprado y vendido. El stock de arriba necesita depósitos y movimientos que no son
+      comprobantes — ajustes, transferencias — y esos todavía no existen para este producto.</p>
+    <div class="tabla"><table id="t-stk-fact"><thead><tr>
+      <th>Dirección</th><th>Comprobantes</th><th>Cantidad</th><th>Neto</th>
+      <th>Primera</th><th>Última</th>
+    </tr></thead><tbody></tbody></table></div>
   </div>
 
   <details class="grupo" id="stk-salidas"><summary>Ventas que esperan su salida de stock</summary><div>
@@ -1992,6 +2129,15 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <h3 id="cms-det-titulo">Vendedor</h3>
     <div id="cms-det-metodo" class="ayuda"></div>
 
+    <div id="cms-editar" hidden class="fila">
+      <div style="flex:1"><label>Nombre</label><input id="cms-ed-nombre" maxlength="200"></div>
+      <div><label>Estado</label><select id="cms-ed-status">
+        <option value="ACTIVO">ACTIVO</option><option value="INACTIVO">INACTIVO</option>
+      </select></div>
+      <div><label>&nbsp;</label><button id="b-cms-editar" class="sec">Guardar</button></div>
+    </div>
+    <div id="cms-ed-msg"></div>
+
     <h4>Esquemas declarados</h4>
     <div class="tabla"><table id="t-cms-esq"><thead><tr>
       <th>Desde</th><th>Hasta</th><th>Porcentaje</th><th>Base</th>
@@ -2278,6 +2424,15 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       <div><label>&nbsp;</label><button id="b-crm-alta-etapa" class="sec">Declarar</button></div>
     </div>
     <div id="crm-alta-etapa-msg"></div>
+  </div></details>
+
+  <details class="grupo" id="crm-editar-etapa" hidden><summary>Editar etapas declaradas</summary><div>
+    <p class="ayuda">Renombra o archiva una etapa existente. El orden y el código no se
+      editan acá: cambian la forma del embudo, no cómo se llama cada escalón.</p>
+    <div class="tabla"><table id="t-crm-editar-etapa"><thead><tr>
+      <th>Orden</th><th>Código</th><th>Nombre</th><th>Probabilidad %</th><th>Estado</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+    <div id="crm-editar-etapa-msg"></div>
   </div></details>
 </section>
 
@@ -2642,6 +2797,22 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       <button id="b-sol-anular" class="sec">Anular</button>
       <div id="sol-acc-msg"></div>
     </div>
+
+    <details class="grupo" id="sol-editar" hidden><summary>Editar los renglones del borrador</summary><div>
+      <p class="ayuda">Guardar reemplaza la lista entera: lo que no esté acá se borra.</p>
+      <div class="fila">
+        <div><label>Producto del maestro</label><select id="sol-e-producto"></select></div>
+        <div style="flex:1"><label>Descripción</label><input id="sol-e-descripcion" maxlength="200"></div>
+        <div><label>Cantidad</label><input id="sol-e-cantidad" inputmode="decimal"></div>
+        <div><label>Unidad</label><input id="sol-e-unidad" value="UNIDAD" maxlength="20"></div>
+        <div><label>&nbsp;</label><button id="b-sol-e-agregar" class="sec">Agregar</button></div>
+      </div>
+      <div class="tabla"><table id="t-sol-editar"><thead><tr>
+        <th>Descripción</th><th>Cantidad</th><th>Unidad</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+      <button id="b-sol-e-guardar">Guardar cambios en los renglones</button>
+      <div id="sol-e-msg"></div>
+    </div></details>
   </div>
 
   <details class="grupo" id="sol-alta" hidden><summary>Pedir una compra</summary><div>
@@ -2710,6 +2881,17 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       <button id="b-odp-anular" class="sec">Anular</button>
       <div id="odp-acc-msg"></div>
     </div>
+
+    <details class="grupo" id="odp-editar" hidden><summary>Editar los renglones del borrador</summary><div>
+      <p class="ayuda">Guardar reemplaza la lista entera: lo que quede destildado al guardar,
+        sale de la orden. Nada de esto toca el Mayor — la orden sigue siendo un borrador.</p>
+      <div class="tabla"><table id="t-odp-editar"><thead><tr>
+        <th></th><th>Comprobante</th><th>Fecha</th><th>Total</th>
+        <th>Pendiente</th><th>En otras órdenes</th><th>A pagar</th>
+      </tr></thead><tbody></tbody></table></div>
+      <button id="b-odp-e-guardar">Guardar cambios en los renglones</button>
+      <div id="odp-e-msg"></div>
+    </div></details>
   </div>
 
   <details class="grupo" id="odp-alta" hidden><summary>Armar una orden</summary><div>
@@ -3253,8 +3435,11 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <label>Descripción</label><input id="ne-desc">
     <div class="fila">
       <div><label>Cuenta al Debe</label><select id="ne-debe"></select></div>
+      <div><label>Tercero en el Debe (si aplica)</label><select id="ne-debe-tercero"><option value="">ninguno</option></select></div>
       <div><label>Cuenta al Haber</label><select id="ne-haber"></select></div>
+      <div><label>Tercero en el Haber (si aplica)</label><select id="ne-haber-tercero"><option value="">ninguno</option></select></div>
       <div><label>Importe</label><input id="ne-importe"></div>
+      <div><label>Centro de costo (si aplica)</label><input id="ne-centro" placeholder="código"></div>
     </div>
     <label>Justificación (si no lo funda una decisión)</label><input id="ne-just">
     <div id="ne-decision"></div>
@@ -3271,6 +3456,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div class="fila">
     <div><label>Desde</label><input id="lib-desde" type="date"></div>
     <div><label>Hasta</label><input id="lib-hasta" type="date"></div>
+    <div><label>Cuenta (solo para el Mayor)</label><select id="lib-cuenta"><option value="">todas</option></select></div>
   </div>
   <button id="b-diario" class="sec">Diario</button>
   <button id="b-diario-resumido" class="sec">Diario resumido del mes</button>
@@ -3757,6 +3943,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <div><label>Rol</label><select id="map-rol">
       <option>CLIENTES</option><option>PROVEEDORES</option><option>IVA_DEBITO</option>
       <option>IVA_CREDITO</option><option>VENTAS</option><option>COMPRAS</option>
+      <option>MERCADERIA</option><option>COSTO_DE_VENTAS</option>
     </select></div>
     <div><label>Cuenta</label><input id="map-cuenta" maxlength="40" placeholder="código"></div>
     <div><label>&nbsp;</label><button id="b-map" class="sec">Declarar</button></div>
@@ -4565,6 +4752,33 @@ async function usarEmpresa(id) {
       o.value = (sel === 'afec-cuentas' || sel === 'iap-cuenta') ? a.id : a.code;
       o.textContent = a.code + ' — ' + a.name;
       s.appendChild(o);
+    }
+  }
+
+  // El Mayor por cuenta (GET /books/mayor?cuenta=) existía en la API con el
+  // detalle de movimientos, y la pantalla nunca lo pedía: solo mostraba el
+  // resumen de todas las cuentas, sin forma de elegir una sola.
+  {
+    const s = E('lib-cuenta'); s.innerHTML = '<option value="">todas</option>';
+    for (const a of estado.cuentas) {
+      const o = document.createElement('option');
+      o.value = a.code;
+      o.textContent = a.code + ' — ' + a.name;
+      s.appendChild(o);
+    }
+  }
+
+  // Sin esto, un asiento manual no puede imputarse contra ningún tercero: la
+  // línea queda sin party_id y «Imputar un cobro o pago» nunca la encuentra.
+  const terceosParaAsientoManual = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (terceosParaAsientoManual.ok) {
+    for (const sel of ['ne-debe-tercero', 'ne-haber-tercero']) {
+      const s = E(sel); s.innerHTML = '<option value="">ninguno</option>';
+      for (const t of terceosParaAsientoManual.datos.terceros || []) {
+        const o = document.createElement('option');
+        o.value = t.id; o.textContent = t.razonSocial;
+        s.appendChild(o);
+      }
     }
   }
 
@@ -5663,6 +5877,13 @@ async function abrirDocumento(id) {
     fila('SHA-256', d.sha256) + fila('Origen', d.source) +
     fila('Recibido', d.receivedAt || d.recibidoEn);
 
+  // La corrección se guarda contra la extracción vigente, no contra el
+  // documento — `POST /documents/:id/fields` la exige (`extractionId`) para
+  // saber a cuál de las lecturas se le agrega. `extracciones` viene de más
+  // nueva a más vieja (`ORDER BY started_at DESC`), así que la primera es la
+  // actual.
+  estado.extraccionActual = (r.datos.extracciones && r.datos.extracciones[0] && r.datos.extracciones[0].id) || null;
+
   estado.campos = r.datos.campos || [];
   const cuerpo = E('t-campos').querySelector('tbody');
   cuerpo.innerHTML = '';
@@ -5803,11 +6024,21 @@ function pedirCorreccion(campo, valor) {
   E('doc-corregir').hidden = false;
   E('corr-campo').value = campo;
   E('corr-valor').value = valor === null || valor === undefined ? '' : valor;
+  E('corr-motivo').value = '';
 }
 E('b-corr-cancelar').onclick = () => { E('doc-corregir').hidden = true; };
 E('b-corr-campo').onclick = async () => {
+  if (!estado.extraccionActual) {
+    return decir('doc-detalle-msg', { ok: false, status: 0, datos: null },
+      'No hay una extracción vigente para corregir.');
+  }
+  const motivo = E('corr-motivo').value.trim();
+  if (motivo.length < 3) return avisoMal('doc-detalle-msg', 'El motivo tiene que tener al menos 3 caracteres.');
   const r = await api('POST', '/documents/' + estado.documento + '/fields', {
-    campos: [{ fieldPath: E('corr-campo').value, value: E('corr-valor').value }],
+    extractionId: estado.extraccionActual,
+    fieldPath: E('corr-campo').value,
+    rawValue: E('corr-valor').value,
+    motivo,
   });
   decir('doc-detalle-msg', r, 'Corrección registrada junto a la lectura del motor');
   if (r.ok) { E('doc-corregir').hidden = true; abrirDocumento(estado.documento); }
@@ -5920,6 +6151,29 @@ async function abrirRecepcion(id) {
   caja.innerHTML = '';
   if (puede('receipt:write')) {
     if (x.status === 'BORRADOR') {
+      // El depósito lo pide recién `POST .../confirm` (migración 0054), y solo
+      // si algún renglón lleva un producto con stock — antes de esto no había
+      // ningún control en la consola para mandarlo, así que confirmar una
+      // recepción con productos de stock siempre fallaba con «indicá el
+      // depósito». Se arma acá, no en el alta: al crear el borrador puede no
+      // saberse todavía dónde se va a descargar (mismo texto que ya usa la
+      // pantalla para explicar por qué el campo es opcional ahí).
+      const labelDep = document.createElement('label');
+      labelDep.textContent = 'Depósito (si algún renglón lleva un producto con stock)';
+      caja.appendChild(labelDep);
+      const selDep = document.createElement('select');
+      selDep.id = 'rec-deposito';
+      selDep.innerHTML = '<option value="">sin declarar</option>';
+      const depRes = await api('GET', '/warehouses');
+      if (depRes.ok) {
+        for (const d of (depRes.datos.depositos || [])) {
+          const o = document.createElement('option');
+          o.value = d.id; o.textContent = d.codigo + ' — ' + d.nombre;
+          selDep.appendChild(o);
+        }
+      }
+      caja.appendChild(selDep);
+
       const b = document.createElement('button');
       b.className = 'sec';
       b.textContent = 'Confirmar lo que llegó';
@@ -5952,7 +6206,12 @@ async function accionRecepcion(id, accion, pideMotivo) {
   const url = accion === 'confirm'
     ? '/goods-receipts/' + id + '/confirm'
     : '/goods-receipts/' + id + '/cancel';
-  const r = await api('POST', url, motivo === undefined ? {} : { motivo: motivo.trim() });
+  const cuerpo = motivo === undefined ? {} : { motivo: motivo.trim() };
+  if (accion === 'confirm') {
+    const deposito = E('rec-deposito');
+    if (deposito && deposito.value) cuerpo.depositoId = deposito.value;
+  }
+  const r = await api('POST', url, cuerpo);
   decir('rec-accion-msg', r, 'Listo.');
   if (r.ok) await abrirRecepcion(id);
 }
@@ -6552,6 +6811,21 @@ async function abrirFichaDeTercero(id) {
     fila('Documento', t.tipoDocumento + ' ' + (t.numeroDocumento || '—')) +
     fila('Roles', (t.roles || []).join(', ') || '—');
 
+  E('tf-rol-caja').hidden = !puede('party:write');
+  limpiar('tf-rol-msg');
+  const faltantes = ['CLIENTE', 'PROVEEDOR'].filter((r) => !(t.roles || []).includes(r));
+  E('tf-rol').innerHTML = faltantes
+    .map((r) => '<option value="' + r + '">' + (r === 'CLIENTE' ? 'Cliente' : 'Proveedor') + '</option>')
+    .join('');
+  E('b-tf-rol').disabled = faltantes.length === 0;
+  if (faltantes.length === 0) {
+    E('tf-rol-msg').innerHTML = '<div class="aviso">Ya tiene los dos roles.</div>';
+  }
+
+  E('tf-precios').hidden = !puede('party:read');
+  limpiar('tf-pre-msg');
+  if (!E('tf-precios').hidden) await cargarListasDePrecioDelTercero(id);
+
   // Las condiciones de IVA salen del mismo selector del alta: una lista escrita
   // dos veces se desincroniza a la primera que agregue el organismo.
   E('tf-iva').innerHTML = E('ter-iva').innerHTML;
@@ -6601,6 +6875,61 @@ E('b-tf-guardar').onclick = async () => {
   await abrirFichaDeTercero(estado.terceroEnFicha);
   decir('tf-msg', r, 'Guardado.');
   return undefined;
+};
+
+E('b-tf-rol').onclick = async () => {
+  const r = await api('POST', '/parties/' + estado.terceroEnFicha + '/roles', {
+    role: E('tf-rol').value,
+  });
+  decir('tf-rol-msg', r, 'Rol agregado.');
+  if (r.ok) { await listarTerceros(); await abrirFichaDeTercero(estado.terceroEnFicha); }
+};
+
+async function cargarListasDePrecioDelTercero(id) {
+  const puedeAsignar = puede('party:write') && puede('product:read');
+  E('tf-pre-asignar-caja').hidden = !puedeAsignar;
+  const [asignadas, listas] = await Promise.all([
+    api('GET', '/parties/' + id + '/price-lists'),
+    puedeAsignar ? api('GET', '/price-lists') : Promise.resolve({ ok: false, datos: {} }),
+  ]);
+  if (!asignadas.ok) return decir('tf-pre-msg', asignadas);
+
+  const cuerpo = E('t-tf-precios').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const a of asignadas.datos.asignaciones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(a.codigo) + ' · ' + escapar(a.nombre) + '</td>' +
+      '<td class="mono">' + escapar(a.desde) + '</td>' +
+      '<td class="mono">' + escapar(a.hasta || 'sin fin') + '</td>' +
+      '<td>' + (a.vigenteHoy ? '<span class="p p-ok">sí</span>' : '—') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+  if ((asignadas.datos.asignaciones || []).length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="4">Sin lista asignada. El precio se trae o se escribe a mano al facturar.</td></tr>';
+  }
+
+  if (!puedeAsignar) return;
+  const sel = E('tf-pre-lista');
+  sel.innerHTML = '';
+  if (listas.ok) {
+    for (const l of listas.datos.listas || []) {
+      const o = document.createElement('option');
+      o.value = l.id;
+      o.textContent = l.codigo + ' · ' + l.nombre;
+      sel.appendChild(o);
+    }
+  }
+}
+
+E('b-tf-pre-asignar').onclick = async () => {
+  const r = await api('POST', '/parties/' + estado.terceroEnFicha + '/price-lists', {
+    priceListId: E('tf-pre-lista').value,
+    desde: E('tf-pre-desde').value,
+    hasta: E('tf-pre-hasta').value || undefined,
+  });
+  decir('tf-pre-msg', r, 'Lista asignada.');
+  if (r.ok) await cargarListasDePrecioDelTercero(estado.terceroEnFicha);
 };
 
 async function abrirTercero(id, cursor) {
@@ -6707,7 +7036,7 @@ async function cargarSaldoDelTercero(id) {
       '<td>' + (c.cuotas ? '<span class="p p-neu">' + escapar(c.cuotas) + ' cuotas</span>' : '—') + '</td>';
     pend.appendChild(tr);
 
-    for (const s of [sel, E('ter-p-cbte')]) {
+    for (const s of [sel, E('ter-p-cbte'), E('ter-imp-cbte'), E('ter-corr-cbte')]) {
       const o = document.createElement('option');
       o.value = c.id;
       o.textContent = c.puntoVenta + '-' + c.numero + ' · pendiente ' + c.pendiente;
@@ -6716,6 +7045,8 @@ async function cargarSaldoDelTercero(id) {
   }
 
   E('ter-plan').hidden = !puede('allocation:read');
+  E('ter-imp').hidden = !puede('allocation:read');
+  E('ter-corr').hidden = !puede('allocation:read');
   E('ter-sugerencias').hidden = !puede('allocation:write');
   E('ter-imputar').hidden = !puede('allocation:write');
   E('ter-notas').hidden = !puede('allocation:write');
@@ -6909,6 +7240,129 @@ async function verPlan() {
   E('ter-i-cuota-caja').hidden = !r.datos.tienePlan;
 }
 
+// ── Imputaciones de un comprobante, y su anulación ──────────────────────────
+//
+// Lo que esta pantalla agrega no es una forma nueva de imputar: es la mitad
+// que faltaba de la que ya existe. Una imputación mal cargada —el cobro
+// equivocado contra el comprobante equivocado— no tenía antes ningún camino
+// de vuelta desde la consola; por eso cada fila trae su propio «cancelar»,
+// nunca un botón que anule todo el comprobante de una vez.
+async function verImputaciones() {
+  const tt = E('ter-imp-cbte').value;
+  if (!tt) return;
+  await cargarImputaciones(tt);
+}
+
+async function cargarImputaciones(tt) {
+  const r = await api('GET', '/tax-transactions/' + tt + '/allocations');
+  if (!r.ok) return decir('ter-imp-msg', r);
+  limpiar('ter-imp-msg');
+
+  const cuerpo = E('t-ter-imp').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const a of r.datos.imputaciones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(a.fecha) + '</td>' +
+      '<td class="mono">N.° ' + escapar(a.numeroAsiento) + '</td>' +
+      '<td class="mono">' + escapar(a.importe) + '</td>' +
+      '<td>' + pastilla(a.status) + (a.motivoAnulacion
+        ? '<div class="ayuda">' + escapar(a.motivoAnulacion) + '</div>' : '') + '</td>' +
+      '<td>' + (a.status === 'ACTIVA' && puede('allocation:write')
+        ? '<span class="clic">cancelar</span>' : '') + '</td>';
+    if (a.status === 'ACTIVA' && puede('allocation:write')) {
+      tr.querySelector('.clic').onclick = () => cancelarImputacion(a.id, tt);
+    }
+    cuerpo.appendChild(tr);
+  }
+  if ((r.datos.imputaciones || []).length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="5">Este comprobante no tiene ninguna imputación todavía.</td></tr>';
+  }
+}
+
+async function cancelarImputacion(allocationId, tt) {
+  const motivo = window.prompt(
+    'Esta imputación se anula, no se borra: el asiento del cobro o pago sigue ' +
+    'existiendo, y el comprobante vuelve a figurar con ese importe pendiente. ' +
+    '¿Por qué se cancela? Queda en la bitácora.',
+  );
+  if (motivo === null) return;
+  if (motivo.trim().length < 3) {
+    E('ter-imp-msg').innerHTML = '<div class="aviso mal">Sin motivo no se cancela.</div>';
+    return;
+  }
+  const r = await api('POST', '/party-allocations/' + allocationId + '/cancel', {
+    motivo: motivo.trim(),
+  });
+  decir('ter-imp-msg', r, 'Imputación cancelada.');
+  if (r.ok) {
+    await cargarImputaciones(tt);
+    if (estado.tercero) await cargarSaldoDelTercero(estado.tercero);
+  }
+}
+
+// ── Correcciones de un comprobante (notas de crédito/débito aplicadas) ─────
+//
+// La misma consulta sirve para los dos lados: si el comprobante elegido es
+// la factura, `estaEsLaNota` da false y la fila cuenta qué nota la corrigió;
+// si es la nota, da true y cuenta a qué factura se aplicó. Anular no mueve el
+// Mayor — es la vista `invoice_settlement` la que deja de sumar la corrección.
+async function verCorrecciones() {
+  const tt = E('ter-corr-cbte').value;
+  if (!tt) return;
+  await cargarCorrecciones(tt);
+}
+
+async function cargarCorrecciones(tt) {
+  const r = await api('GET', '/tax-transactions/' + tt + '/correcciones');
+  if (!r.ok) return decir('ter-corr-msg', r);
+  E('ter-corr-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
+
+  const cuerpo = E('t-ter-corr').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.correcciones || []) {
+    const nota = c.correctoraTipo + ' ' + c.correctoraPuntoVenta + '-' + c.correctoraNumero;
+    const factura = c.corregidaTipo + ' ' + c.corregidaPuntoVenta + '-' + c.corregidaNumero;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(nota) + '</td>' +
+      '<td class="mono">' + escapar(factura) + '</td>' +
+      '<td class="mono">' + escapar(c.importe) + '</td>' +
+      '<td>' + pastilla(c.status) + (c.motivoAnulacion
+        ? '<div class="ayuda">' + escapar(c.motivoAnulacion) + '</div>' : '') + '</td>' +
+      '<td>' + (c.status === 'ACTIVA' && puede('allocation:write')
+        ? '<span class="clic">cancelar</span>' : '') + '</td>';
+    if (c.status === 'ACTIVA' && puede('allocation:write')) {
+      tr.querySelector('.clic').onclick = () => cancelarCorreccion(c.id, tt);
+    }
+    cuerpo.appendChild(tr);
+  }
+  if ((r.datos.correcciones || []).length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="5">Este comprobante no tiene ninguna corrección todavía.</td></tr>';
+  }
+}
+
+async function cancelarCorreccion(correccionId, tt) {
+  const motivo = window.prompt(
+    'Esta corrección se anula, no se borra: el total del tercero no cambia, solo deja de ' +
+    'estar trasladado — la factura vuelve a deber lo que debía y la nota vuelve a figurar ' +
+    'sin aplicar. ¿Por qué se cancela? Queda en la bitácora.',
+  );
+  if (motivo === null) return;
+  if (motivo.trim().length < 3) {
+    E('ter-corr-msg').innerHTML = '<div class="aviso mal">Sin motivo no se cancela.</div>';
+    return;
+  }
+  const r = await api('POST', '/tax-transaction-corrections/' + correccionId + '/cancel', {
+    motivo: motivo.trim(),
+  });
+  decir('ter-corr-msg', r, 'Corrección cancelada.');
+  if (r.ok) {
+    await cargarCorrecciones(tt);
+    if (estado.tercero) await cargarSaldoDelTercero(estado.tercero);
+  }
+}
+
 /**
  * Escribe las filas del plan a partir de una periodicidad.
  *
@@ -6947,6 +7401,8 @@ function tipearPlan() {
 
 E('b-ter-plan-ver').onclick = () => verPlan();
 E('b-ter-plan-tipear').onclick = () => tipearPlan();
+E('b-ter-imp-ver').onclick = () => verImputaciones();
+E('b-ter-corr-ver').onclick = () => verCorrecciones();
 
 E('b-ter-plan-guardar').onclick = async () => {
   const fechas = [...document.querySelectorAll('#ter-p-filas .plan-fecha')];
@@ -7154,7 +7610,194 @@ async function abrirOperacion(id) {
       '<td>' + pastillaOrigen(h.origen === 'PROPUESTA_IA' ? 'IA' : 'PROFESIONAL') + '</td>' +
       '<td>' + escapar(h.justificacion || h.motivo || '—') + '</td></tr>').join('') +
     '</tbody></table></div>';
+
+  // ── Vincular a un tercero ─────────────────────────────────────────────
+  E('op-party').hidden = !puede('tax_affectation:declare') || !puede('party:read');
+  limpiar('op-party-msg');
+  if (!E('op-party').hidden) await cargarPartiesParaVinculo();
+
+  // ── Renglones ───────────────────────────────────────────────────────────
+  E('op-lineas').hidden = !puede('journal_entry:read');
+  limpiar('op-lin-msg');
+  if (!E('op-lineas').hidden) await cargarLineasDeOperacion(id);
+
+  // ── Crédito fiscal ──────────────────────────────────────────────────────
+  E('op-credito').hidden = !puede('vat_book:read');
+  limpiar('op-credito-msg');
+
+  // ── Corregir la decisión ────────────────────────────────────────────────
+  estado.decisionVigenteId = d ? d.id : null;
+  E('op-supersede').hidden = !puede('decision:supersede') || !estado.decisionVigenteId;
+  E('op-sup-motivo').value = '';
+  limpiar('op-sup-msg');
 }
+
+async function cargarPartiesParaVinculo() {
+  const r = await api('GET', '/parties?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('op-party-sel');
+  sel.innerHTML = '<option value="">— ninguno (desvincular) —</option>';
+  for (const t of (r.datos.terceros || [])) {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.razonSocial + (t.numeroDocumento ? ' · ' + t.numeroDocumento : '');
+    sel.appendChild(o);
+  }
+}
+
+E('b-op-party').onclick = async () => {
+  const r = await api('POST', '/tax-transactions/' + estado.tt + '/party', {
+    partyId: E('op-party-sel').value || null,
+  });
+  decir('op-party-msg', r, 'Tercero vinculado.');
+};
+
+// El reemplazo completo vive en memoria hasta guardar, igual que los
+// borradores de solicitudes y órdenes de pago: mandar la lista entera evita
+// pasos intermedios que no cierran contra la cabecera.
+const edicionDeLineas = [];
+
+async function cargarLineasDeOperacion(id) {
+  const r = await api('GET', '/tax-transactions/' + id + '/lines');
+  if (!r.ok) return decir('op-lin-msg', r);
+  E('op-lin-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
+
+  const c = r.datos.cabecera;
+  E('op-lin-cab').innerHTML =
+    fila('Neto', c.neto) + fila('IVA', c.iva) + fila('Exento', c.exento) +
+    fila('No gravado', c.noGravado) + fila('Total', c.total);
+
+  const cuerpo = E('t-op-lin').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const l of r.datos.renglones || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(l.linea) + '</td>' +
+      '<td class="mono">' + escapar(l.productoCodigo || '—') + '</td>' +
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(l.precioUnitario) + '</td>' +
+      '<td class="mono">' + escapar(l.descuento) + '</td>' +
+      '<td>' + escapar(l.tratamiento) + '</td>' +
+      '<td class="mono">' + escapar(l.neto) + '</td>' +
+      '<td class="mono">' + escapar(l.iva) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+
+  E('op-lin-editar').hidden = !puede('journal_entry:create');
+  if (!E('op-lin-editar').hidden) {
+    await cargarProductosParaLineas();
+    edicionDeLineas.length = 0;
+    for (const l of r.datos.renglones || []) {
+      edicionDeLineas.push({
+        productoId: l.productoId || undefined,
+        descripcion: l.descripcion,
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario,
+        descuento: l.descuento,
+        tratamiento: l.tratamiento,
+        neto: l.neto,
+        iva: l.iva,
+      });
+    }
+    dibujarEdicionDeLineas();
+  }
+}
+
+async function cargarProductosParaLineas() {
+  if (!puede('product:read')) return;
+  const r = await api('GET', '/products?status=ACTIVO&limite=200');
+  if (!r.ok) return;
+  const sel = E('op-lin-e-producto');
+  sel.innerHTML = '<option value="">— sin producto del maestro —</option>';
+  for (const p of (r.datos.productos || [])) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.codigo + ' · ' + p.nombre;
+    sel.appendChild(o);
+  }
+}
+
+function dibujarEdicionDeLineas() {
+  const cuerpo = E('t-op-lin-borrador').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  edicionDeLineas.forEach((l, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(l.neto) + '</td>' +
+      '<td class="mono">' + escapar(l.iva) + '</td>' +
+      '<td><span class="clic">quitar</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      edicionDeLineas.splice(i, 1);
+      dibujarEdicionDeLineas();
+    };
+    cuerpo.appendChild(tr);
+  });
+}
+
+E('b-op-lin-agregar').onclick = () => {
+  edicionDeLineas.push({
+    productoId: E('op-lin-e-producto').value || undefined,
+    descripcion: E('op-lin-e-desc').value,
+    cantidad: E('op-lin-e-cant').value,
+    precioUnitario: E('op-lin-e-precio').value,
+    descuento: E('op-lin-e-desc-imp').value || '0',
+    tratamiento: E('op-lin-e-trat').value,
+    neto: E('op-lin-e-neto').value,
+    iva: E('op-lin-e-iva').value || '0',
+  });
+  E('op-lin-e-desc').value = '';
+  E('op-lin-e-cant').value = '';
+  E('op-lin-e-precio').value = '';
+  E('op-lin-e-neto').value = '';
+  dibujarEdicionDeLineas();
+};
+
+E('b-op-lin-guardar').onclick = async () => {
+  const r = await api('PUT', '/tax-transactions/' + estado.tt + '/lines', {
+    renglones: edicionDeLineas.slice(),
+  });
+  decir('op-lin-msg', r, 'Detalle guardado.');
+  if (r.ok) await cargarLineasDeOperacion(estado.tt);
+};
+
+E('b-op-lin-vaciar').onclick = async () => {
+  if (!window.confirm('Esto borra todo el detalle cargado del comprobante. ¿Confirmás?')) return;
+  const r = await api('PUT', '/tax-transactions/' + estado.tt + '/lines', { renglones: [] });
+  decir('op-lin-msg', r, 'Detalle borrado.');
+  if (r.ok) await cargarLineasDeOperacion(estado.tt);
+};
+
+E('b-op-credito').onclick = async () => {
+  const r = await api('GET', '/vat/credito-fiscal/' + estado.tt);
+  if (!r.ok) return decir('op-credito-msg', r);
+
+  const d = r.datos;
+  const hallazgos = (d.hallazgos || []).map((h) =>
+    '<li><strong>' + escapar(h.codigo) + '</strong>' +
+    (h.renglon ? ' (renglón ' + escapar(h.renglon) + ')' : '') +
+    (h.bloquea ? ' <span class="p p-mal">bloquea</span>' : '') +
+    '<br>' + escapar(h.mensaje) + '</li>').join('');
+  const falta = (d.faltaRelevar || []).map((f) => '<li>' + escapar(f) + '</li>').join('');
+
+  E('op-credito-msg').innerHTML =
+    '<div class="aviso"><strong>' + escapar(d.estado) + '</strong><p>' + escapar(d.mensaje) +
+    '</p><p>IVA discriminado: <span class="mono">' + escapar(d.ivaDiscriminado) + '</span></p>' +
+    (hallazgos ? '<h4>Hallazgos</h4><ul>' + hallazgos + '</ul>' : '<p>Sin hallazgos de forma.</p>') +
+    '<h4>Falta relevar para decidir de fondo</h4><ul>' + falta + '</ul></div>';
+};
+
+E('b-op-sup').onclick = async () => {
+  const r = await api('POST', '/comprobantes/' + estado.tt + '/decision/supersede', {
+    motivo: E('op-sup-motivo').value,
+    resultado: E('op-sup-resultado').value,
+    supersedeId: estado.decisionVigenteId,
+  });
+  decir('op-sup-msg', r, 'Decisión corregida. La anterior queda conservada como superada.');
+  if (r.ok) { await listarOperaciones(); await abrirOperacion(estado.tt); }
+};
 
 E('b-constatar').onclick = async () => {
   const r = await api('POST', '/tax-transactions/' + estado.tt + '/constatar', {
@@ -7779,6 +8422,31 @@ async function abrirStockDeProducto(id, nombre, cursor) {
   }
   estado.cursores.stk = r.datos.cursor;
   E('b-stk-mov-mas').hidden = !r.datos.cursor;
+  if (!cursor) await cargarFacturadoDeProducto(id);
+}
+
+// Agregado por producto, no por depósito: compras y ventas facturadas, sin
+// mezclar con el libro de stock de arriba — son dos preguntas distintas.
+async function cargarFacturadoDeProducto(id) {
+  const r = await api('GET', '/products/' + id + '/movimientos');
+  if (!r.ok) return;
+
+  const cuerpo = E('t-stk-fact').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const m of r.datos.movimientos || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(m.direccion) + '</td>' +
+      '<td class="mono">' + escapar(m.comprobantes) + '</td>' +
+      '<td class="mono">' + escapar(m.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(m.neto) + '</td>' +
+      '<td class="mono">' + escapar(m.primera) + '</td>' +
+      '<td class="mono">' + escapar(m.ultima) + '</td>';
+    cuerpo.appendChild(tr);
+  }
+  if ((r.datos.movimientos || []).length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="6">Este producto no tiene comprobantes facturados todavía.</td></tr>';
+  }
 }
 
 E('b-stk').onclick = () => listarStock();
@@ -7808,33 +8476,44 @@ E('stk-m-tipo').onchange = () => {
 };
 
 E('b-stk-mover').onclick = async () => {
-  const t = E('stk-m-tipo').value;
-  const comun = {
-    productoId: E('stk-m-prod').value,
-    cantidad: E('stk-m-cant').value,
-    fecha: E('stk-m-fecha').value,
-  };
-  let r;
-  if (t === 'salida') {
-    r = await api('POST', '/stock-movements/salida', Object.assign({}, comun, {
-      depositoId: E('stk-m-dep').value,
-      taxTransactionId: E('stk-m-venta').value,
-    }));
-  } else if (t === 'ajuste') {
-    r = await api('POST', '/stock-movements/ajuste', Object.assign({}, comun, {
-      depositoId: E('stk-m-dep').value,
-      sentido: E('stk-m-sentido').value,
-      motivo: E('stk-m-motivo').value,
-    }));
-  } else {
-    r = await api('POST', '/stock-movements/transferencia', Object.assign({}, comun, {
-      origenDepositoId: E('stk-m-dep').value,
-      destinoDepositoId: E('stk-m-destino').value,
-      motivo: E('stk-m-motivo').value || undefined,
-    }));
+  // Deshabilitado mientras viaja: un ajuste o una transferencia no citan un
+  // comprobante que la base pueda usar para no repetirlos, y una salida
+  // puede legítimamente repetirse para la misma venta (despacho parcial) —
+  // la base no tiene con qué distinguir eso de un doble click. Esto es lo
+  // único que se puede hacer sin una decisión de producto sobre claves de
+  // idempotencia.
+  E('b-stk-mover').disabled = true;
+  try {
+    const t = E('stk-m-tipo').value;
+    const comun = {
+      productoId: E('stk-m-prod').value,
+      cantidad: E('stk-m-cant').value,
+      fecha: E('stk-m-fecha').value,
+    };
+    let r;
+    if (t === 'salida') {
+      r = await api('POST', '/stock-movements/salida', Object.assign({}, comun, {
+        depositoId: E('stk-m-dep').value,
+        taxTransactionId: E('stk-m-venta').value,
+      }));
+    } else if (t === 'ajuste') {
+      r = await api('POST', '/stock-movements/ajuste', Object.assign({}, comun, {
+        depositoId: E('stk-m-dep').value,
+        sentido: E('stk-m-sentido').value,
+        motivo: E('stk-m-motivo').value,
+      }));
+    } else {
+      r = await api('POST', '/stock-movements/transferencia', Object.assign({}, comun, {
+        origenDepositoId: E('stk-m-dep').value,
+        destinoDepositoId: E('stk-m-destino').value,
+        motivo: E('stk-m-motivo').value || undefined,
+      }));
+    }
+    decir('stk-m-msg', r, 'Movimiento registrado');
+    if (r.ok) listarStock();
+  } finally {
+    E('b-stk-mover').disabled = false;
   }
-  decir('stk-m-msg', r, 'Movimiento registrado');
-  if (r.ok) listarStock();
 };
 
 // ══ 4c · Bienes de uso ════════════════════════════════════════════════════
@@ -8039,6 +8718,12 @@ E('b-act-baja').onclick = async () => {
     motivo: E('act-baja-motivo').value,
   });
   decir('act-acc-msg', r, 'Bien dado de baja');
+  // La API avisa explícitamente que la baja no asienta sola (§alcance) — sin
+  // esto, `decir` solo lee `mensaje`/`siguiente` y el aviso quedaba escondido
+  // dentro de «Ver el detalle técnico» como JSON, nunca como texto para leer.
+  if (r.ok && r.datos && r.datos.alcance) {
+    E('act-acc-msg').innerHTML += '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
+  }
   if (r.ok) { listarActivos(); abrirActivo(estado.activo); }
 };
 
@@ -8653,10 +9338,28 @@ E('b-ban-proponer').onclick = async () => {
         score: p.score,
       });
       decir('ban-prop-msg', c, 'Conciliación confirmada');
+      if (c.ok && c.datos.matchId) await mostrarTrazaDeMatch(c.datos.matchId);
     };
     cuerpo.appendChild(tr);
   }
 };
+
+// Del movimiento del banco al asiento que lo sostiene, en un salto — y solo
+// alcanzable con el `matchId` que la propia confirmación devuelve: no hay
+// ninguna ruta que liste coincidencias confirmadas en sesiones anteriores
+// por su id, así que esto solo traza la que se acaba de confirmar acá.
+async function mostrarTrazaDeMatch(matchId) {
+  const r = await api('GET', '/banks/trace/' + matchId);
+  if (!r.ok) return;
+  const t = r.datos;
+  E('ban-prop-msg').innerHTML +=
+    '<div class="aviso ok"><strong>De dónde sale</strong>' +
+    '<dl class="kv">' +
+    fila('Movimiento', t.movimiento_fecha + ' · ' + t.movimiento_descripcion + ' · ' +
+      t.movimiento_importe) +
+    fila('Asiento', t.journal_code + ' N.° ' + t.entry_number + ' · ' + t.entry_date) +
+    '</dl></div>';
+}
 
 // ══ 4c2 · Cheques ═════════════════════════════════════════════════════════
 async function listarCheques() {
@@ -8860,13 +9563,14 @@ async function cargarProductosParaSolicitud() {
   if (!puede('product:read')) return;
   const r = await api('GET', '/products?status=ACTIVO&limite=200');
   if (!r.ok) return;
-  const sel = E('sol-r-producto');
-  sel.innerHTML = '<option value="">— no está en el maestro —</option>';
-  for (const p of (r.datos.productos || [])) {
-    const o = document.createElement('option');
-    o.value = p.id;
-    o.textContent = p.codigo + ' · ' + p.nombre;
-    sel.appendChild(o);
+  for (const sel of [E('sol-r-producto'), E('sol-e-producto')]) {
+    sel.innerHTML = '<option value="">— no está en el maestro —</option>';
+    for (const p of (r.datos.productos || [])) {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.codigo + ' · ' + p.nombre;
+      sel.appendChild(o);
+    }
   }
 }
 
@@ -8903,7 +9607,67 @@ async function abrirSolicitud(id, titulo) {
       '<td>' + escapar(l.observaciones || '') + '</td>';
     cuerpo.appendChild(tr);
   }
+
+  E('sol-editar').hidden = s.estado !== 'BORRADOR' || !puede('purchase_request:write');
+  if (!E('sol-editar').hidden) {
+    edicionDeSolicitud.length = 0;
+    for (const l of r.datos.renglones || []) {
+      edicionDeSolicitud.push({
+        productoId: l.productoId || undefined,
+        descripcion: l.descripcion,
+        cantidad: l.cantidad,
+        unidad: l.unidad,
+      });
+    }
+    await cargarProductosParaSolicitud();
+    dibujarEdicionDeSolicitud();
+  }
 }
+
+// Mismo patrón que `borradorDeSolicitud` (alta), para no mezclar los dos
+// estados: uno arma una solicitud nueva, el otro reemplaza una ya existente.
+const edicionDeSolicitud = [];
+
+function dibujarEdicionDeSolicitud() {
+  const cuerpo = E('t-sol-editar').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  edicionDeSolicitud.forEach((l, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escapar(l.descripcion) + '</td>' +
+      '<td class="mono">' + escapar(l.cantidad) + '</td>' +
+      '<td class="mono">' + escapar(l.unidad) + '</td>' +
+      '<td><span class="clic">quitar</span></td>';
+    tr.querySelector('.clic').onclick = () => {
+      edicionDeSolicitud.splice(i, 1);
+      dibujarEdicionDeSolicitud();
+    };
+    cuerpo.appendChild(tr);
+  });
+}
+
+E('b-sol-e-agregar').onclick = () => {
+  edicionDeSolicitud.push({
+    productoId: E('sol-e-producto').value || undefined,
+    descripcion: E('sol-e-descripcion').value,
+    cantidad: E('sol-e-cantidad').value,
+    unidad: E('sol-e-unidad').value || 'UNIDAD',
+  });
+  E('sol-e-descripcion').value = '';
+  E('sol-e-cantidad').value = '';
+  dibujarEdicionDeSolicitud();
+};
+
+E('b-sol-e-guardar').onclick = async () => {
+  const r = await api('PUT', '/purchase-requests/' + estado.solicitud + '/renglones', {
+    renglones: edicionDeSolicitud.slice(),
+  });
+  decir('sol-e-msg', r, 'Renglones actualizados.');
+  if (r.ok) {
+    await listarSolicitudes();
+    await abrirSolicitud(estado.solicitud, E('sol-det-titulo').textContent.split(' · ')[0]);
+  }
+};
 
 async function cargarOrdenesParaSolicitud() {
   if (!puede('commercial:read')) return;
@@ -8914,7 +9678,7 @@ async function cargarOrdenesParaSolicitud() {
   for (const d of (r.datos.documentos || [])) {
     const o = document.createElement('option');
     o.value = d.id;
-    o.textContent = 'N° ' + d.numero + ' · ' + (d.razonSocial || '') + ' · ' + d.estado;
+    o.textContent = 'N° ' + d.numero + ' · ' + (d.razonSocial || '') + ' · ' + d.status;
     sel.appendChild(o);
   }
 }
@@ -9070,7 +9834,52 @@ async function abrirOrdenDePago(id, titulo) {
         : escapar(l.comprometidoEnOtras)) + '</td>';
     cuerpo.appendChild(tr);
   }
+
+  E('odp-editar').hidden = r.datos.orden.estado !== 'BORRADOR' || !puede('payment_order:write');
+  if (!E('odp-editar').hidden) await cargarEdicionDeOrden(r.datos.orden.proveedorId, r.datos.renglones);
 }
+
+// Mismo selector que armar una orden ("Ver qué se le debe"), pero acá llega
+// precargado: lo que ya está en el borrador queda tildado con su importe
+// actual, y el resto aparece sin tildar para agregar.
+async function cargarEdicionDeOrden(proveedorId, renglonesActuales) {
+  const r = await api('GET', '/payment-orders/pagables?proveedorId=' + proveedorId);
+  if (!r.ok) return decir('odp-e-msg', r);
+
+  const actuales = new Map((renglonesActuales || []).map((l) => [l.comprobanteId, l.importe]));
+  const cuerpo = E('t-odp-editar').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of r.datos.comprobantes || []) {
+    const yaEsta = actuales.has(c.id);
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="checkbox" class="odp-e-sel" data-id="' + escapar(c.id) + '"' +
+        (yaEsta ? ' checked' : '') + '></td>' +
+      '<td class="mono">' + escapar(c.cbteTipo + '-' + c.puntoVenta + '-' + c.cbteNumero) + '</td>' +
+      '<td class="mono">' + escapar(c.cbteFecha) + '</td>' +
+      '<td class="mono">' + escapar(c.total) + '</td>' +
+      '<td class="mono">' + escapar(c.pendiente) + '</td>' +
+      '<td class="mono">' + escapar(c.comprometido) + '</td>' +
+      '<td><input class="odp-e-imp mono" data-id="' + escapar(c.id) + '" value="' +
+        escapar(yaEsta ? actuales.get(c.id) : c.pendiente) + '" inputmode="decimal"></td>';
+    cuerpo.appendChild(tr);
+  }
+}
+
+E('b-odp-e-guardar').onclick = async () => {
+  const renglones = [];
+  for (const chk of document.querySelectorAll('.odp-e-sel')) {
+    if (!chk.checked) continue;
+    const imp = document.querySelector('.odp-e-imp[data-id="' + chk.dataset.id + '"]');
+    renglones.push({ comprobanteId: chk.dataset.id, importe: imp.value });
+  }
+  const r = await api('PUT', '/payment-orders/' + estado.ordenDePago + '/renglones', { renglones });
+  decir('odp-e-msg', r, 'Renglones actualizados.');
+  if (r.ok) {
+    await listarOrdenesDePago();
+    await abrirOrdenDePago(estado.ordenDePago, E('odp-det-titulo').textContent.split(' · ')[0]);
+  }
+};
 
 E('b-odp').onclick = () => listarOrdenesDePago();
 E('odp-f-estado').onchange = () => listarOrdenesDePago();
@@ -9363,6 +10172,11 @@ async function abrirVendedor(id, titulo) {
   E('cms-operar').hidden = !puede('commission:write');
   limpiar('cms-e-msg');
 
+  E('cms-editar').hidden = !puede('commission:write');
+  E('cms-ed-nombre').value = r.datos.vendedor.nombre;
+  E('cms-ed-status').value = r.datos.vendedor.status;
+  limpiar('cms-ed-msg');
+
   const esq = E('t-cms-esq').querySelector('tbody');
   esq.innerHTML = '';
   for (const e of r.datos.esquemas || []) {
@@ -9406,6 +10220,15 @@ E('b-cms-alta').onclick = async () => {
   const r = await api('POST', '/salespeople', cuerpo);
   decir('cms-alta-msg', r, 'Vendedor creado. Falta declararle el esquema de comisión.');
   if (r.ok) listarComisiones();
+};
+
+E('b-cms-editar').onclick = async () => {
+  const r = await api('PUT', '/salespeople/' + estado.vendedor, {
+    nombre: E('cms-ed-nombre').value,
+    status: E('cms-ed-status').value,
+  });
+  decir('cms-ed-msg', r, 'Vendedor actualizado.');
+  if (r.ok) { await listarComisiones(); await abrirVendedor(estado.vendedor, estado.vendedorTitulo); }
 };
 
 E('b-cms-esquema').onclick = async () => {
@@ -9667,6 +10490,9 @@ async function listarCrm() {
       s.value = previo;
     }
     marcarMotivoDeEtapa();
+
+    E('crm-editar-etapa').hidden = !puede('crm:write');
+    if (puede('crm:write')) pintarEdicionDeEtapas(lista);
   }
 
   const embudo = await api('GET', '/analysis/embudo');
@@ -9819,6 +10645,41 @@ E('b-crm-alta-etapa').onclick = async () => {
   decir('crm-alta-etapa-msg', r, 'Etapa declarada');
   if (r.ok) listarCrm();
 };
+
+function pintarEdicionDeEtapas(lista) {
+  const cuerpo = E('t-crm-editar-etapa').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const e of lista) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">' + escapar(e.orden) + '</td>' +
+      '<td class="mono">' + escapar(e.codigo) + '</td>' +
+      '<td><input class="crm-ee-nombre" value="' + escapar(e.nombre) + '" maxlength="200"></td>' +
+      '<td><input class="crm-ee-prob" inputmode="decimal" value="' +
+        escapar(e.probabilidad === null || e.probabilidad === undefined ? '' : e.probabilidad) +
+        '" placeholder="sin declarar"></td>' +
+      '<td><select class="crm-ee-status">' +
+        '<option value="ACTIVA"' + (e.status === 'ACTIVA' ? ' selected' : '') + '>ACTIVA</option>' +
+        '<option value="ARCHIVADA"' + (e.status === 'ARCHIVADA' ? ' selected' : '') + '>ARCHIVADA</option>' +
+        '</select></td>' +
+      '<td><span class="clic">guardar</span></td>';
+    tr.querySelector('.clic').onclick = () => guardarEdicionDeEtapa(e.id, tr);
+    cuerpo.appendChild(tr);
+  }
+}
+
+async function guardarEdicionDeEtapa(id, tr) {
+  const nombre = tr.querySelector('.crm-ee-nombre').value;
+  const probTxt = tr.querySelector('.crm-ee-prob').value.trim();
+  const status = tr.querySelector('.crm-ee-status').value;
+  const r = await api('PUT', '/crm/stages/' + id, {
+    nombre,
+    probabilidad: probTxt === '' ? null : Number(probTxt),
+    status,
+  });
+  decir('crm-editar-etapa-msg', r, 'Etapa actualizada.');
+  if (r.ok) await listarCrm();
+}
 
 E('b-crm-alta-op').onclick = async () => {
   const cuerpo = {
@@ -9978,18 +10839,26 @@ E('b-caja-abrir').onclick = async () => {
 };
 
 E('b-caja-mov').onclick = async () => {
-  const r = await api('POST', '/cash-sessions/' + estado.sesionCaja + '/movimientos', {
-    tipo: E('caja-m-tipo').value,
-    importe: E('caja-m-importe').value,
-    fecha: E('caja-m-fecha').value,
-    concepto: E('caja-m-concepto').value,
-  });
-  decir('caja-m-msg', r, 'Movimiento registrado');
-  if (r.ok) {
-    E('caja-m-importe').value = '';
-    E('caja-m-concepto').value = '';
-    await listarCaja();
-    await abrirSesionDeCaja(estado.sesionCaja, estado.sesionCajaTitulo);
+  // Deshabilitado mientras viaja: no hay con qué distinguir un doble click de
+  // dos movimientos reales iguales, porque un movimiento manual de caja no
+  // cita ningún comprobante que la base pueda usar para no repetirlo.
+  E('b-caja-mov').disabled = true;
+  try {
+    const r = await api('POST', '/cash-sessions/' + estado.sesionCaja + '/movimientos', {
+      tipo: E('caja-m-tipo').value,
+      importe: E('caja-m-importe').value,
+      fecha: E('caja-m-fecha').value,
+      concepto: E('caja-m-concepto').value,
+    });
+    decir('caja-m-msg', r, 'Movimiento registrado');
+    if (r.ok) {
+      E('caja-m-importe').value = '';
+      E('caja-m-concepto').value = '';
+      await listarCaja();
+      await abrirSesionDeCaja(estado.sesionCaja, estado.sesionCajaTitulo);
+    }
+  } finally {
+    E('b-caja-mov').disabled = false;
   }
 };
 
@@ -10784,15 +11653,20 @@ async function abrirAsiento(id, resumen) {
 
 E('b-ne').onclick = async () => {
   const importe = E('ne-importe').value;
+  const lineaDebe = { accountCode: E('ne-debe').value, debit: importe, credit: '0' };
+  const lineaHaber = { accountCode: E('ne-haber').value, debit: '0', credit: importe };
+  if (E('ne-debe-tercero').value) lineaDebe.partyId = E('ne-debe-tercero').value;
+  if (E('ne-haber-tercero').value) lineaHaber.partyId = E('ne-haber-tercero').value;
+  // Se aplica a las dos líneas: un gasto de proyecto suele imputarse por el
+  // lado del Debe, pero un ingreso lo hace por el del Haber, y la pantalla no
+  // tiene forma de saber cuál es cuál de antemano.
+  if (E('ne-centro').value) { lineaDebe.costCenterCode = E('ne-centro').value; lineaHaber.costCenterCode = E('ne-centro').value; }
   const cuerpo = {
     journalCode: E('ne-libro').value,
     entryDate: E('ne-fecha').value,
     description: E('ne-desc').value,
     status: E('ne-status').value,
-    lines: [
-      { accountCode: E('ne-debe').value, debit: importe, credit: '0' },
-      { accountCode: E('ne-haber').value, debit: '0', credit: importe },
-    ],
+    lines: [lineaDebe, lineaHaber],
     source: { type: 'MANUAL' },
   };
   if (E('ne-just').value) cuerpo.manualJustification = E('ne-just').value;
@@ -10898,12 +11772,23 @@ E('b-diario-resumido').onclick = async () => {
 };
 
 E('b-mayor').onclick = async () => {
-  const r = await api('GET', '/books/mayor?' + rango());
+  const cuenta = E('lib-cuenta').value;
+  const url = '/books/mayor?' + rango() + (cuenta ? '&cuenta=' + encodeURIComponent(cuenta) : '');
+  const r = await api('GET', url);
   if (!r.ok) return decir('lib-msg', r);
   limpiar('lib-msg');
-  E('lib-salida').innerHTML = tablaDe(r.datos.cuentas || [],
+  let html = tablaDe(r.datos.cuentas || [],
     [['Cuenta','codigo'],['Nombre','nombre'],['Saldo inicial','saldoInicial'],
      ['Debe','totalDebe'],['Haber','totalHaber'],['Saldo','saldoFinal']]);
+  // Con una cuenta elegida, la API ya trae sus movimientos uno por uno — sin
+  // esto la pantalla solo mostraba el total, nunca de dónde salió.
+  if (cuenta && (r.datos.cuentas || []).length === 1) {
+    html += '<h3>Movimientos de ' + escapar(cuenta) + '</h3>' +
+      tablaDe(r.datos.cuentas[0].movimientos || [],
+        [['Fecha','fecha'],['Libro','libro'],['N.°','numero'],['Detalle','detalle'],
+         ['Debe','debe'],['Haber','haber'],['Saldo','saldo']]);
+  }
+  E('lib-salida').innerHTML = html;
   pintarAccionesDeLibro('MAYOR');
 };
 
@@ -11018,10 +11903,16 @@ E('b-est-armar').onclick = async () => {
       '<td class="mono">' + escapar(renglon.importe) + '</td>' +
       '<td><span class="clic">de dónde sale</span></td>';
     tr.querySelector('.clic').onclick = () => {
+      const cuentas = (renglon.origen || []).map((o) =>
+        '<tr><td class="mono">' + escapar(o.codigo) + '</td>' +
+        '<td class="mono">' + escapar(o.aporte) + '</td></tr>').join('');
       E('est-detalle').innerHTML = '<h3>' + escapar(renglon.etiqueta) + '</h3>' +
-        '<p class="ayuda">Las cuentas que componen el renglón, tal como las devolvió ' +
-        'la API. Un renglón emitido además se traza por su identificador.</p>' +
-        '<pre>' + escapar(JSON.stringify(renglon, null, 2)) + '</pre>';
+        '<p class="ayuda">Las cuentas que componen el renglón. Llega en la misma respuesta: ' +
+        'no hace falta una segunda pantalla para el estado recién armado.</p>' +
+        '<div class="tabla"><table><thead><tr><th>Cuenta</th><th>Aporte</th></tr></thead>' +
+        '<tbody>' + (cuentas || '<tr><td colspan="2">Sin cuentas de origen declaradas.</td></tr>') +
+        '</tbody></table></div>' +
+        (renglon.fundamento ? '<p class="ayuda">' + escapar(renglon.fundamento) + '</p>' : '');
     };
     cuerpo.appendChild(tr);
   }
@@ -12809,6 +13700,34 @@ async function cargarConfig() {
       fila('Organismo', c.regulator) + fila('Cierre de ejercicio', c.fiscalYearEnd) +
       fila('Marco contable', (empresa.datos.reportingFramework || {}).framework || 'sin fijar') +
       '</dl>';
+
+    // POST /companies/current/reporting-framework existía en la API (la opción
+    // es del ente, no se infiere del CUIT) y no había ningún formulario para
+    // llamarlo: la pantalla solo mostraba «sin fijar», sin forma de fijarlo.
+    if (puede('company:write')) {
+      caja.innerHTML +=
+        '<h4>Declarar el marco de reporte</h4>' +
+        '<p class="ayuda">La norma bajo la que se presentan los estados contables. Es una ' +
+        'opción del ente, con respaldo documental — NEXO no la deduce del CUIT.</p>' +
+        '<div class="fila">' +
+        '<div><label>Marco</label><select id="cfg-marco-framework">' +
+        '<option value="RT_FACPCE">RT FACPCE</option>' +
+        '<option value="NIIF">NIIF</option>' +
+        '<option value="NIIF_PYMES">NIIF para PyMES</option>' +
+        '</select></div>' +
+        '<div><label>Válido desde</label><input id="cfg-marco-desde" type="date"></div>' +
+        '</div>' +
+        '<button id="b-cfg-marco" class="sec">Declarar</button>' +
+        '<div id="cfg-marco-msg"></div>';
+      E('b-cfg-marco').onclick = async () => {
+        const r = await api('POST', '/companies/current/reporting-framework', {
+          framework: E('cfg-marco-framework').value,
+          validFrom: E('cfg-marco-desde').value,
+        });
+        decir('cfg-marco-msg', r, 'Marco contable declarado');
+        if (r.ok) cargarConfig();
+      };
+    }
     // El rol adelante; los códigos de permiso, plegados.
     //
     // No se borran: son exactamente lo que hace falta el día que alguien no
@@ -12828,10 +13747,43 @@ async function cargarConfig() {
   if (puede('user:read')) {
     const u = await api('GET', '/companies/current/users');
     if (u.ok) {
+      // `personas` ahora trae también a quien pertenece al estudio pero
+      // todavía no tiene ningún rol en ESTA empresa (llega con `role: null`).
+      // La tabla de «con acceso» tiene que excluirlos — no tienen acceso
+      // todavía, es justo lo que están por recibir más abajo.
       const personas = u.datos.users || u.datos.usuarios || [];
+      const conAcceso = personas.filter((p) => p.role);
       caja.innerHTML += '<h3>Personas con acceso</h3>' +
-        tablaDe(personas,
+        tablaDe(conAcceso,
           [['Nombre','fullName'],['Correo','email'],['Rol','role'],['Desde','validFrom']]);
+
+      // Alta de una persona nueva en el estudio.
+      //
+      // `POST /organizations/:organizationId/users` existía desde la 0011
+      // (junto con `organization_members`, migración 0012) y tampoco tenía
+      // ningún botón: sin él, la única persona que podía recibir un rol acá
+      // era quien ya tenía uno, porque «Dar un rol» siempre salió de quienes
+      // ya tienen acceso. Es la misma raíz que el hueco de más abajo, del otro
+      // lado: no hay forma de que una persona ajena a la empresa empiece a
+      // existir para el estudio desde la consola.
+      //
+      // Se muestra solo si `canManageOrganization` ya vino en `true` desde el
+      // backend — que resuelve `organization_level` una sola vez con el mismo
+      // criterio que usa `POST /organizations/:id/users` para autorizar. Es
+      // la regla de siempre: si el backend va a decir que no, la consola no
+      // pregunta.
+      if (u.datos.canManageOrganization) {
+        caja.innerHTML +=
+          '<div class="grupo"><h4>Alta de una persona nueva en el estudio</h4>' +
+          '<p class="ayuda">Esto no le da acceso a ninguna empresa por sí solo — solo hace que ' +
+          'exista para el estudio, para poder elegirla después en «Dar un rol».</p>' +
+          '<div class="fila">' +
+          '<div><label>Correo</label><input id="est-correo" type="email"></div>' +
+          '<div><label>Nombre y apellido</label><input id="est-nombre"></div>' +
+          '<div><label>Contraseña (12 o más)</label><input id="est-clave" type="password"></div>' +
+          '<div><label>&nbsp;</label><button id="b-est-alta">Dar de alta en el estudio</button></div>' +
+          '</div><div id="est-alta-msg"></div></div>';
+      }
 
       // Dar un rol.
       //
@@ -12889,6 +13841,37 @@ async function cargarConfig() {
             if (r.ok) await usarEmpresa(estado.empresa);
           });
         }
+      }
+
+      // Mismo contenedor, mismo motivo de delegación que «Dar un rol» de
+      // arriba: `caja.innerHTML += …` vuelve a parsear todo y un `onclick`
+      // puesto sobre el botón se pierde en el siguiente render.
+      if (u.datos.canManageOrganization && !caja.dataset.altaEstudioEnganchado) {
+        caja.dataset.altaEstudioEnganchado = 'si';
+        caja.addEventListener('click', async (ev) => {
+          const boton = ev.target.closest && ev.target.closest('#b-est-alta');
+          if (!boton) return;
+          const correo = E('est-correo').value.trim();
+          const nombre = E('est-nombre').value.trim();
+          const clave = E('est-clave').value;
+          if (!correo || !nombre) return avisoMal('est-alta-msg', 'Completá correo y nombre.');
+          const r = await api('POST', '/organizations/' + u.datos.organizationId + '/users', {
+            email: correo,
+            fullName: nombre,
+            password: clave,
+          });
+          decir('est-alta-msg', r, 'Alta hecha. Ya podés elegirla en «Dar un rol», más abajo.');
+          // Sin este refresco, la persona recién dada de alta no aparece en el
+          // selector de «Dar un rol» hasta salir de Configuración y volver:
+          // esa lista se arma con lo que trajo este mismo GET, no se
+          // recalcula sola.
+          if (r.ok) {
+            E('est-correo').value = '';
+            E('est-nombre').value = '';
+            E('est-clave').value = '';
+            await cargarConfig();
+          }
+        });
       }
     }
   }
