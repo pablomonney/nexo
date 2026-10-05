@@ -106,6 +106,44 @@ asientos a mano; lo que se pierde es que NEXO los **proponga**.
 
 ---
 
+## Conceptos básicos, en criollo
+
+*(Agregado como parte del proyecto de curso — `docs/curso/`. Si ya sabés
+contabilidad, saltealo.)*
+
+No hace falta saber contabilidad para empezar a usar NEXO, pero sí conviene
+tener estas ocho palabras claras antes de la sección A — van a aparecer
+todo el tiempo y ninguna pantalla las explica sola.
+
+- **Ejercicio.** El período grande, normalmente un año, que declarás una
+  vez («Abrir un ejercicio») y que fija cuándo cierran las cuentas.
+- **Período.** Un tramo más chico dentro del ejercicio — NEXO los crea
+  solos al abrir el ejercicio (normalmente, uno por mes). Sin un período
+  `ABIERTO` que contenga la fecha, no se puede registrar nada con esa
+  fecha.
+- **Cuenta imputable.** Una cuenta del plan de cuentas contra la que sí se
+  puede anotar un movimiento (a diferencia de una cuenta "agrupadora",
+  que solo sirve para sumar a las de abajo — como una carpeta que no
+  contiene archivos propios).
+- **Mapeo contable.** La declaración de qué cuenta usar para qué —
+  "cuando venda, anotá acá" — para que NEXO pueda **proponerte** el
+  asiento en vez de que lo escribas siempre a mano.
+- **Comprobante.** El registro de una operación fiscal (una venta, una
+  compra) con sus importes ya fijados. Sale de un documento (una factura
+  subida) más los datos que confirmás vos.
+- **Asiento.** El movimiento contable en sí — quién debe y quién tiene,
+  por qué importe, con qué justificación. Un comprobante puede generar un
+  asiento; un asiento no necesita un comprobante (se puede cargar a mano).
+- **Debe / Haber.** Las dos columnas de un asiento. La regla que nunca se
+  rompe: la suma del Debe tiene que ser igual a la suma del Haber. NEXO no
+  deja guardar un asiento que no cierra.
+- **Mayor.** El resumen, cuenta por cuenta, de todos los asientos
+  **aprobados**. Un asiento en borrador no aparece acá todavía — a
+  propósito: la aprobación es el paso en el que una persona se hace
+  responsable de lo que dice el asiento.
+
+---
+
 ## A · Primer ingreso
 
 ### A.1 · Registrarse
@@ -689,6 +727,106 @@ impiden se escribieron **antes** que el camino que lo produciría.
 
 ---
 
+## N · La bandeja de Pendientes
+
+*(Agregado como parte del proyecto de curso — `docs/curso/`.)*
+
+**Dónde:** Inicio → **Pendientes**.
+
+### Qué es
+
+Una lista de todo lo que necesita que una persona haga algo, armada leyendo
+directamente el estado del sistema — no hay una tabla de tareas aparte que
+alguien tenga que mantener. Si el hecho que la generó cambia, el pendiente
+desaparece solo; no hay forma de "marcarlo como resuelto" a mano, porque eso
+sería una segunda verdad que puede mentir.
+
+### Para qué sirve
+
+Es el punto al que conviene volver cuando no sabés qué hacer. Cubre 33
+tipos de situación distinta — desde "esta empresa no tiene plan de cuentas"
+hasta "este comprobante tiene un hallazgo bloqueante" — agrupadas en 7
+categorías.
+
+### Cuándo usarla
+
+Todo el tiempo, no solo al principio. Es la única pantalla pensada para
+mirarse de forma recurrente, no una vez y listo.
+
+### Antes de empezar
+
+Nada especial — la bandeja siempre está disponible una vez que hay una
+empresa elegida. Cada fila solo aparece si tenés el permiso de lectura de
+esa entidad (no hay un permiso único de "ver la bandeja": cada rama usa el
+mismo permiso que ya exige verla de a una).
+
+### Paso a paso exacto
+
+1. Entrá a **Inicio → Pendientes**.
+2. Si querés acotar, usá el filtro de **categoría** (arriba de la lista).
+3. En la fila que te interese, hacé clic en **«abrir»**.
+4. NEXO te lleva a la pantalla real donde se resuelve ese pendiente
+   específico — no hay ninguna acción que se resuelva "desde la bandeja
+   misma": siempre te manda al lugar que ya existía.
+
+### Qué debería aparecer en pantalla
+
+Una tabla con: la categoría, el motivo en una frase (no un código), y el
+botón «abrir». Si no tenés ningún pendiente, la tabla aparece vacía — no es
+un error.
+
+### Resultado esperado
+
+Al resolver lo que el pendiente pedía (declarar un mapeo, aprobar un
+asiento, corregir un dato), la fila desaparece sola la próxima vez que se
+carga la bandeja.
+
+### Estados posibles (las 7 categorías)
+
+| Categoría | Qué significa |
+|---|---|
+| `BLOQUEADO` | Impide operar hasta resolverse (ej. sin plan de cuentas) |
+| `REQUIERE_CORRECCIÓN` | Hay un dato mal cargado que corregir |
+| `REQUIERE_APROBACIÓN` | Alguien con el permiso tiene que aprobar |
+| `REQUIERE_REVISIÓN` | Alguien tiene que mirarlo, no necesariamente aprobar |
+| `REQUIERE_DECLARACIÓN` | Falta declarar algo (ej. un método de valuación) |
+| `REQUIERE_EVIDENCIA` | Falta adjuntar o confirmar un respaldo |
+| `REQUIERE_FUENTE_EXTERNA` | Depende de una consulta a algo fuera de NEXO (ej. ARCA) |
+
+### Errores frecuentes
+
+«Aprieto "abrir" y no pasa nada» — si te pasa esto en la versión que estás
+usando, es un defecto conocido de versiones anteriores a la corrección del
+2026-09-22 (routing incompleto de 18 de las 33 entidades); en la versión
+publicada desde ese commit, las 33 entidades abren su pantalla real.
+
+### Cómo resolverlos
+
+Cada categoría se resuelve en su pantalla propia — la bandeja no inventa un
+camino nuevo, solo evita que tengas que saber de memoria dónde está cada
+uno.
+
+### Qué permisos requiere
+
+Ninguno propio. Ver una fila depende del permiso de lectura de esa entidad
+(ej. `account:read` para ver "falta el plan de cuentas", `journal_entry:read`
+para ver un asiento sin aprobar).
+
+### Qué otras funcionalidades dependen de ella
+
+Ninguna depende de la bandeja para funcionar — es un atajo, no un requisito.
+Pero es, en la práctica, el punto de entrada más usado después del Panel.
+
+### Ejemplo práctico
+
+Una empresa recién creada, sin plan de cuentas ni ejercicio, muestra en
+Pendientes: "Esta empresa no tiene ninguna cuenta imputable" (`BLOQUEADO`,
+lleva a Plan de cuentas) y "Esta empresa no tiene ningún ejercicio abierto"
+(`BLOQUEADO`, lleva a Períodos y cierre). Resolver los dos hace que la
+bandeja quede sin esas dos filas.
+
+---
+
 ## HUECOS CRÍTICOS PARA EL USUARIO
 
 Tres, y ninguno tiene salida desde la interfaz. Van aparte porque **le pueden
@@ -753,7 +891,10 @@ que **no se pudo escribir completo**.
 | 12 | Retenciones y Libro IVA Digital | Sin implementar / bloqueado | `NO DISPONIBLE` |
 | 13 | Recuperar la contraseña | No existe ningún flujo. **Ver «Huecos críticos», 1** | `NO DISPONIBLE` |
 | 14 | Que una propuesta de IA llegue a confianza alta | `accounting_rules` está vacía: todo cae en revisión profesional | `PARCIAL` |
+| 15 | El plan de cuentas aparece vacío la primera vez que se entra a Configuración por el menú (no así llegando desde un pendiente de puesta en marcha) | `cargarConfig()` no llama a `dibujarCuentas()`; un clic en «Buscar» lo resuelve. Detalle completo en [`curso/05-gap-plan-de-cuentas.md`](curso/05-gap-plan-de-cuentas.md) | `FRICCIÓN UX` |
 
 Documentos relacionados: [`MATRIZ-FUNCIONALIDADES-NEXO.md`](MATRIZ-FUNCIONALIDADES-NEXO.md),
 [`GUIA-PRIMEROS-30-MINUTOS.md`](GUIA-PRIMEROS-30-MINUTOS.md),
-[`GUIA-VIDEOS-NEXO.md`](GUIA-VIDEOS-NEXO.md).
+[`GUIA-VIDEOS-NEXO.md`](GUIA-VIDEOS-NEXO.md),
+[`curso/10-master-plan.md`](curso/10-master-plan.md) — el proyecto del curso
+"NEXO desde Cero", que reorganiza y extiende este manual.

@@ -466,6 +466,7 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
   app.get('/companies/current/users', async (request) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'user:read');
+    const actorUserId = requireAuth(request).user.userId;
 
     // CON la empresa en contexto, y no sin ella.
     //
@@ -478,19 +479,64 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     //
     // Fijar la empresa no debilita nada: RLS acota por empresa, no autoriza. El
     // permiso ya lo exigió `requirePermission`.
-    return withCompany({ companyId: tenant.companyId, actorId: `user:${requireAuth(request).user.userId}` }, async (tx) => {
+    return withCompany({ companyId: tenant.companyId, actorId: `user:${actorUserId}` }, async (tx) => {
+      // Se lee `companies` directo y NO `company_organization()`: esa función
+      // es SECURITY DEFINER y no comprueba a quién le contesta — la 0108 le
+      // revocó el EXECUTE a `aai_app` a propósito, precisamente porque
+      // devolvería el estudio de CUALQUIER empresa, no solo de la que está en
+      // contexto. Acá no hace falta: `companies` tiene RLS por `id =
+      // app_company_id()` (0009), así que este SELECT ya vuelve acotado a la
+      // única empresa a la que `withCompany` dio acceso — el mismo patrón que
+      // ya usa `GET /companies/current` para leer esta tabla.
+      const organizacion = await tx.query<{ organizationId: string }>(
+        'SELECT organization_id AS "organizationId" FROM companies WHERE id = $1',
+        [tenant.companyId],
+      );
+      const organizationId = organizacion.rows[0]!.organizationId;
+
+      // Quién puede APARECER acá para recibir un rol no lo decide esta
+      // consulta: lo decide `grant_company_role` (migración 0014), que exige
+      // pertenecer al mismo estudio (`organization_members`) y por eso rechaza
+      // a cualquier otro con «El usuario destinatario no pertenece al
+      // estudio». Antes esta lista salía únicamente de `user_company_roles`,
+      // así que la pantalla que existe para dar el PRIMER rol de una persona
+      // no podía listar a nadie que no tuviera ya uno — circular, y ninguna
+      // alta nueva podía completarse desde acá. La fuente pasa a ser los
+      // miembros del estudio, con LEFT JOIN a sus roles en esta empresa
+      // puntual: quien todavía no tiene ninguno aparece con `role: null`,
+      // igual de seleccionable en «Dar un rol»; quien ya tiene uno aparece
+      // exactamente igual que antes.
       const result = await tx.query(
         `SELECT u.id, u.email, u.full_name AS "fullName", u.mfa_enabled AS "mfaEnabled",
                 u.status, r.code AS role,
                 ucr.valid_from AS "validFrom", ucr.valid_to AS "validTo"
-           FROM user_company_roles ucr
-           JOIN users u ON u.id = ucr.user_id
-           JOIN roles r ON r.id = ucr.role_id
-          WHERE ucr.company_id = $1
+           FROM organization_members om
+           JOIN users u ON u.id = om.user_id
+           LEFT JOIN user_company_roles ucr
+             ON ucr.user_id = u.id AND ucr.company_id = $1
+           LEFT JOIN roles r ON r.id = ucr.role_id
+          WHERE om.organization_id = $2
           ORDER BY u.full_name`,
-        [tenant.companyId],
+        [tenant.companyId, organizationId],
       );
-      return { users: result.rows };
+
+      // El alta de una persona nueva en el estudio (`POST
+      // /organizations/:id/users`) no la autoriza el permiso de esta empresa:
+      // la autoriza `organization_level` sobre el estudio (migración 0012).
+      // Sin resolverlo acá, la consola no tiene cómo decidir si mostrar ese
+      // botón sin que termine en 403 — la misma regla que ya vale para el
+      // plan («si el backend va a decir que no, la consola no pregunta»).
+      const nivel = await tx.query<{ organization_level: string | null }>(
+        'SELECT organization_level($1, $2)',
+        [actorUserId, organizationId],
+      );
+      const nivelDelEstudio = nivel.rows[0]?.organization_level ?? null;
+
+      return {
+        users: result.rows,
+        organizationId,
+        canManageOrganization: nivelDelEstudio === 'OWNER' || nivelDelEstudio === 'ADMIN',
+      };
     });
   });
 
