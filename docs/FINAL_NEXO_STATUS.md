@@ -110,13 +110,24 @@ Los bugs #4 y #5 se encontraron por el mismo método: al leer el backend para co
 
 **Segunda ronda de búsqueda de defectos (2026-10-01), con dos agentes de exploración dedicados — uno por clase de defecto:**
 
+> **CORRECCIÓN 2026-10-05 — los defectos #6, #7 y #8 de esta tabla (que en
+> `CIERRE_INTEGRAL_NEXO.md` figuran como #3, #4 y #5) NO están corregidos en
+> producción.** La columna "Solución" describe un intento que depende de que
+> PostgreSQL esté en hora argentina; producción está en **UTC** (`SHOW
+> timezone` → `UTC`, confirmado el 2026-10-05), así que `CURRENT_DATE` sigue
+> devolviendo la fecha de mañana entre las 21:00 y las 24:00 ART. Los tests
+> pasaban porque la base de desarrollo está en `America/Buenos_Aires`. El
+> despliegue `b412b9e` es correcto; esto es un defecto funcional pendiente. Los
+> defectos #1 a #5 de la tabla anterior sí están corregidos. Plan:
+> `docs/PLAN_ZONA_HORARIA.md`.
+
 | # | Problema | Causa | Solución | Test que lo protege |
 |---|---|---|---|---|
-| 6 | La prueba gratuita de una empresa nueva podía arrancar con `desde` fechado **un día después** del alta real | `onboarding.ts` calculaba `hoy` con `new Date().toISOString().slice(0,10)` (forzado a tipo con `as never`, señal de que no encajaba donde se usaba). Argentina es UTC−3: después de las 21 h, ese cálculo ya da el día siguiente — el mismo defecto documentado en S-37 y ya corregido una vez en `suscripciones.ts`, repetido acá sin que nadie lo conectara | Se le pregunta `CURRENT_DATE` a la base, como ya hace `suscripciones.ts` | Se extendió S-37 (ver abajo) para que esto no vuelva a pasar inadvertido |
-| 7 | Preguntarle al catálogo de NEXO Intelligence por un mes sin año ("ventas de noviembre") podía resolver el **año equivocado** cerca de un fin de año/mes, después de las 21 h | `mesDe()` en `intelligence/catalogo.ts` inferís el año con `new Date().getUTCMonth()` | `mesDe()` ahora recibe `hoy: CalendarDate` desde quien la llama, nunca lo calcula sola | `tests/unit/catalogo-de-preguntas.test.ts` — el caso "mes que todavía no pasó" pasó de depender del reloj real (solo corría, y solo probaba algo, dos meses al año) a una fecha fija |
-| 8 | "¿Cómo voy este mes?" y el panorama general podían consultar el **mes equivocado** después de las 21 h | `intelligence.ts` calculaba `mesCorriente()` con `new Date().toISOString().slice(0,7)`, antes de entrar a la transacción | Se mueve adentro de `withCompany` y se pregunta `CURRENT_DATE` a la base (`hoyDeLaBase`) | Misma extensión de S-37 |
+| 6 | La prueba gratuita de una empresa nueva podía arrancar con `desde` fechado **un día después** del alta real | `onboarding.ts` calculaba `hoy` con `new Date().toISOString().slice(0,10)` (forzado a tipo con `as never`, señal de que no encajaba donde se usaba). Argentina es UTC−3: después de las 21 h, ese cálculo ya da el día siguiente — el mismo defecto documentado en S-37 y ya corregido una vez en `suscripciones.ts`, repetido acá sin que nadie lo conectara | **Intento NO efectivo en producción (UTC):** se le pregunta `CURRENT_DATE` a la base, como ya hace `suscripciones.ts` — que tiene el mismo problema latente | Se extendió S-37 (ver abajo); S-37 no detecta la dependencia de la zona de la base |
+| 7 | Preguntarle al catálogo de NEXO Intelligence por un mes sin año ("ventas de noviembre") podía resolver el **año equivocado** cerca de un fin de año/mes, después de las 21 h | `mesDe()` en `intelligence/catalogo.ts` inferís el año con `new Date().getUTCMonth()` | `mesDe()` ahora recibe `hoy: CalendarDate` desde quien la llama, nunca lo calcula sola. **La función es correcta; el `hoy` que le llega sale de `CURRENT_DATE` y en producción (UTC) es el de mañana después de las 21 h** | `tests/unit/catalogo-de-preguntas.test.ts` — el caso "mes que todavía no pasó" pasó de depender del reloj real (solo corría, y solo probaba algo, dos meses al año) a una fecha fija |
+| 8 | "¿Cómo voy este mes?" y el panorama general podían consultar el **mes equivocado** después de las 21 h | `intelligence.ts` calculaba `mesCorriente()` con `new Date().toISOString().slice(0,7)`, antes de entrar a la transacción | **Intento NO efectivo en producción (UTC):** se mueve adentro de `withCompany` y se pregunta `CURRENT_DATE` a la base (`hoyDeLaBase`) | Misma extensión de S-37 |
 
-**S-37 ya no mira solo `scripts/`:** el control que debería haber atrapado los #6 y #7 solo escaneaba `scripts/*.mjs`, no `apps/api/src`. Se agregó un cuarto caso que recorre `apps/api/src` y `packages/*/src` buscando el mismo patrón (con `calendar-date.ts` como única excepción legítima, justificada); se confirmó que atrapa los dos defectos originales revirtiendo el fix y viendo el test fallar, y que pasa con el fix aplicado.
+**S-37 ya no mira solo `scripts/`:** el control que debería haber atrapado los #6 y #7 solo escaneaba `scripts/*.mjs`, no `apps/api/src`. Se agregó un cuarto caso que recorre `apps/api/src` y `packages/*/src` buscando el mismo patrón (con `calendar-date.ts` como única excepción legítima, justificada); se confirmó que atrapa los dos defectos originales revirtiendo el fix y viendo el test fallar, y que pasa con el fix aplicado. **Límites (2026-10-05):** solo lee TypeScript, así que no ve que `CURRENT_DATE` dependa de la zona de PostgreSQL, y su patrón `slice(0, 10)` no detecta `toISOString().slice(0, 7)` (queda en `intelligence/catalogo.ts:617`) ni `getUTCFullYear` (queda en `document-engine/parsers/fecha.ts:154`).
 
 **Hallados y documentados, sin una solución limpia disponible (no forzados):**
 

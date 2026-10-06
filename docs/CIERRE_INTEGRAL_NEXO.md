@@ -7,11 +7,24 @@ de interfaz) y [`FINAL_NEXO_STATUS.md`](FINAL_NEXO_STATUS.md) (el registro de
 trabajo, con los bugs encontrados y corregidos). Este documento no repite esa
 evidencia — la indexa.
 
+> **CORRECCIÓN 2026-10-05 — leer primero.** Este informe decía que los 8
+> defectos de la tabla B estaban corregidos. **No es así para los #3, #4 y
+> #5 (los de fechas): NO están corregidos en producción.** Su arreglo
+> consulta `CURRENT_DATE` a PostgreSQL y asume que la base está en hora
+> argentina; la base de producción está en **UTC** (confirmado en el servidor
+> el 2026-10-05), así que sigue devolviendo la fecha de mañana entre las
+> 21:00 y las 24:00 ART. Los tests pasaban porque la base de desarrollo está
+> en `America/Buenos_Aires`. Los otros 5 defectos (#1, #2, #6, #7, #8) sí
+> están corregidos. El despliegue `b412b9e` **es correcto**: este es un
+> defecto funcional pendiente, no un fallo del despliegue. Ver la sección I
+> y `docs/PLAN_ZONA_HORARIA.md`.
+
 > **NEXO no está listo para habilitar clientes solo porque esta sesión cierre
 > en verde.** Lo que sí se puede decir con evidencia real: el backlog de
 > interfaz que bloqueaba operar ciertos flujos desde la consola se cerró casi
-> entero, se encontraron y corrigieron 8 defectos reales con prueba de
-> regresión, y la suite completa (197 archivos, 3056 pruebas) pasa. Lo que
+> entero, se encontraron 8 defectos reales (5 corregidos con prueba de
+> regresión; 3 de fechas pendientes, ver arriba), y la suite completa (197
+> archivos, 3056 pruebas) pasa. Lo que
 > **no** se puede decir: que las pantallas nuevas se vean bien (el navegador
 > siguió desconectado toda la sesión), que la infraestructura de producción
 > cambió de estado (el acceso SSH sigue denegado), ni que el curso avanzó.
@@ -37,15 +50,15 @@ evidencia — la indexa.
    releyó para confirmar que nada de lo tocado hoy la afecta. No hizo falta
    repetirla — sigue siendo evidencia válida y vigente.
 
-## B. Qué se corrigió (8 defectos reales, todos con prueba de regresión)
+## B. Qué se encontró (8 defectos reales: 5 corregidos, 3 de fechas NO corregidos en producción)
 
 | # | Defecto | Impacto real |
 |---|---|---|
 | 1 | `GET /vat/credito-fiscal/:txId` — 500 siempre | Cualquier evaluación de crédito fiscal de una compra fallaba, el 100% de las veces |
 | 2 | `POST /banks/.../reconciliations/propose` — 500 ante cualquier ambigüedad real | El caso normal de un movimiento con dos candidatos empatados rompía la conciliación |
-| 3 | Prueba gratuita con fecha de inicio adelantada un día | Después de las 21h ART, toda empresa nueva |
-| 4 | Pregunta por mes sin año resolvía año equivocado | Cerca de un fin de año/mes, después de las 21h ART |
-| 5 | "Cómo voy este mes" consultaba el mes equivocado | Después de las 21h ART, cualquier consulta al panorama |
+| 3 | **NO CORREGIDO EN PRODUCCIÓN** — Prueba gratuita con fecha de inicio adelantada un día | Después de las 21h ART, toda empresa nueva (el fix usa `CURRENT_DATE`; producción está en UTC) |
+| 4 | **NO CORREGIDO EN PRODUCCIÓN** — Pregunta por mes sin año resolvía año equivocado | Cerca de un fin de año/mes, después de las 21h ART (mismo motivo) |
+| 5 | **NO CORREGIDO EN PRODUCCIÓN** — "Cómo voy este mes" consultaba el mes equivocado | Después de las 21h ART, cualquier consulta al panorama (mismo motivo) |
 | 6 | Confirmar dos veces la misma coincidencia bancaria daba 500 crudo | Cualquier reintento sobre una coincidencia ya confirmada |
 | 7 | Doble clic podía duplicar un movimiento de caja | Sin guardia de ningún tipo hasta hoy |
 | 8 | Doble clic podía duplicar un movimiento de stock | Sin guardia de ningún tipo hasta hoy |
@@ -54,8 +67,10 @@ Detalle completo, causa raíz y el test que prueba cada uno:
 [`FINAL_NEXO_STATUS.md`](FINAL_NEXO_STATUS.md#bugs-corregidos-con-test-de-regresión).
 
 También se extendió el control S-37 (fechas en UTC) para que mire
-`apps/api/src` y `packages/*/src`, no solo `scripts/` — así una cuarta
-instancia del defecto #3/#4/#5 no vuelva a pasar inadvertida.
+`apps/api/src` y `packages/*/src`, no solo `scripts/`. **Límite que se
+descubrió después (2026-10-05):** S-37 solo lee el código TypeScript. No ve que
+`CURRENT_DATE` dependa de la zona de la sesión de PostgreSQL, y tampoco
+detecta `toISOString().slice(0, 7)` ni `getUTCFullYear`.
 
 ## C. Qué se implementó (16 de 19 gaps de interfaz)
 
@@ -83,6 +98,9 @@ Detalle, evidencia de cierre y por qué cada uno quedó así:
 - `npx vitest run` (suite completa): **197 archivos, 3056 pruebas, todas
   verdes** — incluye seguridad multiempresa, aislamiento, integración
   end-to-end, y los 4 archivos de test nuevos de esta sesión.
+- **Salvedad (2026-10-05):** la prueba de los bugs #3, #4 y #5 corrió contra una
+  base local en `America/Buenos_Aires`, que no es la zona de producción (UTC);
+  por eso pasaba sin que el defecto estuviera corregido allá.
 - Cada bug de la tabla B se probó dos veces: contra el código con el defecto
   (falla, reproduciendo el síntoma real) y contra el código corregido
   (pasa) — no se declaró ningún arreglo sin esa comprobación.
@@ -124,7 +142,9 @@ el código permite:
   son hipótesis): dos rompían una ruta siempre, tres daban una fecha
   incorrecta en una ventana horaria real y diaria (después de las 21h
   Argentina), uno daba un error confuso, y dos podían duplicar un
-  movimiento financiero real.
+  movimiento financiero real. **Cinco están corregidos en producción desde
+  `b412b9e`. Los tres de fechas (#3, #4, #5) siguen presentes** porque la
+  base de producción está en UTC (ver sección I).
 - Lo que sigue en pie: el reintento de red en caja/stock (arriba), y que
   nada de lo nuevo tiene confirmación visual.
 
@@ -146,9 +166,36 @@ el código permite:
 
 ## H. Estado de git
 
-- Rama: `main`. Sin commits hechos por esta sesión (ninguno pedido).
-- Working tree: cambios sin commitear en 12 archivos de producto/test y 2
-  documentos históricos con una nota agregada (no reescritos); 6 archivos
-  nuevos sin trackear (2 documentos, 2 scripts de sesiones anteriores sin
-  tocar hoy, 2 tests de integración nuevos).
-- Sin conflictos. Sin ninguna migración de base de datos.
+- **Actualizado 2026-10-05:** el trabajo se commiteó en dos commits sobre
+  `main` — `9fc4652` (16 pantallas, 8 defectos, informes) y `b412b9e`
+  (alta de personas en el estudio, manual de Pendientes, curso, scripts de
+  reseteo) — y se desplegó `b412b9e` a producción.
+- Sin conflictos. Sin ninguna migración de base de datos en esos commits.
+
+## I. Corrección del 2026-10-05 — los defectos de fechas #3, #4 y #5
+
+- **Estado del despliegue:** `b412b9e` quedó correctamente desplegado
+  (`/health` y `/health/db` responden `version: b412b9e`, 130 migraciones,
+  RLS correcto, contenedores healthy). **Esto no es un fallo del despliegue:**
+  es un defecto funcional pendiente.
+- **Qué pasó:** los tres arreglos reemplazaron una fecha calculada en
+  JavaScript (UTC) por `SELECT CURRENT_DATE`, asumiendo que la base está en
+  hora argentina. Producción devuelve `UTC` (`SHOW timezone`, confirmado el
+  2026-10-05), así que `CURRENT_DATE` entre las 21:00 y las 24:00 ART sigue
+  siendo la fecha de mañana. No hay ninguna configuración de zona en el
+  repositorio; la base local de desarrollo sí está en `America/Buenos_Aires`,
+  y eso enmascaró el defecto en las pruebas.
+- **Qué sigue ocurriendo hoy en producción** (solo entre las 21:00 y las
+  24:00 ART): la prueba gratuita nueva arranca un día adelantada; "cómo voy
+  este mes" y el panorama pueden consultar el mes siguiente a fin de mes;
+  la pregunta por un mes sin año puede resolver el año equivocado en
+  diciembre/enero; la cuota diaria de IA se reinicia a las 21:00.
+- **Por qué no se resuelve cambiando la zona de PostgreSQL:** el hash de la
+  cadena de auditoría incluye `occurred_at::text`, que depende de la zona de
+  la sesión. Cambiarla haría que `audit:cadena` reporte rota la cadena de
+  todo el historial. Se verificó con el mismo instante: hash `23acd960…`
+  en UTC y `a6b17a0c…` en hora argentina.
+- **Solución propuesta (no implementada):** ver `docs/PLAN_ZONA_HORARIA.md`.
+- **Otros restos de UTC detectados y no corregidos:**
+  `apps/api/src/intelligence/catalogo.ts:617`,
+  `packages/document-engine/src/parsers/fecha.ts:154`.
