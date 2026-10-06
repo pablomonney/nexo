@@ -6,6 +6,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ZONA_DE_NEGOCIO } from '@aai/shared';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const envFile = join(raiz, '.env');
@@ -90,3 +91,25 @@ function derivarUrlDePruebas(base: string | undefined): string | undefined {
   url.pathname = `/${nombre.endsWith('_test') ? nombre : `${nombre}_test`}`;
   return url.toString();
 }
+
+/**
+ * Los clientes crudos de los tests escriben en la misma zona que la aplicación.
+ *
+ * `initPool` abre las conexiones de la API en `America/Argentina/Buenos_Aires`
+ * para que `CURRENT_DATE` sea el día del negocio; la base, en cambio, queda en
+ * UTC. Los fixtures abren clientes `pg` crudos (`helpers/db.ts` y muchos tests
+ * propios) que crean filas con `valid_from DEFAULT CURRENT_DATE`: en una sesión
+ * UTC, entre las 21:00 y las 24:00 ART eso es **mañana**, y la API —que exige
+ * `valid_from <= CURRENT_DATE` en su propia zona— contesta 403 «No tenés acceso
+ * a esta empresa» a un usuario que acaba de recibir su rol.
+ *
+ * Es un hallazgo de verdad y no un problema de los tests: dos escritores en
+ * zonas distintas sobre la misma base. En producción el escritor es la
+ * aplicación; los escritores manuales (`psql`, scripts) tienen que declarar la
+ * misma zona. Ver `docs/PLAN_ZONA_HORARIA.md`, «Escritores en otra zona».
+ *
+ * `PGOPTIONS` lo respeta `pg` en cada cliente que no pasa `options` propio, así
+ * que alcanza con fijarlo acá y no en cada suite. Un `SET timezone` explícito
+ * dentro de un test (como hace `zona-horaria-y-cadena.test.ts`) lo sigue pisando.
+ */
+process.env.PGOPTIONS = `-c timezone=${ZONA_DE_NEGOCIO}`;

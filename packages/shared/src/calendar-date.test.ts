@@ -5,6 +5,8 @@ import {
   compareDates,
   isCalendarDate,
   parseCalendarDate,
+  hoyEnZonaDeNegocio,
+  ZONA_DE_NEGOCIO,
 } from './calendar-date.js';
 
 describe('CalendarDate', () => {
@@ -37,5 +39,25 @@ describe('CalendarDate', () => {
 
   it('calendarDate construye con padding', () => {
     expect(calendarDate(2025, 1, 5)).toBe('2025-01-05');
+  });
+});
+
+describe('hoyEnZonaDeNegocio', () => {
+  it('la zona del negocio es la argentina', () => {
+    expect(ZONA_DE_NEGOCIO).toBe('America/Argentina/Buenos_Aires');
+  });
+
+  // Instantes fijos: la prueba no depende de la hora a la que corre. Argentina
+  // es UTC−3, así que las 21:00 locales son las 00:00 UTC del día siguiente.
+  it.each([
+    ['2026-10-06T01:00:00Z', '2026-10-05'], // 22:00 ART: en UTC ya es mañana
+    ['2026-10-06T02:59:59Z', '2026-10-05'], // 23:59:59 ART
+    ['2026-10-06T03:00:00Z', '2026-10-06'], // 00:00:00 ART
+    ['2026-12-31T23:30:00Z', '2026-12-31'],
+    ['2027-01-01T02:59:59Z', '2026-12-31'], // en UTC ya es año nuevo
+    ['2027-01-01T03:00:00Z', '2027-01-01'],
+    ['2028-03-01T02:00:00Z', '2028-02-29'], // año bisiesto
+  ])('%s → %s', (instante, esperado) => {
+    expect(hoyEnZonaDeNegocio(new Date(instante))).toBe(esperado);
   });
 });

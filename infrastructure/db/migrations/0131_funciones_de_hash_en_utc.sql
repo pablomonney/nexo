@@ -1,0 +1,51 @@
+-- ---------------------------------------------------------------------------
+-- Las funciones de hash no dependen de la zona de la sesión
+-- ---------------------------------------------------------------------------
+--
+-- La cadena de auditoría encadena cada fila con un hash SHA-256 cuyo texto
+-- incluye `NEW.occurred_at::text`, y las dos cadenas tienen el mismo diseño:
+--
+--     audit_chain_link()            trigger de `audit_logs`          (0008, 0025)
+--     normative_audit_chain_link()  trigger de `normative_audit_logs`  (0041)
+--     verify_audit_chain(uuid)      recalcula y compara la anterior    (0059)
+--
+-- Un `timestamptz` convertido a texto se escribe **en la zona de la sesión**:
+--
+--     sesión UTC        2026-10-05 21:30:00.123456+00
+--     sesión Argentina  2026-10-05 18:30:00.123456-03
+--
+-- Es el mismo instante y dos textos distintos, así que dos hashes distintos
+-- (`23acd960…` y `a6b17a0c…` para el mismo payload de ejemplo). Todo el historial
+-- se escribió con la sesión en UTC, que es la zona por defecto de la base.
+--
+-- ## Por qué hace falta ahora
+--
+-- La aplicación va a abrir sus conexiones con `timezone=America/Argentina/
+-- Buenos_Aires` (`initPool`), para que `CURRENT_DATE` sea el día del negocio y
+-- no el de UTC —los defectos de fechas #3, #4 y #5, que dependían de eso—.
+-- Sin esta migración, esa decisión rompería la verificación de la cadena:
+--
+--     filas viejas (hasheadas en UTC) verificadas en una sesión Argentina
+--     → `verify_audit_chain` las reportaría rotas, todas.
+--
+-- ## Qué hace, y qué no
+--
+-- Fija `timezone = 'UTC'` **dentro de cada una de las tres funciones**. No
+-- cambia la fórmula, ni el orden, ni el payload: mientras corren, el texto de
+-- `occurred_at` sale exactamente como salía hasta hoy, sea cual sea la zona de
+-- la sesión que las invoca. Los hashes ya escritos siguen siendo válidos, y los
+-- nuevos son idénticos a los que se habrían escrito antes.
+--
+-- `ALTER FUNCTION … SET` y no `CREATE OR REPLACE`: reescribir las funciones
+-- repetiría su cuerpo a mano —el riesgo que la 0025 ya dejó anotado: dos
+-- fórmulas que se mantienen sincronizadas a mano— solo para agregar una línea.
+--
+-- ## Compatibilidad
+--
+-- Es compatible con el código anterior: la versión vieja de la aplicación sigue
+-- en UTC y no cambia de comportamiento. El orden de despliegue (migrar antes de
+-- levantar la imagen nueva) es seguro.
+
+ALTER FUNCTION audit_chain_link()           SET timezone = 'UTC';
+ALTER FUNCTION normative_audit_chain_link() SET timezone = 'UTC';
+ALTER FUNCTION verify_audit_chain(uuid)     SET timezone = 'UTC';

@@ -11,6 +11,7 @@
  * acá no sea una fuga: RLS sigue filtrando aunque el código se equivoque.
  */
 
+import { ZONA_DE_NEGOCIO } from '@aai/shared';
 import pg from 'pg';
 
 export interface Tx {
@@ -35,6 +36,19 @@ export function initPool(connectionString: string, options: { max?: number } = {
     max: options.max ?? 10,
     // Un contexto de empresa mal cerrado no puede sobrevivir a la conexión.
     idleTimeoutMillis: 30_000,
+    // Cada conexión de la aplicación cuenta los días en hora argentina, así que
+    // `CURRENT_DATE`, `date_trunc('day', now())` y los valores por defecto de las
+    // vistas coinciden con el día del negocio aunque la base esté en UTC.
+    //
+    // Es un parámetro de arranque de la conexión, no un cambio en el servidor:
+    // la base sigue en UTC, y tiene que seguir así, porque el hash de la cadena
+    // de auditoría escribe `occurred_at::text` y ese texto depende de la zona de
+    // la sesión. Las tres funciones que lo calculan se fijan a UTC en la
+    // migración 0131, que es lo que hace seguro este cambio.
+    //
+    // `options` no lo admite un pooler en modo transacción; hoy la conexión es
+    // directa a PostgreSQL.
+    options: `-c timezone=${ZONA_DE_NEGOCIO}`,
   });
 }
 

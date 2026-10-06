@@ -101,3 +101,35 @@ export function daysBetween(desde: CalendarDate, hasta: CalendarDate): number {
   const b = Date.UTC(yearOf(hasta), monthOf(hasta) - 1, dayOf(hasta));
   return Math.round((b - a) / 86_400_000);
 }
+
+/**
+ * La zona horaria en la que se cuentan los días del negocio.
+ *
+ * Argentina es UTC−3 fijo (sin horario de verano desde 2009). Es la zona que la
+ * aplicación fija en cada conexión a PostgreSQL —`initPool`— y la que usa
+ * `hoyEnZonaDeNegocio`. La base de producción corre en UTC y **no** se cambia:
+ * el hash de la cadena de auditoría incluye `occurred_at::text`, y ese texto
+ * depende de la zona de la sesión (ver `docs/PLAN_ZONA_HORARIA.md`).
+ */
+export const ZONA_DE_NEGOCIO = 'America/Argentina/Buenos_Aires';
+
+const PARTES_DE_HOY = new Intl.DateTimeFormat('en-US', {
+  timeZone: ZONA_DE_NEGOCIO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * El día de calendario de `ahora` en la zona del negocio.
+ *
+ * Para código que no tiene una base a mano. Con una transacción abierta se le
+ * pregunta `CURRENT_DATE` a la base: la sesión ya está en esta misma zona y es
+ * la base la que después compara.
+ */
+export function hoyEnZonaDeNegocio(ahora: Date = new Date()): CalendarDate {
+  const partes = Object.fromEntries(
+    PARTES_DE_HOY.formatToParts(ahora).map((p) => [p.type, p.value]),
+  );
+  return calendarDate(Number(partes['year']), Number(partes['month']), Number(partes['day']));
+}

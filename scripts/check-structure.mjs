@@ -707,6 +707,31 @@ export async function verificarEstructura(client) {
     retorno.rows.length > 0 && !/\bfound\b/i.test(retorno.rows[0].r),
   );
 
+  // Las funciones que escriben el hash de la cadena de auditoría, o lo
+  // recalculan, tienen la zona fijada a UTC (0131).
+  //
+  // El hash incluye `occurred_at::text`, y un `timestamptz` en texto sale según
+  // la zona de la sesión. La aplicación abre sus conexiones en hora argentina:
+  // sin este `SET`, la cadena escrita en UTC se vería rota desde esa sesión. Se
+  // declara acá porque es un candado sobre la forma — una reescritura futura de
+  // la función con `CREATE OR REPLACE` pierde el `SET` sin que nada falle hasta
+  // que alguien verifique la cadena desde otra zona.
+  // `array_to_string` y no el array: ver la nota del depósito, más abajo.
+  const hashEnUtc = await client.query(
+    `SELECT proname, coalesce(array_to_string(proconfig, ','), '') AS config
+       FROM pg_proc
+      WHERE proname IN ('audit_chain_link', 'normative_audit_chain_link', 'verify_audit_chain')`,
+  );
+  for (const nombre of ['audit_chain_link', 'normative_audit_chain_link', 'verify_audit_chain']) {
+    const fila = hashEnUtc.rows.find((r) => r.proname === nombre);
+    anotar(
+      'FUNCIÓN',
+      `${nombre}`,
+      'Tiene `SET timezone = UTC`: su hash no depende de la zona de la sesión',
+      fila !== undefined && /(^|,)timezone=UTC(,|$)/i.test(fila.config),
+    );
+  }
+
   // El depósito por defecto tiene que ser de la propia empresa, y no entra en el
   // grupo de arriba por un motivo real: ese grupo exige que la primera columna
   // de la clave se llame `company_id`, y en `companies` la empresa **es** el
