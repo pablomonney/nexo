@@ -39,6 +39,7 @@ const { buildServer } = await import('@aai/api/server');
 const { initPool, closePool } = await import('@aai/db');
 const { ROLES, cuitCheckDigit, totp, withCheckDigit } = await import('@aai/shared');
 const pg = (await import('pg')).default;
+const { opcionesDeConexion } = await import('./lib/zona.mjs');
 const { hash: argonHash } = await import('@node-rs/argon2');
 
 // ── Guardas ────────────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ const dec = (n) => n.toFixed(2);
 initPool(URL_BASE);
 const app = await buildServer();
 await app.ready();
-const db = new pg.Client({ connectionString: URL_BASE });
+const db = new pg.Client({ connectionString: URL_BASE, ...opcionesDeConexion() });
 await db.connect();
 
 const stamp = String(

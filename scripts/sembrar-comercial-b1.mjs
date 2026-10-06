@@ -48,6 +48,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { opcionesDeConexion } from './lib/zona.mjs';
 
 const RAIZ = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'));
 try {
@@ -121,7 +122,7 @@ const TOPES = {
   COMPLETO:   { EMPRESAS: 20, USUARIOS: 50, COMPROBANTES_MES: 100000, DOCUMENTOS_MES: 100000, INTEGRACIONES: ILIMITADO },
 };
 
-const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });
 await cliente.connect();
 
 try {

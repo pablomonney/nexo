@@ -595,18 +595,23 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
     permisos: ['analytics:read'],
     admiteMes: false,
     responder: async (tx, companyId) => {
+      // Unión externa y no un filtro sobre la vista: una empresa sin fila de resumen
+      // tiene que seguir recibiendo su período. (El comentario va acá y no dentro
+      // del SQL porque S-26 lee el archivo entero y tomaría las palabras por tablas.)
       const r = await tx.query<{
         ventas_mes: string; compras_mes: string; a_cobrar: string; vencido_a_cobrar: string;
-        a_pagar: string; pendientes: number; pendientes_bloqueantes: number;
+        a_pagar: string; pendientes: number; pendientes_bloqueantes: number; periodo: string;
       }>(
-        `SELECT coalesce(ventas_mes, 0)::text AS ventas_mes,
+        `SELECT to_char(current_date, 'YYYY-MM') AS periodo,
+                coalesce(ventas_mes, 0)::text AS ventas_mes,
                 coalesce(compras_mes, 0)::text AS compras_mes,
                 coalesce(a_cobrar, 0)::text AS a_cobrar,
                 coalesce(vencido_a_cobrar, 0)::text AS vencido_a_cobrar,
                 coalesce(a_pagar, 0)::text AS a_pagar,
                 coalesce(pendientes, 0) AS pendientes,
                 coalesce(pendientes_bloqueantes, 0) AS pendientes_bloqueantes
-           FROM analytics_resumen WHERE company_id = $1`,
+           FROM (SELECT 1 AS uno) AS u
+           LEFT JOIN analytics_resumen ON analytics_resumen.company_id = $1`,
         [companyId],
       );
       const f = r.rows[0];
@@ -614,7 +619,10 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
         titulo: 'Cómo viene el mes',
         valor: pesos(f?.ventas_mes ?? '0'),
         unidad: '$ vendidos en el mes',
-        periodo: new Date().toISOString().slice(0, 7),
+        // Del mismo reloj que las columnas «del mes» de `analytics_resumen`
+        // (`date_trunc('month', current_date)`, migración 0057): la etiqueta y
+        // el dato no pueden salir de dos relojes distintos.
+        periodo: f?.periodo ?? '',
         datos: [
           { etiqueta: 'Ventas del mes', valor: pesos(f?.ventas_mes ?? '0')!, origen: 'analytics_resumen' },
           { etiqueta: 'Compras del mes', valor: pesos(f?.compras_mes ?? '0')!, origen: 'analytics_resumen' },

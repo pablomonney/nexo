@@ -51,6 +51,12 @@ const SCRIPTS = join(RAIZ, 'scripts');
  */
 const EN_UTC = [
   /new Date\(\)\s*\.\s*toISOString\(\)\s*\.\s*slice\(\s*0\s*,\s*10\s*\)/,
+  // El mes («AAAA-MM») y el año, que son las otras dos formas de «hoy» que el
+  // patrón de arriba dejaba pasar: `intelligence/catalogo.ts` etiquetaba el
+  // período con `toISOString().slice(0, 7)` y `document-engine/parsers/fecha.ts`
+  // infería el año con `getUTCFullYear()` (2026-10-05).
+  /new Date\(\)\s*\.\s*toISOString\(\)\s*\.\s*slice\(\s*0\s*,\s*7\s*\)/,
+  /getUTCFullYear\(\)/,
   /getUTCDate\(\)/,
   /getUTCMonth\(\)/,
 ];

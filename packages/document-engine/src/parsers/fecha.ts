@@ -23,7 +23,7 @@
  */
 
 import type { CalendarDate, Result } from '@aai/shared';
-import { calendarDate, daysInMonth, err, ok } from '@aai/shared';
+import { calendarDate, daysInMonth, err, hoyEnZonaDeNegocio, ok, yearOf } from '@aai/shared';
 import type { ErrorParseo } from './importe.js';
 
 export interface FechaInterpretada {
@@ -151,7 +151,9 @@ interface AnioResuelto {
  */
 function resolverAnio(bruto: string, opciones: OpcionesFecha): AnioResuelto {
   if (bruto.length === 4) return { valor: Number(bruto) };
-  const referencia = opciones.anioReferencia ?? new Date().getUTCFullYear();
+  // El año de «hoy» en hora argentina: el 31 de diciembre después de las 21 h el
+  // reloj de UTC ya está en el año siguiente.
+  const referencia = opciones.anioReferencia ?? yearOf(hoyEnZonaDeNegocio());
   const siglo = Math.floor(referencia / 100) * 100;
   const candidato = siglo + Number(bruto);
   const valor = candidato > referencia + 1 ? candidato - 100 : candidato;

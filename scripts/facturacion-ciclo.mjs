@@ -34,6 +34,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { opcionesDeConexion } from './lib/zona.mjs';
 
 const RAIZ = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'));
 try {
@@ -50,7 +51,7 @@ const args = process.argv.slice(2);
 const ensayo = args.includes('--ensayo');
 const fechaDeclarada = args.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) ?? null;
 
-const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });
 await cliente.connect();
 
 /**

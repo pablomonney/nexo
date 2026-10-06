@@ -26,6 +26,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { opcionesDeConexion } from './lib/zona.mjs';
 
 const RAIZ = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'));
 try {
@@ -34,7 +35,7 @@ try {
   /* en CI las variables vienen del entorno */
 }
 
-const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });
 await cliente.connect();
 
 const q = async (sql, valores = []) => (await cliente.query(sql, valores)).rows;
