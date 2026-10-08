@@ -122,7 +122,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
         const lineas = await tx.query<FilaParaAuditar>(
           `SELECT e.id                                  AS entry_id,
                   e.entry_date::text                    AS fecha,
-                  e.created_at::text                    AS cargado_el,
+                  to_char(e.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cargado_el,
                   greatest(l.debit, l.credit)::text     AS importe,
                   a.code                                AS cuenta_codigo,
                   l.party_id                            AS contraparte_id

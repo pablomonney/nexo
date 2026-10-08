@@ -39,6 +39,7 @@
     "seed:base": "node scripts/seed-base.mjs",
     "ledger:verify": "node scripts/verify-ledger.mjs",
     "audit:cadena": "node scripts/verify-audit-chain.mjs",
+    "audit:recalcular": "node scripts/recalcular-cadena.mjs",
     "statements:seed": "node scripts/seed-statement-templates.mjs",
     "audit:invariants": "node scripts/check-invariants.mjs",
     "arca:capabilities": "node scripts/arca-capabilities.mjs",

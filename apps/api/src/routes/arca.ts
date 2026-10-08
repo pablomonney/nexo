@@ -31,6 +31,7 @@ import { createHash } from 'node:crypto';
 import { X509Certificate } from 'node:crypto';
 import { SERVICIOS_DEL_PRODUCTO, leerHabilitacion, type ServiceName } from '@aai/arca';
 import { recordAudit, withCompany } from '@aai/db';
+import { hoyEnZonaDeNegocio } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { envolver } from '../arca/credential-store.js';
@@ -85,7 +86,7 @@ export async function arcaRoutes(app: FastifyInstance): Promise<void> {
     if (notAfter.getTime() <= Date.now()) {
       throw conflictoTipado(
         'CERTIFICADO_VENCIDO',
-        `El certificado venció el ${notAfter.toISOString().slice(0, 10)}. Cargar uno vencido ` +
+        `El certificado venció el ${hoyEnZonaDeNegocio(notAfter)}. Cargar uno vencido ` +
           'solo produciría validaciones que fallan sin decir por qué.',
       );
     }

@@ -50,6 +50,7 @@ import {
   type SecretRef,
 } from '@aai/secrets';
 import { recordAudit, withCompany, withoutCompany, type Tx } from '@aai/db';
+import { hoyEnZonaDeNegocio } from '@aai/shared';
 
 interface FilaDeReferencia {
   id: string;
@@ -97,7 +98,7 @@ export class DbSecretProvider implements SecretProvider, SecretAdmin {
       throw new ErrorDeSecreto(
         'SECRET_INVALID',
         ref,
-        `la referencia venció el ${fila.expires_at.toISOString().slice(0, 10)}`,
+        `la referencia venció el ${hoyEnZonaDeNegocio(fila.expires_at)}`,
       );
     }
 

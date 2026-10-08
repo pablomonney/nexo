@@ -42,7 +42,7 @@ DESPUÉS / MÁS ADELANTE**, igual que en el mapa maestro, pero acá justificada
 | Decidir cobro manual vs. esperar Mercado Pago | — | — | Alto (condiciona cómo arranca el primer cliente) | Alto | — | — | — | — | — | **AHORA** |
 | Mercado Pago (u otra pasarela) contratada | — | Bajo | Medio (cobro manual ya funciona) | Alto | Alto | Medio | Alto (cobro manual no escala) | — | — | **DESPUÉS** |
 | Política de cobranza declarada | Medio (hoy un pago fallido no actúa solo) | Medio | — | Alto | Alto | — | Medio | — | — | **DESPUÉS** |
-| Defectos de fechas #3, #4 y #5 (UTC en producción; ver `PLAN_ZONA_HORARIA.md`) | Alto (hoy dan fecha de mañana entre 21 y 24 h ART; el cambio ingenuo de zona rompería la cadena de auditoría) | Medio | Bajo | — | — | Medio | — | — | — | **DESPUÉS** (plan listo, sin implementar; no es un fallo del deploy `b412b9e`) |
+| Defectos de fechas #3, #4 y #5 (UTC en producción; ver `PLAN_ZONA_HORARIA.md`) | Alto (hoy dan fecha de mañana entre 21 y 24 h ART; el cambio ingenuo de zona rompería la cadena de auditoría) | Medio | Bajo | — | — | Medio | — | — | — | **DESPUÉS** (implementado y auditado en local —incluida la interfaz—, sin deploy; no es un fallo del deploy `b412b9e`) |
 | Clave de idempotencia caja/stock (reintento de red) | Alto (puede duplicar un movimiento financiero real) | Alto | Medio | — | — | — | — | — | — | **DESPUÉS** |
 | Trámite ARCA: delegar wscdc + padrones | — | Bajo | Bajo (ya factura y constata lo propio) | Medio | Medio | — | — | Alto (constatar terceros es diferencial) | — | **DESPUÉS** |
 | Certificado de producción ARCA | — | — | — | Alto (sin esto, no hay CAE real nunca) | — | — | — | Alto | — | **DESPUÉS** |

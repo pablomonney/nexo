@@ -97,7 +97,7 @@ try {
     console.log('  Ninguno registrado.');
   } else {
     for (const m of movimientos) {
-      console.log(`  ${m.mes.toISOString().slice(0, 7)}  ${m.tipo.padEnd(24)} ${m.n}`);
+      console.log(`  ${m.mes.toISOString().slice(0, 7)}  ${m.tipo.padEnd(24)} ${m.n}`); // s37-permite: `mes` es una columna `date` de pg (primer día del mes), no el reloj
     }
     console.log('');
     console.log('  La baja que pide el cliente y la suspensión por falta de pago van');
@@ -111,7 +111,7 @@ try {
   } else {
     for (const c of cobranza) {
       console.log(
-        `  ${c.mes.toISOString().slice(0, 7)} ${c.moneda}  ` +
+        `  ${c.mes.toISOString().slice(0, 7)} ${c.moneda}  ` + // s37-permite: `mes` es una columna `date` de pg (primer día del mes), no el reloj
           `emitido ${c.emitido}  cobrado ${c.cobrado ?? '0.00'}  ` +
           `pendiente ${c.pendiente ?? '0.00'}  anulado ${c.anulado ?? '0.00'}`,
       );

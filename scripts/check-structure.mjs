@@ -708,27 +708,33 @@ export async function verificarEstructura(client) {
   );
 
   // Las funciones que escriben el hash de la cadena de auditoría, o lo
-  // recalculan, tienen la zona fijada a UTC (0131).
+  // recalculan, tienen fijadas la zona (UTC, 0131) y el formato de fecha (ISO,
+  // 0132).
   //
   // El hash incluye `occurred_at::text`, y un `timestamptz` en texto sale según
-  // la zona de la sesión. La aplicación abre sus conexiones en hora argentina:
-  // sin este `SET`, la cadena escrita en UTC se vería rota desde esa sesión. Se
-  // declara acá porque es un candado sobre la forma — una reescritura futura de
-  // la función con `CREATE OR REPLACE` pierde el `SET` sin que nada falle hasta
-  // que alguien verifique la cadena desde otra zona.
+  // la zona **y el DateStyle** de la sesión. La aplicación abre sus conexiones en
+  // hora argentina: sin estos `SET`, la cadena escrita en UTC se vería rota desde
+  // esa sesión. Se declara acá porque es un candado sobre la forma — una
+  // reescritura futura de la función con `CREATE OR REPLACE` pierde los `SET` sin
+  // que nada falle hasta que alguien verifique la cadena desde otra sesión.
   // `array_to_string` y no el array: ver la nota del depósito, más abajo.
   const hashEnUtc = await client.query(
     `SELECT proname, coalesce(array_to_string(proconfig, ','), '') AS config
        FROM pg_proc
-      WHERE proname IN ('audit_chain_link', 'normative_audit_chain_link', 'verify_audit_chain')`,
+      WHERE pronamespace = 'public'::regnamespace
+        AND proname IN ('audit_chain_link', 'normative_audit_chain_link', 'verify_audit_chain')`,
   );
   for (const nombre of ['audit_chain_link', 'normative_audit_chain_link', 'verify_audit_chain']) {
-    const fila = hashEnUtc.rows.find((r) => r.proname === nombre);
+    const filas = hashEnUtc.rows.filter((r) => r.proname === nombre);
+    // Una sola función con ese nombre: una sobrecarga sin el `SET` esquivaría el candado.
+    const fila = filas.length === 1 ? filas[0] : undefined;
     anotar(
       'FUNCIÓN',
       `${nombre}`,
-      'Tiene `SET timezone = UTC`: su hash no depende de la zona de la sesión',
-      fila !== undefined && /(^|,)timezone=UTC(,|$)/i.test(fila.config),
+      'Tiene `SET timezone = UTC` y `SET datestyle = ISO`: su hash no depende de la zona ni del formato de fecha de la sesión',
+      fila !== undefined &&
+        /(^|,)timezone=UTC(,|$)/i.test(fila.config) &&
+        /(^|,)datestyle=ISO(,|$)/i.test(fila.config),
     );
   }
 

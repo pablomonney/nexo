@@ -956,6 +956,6 @@ function razonATexto(numerator: bigint, denominator: bigint): string {
 }
 
 function aFecha(valor: Date | string): CalendarDate {
-  const texto = typeof valor === 'string' ? valor : valor.toISOString().slice(0, 10);
+  const texto = typeof valor === 'string' ? valor : valor.toISOString().slice(0, 10); // s37-permite: columna `date` de pg que llega como Date a medianoche del proceso; no es el reloj
   return parseCalendarDate(texto.slice(0, 10));
 }

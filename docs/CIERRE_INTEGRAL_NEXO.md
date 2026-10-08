@@ -195,7 +195,8 @@ el código permite:
   la sesión. Cambiarla haría que `audit:cadena` reporte rota la cadena de
   todo el historial. Se verificó con el mismo instante: hash `23acd960…`
   en UTC y `a6b17a0c…` en hora argentina.
-- **Solución propuesta (no implementada):** ver `docs/PLAN_ZONA_HORARIA.md`.
+- **Solución propuesta:** ver `docs/PLAN_ZONA_HORARIA.md` (commits `6b20f86`, `ddd8d58` y `e1b9007` en el remoto, sin deploy).
+- **Ampliación del 2026-10-07:** Auditoría integral del 2026-10-07 (`docs/AUDITORIA_ZONA_HORARIA.md`): la misma clase de defecto apareció además en la **interfaz** (fecha por defecto de un asiento, período «actual» del inicio, normativa «vigente hoy», el ejercicio propuesto durante todo el día del cierre y seis campos `timestamptz` mostrados con el día de UTC), en el motor de auditoría (`asientosTardios`) y en una brecha de las funciones de hash (`DateStyle`, migración 0132). Todo está corregido en el árbol local, **sin commitear ni desplegar**: en producción siguen presentes.
 - **Otros restos de UTC detectados y no corregidos:**
   `apps/api/src/intelligence/catalogo.ts:617`,
   `packages/document-engine/src/parsers/fecha.ts:154`.

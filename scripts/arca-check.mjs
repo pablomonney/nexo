@@ -105,7 +105,7 @@ try {
     certificatePem: await readFile(certPath, 'utf8'),
     privateKeyPem: await readFile(keyPath, 'utf8'),
   });
-  ok(`Certificado y clave leídos (vence ${certificate.notAfter.toISOString().slice(0, 10)})`);
+  ok(`Certificado y clave leídos (vence ${certificate.notAfter.toISOString().slice(0, 10)})`); // s37-permite: el vencimiento de un certificado X.509 está definido en UTC (RFC 5280); es un mensaje de un chequeo manual
 } catch (error) {
   fail(
     'No se pudo leer el certificado',

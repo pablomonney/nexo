@@ -4016,6 +4016,112 @@ const escapar = (t) => String(t === null || t === undefined ? '' : t)
   .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /**
+ * El día de hoy según el negocio, y la aritmética de calendario que lo rodea.
+ *
+ * `new Date().toISOString().slice(0, 10)` es el día de **UTC**: Argentina es
+ * UTC−3, así que entre las 21:00 y las 24:00 ya es mañana. Con eso se llenaban
+ * la fecha de un asiento nuevo, el período «actual» del inicio y la normativa
+ * «vigente hoy» (defecto encontrado el 2026-10-07; mismo error que S-37 busca en
+ * el servidor). La zona es la misma que fija `initPool`; un test comprueba que
+ * esta constante sea igual a `ZONA_DE_NEGOCIO` de `@aai/shared`.
+ *
+ * Todo lo de abajo es puro —no toca el DOM ni el reloj salvo `hoyEnArgentina`—
+ * para que `tests/security/fechas-de-la-consola.test.ts` lo pueda ejecutar con
+ * instantes fijos.
+ */
+const ZONA_DE_NEGOCIO = 'America/Argentina/Buenos_Aires';
+const FORMATO_DE_HOY = new Intl.DateTimeFormat('en-US', {
+  timeZone: ZONA_DE_NEGOCIO, year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+/** El día de calendario (AAAA-MM-DD) de un instante, contado en hora argentina. */
+function hoyEnArgentina(ahora) {
+  const partes = {};
+  for (const p of FORMATO_DE_HOY.formatToParts(ahora === undefined ? new Date() : ahora)) {
+    partes[p.type] = p.value;
+  }
+  return partes.year + '-' + partes.month + '-' + partes.day;
+}
+
+/**
+ * El día argentino (AAAA-MM-DD) de un INSTANTE que llega de la API: un ISO con Z
+ * (una columna timestamptz serializada) o el texto de PostgreSQL con su desfase.
+ *
+ * Recortar los diez primeros caracteres de un ISO en UTC muestra el día de
+ * mañana para un evento de las 22:00 ART. Solo para instantes (timestamptz):
+ * una columna `date` ya es un día y no se convierte: un texto AAAA-MM-DD se
+ * devuelve tal cual (`new Date('2026-03-01')` es la medianoche UTC y pasaría al
+ * 28/02 en Argentina: doble conversión). Si no se puede leer, se devuelve el
+ * recorte de siempre.
+ */
+const SOLO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+function diaDeUnInstante(t) {
+  if (SOLO_FECHA.test(String(t || ''))) return String(t);
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? String(t || '').slice(0, 10) : hoyEnArgentina(d);
+}
+
+const FORMATO_DE_INSTANTE = new Intl.DateTimeFormat('en-GB', {
+  timeZone: ZONA_DE_NEGOCIO, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+/** «AAAA-MM-DD HH:mm:ss» en hora argentina de un instante (sin las 24:00:00). */
+function momentoDeUnInstante(t) {
+  if (SOLO_FECHA.test(String(t || ''))) return String(t) + ' 00:00:00';
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return String(t || '').replace('T', ' ').slice(0, 19); // s37-permite: texto que no se pudo leer como instante; se muestra tal cual, sin convertir
+  const p = {};
+  for (const x of FORMATO_DE_INSTANTE.formatToParts(d)) p[x.type] = x.value;
+  return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second;
+}
+
+/** Suma días a una fecha de calendario AAAA-MM-DD. Nunca toca el reloj. */
+function sumarDias(fecha, dias) {
+  const [a, m, d] = fecha.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10); // s37-permite: suma días a una fecha de calendario explícita; no lee el reloj
+}
+
+const dosDigitos = (n) => String(n).padStart(2, '0');
+
+/** Cuántos días tiene un mes (mes 1..12). */
+function diasDelMes(anio, mes) {
+  const primeroDelSiguiente = (mes === 12 ? anio + 1 : anio) + '-' + dosDigitos(mes === 12 ? 1 : mes + 1) + '-01';
+  return Number(sumarDias(primeroDelSiguiente, -1).slice(8, 10));
+}
+
+/**
+ * El ejercicio que contiene `hoy`, dado el cierre `MM-DD` de la empresa.
+ *
+ * `hoy` y todo lo que se devuelve son fechas de calendario (AAAA-MM-DD): se
+ * comparan como cadenas y no como instantes. La versión anterior comparaba el
+ * instante actual contra la medianoche UTC del cierre, así que **el propio día
+ * del cierre** ya caía en el ejercicio siguiente (31/12 a las 00:00 ART =
+ * 03:00Z > 00:00Z) — y no solo de noche. Sirve para cualquier cierre válido,
+ * incluidos los que no son 31/12 y el 29/02.
+ *
+ * Un cierre que no es un mes/día posible se trata como 31/12, y la persona lo
+ * corrige: las tres casillas quedan editables y el servidor es la autoridad.
+ */
+function ejercicioQueContiene(hoy, cierre) {
+  const partes = String(cierre || '').split('-').map(Number);
+  let mes = partes[0];
+  let dia = partes[1];
+  if (!(mes >= 1 && mes <= 12) || !(dia >= 1)) { mes = 12; dia = 31; }
+
+  // El último día del ejercicio que termina en `anio`. Un 29/02 en un año común
+  // cierra el 28/02.
+  const finDe = (anio) =>
+    String(anio).padStart(4, '0') + '-' + dosDigitos(mes) + '-' + dosDigitos(Math.min(dia, diasDelMes(anio, mes)));
+
+  const anioDeHoy = Number(hoy.slice(0, 4));
+  const hasta = hoy <= finDe(anioDeHoy) ? finDe(anioDeHoy) : finDe(anioDeHoy + 1);
+  const anioDeHasta = Number(hasta.slice(0, 4));
+  const desde = sumarDias(finDe(anioDeHasta - 1), 1);
+  return { desde, hasta, codigo: String(anioDeHasta) };
+}
+
+/**
  * Los textos de alcance que manda la API, con el énfasis que traen.
  *
  * Cuarenta y cinco cadenas en catorce módulos de rutas escriben `**así**` y
@@ -4783,7 +4889,7 @@ async function usarEmpresa(id) {
   }
 
   aplicarPermisosANav();
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyEnArgentina();
   for (const campo of ['tt-fecha', 'ne-fecha']) E(campo).value = hoy;
   E('lib-desde').value = hoy.slice(0, 4) + '-01-01';
   E('ccr-desde').value = hoy.slice(0, 4) + '-01-01';
@@ -5068,7 +5174,7 @@ async function cargarInicio() {
    * contiene la fecha de hoy, y ahora está arriba y en una frase. Los doce
    * siguen abajo, plegados, para el día que la pregunta sí sea esa.
    */
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyEnArgentina();
   const actual = periodos.find((p) => p.startDate <= hoy && hoy <= p.endDate);
 
   E('inicio-periodo').innerHTML = periodos.length === 0
@@ -5374,7 +5480,7 @@ async function bandeja(cursor) {
             ? '<br><span class="mono">falta: ' + escapar((it.evidenciaFaltante || []).join(', ')) + '</span>'
             : '') + '</td>' +
         '<td>' + disp + '</td>' +
-        '<td class="mono">' + escapar(String(it.creadoEn).slice(0, 10)) + '</td>' +
+        '<td class="mono">' + escapar(diaDeUnInstante(it.creadoEn)) + '</td>' +
         '<td class="mono">' + escapar(it.fechaLimite || '—') + '</td>' +
         '<td><span class="clic">abrir</span></td>';
       tr.querySelector('.clic').onclick = () => abrirPendiente(it);
@@ -7385,14 +7491,13 @@ function tipearPlan() {
   const caja = E('ter-p-filas');
   caja.innerHTML = '';
   for (let i = 0; i < n; i += 1) {
-    const d = new Date(desde + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() + cada * i);
+    const vence = sumarDias(desde, cada * i);
     const cent = i === n - 1 ? totalCent - base * (n - 1) : base;
     const div = document.createElement('div');
     div.className = 'fila';
     div.innerHTML =
       '<div><label>Cuota ' + (i + 1) + ' vence</label>' +
-      '<input class="plan-fecha" type="date" value="' + d.toISOString().slice(0, 10) + '"></div>' +
+      '<input class="plan-fecha" type="date" value="' + vence + '"></div>' +
       '<div><label>Importe</label>' +
       '<input class="plan-importe" inputmode="decimal" value="' + (cent / 100).toFixed(2) + '"></div>';
     caja.appendChild(div);
@@ -11453,7 +11558,7 @@ async function cargarDeclaracionDeEscenario() {
   for (const a of ((actos.datos && actos.datos.eventos) || [])) {
     const o = document.createElement('option');
     o.value = a.id;
-    o.textContent = String(a.ocurridoEn).slice(0, 10) + ' · ' + a.accion + ' · ' + a.objetoTipo;
+    o.textContent = diaDeUnInstante(a.ocurridoEn) + ' · ' + a.accion + ' · ' + a.objetoTipo;
     selActo.appendChild(o);
   }
   if (selActo.options.length === 0) {
@@ -12107,19 +12212,11 @@ function prepararAltaDeEjercicio(ejercicios) {
   if (caja.hidden) return;
 
   const cierre = (estado.empresaDatos && estado.empresaDatos.fiscalYearEnd) || '12-31';
-  const [mes, dia] = cierre.split('-').map(Number);
-  const hoy = new Date();
-  const anio = hoy.getUTCFullYear();
 
-  // El ejercicio que contiene hoy: termina en el próximo cierre que no pasó.
-  const cierreDeEsteAnio = new Date(Date.UTC(anio, mes - 1, dia));
-  const fin = hoy > cierreDeEsteAnio ? new Date(Date.UTC(anio + 1, mes - 1, dia)) : cierreDeEsteAnio;
-  const inicio = new Date(fin.getTime());
-  inicio.setUTCFullYear(inicio.getUTCFullYear() - 1);
-  inicio.setUTCDate(inicio.getUTCDate() + 1);
-
-  const iso = (d) => d.toISOString().slice(0, 10);
-  const propuesto = String(fin.getUTCFullYear());
+  // El ejercicio que contiene hoy: termina en el próximo cierre que no pasó. La
+  // cuenta es de fechas de calendario en hora argentina (ver
+  // `ejercicioQueContiene`), no de instantes.
+  const { desde: inicio, hasta: fin, codigo: propuesto } = ejercicioQueContiene(hoyEnArgentina(), cierre);
 
   // No se pisa lo que la persona ya escribió, ni se propone un código repetido.
   const usados = new Set(ejercicios.map((e) => e.code));
@@ -12129,8 +12226,8 @@ function prepararAltaDeEjercicio(ejercicios) {
     while (usados.has(codigo)) codigo = propuesto + '-' + n++;
     E('fy-codigo').value = codigo;
   }
-  if (E('fy-desde').value === '') E('fy-desde').value = iso(inicio);
-  if (E('fy-hasta').value === '') E('fy-hasta').value = iso(fin);
+  if (E('fy-desde').value === '') E('fy-desde').value = inicio;
+  if (E('fy-hasta').value === '') E('fy-hasta').value = fin;
 }
 
 E('b-fy-abrir').onclick = async () => {
@@ -12352,7 +12449,7 @@ async function abrirSiguiente(fiscalYearId) {
 // «Conectar con Tango» que el código no tiene.
 
 /** Una fecha larga de la API, mostrada como día. */
-const soloDia = (t) => String(t || '').slice(0, 10) || '—';
+const soloDia = (t) => (t ? diaDeUnInstante(t) : '—');
 
 /** Los campos canónicos que se le pueden asignar a una columna, por entidad. */
 /**
@@ -12792,7 +12889,7 @@ async function listarAuditoria(cursor) {
     // propuesto un modelo y que lo haya firmado una persona no es lo mismo.
     const clase = e.actorType === 'AI' ? 'p-ia' : e.actorType === 'SYSTEM' ? 'p-neu' : 'p-bien';
     tr.innerHTML =
-      '<td class="mono">' + escapar(String(e.ocurridoEn).replace('T', ' ').slice(0, 19)) + '</td>' +
+      '<td class="mono">' + escapar(momentoDeUnInstante(e.ocurridoEn)) + '</td>' +
       '<td class="mono">' + escapar(e.actor) + '</td>' +
       '<td><span class="p ' + clase + '">' + escapar(e.actorType) + '</span></td>' +
       '<td class="mono">' + escapar(e.accion) + '</td>' +
@@ -13034,7 +13131,7 @@ async function cargarAlertas() {
       '<td>' + escapar(a.sujeto || '—') + '</td>' +
       '<td class="mono">' + escapar((a.valor || '—') + ' ' + (a.unidad || '')) + '</td>' +
       '<td class="mono">' + escapar(a.umbral || '—') + '</td>' +
-      '<td class="mono">' + escapar(String(a.detectadaEl || '').slice(0, 10)) + '</td>' +
+      '<td class="mono">' + escapar(a.detectadaEl ? diaDeUnInstante(a.detectadaEl) : '') + '</td>' +
       '<td>' + escapar(a.estado) + (a.motivo ? ' — ' + escapar(a.motivo) : '') + '</td>' +
       '<td>' + escapar(a.metodologia || '—') + '</td>' +
       '<td>' + (a.estado === 'ABIERTA' || a.estado === 'RECONOCIDA'
@@ -13982,7 +14079,7 @@ async function cargarConfig() {
     // Lo que gobierna, antes de lo que falta. El estado normal hoy es «ninguna
     // regla activa», y verlo es el punto: una pantalla que solo muestra huecos
     // deja creer que lo demás está resuelto.
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyEnArgentina();
     const reglas = await api('GET', '/normative/rules?fecha=' + hoy);
     if (reglas.ok) {
       const v = reglas.datos;

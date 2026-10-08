@@ -120,6 +120,8 @@ Los bugs #4 y #5 se encontraron por el mismo método: al leer el backend para co
 > despliegue `b412b9e` es correcto; esto es un defecto funcional pendiente. Los
 > defectos #1 a #5 de la tabla anterior sí están corregidos. Plan:
 > `docs/PLAN_ZONA_HORARIA.md`.
+>
+> Auditoría integral del 2026-10-07 (`docs/AUDITORIA_ZONA_HORARIA.md`): la misma clase de defecto apareció además en la **interfaz** (fecha por defecto de un asiento, período «actual» del inicio, normativa «vigente hoy», el ejercicio propuesto durante todo el día del cierre y seis campos `timestamptz` mostrados con el día de UTC), en el motor de auditoría (`asientosTardios`) y en una brecha de las funciones de hash (`DateStyle`, migración 0132). Todo está corregido en el árbol local, **sin commitear ni desplegar**: en producción siguen presentes.
 
 | # | Problema | Causa | Solución | Test que lo protege |
 |---|---|---|---|---|

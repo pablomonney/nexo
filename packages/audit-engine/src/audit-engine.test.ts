@@ -294,12 +294,95 @@ describe('detectores que no concluyen', () => {
 
   it('un asiento cargado meses después de su fecha contable se señala', () => {
     const hallazgos = asientosTardios([
-      asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl: '2026-09-01T00:00:00.000Z' }),
+      asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl: '2026-09-01T12:00:00.000Z' }),
     ]);
 
     expect(hallazgos[0]?.codigo).toBe('ASIENTO_TARDIO');
     expect(hallazgos[0]?.observado).toMatch(/184 días después/);
     expect(hallazgos[0]?.queMirar).toMatch(/no estuvo a la vista cuando se revisó su período/);
+  });
+
+  describe('el borde de los 60 días se cuenta en días de calendario argentinos', () => {
+    // Fecha contable 2026-03-01. El día 60 es el 30/04; el 01/05 ya son 61.
+    // 21:00 ART = 00:00Z del día siguiente: ahí está el defecto que se corrige.
+    it.each([
+      ['2026-04-30T15:00:00.000Z', 60, false], // mediodía ART del 30/04
+      ['2026-04-30T23:59:59.000Z', 60, false], // 20:59:59 ART del 30/04
+      ['2026-05-01T00:00:00.000Z', 60, false], // 21:00:00 ART del 30/04 (antes: 61 → se marcaba)
+      ['2026-05-01T00:00:01.000Z', 60, false], // 21:00:01 ART del 30/04
+      ['2026-05-01T02:59:59.000Z', 60, false], // 23:59:59 ART del 30/04
+      ['2026-05-01T03:00:00.000Z', 61, true], //  00:00:00 ART del 01/05
+      ['2026-05-01T15:00:00.000Z', 61, true],
+    ])('cargado %s → %i días → %s', (cargadoEl, dias, seMarca) => {
+      const hallazgos = asientosTardios([
+        asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl }),
+      ]);
+      expect(hallazgos.length > 0).toBe(seMarca);
+      if (seMarca) expect(hallazgos[0]?.observado).toMatch(new RegExp(`${dias} días después`));
+    });
+
+    // Los demás bordes: 59 días, cambio de año, año bisiesto vs común, carga
+    // anterior a la fecha contable y otro plazo de gracia. [fecha contable, cargado, días, ¿se marca?]
+    it.each([
+      ['2026-03-01', '2026-04-29T15:00:00.000Z', 59, false], // 59 días
+      ['2026-03-01', '2026-04-30T02:59:59Z', 59, false], //  23:59:59 ART del 29/04, sin milisegundos
+      ['2026-11-01', '2027-01-01T02:59:59.000Z', 60, false], // 23:59:59 ART del 31/12: UTC ya es 2027
+      ['2026-11-01', '2027-01-01T03:00:00.000Z', 61, true], //  00:00:00 ART del 01/01
+      ['2028-01-01', '2028-03-01T02:59:59.000Z', 59, false], // 29/02 bisiesto, 23:59:59 ART
+      ['2028-01-01', '2028-03-01T03:00:00.000Z', 60, false], // 01/03 bisiesto
+      ['2028-01-01', '2028-03-02T03:00:00.000Z', 61, true],
+      ['2027-01-01', '2027-03-02T02:59:59.000Z', 59, false], // año común: 01/03, 23:59:59 ART
+      ['2027-01-01', '2027-03-03T02:59:59.000Z', 60, false], // 02/03 ART
+      ['2027-01-01', '2027-03-03T03:00:00.000Z', 61, true], //  03/03 ART
+      ['2026-03-10', '2026-03-01T12:00:00.000Z', -9, false], // cargado antes de su fecha: no es tardío
+    ] as const)('fecha %s, cargado %s → %i días → se marca: %s', (fechaContable, cargadoEl, dias, seMarca) => {
+      const hallazgos = asientosTardios([asiento({ entryId: 'a', fecha: fecha(fechaContable), cargadoEl })]);
+      expect(hallazgos.length > 0).toBe(seMarca);
+      if (seMarca) expect(hallazgos[0]?.observado).toMatch(new RegExp(`${dias} días después`));
+    });
+
+    it('con otro plazo de gracia el borde se mueve igual, también de noche', () => {
+      const cargado = (cargadoEl: string, gracia: number) =>
+        asientosTardios([asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl })], gracia).length;
+      // Gracia 0: el mismo día argentino no se marca aunque en UTC ya sea el siguiente (22:00 ART).
+      expect(cargado('2026-03-02T01:00:00.000Z', 0)).toBe(0);
+      expect(cargado('2026-03-02T03:00:00.000Z', 0)).toBe(1); // 00:00 ART del día siguiente
+      // Gracia 30: el día 30 es el 31/03; el 01/04 ya son 31.
+      expect(cargado('2026-04-01T02:59:59.000Z', 30)).toBe(0); // 23:59:59 ART del 31/03
+      expect(cargado('2026-04-01T03:00:00.000Z', 30)).toBe(1);
+    });
+
+    it('no depende de la zona de la sesión: el texto de PostgreSQL de un mismo instante da lo mismo en cualquier zona', () => {
+      // El mismo instante (2026-05-01T00:30Z = 21:30 ART del 30/04) escrito con los desfases de varias zonas.
+      for (const cargadoEl of [
+        '2026-05-01 00:30:00+00',
+        '2026-04-30 21:30:00-03',
+        '2026-04-30 17:30:00-07',
+        '2026-05-01 09:30:00+09',
+        '2026-05-01T00:30:00.000Z',
+      ]) {
+        expect(
+          asientosTardios([asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl })]),
+          cargadoEl,
+        ).toEqual([]);
+      }
+    });
+
+    it('el texto de PostgreSQL con -03 y con +00 da el mismo resultado', () => {
+      // La API entrega `created_at::text`; con la sesión en hora argentina termina en -03.
+      for (const cargadoEl of ['2026-04-30 21:30:00.123456-03', '2026-05-01 00:30:00.123456+00']) {
+        expect(
+          asientosTardios([asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl })]),
+          cargadoEl,
+        ).toEqual([]);
+      }
+    });
+
+    it('un instante ilegible no se marca ni rompe el informe', () => {
+      expect(
+        asientosTardios([asiento({ entryId: 'a', fecha: fecha('2026-03-01'), cargadoEl: 'no es una fecha' })]),
+      ).toEqual([]);
+    });
   });
 
   it('la carga normal, unos días después, no se marca', () => {

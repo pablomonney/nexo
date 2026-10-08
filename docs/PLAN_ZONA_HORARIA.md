@@ -1,8 +1,11 @@
 # Plan — zona horaria de negocio (defectos de fechas #3, #4 y #5)
 
-Estado (2026-10-06): **plan aprobado con dos modificaciones; implementado y
-verificado localmente; P0–P2 ejecutadas en el servidor por el usuario; P3 en
-curso (commit y push, sin deploy).**
+Estado (2026-10-07): **plan aprobado con dos modificaciones; implementado y
+verificado localmente; commits `6b20f86`, `ddd8d58` y `e1b9007` en el remoto; P0–P2
+y P3 (solo con la 0131) ejecutadas en el servidor por el usuario. La auditoría
+integral del 2026-10-07 agregó la migración 0132 y otros cambios, SIN COMMITEAR
+(ver el apartado «Actualización del 2026-10-07» al final de este documento y
+`docs/AUDITORIA_ZONA_HORARIA.md`). Sin deploy.**
 
 **Resultados de P0–P2 — informados por el usuario, no ejecutados ni verificados
 por la sesión que escribió este plan**, sobre una copia aislada
@@ -77,7 +80,8 @@ Argentina + función con `SET timezone='UTC'` → `2026-10-05 21:30:00.123456+00
 Cabecera de la migración en el estilo de la 0130 (explica el porqué).
 
 Complemento en `scripts/check-structure.mjs` (`audit:estructura`): comprobar que
-`pg_proc.proconfig` de las tres funciones contiene `timezone=UTC`, para que una
+`pg_proc.proconfig` de las tres funciones contiene `timezone=UTC` y `datestyle=ISO`
+(éste último desde la 0132), para que una
 reescritura futura que pierda el `SET` falle en la verificación.
 
 ### C2 · `packages/db/src/tenancy.ts` — `initPool`
@@ -220,16 +224,16 @@ codificada dentro del contenedor, igual que en `scripts/desplegar.sh`.
 | **P0b** | La prueba tiene potencia | `SELECT count(*) FROM audit_logs` en la copia | > 0 filas en al menos una empresa. Si es 0, P1/P2 no prueban nada: se exige P5 (sintética) como sustituto | — |
 | **P1** | Cadena íntegra, sesión UTC, **antes** de la 0131 | `SET timezone='UTC'; SELECT c.id, count(*) filter … FROM companies c, LATERAL verify_audit_chain(c.id)` por empresa | 0 roturas en todas las empresas | ≥ 1 rotura: producción ya tiene la cadena rota, se corta y se investiga antes de seguir |
 | **P2** | Control negativo: misma verificación en sesión Argentina, antes de la 0131 | idem con `SET timezone='America/Argentina/Buenos_Aires'` | **Debe dar roturas** en toda empresa con filas (confirma que la prueba detecta el problema y que el cambio ingenuo de zona habría roto la cadena) | 0 roturas con filas > 0: el supuesto es falso y hay que revisar el plan |
-| **P3** | Migración 0131 sobre la copia, y verificación en ambas zonas | `migrate up` desde `nexo:ensayo-tz`; repetir la consulta de P1 con sesión UTC y con sesión Argentina; `diff` de las dos salidas | `schema_migrations` pasa a 131; ambas sesiones dan 0 roturas; las salidas son idénticas byte a byte | Cualquier rotura o diferencia |
+| **P3** | Migración 0131 sobre la copia, y verificación en ambas zonas | `migrate up` desde `nexo:ensayo-tz`; repetir la consulta de P1 con sesión UTC y con sesión Argentina; `diff` de las dos salidas | `schema_migrations` pasa a 131 (solo 0131) o a 132 (con la 0132); ambas sesiones dan 0 roturas; las salidas son idénticas byte a byte | Cualquier rotura o diferencia |
 
 ### Pruebas locales (P4–P12)
 
 | # | Prueba | Aprueba si | Falla si |
 |---|---|---|---|
 | **P4** | Las tres funciones, bajo ambas zonas (vitest de integración): insertar filas de auditoría y de `normative_audit_logs` con sesión UTC y con sesión Argentina | El hash guardado de cada fila coincide con el recalculado en JavaScript a partir del texto UTC de `occurred_at`; `verify_audit_chain` da 0 roturas sobre filas escritas en cualquiera de las dos zonas | Algún hash difiere según la zona de escritura |
-| **P5** | Filas «heredadas»: antes de aplicar la 0131 en una base de prueba, escribir filas con sesión UTC; aplicar la 0131; verificar con sesión Argentina | 0 roturas (reproduce la situación de producción sin depender del contenido del backup) | Cualquier rotura |
-| **P6** | `proconfig` de las tres funciones | Contiene `timezone=UTC` en las tres | Falta en alguna (y `audit:estructura` lo confirma) |
-| **P7** | Las conexiones de la aplicación | `SHOW timezone` dentro de `withCompany` y de `withoutCompany` devuelve `America/Argentina/Buenos_Aires`; `CURRENT_DATE::text` es igual a `(now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date::text` | Cualquier otra zona o fecha distinta. Es independiente de la hora a la que se corre |
+| **P5** | Filas «heredadas»: volver al estado previo a las migraciones, escribir filas con sesión UTC/ISO, aplicar **los archivos reales** de la 0131 y de la 0132 una por una y verificar desde 10 zonas × 6 estilos de fecha | Antes de la 0131: Argentina da rotura (control negativo). Tras la 0131: 0 roturas en todas las zonas y rotura con estilo SQL (control negativo de `DateStyle`). Tras la 0132: 0 roturas en las 60 sesiones y las tres funciones con ambas fijaciones | Cualquier rotura donde no se espera, o falta de rotura donde se espera |
+| **P6** | `proconfig` de las tres funciones | Contiene `timezone=UTC` y `datestyle=ISO` en las tres | Falta en alguna (y `audit:estructura` lo confirma) |
+| **P7** | Las conexiones de la aplicación | Con el entorno **hostil** (`PGOPTIONS=-c timezone=UTC`): `SHOW timezone` dentro de `withCompany` y de `withoutCompany` devuelve `America/Argentina/Buenos_Aires`; **las 5 conexiones simultáneas del pool** (≥ 3 backends distintos) la reciben; un `SET LOCAL` deshecho no la contamina; `CURRENT_DATE::text` es igual a `(now() AT TIME ZONE …)::date::text` | Cualquier otra zona o fecha. Independiente de la hora. (La versión anterior de este test pasaba aunque `initPool` no pidiera la zona, porque `setup-env.ts` ya fijaba `PGOPTIONS`: falso PASS, corregido) |
 | **P8** | `hoyEnZonaDeNegocio` con instantes fijos | `2026-10-06T01:00:00Z`→`2026-10-05`; `2026-10-06T03:00:00Z`→`2026-10-06`; `2026-12-31T23:30:00Z`→`2026-12-31`; `2027-01-01T02:59:59Z`→`2026-12-31`; `2027-01-01T03:00:00Z`→`2027-01-01` | Cualquier valor distinto |
 | **P9** | S-37 extendido | Pasa con el código corregido y **falla** al revertir `catalogo.ts:617`, `fecha.ts:154` o la opción de un script de la tabla C4 | No falla al revertir (el control no sirve) |
 | **P10** | Suite completa con la base de pruebas en **UTC** (como producción) | Ver comando abajo. 197 archivos, todas las pruebas verdes | Cualquier prueba roja: se investiga si es una dependencia oculta de la zona |
@@ -294,11 +298,11 @@ informar `NO EJERCITADO` solo si P0b dio 0 filas.
 
 | # | Qué se comprueba | Cómo | Aprueba si |
 |---|---|---|---|
-| **V1** | Versión y migraciones | `curl -fsS https://nexointelligence.com.ar/health/db` | `version` = el nuevo commit y `migrations` = 131 |
-| **V2** | Las conexiones de la aplicación usan la zona de negocio | `scripts/verificar-zona-de-negocio.mjs` dentro de un contenedor de la imagen desplegada (ver C3) | Código 0; `desdeLaAplicacion.zona` = `America/Argentina/Buenos_Aires`; `conexionCruda.zona` = `UTC` (la base sigue en UTC) |
-| **V3** | El historial de auditoría sigue íntegro | `audit:cadena --observacional` desde la imagen nueva contra la base real, con `PGOPTIONS='-c timezone=UTC'` y otra vez con `PGOPTIONS='-c timezone=America/Argentina/Buenos_Aires'` (`pg` respeta `PGOPTIONS`; verificado) | 0 roturas en ambas corridas, salidas idénticas |
-| **V4** | Las funciones de hash usan UTC | `SELECT proname, proconfig FROM pg_proc WHERE proname IN ('audit_chain_link','normative_audit_chain_link','verify_audit_chain')` | `timezone=UTC` en las tres |
-| **V5** | Las filas nuevas (escritas por la API en zona Argentina) verifican | Tras una acción real que escriba auditoría (un inicio de sesión), repetir V3 | 0 roturas, incluida la fila nueva |
+| **V1** | Versión y migraciones | `curl -fsS https://nexointelligence.com.ar/health/db` | `version` = el nuevo commit y `migrations` = 132 (131 + 0132) |
+| **V2** | Las conexiones de la aplicación usan la zona de negocio | `scripts/verificar-zona-de-negocio.mjs` dentro de un contenedor de la imagen desplegada (ver C3) | Código 0; `desdeLaAplicacion.zona` = `America/Argentina/Buenos_Aires`; `conexionCruda.zona` = `UTC` (la base sigue en UTC); `matrizOk` = true y `distingue` = true **a cualquier hora**, porque la prueba principal convierte 14 instantes fijos (20:59:59, 21:00:00, 21:00:01, 23:59:59 y 00:00:00 ART, fin de mes, fin de año y los dos febreros) y no depende del reloj |
+| **V3** | El historial de auditoría sigue íntegro | `audit:cadena --observacional` desde la imagen nueva contra la base real, con `PGOPTIONS='-c timezone=UTC'` y otra vez con `PGOPTIONS='-c timezone=America/Argentina/Buenos_Aires'` (`pg` respeta `PGOPTIONS`; verificado) | 0 roturas en ambas corridas, salidas idénticas. Reforzar con `PGOPTIONS='-c datestyle=SQL,DMY'` y `-c timezone=Pacific/Kiritimati`: también 0 roturas (la brecha de `DateStyle` la cierra la 0132) |
+| **V4** | Las funciones de hash usan UTC | `SELECT proname, proconfig FROM pg_proc WHERE proname IN ('audit_chain_link','normative_audit_chain_link','verify_audit_chain')` | `TimeZone=UTC` **y** `DateStyle=ISO, MDY` en las tres |
+| **V5** | Las filas nuevas (escritas por la API en zona Argentina) verifican | Tras una acción real que escriba auditoría (un inicio de sesión), repetir V3 **y** correr `scripts/recalcular-cadena.mjs --ultimas 50` dentro de la imagen (`npm run audit:recalcular`): recalcula en Node, con SHA-256 y su propia copia de la fórmula, el hash de las últimas 50 filas de cada empresa y de la bitácora normativa, y comprueba el enlace `prev_hash` → `hash`. Solo lee y fija su propia sesión en UTC/ISO | Código 0, `ok: true`, `rotas: 0`. (Verificar solo con `verify_audit_chain` es circular para las filas nuevas: trigger y verificador están fijados igual y podrían equivocarse juntos; el recálculo en Node no. Verificado en local sobre las últimas 50 filas de cada una de las 1 875 cadenas de `aai_test` (21 429 filas): 0 rotas) |
 | **V6** | Resto de verificadores | `ledger:verify --observacional`, `/health` y logs del contenedor | Verde, sin errores |
 | **V7** | **Confirmación de los bugs #3/#4/#5 en producción** — *separada del deploy* | Entre las 21:00 y las 23:59 ART: `date -u +%F` (ya es mañana) y `scripts/verificar-zona-de-negocio.mjs` en un contenedor de la imagen desplegada | Código 0 **y** `distingue: true`: `conexionCruda.currentDate` = el día de mañana (UTC) y `desdeLaAplicacion.currentDate` = el día de **hoy en Argentina**. Es la comprobación decisiva: demuestra que `CURRENT_DATE`, de lo que dependen los tres arreglos, ya es la argentina en las conexiones de la API |
 
@@ -472,7 +476,7 @@ PGUSER="$POSTGRES_USER" PGDB="$DESCARTABLE" PGHOST=nexo-postgres \
 docker run --rm --network nexo -e PGPASSWORD -e PGUSER -e PGDB -e PGHOST --entrypoint sh nexo:ensayo-tz \
   -c 'CLAVE=$(node -e "process.stdout.write(encodeURIComponent(process.env.PGPASSWORD))"); DATABASE_URL="postgresql://${PGUSER}:${CLAVE}@${PGHOST}:5432/${PGDB}" node scripts/migrate.mjs up'
 
-psqlc -d "$DESCARTABLE" -At -c "SELECT count(*) FROM schema_migrations"          # 131
+psqlc -d "$DESCARTABLE" -At -c "SELECT count(*) FROM schema_migrations"          # 131 con el commit e1b9007; 132 con la 0132
 verificar UTC                            "$DESCARTABLE" > /tmp/tz-p3-utc.txt
 verificar America/Argentina/Buenos_Aires "$DESCARTABLE" > /tmp/tz-p3-ar.txt
 diff /tmp/tz-p3-utc.txt /tmp/tz-p3-ar.txt && echo "idénticas"
@@ -481,8 +485,89 @@ psqlc -d "$DESCARTABLE" -At -c "SELECT proname, coalesce(array_to_string(proconf
   FROM pg_proc WHERE proname IN ('audit_chain_link','normative_audit_chain_link','verify_audit_chain') ORDER BY 1"
 ```
 
-- **P3 aprueba si:** `schema_migrations` = 131; `diff` sin diferencias; 0 filas con
-  roturas en ambas zonas; las tres funciones muestran `TimeZone=UTC`.
+- **P3 aprueba si:** `schema_migrations` = 131 (o 132 con la 0132); `diff` sin
+  diferencias; 0 filas con roturas en ambas zonas; las tres funciones muestran
+  `TimeZone=UTC` (y `DateStyle=ISO, MDY` desde la 0132).
+
+### A.4b · Llevar la copia a la 0132 y comprobar las 24 sesiones — **PENDIENTE (no ejecutado)**
+
+> **Estado:** no se ejecutó. Requiere acceso al servidor (`docker`, `nexo-postgres`),
+> que esta auditoría no tiene, y **no se simuló**. Todo lo de abajo es el
+> procedimiento exacto que hay que correr, con su criterio de aprobación. Las
+> pruebas locales equivalentes (P4b, P5, P4c) son evidencia sobre `aai_test`, no
+> reemplazan este ensayo sobre la copia del backup real.
+
+La P3 que ya se ejecutó aplicó solo la 0131 (131 migraciones). Cuando la 0132
+esté en el remoto, **sobre la misma copia** `aai_restauracion_tz` (sin tocar `aai`):
+
+**A.4b.1 · Estado previo y huella del historial (solo lectura).** Se anota antes de
+migrar para poder demostrar después que **ninguna fila histórica cambió**.
+
+```bash
+huella() {   # $1 = base. Una línea por bitácora: tabla|filas|md5 de (id:hash) en orden de seq
+psqlc -d "$1" -At <<'SQL'
+SELECT 'audit_logs', count(*), coalesce(md5(string_agg(id::text || ':' || hash, ',' ORDER BY seq)), '-') FROM audit_logs
+UNION ALL
+SELECT 'normative_audit_logs', count(*), coalesce(md5(string_agg(id::text || ':' || hash, ',' ORDER BY seq)), '-') FROM normative_audit_logs;
+SQL
+}
+psqlc -d "$DESCARTABLE" -At -c "SELECT count(*) FROM schema_migrations"          # 131: la 0131 está aplicada y la 0132 no
+psqlc -d "$DESCARTABLE" -At -c "SELECT proname, coalesce(array_to_string(proconfig, ','), '')
+  FROM pg_proc WHERE proname IN ('audit_chain_link','normative_audit_chain_link','verify_audit_chain') ORDER BY 1"
+                                                                                  # solo TimeZone=UTC (sin DateStyle todavía)
+huella "$DESCARTABLE" | tee /tmp/tz-huella-antes.txt
+```
+
+**A.4b.2 · Control negativo previo a la 0132 (se espera ROTURA).** Con solo la 0131, un
+estilo no ISO tiene que dar roturas: confirma que la prueba tiene potencia.
+
+```bash
+verificar_estilo() {   # $1 = zona, $2 = DateStyle, $3 = base
+psqlc -d "$3" -At <<SQL
+SET timezone = '$1';
+SET datestyle = '$2';
+SELECT c.id, (SELECT count(*) FROM audit_logs a WHERE a.company_id = c.id) AS filas,
+       (SELECT count(*) FROM verify_audit_chain(c.id)) AS roturas
+  FROM companies c ORDER BY c.id;
+SQL
+}
+verificar_estilo UTC 'SQL, DMY' "$DESCARTABLE" | awk -F'|' '$2 > 0 && $3 == 0' | wc -l   # 0: toda empresa con filas rompe
+```
+
+**A.4b.3 · Aplicar la 0132 sobre la copia.** Repetir el `git fetch`, el `git archive` y el
+`docker build` de A.4 con el nuevo `$COMMIT` y correr de nuevo el `migrate up`
+(aplica solo la pendiente).
+
+**A.4b.4 · Después.**
+
+```bash
+psqlc -d "$DESCARTABLE" -At -c "SELECT count(*) FROM schema_migrations"   # 132
+psqlc -d "$DESCARTABLE" -At -c "SELECT proname, coalesce(array_to_string(proconfig, ','), '')
+  FROM pg_proc WHERE proname IN ('audit_chain_link','normative_audit_chain_link','verify_audit_chain') ORDER BY 1"
+                                                                           # las tres: TimeZone=UTC y DateStyle=ISO, MDY
+huella "$DESCARTABLE" | tee /tmp/tz-huella-despues.txt
+diff /tmp/tz-huella-antes.txt /tmp/tz-huella-despues.txt && echo "HISTORIAL SIN CAMBIOS"
+
+for ESTILO in 'ISO, MDY' 'ISO, DMY' 'SQL, MDY' 'SQL, DMY' 'Postgres, MDY' 'German, DMY'; do
+  for ZONA in UTC America/Argentina/Buenos_Aires Asia/Kolkata Pacific/Kiritimati; do
+    verificar_estilo "$ZONA" "$ESTILO" "$DESCARTABLE"
+  done
+done | sort | uniq -c
+corrido "scripts/recalcular-cadena.mjs --ultimas 100000"                    # (`corrido` se define en A.5) recálculo en Node, independiente de las funciones
+```
+
+**Aprueba si, y solo si, se cumplen las seis:**
+
+1. `schema_migrations` pasó de 131 a 132 y las tres funciones muestran `TimeZone=UTC` **y** `DateStyle=ISO, MDY`.
+2. `diff` de las huellas sin diferencias (`HISTORIAL SIN CAMBIOS`): mismas filas, mismos hashes, mismo orden, en las dos bitácoras.
+3. La matriz imprime, **por cada empresa, una sola línea** con el contador 24
+   (`24 <id>|<filas>|0`): las 24 combinaciones de zona y estilo dan 0 roturas y el mismo resultado.
+   Una línea con un contador menor, o con roturas distintas de 0, es un fallo.
+4. El control negativo de A.4b.2 dio 0 (sin la 0132 un estilo SQL rompía todas las empresas con filas).
+5. `recalcular-cadena.mjs` termina con código 0 (`ok: true`, `rotas: 0`) **sobre todas las filas**.
+6. `audit_logs` de la copia tiene > 0 filas (P0b); si da 0, nada de lo anterior prueba algo.
+
+Con cualquier otro resultado: **se corta**, no se despliega, y la copia queda para análisis.
 
 ### A.5 · P12 (parte servidor) — verificadores sobre la copia
 
@@ -500,7 +585,7 @@ corrido "scripts/check-invariants.mjs --observacional"
 
 Aprueba si los cuatro terminan con código 0. `NO EJERCITADO` solo es aceptable
 si P0b dio 0 filas. (`check-structure` incluye el control nuevo de las tres
-funciones con `TimeZone=UTC`.)
+funciones con `TimeZone=UTC` y `DateStyle=ISO, MDY`.)
 
 ### A.6 · Limpieza (solo con P0–P3 y P12 aprobados)
 
@@ -525,8 +610,35 @@ date -u +%F
 
 - **V2 (de día, tras el deploy):** código 0, `desdeLaAplicacion.zona` =
   `America/Argentina/Buenos_Aires`, `conexionCruda.zona` = `UTC`.
-- **V7 (de noche, 21:00–24:00 ART):** además `"distingue": true`: la conexión cruda
-  ve el día de mañana (el mismo de `date -u +%F`) y la de la aplicación el de hoy.
+- **V7 (de noche, 21:00–24:00 ART):** además `hoyEnUtc` es el día **siguiente** a
+  `desdeLaAplicacion.currentDate` (el mismo de `date -u +%F`) y `fechaOk` es `true`: es la
+  única parte que depende del reloj real. `distingue` ya no la prueba: sale de 14 instantes
+  fijos y da lo mismo a cualquier hora.
 
 Evidencia local del mismo mecanismo (2026-10-05, 22:49 ART, base de pruebas en
 UTC): aplicación `2026-10-05`, conexión cruda `2026-10-06`.
+
+
+## Actualización del 2026-10-07 — auditoría integral
+
+Informe completo, con severidades, matriz V1–V7 y clasificaciones:
+`docs/AUDITORIA_ZONA_HORARIA.md`. Lo que cambió respecto del plan original, y que
+**está sin commitear**:
+
+| Cambio | Por qué |
+|---|---|
+| **Migración 0132** (`SET datestyle = 'ISO, MDY'` en las tres funciones) | `occurred_at::text` depende también de `DateStyle`: con SQL/Postgres/German el hash cambia. Medido: 10 zonas × 6 estilos de fecha (60 sesiones) escribiendo y verificando, para la cadena por empresa y la normativa, con recálculo independiente en SQL plano desde la sesión canónica; un estilo no ISO rompe la cadena antes de la 0132 |
+| `scripts/recalcular-cadena.mjs` (+ `scripts/lib/cadena.mjs`, `npm run audit:recalcular`) | El paso V5 pedía un recálculo «fuera de las funciones» que solo existía como texto. Ahora es un script de solo lectura con test propio y control negativo (campo alterado, hash alterado, enlace roto). Al escribirlo apareció un defecto propio (`ORDER BY seq` tomaba el alias de texto): lo detectó la corrida contra `aai_test` |
+| `prepararAltaDeEjercicio` y 3 fechas «hoy» en `consola.html` | La consola calculaba «hoy» en UTC: fecha por defecto de un asiento, período «actual» y normativa «vigente hoy» mostraban mañana de 21:00 a 24:00; y el ejercicio propuesto saltaba al año siguiente **todo el día del cierre**. `diaDeUnInstante` / `momentoDeUnInstante` ya no convierten dos veces una fecha `AAAA-MM-DD` |
+| Seis campos `timestamptz` de la consola | Se recortaban en UTC (`slice(0, 10)`): un evento de las 22:00 ART aparecía con el día siguiente. Ahora `diaDeUnInstante` / `momentoDeUnInstante` |
+| `asientosTardios` (motor de auditoría) | Contaba días contra la medianoche UTC: el borde de los 60 días se corría hasta un día para cargas de 21:00 a 24:00 ART. Ahora con casos de borde para 59/60/61 días, año nuevo, bisiesto, otros plazos de gracia y el texto de PostgreSQL con otros desfases |
+| Año de referencia del parser de fechas (`fecha.ts`) | Ya estaba corregido, pero ningún test dinámico lo cubría: la mutación a `getUTCFullYear()` pasaba. Ahora hay un test con reloj fijo en el 31/12 entre las 21:00 y las 24:00 ART |
+| Dos mensajes con un instante como día (`arca.ts`, `secrets/proveedor.ts`) | Mostraban la fecha UTC del vencimiento |
+| `/audit`: `cargado_el` | Entrega ISO inequívoco en UTC en vez del texto de la sesión (campo interno: no sale en la respuesta). Test P8: idéntico desde 60 sesiones |
+| `fixtures-invariantes.mjs` con zona | Crea empresas y roles por un cliente crudo (`valid_from DEFAULT CURRENT_DATE`) |
+| S-37 reescrito, S-45 reforzado, S-46 nuevo, test P7 corregido | S-37 dejaba pasar 7 de 9 variantes (y ahora también sigue una variable que guarda el ISO, `toJSON`, `.replace('T', …)` y `getTimezoneOffset`); la excepción de archivo para `calendar-date.ts` pasó a una anotación en su única línea y cada anotación `s37-permite` se comprueba que tape algo real. S-45 aceptaba un `import` sin uso y ahora rechaza una zona equivocada, el helper pisado por otra `options` y una segunda conexión sin zona; P7 daba falso PASS por `PGOPTIONS` y ahora prueba también el reciclaje de conexiones |
+| `verificar-zona-de-negocio.mjs` determinístico | La corrida de las 00:44 ART dio `distingue=false`: dependía del reloj. Ahora convierte 14 instantes fijos, y `fechaOk` acepta el día de antes y el de después de la consulta (no falla justo en la medianoche argentina) |
+
+Pasos nuevos para llevar esto a producción (**no se hicieron**): commit y push de
+estos cambios; **A.4b sobre la copia, que sigue PENDIENTE** (necesita el servidor y la
+0132 en el remoto); recién entonces el deploy, de día, y V7 de noche.

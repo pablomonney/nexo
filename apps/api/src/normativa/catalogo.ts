@@ -14,7 +14,7 @@ import { parseCalendarDate, type CalendarDate } from '@aai/shared';
 /** De `date` de PostgreSQL a la fecha del motor, sin pasar por `Date`. */
 function aFecha(valor: Date | string): CalendarDate {
   return parseCalendarDate(
-    typeof valor === 'string' ? valor.slice(0, 10) : valor.toISOString().slice(0, 10),
+    typeof valor === 'string' ? valor.slice(0, 10) : valor.toISOString().slice(0, 10), // s37-permite: columna `date` de pg que llega como Date a medianoche del proceso; no es el reloj
   );
 }
 

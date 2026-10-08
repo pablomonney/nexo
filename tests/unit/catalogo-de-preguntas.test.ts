@@ -24,7 +24,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseCalendarDate } from '@aai/shared';
+import { parseCalendarDate, hoyEnZonaDeNegocio } from '@aai/shared';
 import {
   CATALOGO,
   coincidencias,
@@ -138,6 +138,26 @@ describe('El catálogo de preguntas', () => {
     expect(mesDe('cuanto vendi en noviembre', hoy)).toBe('2025-11');
     expect(mesDe('cuanto vendi en marzo', hoy)).toBe('2026-03');
     expect(mesDe('cuanto vendi en enero', hoy)).toBe('2026-01');
+  });
+
+  it('en el borde del mes y del año, el «hoy» argentino decide cuál es el mes en curso', () => {
+    // 21:00 ART = 00:00Z. Estos son los instantes del defecto: en UTC ya es el mes
+    // (o el año) siguiente, en Argentina todavía no. `hoy` sale del mismo helper
+    // que usa la aplicación, con instantes fijos y no con el reloj.
+    const octubre = hoyEnZonaDeNegocio(new Date('2026-11-01T01:00:00Z')); // 22:00 ART del 31/10
+    const noviembre = hoyEnZonaDeNegocio(new Date('2026-11-01T03:00:00Z')); // 00:00 ART del 01/11
+    expect(octubre).toBe('2026-10-31');
+    expect(noviembre).toBe('2026-11-01');
+    expect(mesDe('cuanto vendi en octubre', octubre)).toBe('2026-10'); // el mes en curso
+    expect(mesDe('cuanto vendi en noviembre', octubre)).toBe('2025-11'); // todavía no llegó
+    expect(mesDe('cuanto vendi en noviembre', noviembre)).toBe('2026-11');
+
+    const dic31 = hoyEnZonaDeNegocio(new Date('2027-01-01T01:00:00Z')); // 22:00 ART del 31/12/2026
+    const ene01 = hoyEnZonaDeNegocio(new Date('2027-01-01T03:00:00Z')); // 00:00 ART del 01/01/2027
+    expect(mesDe('cuanto vendi en diciembre', dic31)).toBe('2026-12');
+    expect(mesDe('cuanto vendi en enero', dic31)).toBe('2026-01'); // enero de 2027 todavía no llegó
+    expect(mesDe('cuanto vendi en enero', ene01)).toBe('2027-01');
+    expect(mesDe('cuanto vendi en diciembre', ene01)).toBe('2026-12');
   });
 
   it('los importes se escriben como los escribe una persona', () => {

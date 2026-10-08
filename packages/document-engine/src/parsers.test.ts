@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { moneyFromDecimalString } from '@aai/shared';
 import { desambiguarPorControl, parseImporteAr } from './parsers/importe.js';
 import { parseFechaAr } from './parsers/fecha.js';
@@ -137,6 +137,30 @@ describe('parseFechaAr', () => {
     expect(resultado.value.nota).toMatch(/dos dígitos/);
     // La interpretación vale menos que un año de cuatro dígitos.
     expect(resultado.value.confianza).toBeLessThanOrEqual(0.85);
+  });
+
+  describe('el año de referencia por defecto es el de Argentina, a cualquier hora del test', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // «28» es 2028 si el año de referencia es 2027 (ventana de un año hacia
+    // adelante) y, si es 2026, cae al siglo anterior (1928) y se rechaza por fuera
+    // de rango. Entre las 21:00 y las 24:00 ART del 31/12 el reloj de UTC ya está en
+    // el año siguiente, y ahí se distinguen. El reloj es fijo: este test vale a
+    // cualquier hora a la que se corra.
+    it.each([
+      ['2026-12-31T12:00:00Z', false], //     09:00 ART del 31/12/2026
+      ['2027-01-01T00:59:59Z', false], //     21:59:59 ART del 31/12/2026: el año argentino sigue siendo 2026
+      ['2027-01-01T02:59:59Z', false], //     23:59:59 ART
+      ['2027-01-01T03:00:00Z', true], //      00:00:00 ART del 01/01/2027: recién ahora es 2027
+    ])('con el reloj en %s, «05/03/28» %s se lee como 2028', (instante, seLee) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(instante));
+      const resultado = parseFechaAr('05/03/28');
+      expect(resultado.ok).toBe(seLee);
+      if (resultado.ok) expect(resultado.value.fecha).toBe('2028-03-05');
+    });
   });
 
   it('manda un año de dos dígitos muy adelantado al siglo anterior', () => {

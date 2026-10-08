@@ -40,6 +40,7 @@ import { closePool, initPool } from '@aai/db';
 import { totp, withCheckDigit } from '@aai/shared';
 import pg from 'pg';
 import { nombreDe } from './verification-db.mjs';
+import { opcionesDeConexion } from './lib/zona.mjs';
 
 const PASSWORD = 'una-contrasena-suficientemente-larga';
 
@@ -76,7 +77,11 @@ export async function sembrarFixtures(databaseUrl, { silencioso = false } = {}) 
   initPool(databaseUrl);
   const app = await buildServer();
   await app.ready();
-  const db = new pg.Client({ connectionString: databaseUrl });
+  // En la zona del negocio, como la aplicación: este cliente crudo crea empresas y
+  // roles (`valid_from DEFAULT CURRENT_DATE`), y desde una sesión UTC la fila queda
+  // con la fecha de mañana entre las 21:00 y las 24:00 ART — y la API, que cuenta en
+  // hora argentina, le niega el acceso a quien acaba de recibir el rol.
+  const db = new pg.Client({ connectionString: databaseUrl, ...opcionesDeConexion() });
   await db.connect();
 
   try {

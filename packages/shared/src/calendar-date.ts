@@ -70,7 +70,7 @@ export function compareDates(a: CalendarDate, b: CalendarDate): -1 | 0 | 1 {
 export function addDays(value: CalendarDate, days: number): CalendarDate {
   const utc = Date.UTC(yearOf(value), monthOf(value) - 1, dayOf(value));
   const shifted = new Date(utc + days * 86_400_000);
-  return calendarDate(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+  return calendarDate(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate()); // s37-permite: parte de año/mes/día explícitos y los lee en UTC; no lee el reloj
 }
 
 /**

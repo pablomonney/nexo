@@ -1,0 +1,51 @@
+-- ---------------------------------------------------------------------------
+-- Las funciones de hash tampoco dependen del formato de fecha de la sesión
+-- ---------------------------------------------------------------------------
+--
+-- La 0131 fijó la **zona** (`timezone = 'UTC'`) dentro de las tres funciones que
+-- escriben o recalculan el hash de la cadena de auditoría, porque el payload
+-- incluye `occurred_at::text` y un `timestamptz` en texto sale en la zona de la
+-- sesión. La auditoría del 2026-10-07 midió que **la zona no era la única
+-- configuración de sesión de la que depende ese texto**: también lo es
+-- `DateStyle`.
+--
+--     DateStyle        texto de 2026-10-05 21:30:00.123456+00 (en UTC)
+--     ISO, MDY         2026-10-05 21:30:00.123456+00
+--     ISO, DMY         2026-10-05 21:30:00.123456+00      (el orden no afecta a ISO)
+--     SQL, DMY         05/10/2026 21:30:00.123456 UTC
+--     Postgres, DMY    Mon 05 Oct 21:30:00.123456 2026 UTC
+--     German, DMY      05.10.2026 21:30:00.123456 UTC
+--
+-- Una sesión con un estilo que no es ISO —por ejemplo, una herramienta de
+-- administración que lo fije— escribiría una fila con otro hash, y la
+-- verificaría como rota cualquier otra sesión, **sin que cambie nada del dato**.
+-- Medido contra esta base: una cadena escrita en 8 zonas distintas con estilo ISO
+-- verifica limpia desde cualquiera de ellas (0 roturas en 16 combinaciones), y
+-- una escrita con estilo SQL, Postgres o German se rompe.
+--
+-- Nada del repositorio fija `DateStyle`, y `pg` y `psql` usan ISO por defecto:
+-- hoy no se manifiesta. Es la misma clase de fragilidad que la 0131 cerró para la
+-- zona, y cuesta tres líneas.
+--
+-- ## Qué hace, y qué no
+--
+-- Fija `datestyle = 'ISO, MDY'` dentro de cada función. En estilo ISO el texto es
+-- el mismo que ya tienen todas las filas escritas (la parte «MDY» solo ordena
+-- las fechas ambiguas al *leer* y no cambia la salida), así que **los hashes
+-- existentes siguen siendo válidos** y los nuevos son idénticos. No cambia la
+-- fórmula, el orden ni el payload. Compatible con la versión anterior de la
+-- aplicación.
+--
+-- Va en una migración aparte y no editando la 0131 porque una migración ya
+-- publicada no se edita (guarda de checksum): la 0131 puede estar aplicada en
+-- copias de ensayo.
+--
+-- ## Lo que queda fuera, a propósito
+--
+-- `search_path`: las funciones resuelven `audit_logs` y `digest()` sin calificar.
+-- Una sesión con otro `search_path` falla de forma visible (la función no existe)
+-- y no cambia el hash. Es anterior a esto y no es de fecha; se deja anotado.
+
+ALTER FUNCTION audit_chain_link()           SET datestyle = 'ISO, MDY';
+ALTER FUNCTION normative_audit_chain_link() SET datestyle = 'ISO, MDY';
+ALTER FUNCTION verify_audit_chain(uuid)     SET datestyle = 'ISO, MDY';

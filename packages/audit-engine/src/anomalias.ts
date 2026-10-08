@@ -21,7 +21,7 @@
  * detectarla. La mediana no se mueve.
  */
 
-import type { CalendarDate, Money } from '@aai/shared';
+import { daysBetween, hoyEnZonaDeNegocio, type CalendarDate, type Money } from '@aai/shared';
 
 /**
  * Un código por detector, ni uno más.
@@ -175,22 +175,26 @@ export function justoBajoUmbral(
  * No es una irregularidad —la carga siempre va atrás de los hechos— pero un
  * asiento con fecha de marzo cargado en septiembre no se revisó en su momento, y
  * eso cambia qué tan confiable es el período que ya se dio por cerrado.
+ *
+ * ## Los días son de calendario, en hora argentina
+ *
+ * La fecha contable es un día (`CalendarDate`) y la carga es un instante. Antes se
+ * restaban en milisegundos contra la medianoche **UTC** del día contable, así que
+ * un asiento cargado entre las 21:00 y las 24:00 ART —que en UTC ya es el día
+ * siguiente— sumaba un día de más y podía cruzar el umbral sin haberlo cruzado.
+ * Ahora se cuenta el día argentino de la carga contra el día contable
+ * (2026-10-07).
  */
 export function asientosTardios(
   asientos: readonly AsientoParaAuditar[],
   diasDeGracia = 60,
 ): Anomalia[] {
-  const MS_POR_DIA = 86_400_000;
-
   return asientos
     .map((asiento) => {
-      const contable = Date.UTC(
-        Number(asiento.fecha.slice(0, 4)),
-        Number(asiento.fecha.slice(5, 7)) - 1,
-        Number(asiento.fecha.slice(8, 10)),
-      );
-      const cargado = new Date(asiento.cargadoEl).getTime();
-      const dias = Math.floor((cargado - contable) / MS_POR_DIA);
+      const cargado = new Date(asiento.cargadoEl);
+      // Un instante ilegible no se marca ni rompe el informe: queda afuera, como antes.
+      if (Number.isNaN(cargado.getTime())) return { asiento, dias: Number.NaN };
+      const dias = daysBetween(asiento.fecha, hoyEnZonaDeNegocio(cargado));
       return { asiento, dias };
     })
     .filter(({ dias }) => dias > diasDeGracia)
