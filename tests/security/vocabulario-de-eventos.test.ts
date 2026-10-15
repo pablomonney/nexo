@@ -90,6 +90,19 @@ const SIN_ESCRITOR = new Map<string, string>([
     'Anular una intención abandona un número de comprobante ya reservado y deja un hueco en la ' +
       'numeración. No lo escribe nadie todavía por el mismo motivo: no hay quien emita.',
   ],
+  // Las dos de la 0135: las escribe la herramienta del operador (`scripts/recuperar-cuenta.mjs`, con SQL directo y no con
+  // `recordAudit`), no la API. El barrido sólo mira el código de la API, así que no las ve: están registradas en la base y
+  // exigen motivo, y `tests/integration/recuperar-cuenta.test.ts` comprueba que el script las escribe.
+  [
+    'RESETEAR_SEGUNDO_FACTOR',
+    'Lo escribe el operador con `scripts/recuperar-cuenta.mjs segundo-factor` cuando alguien perdió el segundo factor y ' +
+      'los códigos de recuperación. No es una operación de la API: no hay pantalla ni ruta que lo haga.',
+  ],
+  [
+    'CAMBIAR_CORREO_DE_CUENTA',
+    'Lo escribe el operador con `scripts/recuperar-cuenta.mjs correo` cuando alguien perdió el acceso a la casilla de la ' +
+      'cuenta. Tampoco es una operación de la API.',
+  ],
 ]);
 
 suite('S-20 — el vocabulario de la bitácora', () => {

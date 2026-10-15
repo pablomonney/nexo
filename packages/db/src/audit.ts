@@ -85,6 +85,10 @@ export const ACTIONS_REQUIRING_REASON = [
   // Cambiar la contraseña de una cuenta es el acto que da acceso a una empresa. Sin el motivo escrito, una auditoría no
   // distingue una recuperación legítima de un cambio hecho por otra vía (0134).
   'RESTABLECER_CONTRASENA',
+  // Los dos casos que el correo no resuelve y que hace el operador a mano (0135): sin el motivo y la verificación de
+  // identidad escritos, una cuenta que cambió de segundo factor o de correo no se puede explicar (0135).
+  'RESETEAR_SEGUNDO_FACTOR',
+  'CAMBIAR_CORREO_DE_CUENTA',
 ] as const;
 
 export interface AuditEvent {
