@@ -82,6 +82,9 @@ export const ACTIONS_REQUIRING_REASON = [
   // reservó. Deja un hueco en la numeración, y un hueco sin explicación es
   // exactamente lo que una inspección va a preguntar.
   'ANULAR_INTENCION_FISCAL',
+  // Cambiar la contraseña de una cuenta es el acto que da acceso a una empresa. Sin el motivo escrito, una auditoría no
+  // distingue una recuperación legítima de un cambio hecho por otra vía (0134).
+  'RESTABLECER_CONTRASENA',
 ] as const;
 
 export interface AuditEvent {

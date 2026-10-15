@@ -545,6 +545,32 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <p class="ayuda">Cuando confirmes, entrá con tu correo y tu contraseña: la pantalla
       siguiente es la de crear tu empresa.</p>
   </div></details>
+
+  <!-- «Olvidé mi contraseña»: dos pasos, como el alta. Primero se pide el código (llega por correo) y después se lo pega
+       acá con la contraseña nueva. La respuesta del servidor es la misma exista o no la cuenta: lo que se muestra debajo
+       es esa respuesta, no una frase escrita a mano que pueda quedar vieja. -->
+  <details class="grupo" id="recuperar"><summary>Olvidé mi contraseña</summary><div>
+    <h3>Elegir una contraseña nueva</h3>
+    <p class="ayuda">Te mandamos un código al correo de tu cuenta. Con ese código elegís la contraseña nueva; al
+      cambiarla se <strong>cierran todas tus sesiones abiertas</strong>. Si tu cuenta tiene segundo factor, lo vas a
+      seguir necesitando: recuperar la contraseña no lo saltea.</p>
+    <div class="fila">
+      <div><label>Correo de tu cuenta</label><input id="rec-email" type="email" autocomplete="email"></div>
+      <div><label>&nbsp;</label><button id="b-rec-pedir" class="sec">Mandarme el código</button></div>
+    </div>
+    <div id="rec-pedir-msg"></div>
+
+    <h4>Ya tengo el código de recuperación</h4>
+    <div class="fila">
+      <div><label>Código</label><input id="rec-token" maxlength="200" autocomplete="off"></div>
+      <div><label>Contraseña nueva (12 o más)</label>
+        <input id="rec-pass" type="password" autocomplete="new-password"></div>
+      <div><label>&nbsp;</label><button id="b-rec-cambiar">Cambiar la contraseña</button></div>
+    </div>
+    <div id="rec-cambiar-msg"></div>
+    <p class="ayuda">¿Perdiste también el segundo factor, o el correo ya no es tuyo? Escribinos desde la dirección
+      registrada: lo resolvemos a mano, verificando que seas vos.</p>
+  </div></details>
 </section>
 
 <!-- ══ Segundo factor ═════════════════════════════════════════════════════
@@ -4582,6 +4608,25 @@ E('b-alta-verificar').onclick = async () => {
   if (r.ok) {
     E('alta-token').value = '';
     E('email').value = E('alta-email').value.trim();
+  }
+};
+
+// «Olvidé mi contraseña». El servidor contesta lo mismo exista o no la cuenta: se muestra SU respuesta, sin agregar nada
+// que diga si el correo estaba registrado.
+E('b-rec-pedir').onclick = async () => {
+  const r = await api('POST', '/auth/recuperar', { email: E('rec-email').value.trim() });
+  decir('rec-pedir-msg', r);
+};
+
+E('b-rec-cambiar').onclick = async () => {
+  const r = await api('POST', '/auth/restablecer', { token: E('rec-token').value.trim(), password: E('rec-pass').value });
+  decir('rec-cambiar-msg', r);
+  if (r.ok) {
+    // La contraseña nueva no se queda en el campo. El correo sí pasa al ingreso, para entrar enseguida.
+    E('rec-pass').value = '';
+    E('rec-token').value = '';
+    if (E('rec-email').value.trim() !== '') E('email').value = E('rec-email').value.trim();
+    E('pass').value = '';
   }
 };
 

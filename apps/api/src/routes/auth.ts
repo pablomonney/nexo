@@ -1,4 +1,4 @@
-import { withoutCompany, type Tx } from '@aai/db';
+import { recordAudit, withCompany, withoutCompany, type Tx } from '@aai/db';
 import { toString } from 'qrcode';
 import { generateSecret, otpauthUri, verifyTotp } from '@aai/shared';
 import type { FastifyInstance } from 'fastify';
@@ -603,6 +603,210 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       estado: 'PEDIDO',
       mensaje: 'Si esa dirección tenía un alta sin confirmar, te mandamos un mensaje nuevo.',
     };
+  });
+
+  /**
+   * «Olvidé mi contraseña»: pide el código para elegir una nueva.
+   *
+   * ## Contesta lo mismo exista o no la cuenta
+   *
+   * Decir «esa dirección no tiene cuenta» le diría a cualquiera qué correos son clientes de NEXO. La respuesta es la
+   * misma para una dirección registrada, una que no, y una cuenta todavía sin confirmar (a esa se le resuelve con
+   * «No me llegó», no con esto). Sólo cambia lo que pasa del otro lado: el mensaje sale, o no.
+   *
+   * ## Un solo código vivo, y un freno
+   *
+   * Pedir otro **invalida el anterior** (dos vías abiertas hacia la misma cuenta son una superficie doble) y no sale más
+   * de un mensaje por minuto por cuenta: sin freno, esta ruta es una forma de llenarle la bandeja a cualquiera.
+   */
+  app.post('/auth/recuperar', async (request) => {
+    const { email } = z.object({ email: z.string().email().max(320) }).parse(request.body);
+
+    await withoutCompany('system:recuperacion', async (tx) => {
+      const fila = await tx.query<{ id: string; status: string }>(
+        'SELECT id, status FROM users WHERE lower(email) = lower($1)',
+        [email],
+      );
+      const u = fila.rows[0];
+      if (u === undefined || u.status !== 'ACTIVE') return;
+
+      const reciente = await tx.query(
+        `SELECT 1 FROM email_verifications
+          WHERE user_id = $1 AND proposito = 'RECUPERACION'
+            AND creado_el > now() - interval '60 seconds'`,
+        [u.id],
+      );
+      if ((reciente.rowCount ?? 0) > 0) return;
+
+      await tx.query(
+        `UPDATE email_verifications SET consumido_el = now()
+          WHERE user_id = $1 AND proposito = 'RECUPERACION' AND consumido_el IS NULL`,
+        [u.id],
+      );
+      await emitirRecuperacion(tx, correo, u.id, email, request.ip);
+    });
+
+    return {
+      estado: 'PEDIDO',
+      mensaje:
+        'Si esa dirección tiene una cuenta, te mandamos un mensaje con un código para elegir una contraseña nueva. ' +
+        `El código vence en ${HORAS_DE_VIDA_DE_LA_RECUPERACION} hora.`,
+    };
+  });
+
+  /**
+   * Elige la contraseña nueva con el código que llegó por correo.
+   *
+   * Qué hace, y qué deliberadamente **no** hace:
+   *
+   *   · el código se compara por su hash y se consume en la misma transacción (sirve una sola vez);
+   *   · **cierra todas las sesiones** de la cuenta: quien tenía la contraseña vieja —o una sesión robada— queda afuera;
+   *   · limpia el bloqueo por intentos fallidos (quien olvidó la contraseña probablemente lo disparó);
+   *   · **NO toca el segundo factor.** Recuperar la contraseña por correo no puede ser una forma de saltearlo: quien
+   *     tenga MFA lo sigue necesitando para entrar. Si también lo perdió, es el procedimiento manual
+   *     (`docs/legal/PROCEDIMIENTO_RECUPERACION_DE_CUENTA.md`), con verificación de identidad;
+   *   · avisa a la dirección de la cuenta que la contraseña cambió, y deja constancia en la bitácora de cada empresa a la
+   *     que pertenece. La contraseña nueva nunca se escribe en ningún registro.
+   */
+  app.post('/auth/restablecer', async (request) => {
+    const body = z
+      .object({
+        token: z.string().min(20).max(200),
+        // El mismo mínimo que el alta (SECURITY.md §2): longitud, no complejidad cosmética.
+        password: z.string().min(12).max(1024),
+      })
+      .parse(request.body);
+
+    const resultado = await withoutCompany('system:recuperacion', async (tx) => {
+      const fila = await tx.query<{ id: string; user_id: string; expira_el: Date }>(
+        `SELECT id, user_id, expira_el FROM email_verifications
+          WHERE token_hash = $1 AND proposito = 'RECUPERACION' AND consumido_el IS NULL
+          FOR UPDATE`,
+        [hashToken(body.token)],
+      );
+      const v = fila.rows[0];
+      if (v === undefined) return { estado: 'INVALIDO' as const };
+      if (v.expira_el <= new Date()) return { estado: 'VENCIDO' as const };
+
+      const cuenta = await tx.query<{ email: string; status: string }>(
+        'SELECT email, status FROM users WHERE id = $1 FOR UPDATE',
+        [v.user_id],
+      );
+      const u = cuenta.rows[0];
+      if (u === undefined || u.status !== 'ACTIVE') return { estado: 'INVALIDO' as const };
+
+      // El código se consume ANTES de cambiar nada (y con él cualquier otro que hubiera): si algo fallara en el medio,
+      // no queda un código vivo sobre una cuenta ya cambiada.
+      await tx.query(
+        `UPDATE email_verifications SET consumido_el = now()
+          WHERE user_id = $1 AND proposito = 'RECUPERACION' AND consumido_el IS NULL`,
+        [v.user_id],
+      );
+      await tx.query(
+        `UPDATE users
+            SET password_hash = $2, failed_login_count = 0, locked_until = NULL, updated_at = now()
+          WHERE id = $1`,
+        [v.user_id, await hashPassword(body.password)],
+      );
+      await tx.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [
+        v.user_id,
+      ]);
+
+      await encolar(tx, correo, {
+        destinatario: u.email,
+        asunto: 'Se cambió la contraseña de tu cuenta de NEXO',
+        cuerpo:
+          'Hola,\n\n' +
+          'La contraseña de tu cuenta de NEXO se cambió recién usando el código de recuperación que pediste. ' +
+          'Se cerraron todas las sesiones abiertas.\n\n' +
+          'Si fuiste vos, no tenés que hacer nada. Si NO fuiste vos, escribinos de inmediato.',
+        tipo: 'AVISO',
+      });
+
+      return { estado: 'RESTABLECIDA' as const, userId: v.user_id };
+    });
+
+    if (resultado.estado === 'INVALIDO') {
+      // Un solo mensaje para «no existe» y «ya se usó»: distinguirlos diría si un código fue válido alguna vez.
+      throw badRequest('El código no sirve: puede haberse usado ya o no ser el que mandamos.');
+    }
+    if (resultado.estado === 'VENCIDO') {
+      throw badRequest('El código venció. Pedí uno nuevo desde «Olvidé mi contraseña»: el anterior queda invalidado.');
+    }
+
+    // La constancia va en la bitácora de cada empresa de la cuenta (cadena encadenada), fuera de la transacción de
+    // arriba porque la bitácora es por empresa y ésa corre sin empresa en contexto.
+    // Las empresas de la cuenta salen de `user_companies()` (SECURITY DEFINER), que deriva el usuario de `app.actor_id`: bajo RLS
+    // `user_company_roles` devuelve cero filas sin una empresa en contexto.
+    const empresas = await withoutCompany(`user:${resultado.userId}`, (tx) =>
+      tx.query<{ id: string }>('SELECT id FROM user_companies()'),
+    );
+    for (const { id: companyId } of empresas.rows) {
+      try {
+        await withCompany({ companyId, actorId: 'system:recuperacion' }, (tx) =>
+          recordAudit(tx, companyId, {
+            actorType: 'SYSTEM',
+            actorId: 'system:recuperacion',
+            action: 'RESTABLECER_CONTRASENA',
+            objectType: 'users',
+            objectId: resultado.userId,
+            motivo: 'Contraseña elegida con un código de recuperación enviado por correo; se cerraron todas las sesiones.',
+            ip: config.recordIpInAudit ? request.ip : null,
+            userAgent: null,
+          }),
+        );
+      } catch (error) {
+        // La contraseña YA cambió y el código YA se consumió: contestar 500 acá le diría a la persona que falló algo que
+        // sí pasó, y la dejaría reintentando con un código muerto. Se deja el error a la vista del operador y se sigue.
+        request.log.error(
+          { err: error instanceof Error ? error.message : String(error), companyId, userId: resultado.userId },
+          'RESTABLECER_CONTRASENA: la contraseña cambió pero no se pudo escribir la constancia en la bitácora',
+        );
+      }
+    }
+
+    return {
+      estado: 'RESTABLECIDA',
+      mensaje:
+        'Listo: ya podés entrar con la contraseña nueva. Si tu cuenta tiene segundo factor, lo vas a seguir necesitando.',
+    };
+  });
+}
+
+/**
+ * Cuánto vive un código de recuperación de contraseña.
+ *
+ * Una hora: es una vía directa hacia una cuenta ya activa y por eso vive menos que el de alta (24 h).
+ */
+const HORAS_DE_VIDA_DE_LA_RECUPERACION = 1;
+
+async function emitirRecuperacion(
+  tx: Tx,
+  correo: ProveedorDeCorreo,
+  userId: string,
+  email: string,
+  ip: string,
+): Promise<ResultadoDeEnvio> {
+  const token = generateSessionToken();
+
+  await tx.query(
+    `INSERT INTO email_verifications
+       (user_id, token_hash, proposito, expira_el, creado_desde)
+     VALUES ($1, $2, 'RECUPERACION', now() + ($3 || ' hours')::interval, $4)`,
+    [userId, hashToken(token), String(HORAS_DE_VIDA_DE_LA_RECUPERACION), config.recordIpInAudit ? ip : null],
+  );
+
+  return encolar(tx, correo, {
+    destinatario: email,
+    asunto: 'Código para elegir una contraseña nueva en NEXO',
+    cuerpo:
+      'Hola,\n\n' +
+      'Pediste elegir una contraseña nueva para tu cuenta de NEXO. Copiá este código y pegalo en la pantalla de ingreso, ' +
+      'donde dice «Ya tengo el código de recuperación»:\n\n' +
+      `${token}\n\n` +
+      `El código vence en ${HORAS_DE_VIDA_DE_LA_RECUPERACION} hora y sirve una sola vez. ` +
+      'Si no fuiste vos, ignorá este mensaje: tu contraseña no cambia sola.',
+    tipo: 'RECUPERACION',
   });
 }
 
