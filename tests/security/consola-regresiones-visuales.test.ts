@@ -164,3 +164,29 @@ describe('V-7 · la traza de una conciliación muestra fechas, no instantes', ()
     expect(cuerpo).toContain('String(t.entry_date).slice(0, 10)');
   });
 });
+
+describe('O-7 · agregar un rol a un tercero muestra «Rol agregado.»', () => {
+  it('avisa DESPUÉS de releer la ficha (que repinta la caja del aviso)', () => {
+    const cuerpo = bloqueDesde("E('b-tf-rol').onclick");
+    const relee = cuerpo.indexOf('await abrirFichaDeTercero(');
+    const avisa = cuerpo.indexOf("decir('tf-rol-msg', r, 'Rol agregado.')");
+    expect(relee, 'no relee la ficha').toBeGreaterThan(0);
+    expect(avisa, 'no avisa').toBeGreaterThan(0);
+    expect(avisa, 'el aviso se escribe antes de releer y la relectura lo pisa').toBeGreaterThan(relee);
+  });
+});
+
+describe('O-3 · el historial distingue la decisión vigente de la reemplazada', () => {
+  it('EMITIDA va en verde y SUPERSEDIDA en gris (no las dos en amarillo)', () => {
+    const cuerpo = bloqueDesde('function pastilla(v)');
+    expect(cuerpo).toMatch(/const bien = \[[^\]]*'EMITIDA'/u);
+    expect(cuerpo).toMatch(/const neutra = \['SUPERSEDIDA'\]/u);
+    expect(cuerpo).toContain("'p-neu'");
+  });
+});
+
+describe('O-4 · el nombre de una etapa del embudo no se corta', () => {
+  it('el campo del editor de etapas tiene un ancho mínimo', () => {
+    expect(consola).toMatch(/\.crm-ee-nombre\{min-width:\d+rem\}/u);
+  });
+});

@@ -220,6 +220,8 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .p-ojo{background:var(--ojo-bg);color:var(--ojo)}
 .p-ia{background:var(--ia-bg);color:var(--ia)}
 .p-neu{background:var(--hund);color:var(--tinta3);border-color:var(--linea2)}
+/* O-4: el nombre de una etapa del embudo se cortaba («VIS Primer con…») porque la columna se achicaba con las demás. */
+.crm-ee-nombre{min-width:16rem}
 
 /* ── La barra de «estoy trabajando» ───────────────────────────────────────
    Dos píxeles arriba de todo, con el cian de la marca corriendo de izquierda a
@@ -5311,9 +5313,13 @@ async function cargarInicio() {
 }
 
 function pastilla(v) {
-  const bien = ['APROBADO','APROBADA','OK','EMITIDO','CERRADO','CONFIRMADA','COINCIDE','ACTIVE'];
+  // `EMITIDA` es la decisión VIGENTE y `SUPERSEDIDA` la que una corrección reemplazó (O-3): las dos salían en la misma
+  // pastilla amarilla y en el historial no se distinguía cuál rige. Vigente en verde, reemplazada en gris.
+  const bien = ['APROBADO','APROBADA','OK','EMITIDO','EMITIDA','CERRADO','CONFIRMADA','COINCIDE','ACTIVE'];
   const mal = ['FAIL','ANULADO','ANULADA','RECHAZADO','DISCREPA','BLOQUEADO'];
-  const clase = bien.indexOf(v) !== -1 ? 'p-bien' : (mal.indexOf(v) !== -1 ? 'p-mal' : 'p-ojo');
+  const neutra = ['SUPERSEDIDA'];
+  const clase = bien.indexOf(v) !== -1 ? 'p-bien'
+    : (mal.indexOf(v) !== -1 ? 'p-mal' : (neutra.indexOf(v) !== -1 ? 'p-neu' : 'p-ojo'));
   return '<span class="p ' + clase + '">' + escapar(v) + '</span>';
 }
 
@@ -7093,8 +7099,10 @@ E('b-tf-rol').onclick = async () => {
   const r = await api('POST', '/parties/' + estado.terceroEnFicha + '/roles', {
     role: E('tf-rol').value,
   });
-  decir('tf-rol-msg', r, 'Rol agregado.');
   if (r.ok) { await listarTerceros(); await abrirFichaDeTercero(estado.terceroEnFicha); }
+  // Después de releer (O-7): `abrirFichaDeTercero` repinta la caja y, al quedar con los dos roles, escribía «Ya tiene los dos
+  // roles.» encima de «Rol agregado.», que nunca se llegaba a ver.
+  decir('tf-rol-msg', r, 'Rol agregado.');
 };
 
 async function cargarListasDePrecioDelTercero(id) {

@@ -50,6 +50,22 @@ export function initPool(connectionString: string, options: { max?: number } = {
     // directa a PostgreSQL.
     options: `-c timezone=${ZONA_DE_NEGOCIO}`,
   });
+
+  // Una conexión OCIOSA que PostgreSQL corta (reinicio de la base, `pg_terminate_backend`, un corte de red) emite
+  // `'error'` en el pool. Sin un manejador, Node lo trata como excepción no capturada y **tira el proceso entero**,
+  // incluidas las peticiones en curso de otras conexiones sanas. El pool ya descarta esa conexión y abre otra en el
+  // próximo pedido, así que lo único que hace falta es no morir y dejar constancia. Los errores de una conexión EN USO
+  // no pasan por acá: llegan como rechazo de la consulta que la estaba usando.
+  pool.on('error', (error) => {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'conexion ociosa del pool cortada: se descarta y se abre otra en el proximo pedido',
+        code: (error as { code?: string }).code ?? null,
+        detalle: error.message,
+      }),
+    );
+  });
 }
 
 export async function closePool(): Promise<void> {
