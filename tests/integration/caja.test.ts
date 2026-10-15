@@ -25,6 +25,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, hasDatabase, type Client } from './helpers/db.js';
 import { sufijoUnico } from './helpers/identificadores.js';
+import { cabeceraDeClave } from './helpers/clave-de-idempotencia.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 const PASSWORD = 'una-contrasena-suficientemente-larga';
@@ -52,7 +53,7 @@ suite('Caja y arqueo', () => {
     app.inject({
       method,
       url,
-      headers: { authorization: `Bearer ${token}`, 'x-company-id': empresa },
+      headers: { authorization: `Bearer ${token}`, 'x-company-id': empresa, ...cabeceraDeClave(method, url) },
       ...(payload === undefined ? {} : { payload }),
     });
 

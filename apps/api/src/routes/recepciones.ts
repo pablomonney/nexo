@@ -29,6 +29,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflictoTipado, notFound, unprocessable } from '../http/errors.js';
+import { responderRepeticion } from '../http/idempotencia.js';
 import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 
 const cantidad = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Cantidad con hasta cuatro decimales');
@@ -308,7 +309,7 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post('/goods-receipts/:receiptId/confirm', async (request) => {
+  app.post('/goods-receipts/:receiptId/confirm', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'receipt:write');
     const auth = requireAuth(request);
@@ -320,7 +321,7 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
       .parse(request.body ?? {});
 
     try {
-      return await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const antes = await tx.query<{ status: string }>(
@@ -329,17 +330,31 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
           );
           if (antes.rowCount === 0) throw notFound('Recepción no encontrada');
 
-          if (body.depositoId !== undefined) {
-            await tx.query(
-              'UPDATE goods_receipts SET warehouse_id = $3 WHERE id = $1 AND company_id = $2',
-              [receiptId, tenant.companyId, body.depositoId],
+          // Una sola sentencia y condicional por estado: el depósito y la confirmación van juntos (la proyección a
+          // stock exige el depósito en el mismo UPDATE), y con dos confirmaciones simultáneas la segunda espera el
+          // candado de fila, relee la recepción ya confirmada y no actualiza nada.
+          const confirmada = await tx.query(
+            `UPDATE goods_receipts
+                SET status = 'CONFIRMADA', warehouse_id = COALESCE($3::uuid, warehouse_id)
+              WHERE id = $1 AND company_id = $2 AND status = 'BORRADOR'`,
+            [receiptId, tenant.companyId, body.depositoId ?? null],
+          );
+          if (confirmada.rowCount === 0) {
+            const actual = await tx.query<{ status: string; warehouse_id: string | null }>(
+              'SELECT status, warehouse_id FROM goods_receipts WHERE id = $1 AND company_id = $2',
+              [receiptId, tenant.companyId],
+            );
+            // Ya confirmada (y, si se pidió un depósito, EL MISMO): es un reintento. Lo que se confirmó no se
+            // vuelve a proyectar a stock ni a auditar.
+            const mismoDeposito = body.depositoId === undefined || actual.rows[0]!.warehouse_id === body.depositoId;
+            if (actual.rows[0]!.status === 'CONFIRMADA' && mismoDeposito) {
+              return { cuerpo: { receiptId, status: 'CONFIRMADA' }, repetida: true };
+            }
+            throw conflictoTipado(
+              'TRANSICION_INVALIDA',
+              `La recepción está ${actual.rows[0]!.status.toLowerCase()} y no se puede confirmar.`,
             );
           }
-
-          await tx.query(
-            "UPDATE goods_receipts SET status = 'CONFIRMADA' WHERE id = $1 AND company_id = $2",
-            [receiptId, tenant.companyId],
-          );
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -354,15 +369,17 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return { receiptId, status: 'CONFIRMADA' };
+          return { cuerpo: { receiptId, status: 'CONFIRMADA' }, repetida: false };
         },
       );
+      if (resultado.repetida) responderRepeticion(reply);
+      return resultado.cuerpo;
     } catch (error) {
       throw traducirRecepcion(error);
     }
   });
 
-  app.post('/goods-receipts/:receiptId/cancel', async (request) => {
+  app.post('/goods-receipts/:receiptId/cancel', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'receipt:write');
     const auth = requireAuth(request);
@@ -370,7 +387,7 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ motivo: z.string().min(3).max(500) }).parse(request.body);
 
     try {
-      return await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const antes = await tx.query<{ status: string }>(
@@ -379,11 +396,26 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
           );
           if (antes.rowCount === 0) throw notFound('Recepción no encontrada');
 
-          await tx.query(
+          // Condicional por estado. La máquina de la 0052 deja pasar ANULADA → ANULADA, y con ella la segunda
+          // anulación PISABA el motivo de la primera. Una anulada ya está anulada con el motivo que se escribió.
+          const anulada = await tx.query(
             `UPDATE goods_receipts SET status = 'ANULADA', motivo_anulacion = $3
-              WHERE id = $1 AND company_id = $2`,
+              WHERE id = $1 AND company_id = $2 AND status IN ('BORRADOR', 'CONFIRMADA')`,
             [receiptId, tenant.companyId, body.motivo],
           );
+          if (anulada.rowCount === 0) {
+            const actual = await tx.query<{ motivo_anulacion: string | null }>(
+              'SELECT motivo_anulacion FROM goods_receipts WHERE id = $1 AND company_id = $2',
+              [receiptId, tenant.companyId],
+            );
+            if (actual.rows[0]!.motivo_anulacion === body.motivo) {
+              return { cuerpo: { receiptId, status: 'ANULADA' }, repetida: true };
+            }
+            throw conflictoTipado(
+              'TRANSICION_INVALIDA',
+              'La recepción ya está anulada con otro motivo: lo que quedó escrito no se reescribe.',
+            );
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -398,9 +430,11 @@ export async function recepcionRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return { receiptId, status: 'ANULADA' };
+          return { cuerpo: { receiptId, status: 'ANULADA' }, repetida: false };
         },
       );
+      if (resultado.repetida) responderRepeticion(reply);
+      return resultado.cuerpo;
     } catch (error) {
       throw traducirRecepcion(error);
     }

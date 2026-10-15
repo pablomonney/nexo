@@ -26,6 +26,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
+import {
+  claveDeIdempotencia,
+  exigirLaMismaOperacion,
+  filasPorClave,
+  huellaDeLaOperacion,
+  responderRepeticion,
+  serializarPorClave,
+} from '../http/idempotencia.js';
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
 const monto = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importe con hasta dos decimales');
@@ -231,20 +239,33 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
         saldoInicial: monto,
       })
       .parse(request.body);
+    const clave = claveDeIdempotencia(request);
+    const huella = huellaDeLaOperacion('caja.abrir', { empresa: tenant.companyId, ...body });
 
     try {
-      const id = await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
+          await serializarPorClave(tx, tenant.companyId, clave);
           const r = await tx.query<{ id: string }>(
             `INSERT INTO cash_sessions
-               (company_id, cash_box_id, abierta_el, saldo_inicial, created_by)
-             VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+               (company_id, cash_box_id, abierta_el, saldo_inicial, created_by,
+                idempotency_key, request_hash)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
+             ON CONFLICT (company_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+             RETURNING id`,
             [
               tenant.companyId, body.cajaId, body.fecha,
-              body.saldoInicial, `user:${auth.user.userId}`,
+              body.saldoInicial, `user:${auth.user.userId}`, clave, huella,
             ],
           );
+
+          if (r.rowCount === 0) {
+            // La clave ya existía: es un reintento (o un error de uso). No se escribe nada.
+            const previas = await filasPorClave(tx, 'cash_sessions', tenant.companyId, clave);
+            exigirLaMismaOperacion(previas, huella);
+            return { id: previas[0]!.id, repetida: true };
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -258,11 +279,12 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return r.rows[0]!.id;
+          return { id: r.rows[0]!.id, repetida: false };
         },
       );
-      reply.code(201);
-      return { id };
+      if (resultado.repetida) responderRepeticion(reply);
+      else reply.code(201);
+      return { id: resultado.id };
     } catch (error) {
       throw traducirCaja(error);
     }
@@ -284,25 +306,43 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
         terceroId: z.string().uuid().nullish(),
       })
       .parse(request.body);
+    const clave = claveDeIdempotencia(request);
+    const huella = huellaDeLaOperacion('caja.movimiento', {
+      empresa: tenant.companyId,
+      sessionId,
+      ...body,
+      terceroId: body.terceroId ?? null,
+    });
 
     try {
-      const id = await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const r = await tx.query<{ id: string }>(
             `INSERT INTO cash_movements
-               (company_id, session_id, tipo, importe, fecha, concepto, party_id, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+               (company_id, session_id, tipo, importe, fecha, concepto, party_id, created_by,
+                idempotency_key, request_hash)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             ON CONFLICT (company_id, idempotency_key, idempotency_part)
+               WHERE idempotency_key IS NOT NULL DO NOTHING
+             RETURNING id`,
             [
               tenant.companyId, sessionId, body.tipo, body.importe, body.fecha,
-              body.concepto, body.terceroId ?? null, `user:${auth.user.userId}`,
+              body.concepto, body.terceroId ?? null, `user:${auth.user.userId}`, clave, huella,
             ],
           );
-          return r.rows[0]!.id;
+          if (r.rowCount === 0) {
+            // Un reintento: se devuelve lo que ya se hizo, aunque la sesión se haya cerrado después.
+            const previas = await filasPorClave(tx, 'cash_movements', tenant.companyId, clave);
+            exigirLaMismaOperacion(previas, huella);
+            return { id: previas[0]!.id, repetida: true };
+          }
+          return { id: r.rows[0]!.id, repetida: false };
         },
       );
-      reply.code(201);
-      return { id };
+      if (resultado.repetida) responderRepeticion(reply);
+      else reply.code(201);
+      return { id: resultado.id };
     } catch (error) {
       throw traducirCaja(error);
     }
@@ -316,7 +356,7 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
    * qué. Ajustar el contado para que dé cero es exactamente lo que un arqueo
    * existe para impedir.
    */
-  app.post('/cash-sessions/:sessionId/close', async (request) => {
+  app.post('/cash-sessions/:sessionId/close', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'cash:write');
     const auth = requireAuth(request);
@@ -331,7 +371,7 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
       .parse(request.body);
 
     try {
-      return await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const antes = await tx.query<{ status: string; saldo_teorico: string }>(
@@ -340,20 +380,48 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
             [sessionId, tenant.companyId],
           );
           if (antes.rowCount === 0) throw notFound('Sesión de caja no encontrada');
-          if (antes.rows[0]!.status !== 'ABIERTA') {
-            throw conflict('La sesión ya está cerrada: se arqueó una sola vez.');
-          }
 
-          await tx.query(
+          // El cambio de estado es CONDICIONAL: `AND status = 'ABIERTA'`. La lectura de arriba solo sirve para
+          // dar el 404 y el mensaje; quien decide es este UPDATE. Con dos cierres simultáneos el segundo espera el
+          // candado de fila del primero, relee la fila ya cerrada y no actualiza nada (0 filas).
+          const cierre = await tx.query(
             `UPDATE cash_sessions
                 SET status = 'CERRADA', cerrada_el = $3, saldo_contado = $4,
                     motivo_diferencia = $5, journal_entry_id = $6, closed_by = $7
-              WHERE id = $1 AND company_id = $2`,
+              WHERE id = $1 AND company_id = $2 AND status = 'ABIERTA'`,
             [
               sessionId, tenant.companyId, body.fecha, body.saldoContado,
               body.motivo ?? null, body.asientoId ?? null, `user:${auth.user.userId}`,
             ],
           );
+
+          if (cierre.rowCount === 0) {
+            // Ya estaba cerrada. Si el arqueo que quedó es EXACTAMENTE el que se pide, es un reintento de un cierre
+            // que ya se hizo (la respuesta se perdió, o llegaron dos iguales): se devuelve lo mismo, sin escribir.
+            // Con otros datos es un arqueo distinto del que quedó, y eso no se acepta.
+            const mismo = await tx.query(
+              `SELECT 1
+                 FROM cash_sessions
+                WHERE id = $1 AND company_id = $2 AND status = 'CERRADA'
+                  AND cerrada_el = $3::date AND saldo_contado = $4::numeric
+                  AND motivo_diferencia IS NOT DISTINCT FROM $5::text
+                  AND journal_entry_id IS NOT DISTINCT FROM $6::uuid
+                  AND closed_by = $7`,
+              [
+                sessionId, tenant.companyId, body.fecha, body.saldoContado,
+                body.motivo ?? null, body.asientoId ?? null, `user:${auth.user.userId}`,
+              ],
+            );
+            if (mismo.rowCount === 0) {
+              throw conflict('La sesión ya está cerrada con otro arqueo: se arqueó una sola vez y no se cambia.');
+            }
+            const repetido = await tx.query<{ diferencia: string; saldo_teorico: string }>(
+              `SELECT diferencia::text, saldo_teorico::text
+                 FROM cash_session_status WHERE session_id = $1 AND company_id = $2`,
+              [sessionId, tenant.companyId],
+            );
+            return { cuerpo: respuestaDelArqueo(sessionId, body.saldoContado, repetido.rows[0]!), repetida: true };
+          }
 
           // La diferencia se lee de la vista después de cerrar: se deriva, y
           // calcularla acá sería una segunda aritmética que puede diverger.
@@ -385,16 +453,13 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
           });
 
           return {
-            sessionId,
-            saldoTeorico: despues.rows[0]!.saldo_teorico,
-            saldoContado: body.saldoContado,
-            diferencia: despues.rows[0]!.diferencia,
-            alcance:
-              'La diferencia queda registrada tal cual. **No se generó ningún asiento**: el ' +
-              'movimiento de caja del período lo firma una persona, por el camino de siempre.',
+            cuerpo: respuestaDelArqueo(sessionId, body.saldoContado, despues.rows[0]!),
+            repetida: false,
           };
         },
       );
+      if (resultado.repetida) responderRepeticion(reply);
+      return resultado.cuerpo;
     } catch (error) {
       throw traducirCaja(error);
     }
@@ -442,6 +507,23 @@ export async function cajaRoutes(app: FastifyInstance): Promise<void> {
 }
 
 /** Del candado al error del dominio. Por código, no por prosa. */
+/** El cuerpo del arqueo. Una función aparte para que el cierre original y su repetición no puedan diferir. */
+function respuestaDelArqueo(
+  sessionId: string,
+  saldoContado: string,
+  derivado: { diferencia: string; saldo_teorico: string },
+): Record<string, string> {
+  return {
+    sessionId,
+    saldoTeorico: derivado.saldo_teorico,
+    saldoContado,
+    diferencia: derivado.diferencia,
+    alcance:
+      'La diferencia queda registrada tal cual. **No se generó ningún asiento**: el ' +
+      'movimiento de caja del período lo firma una persona, por el camino de siempre.',
+  };
+}
+
 function traducirCaja(error: unknown): unknown {
   const fallo = error as { code?: string; message?: string };
   const mensaje = fallo.message ?? '';

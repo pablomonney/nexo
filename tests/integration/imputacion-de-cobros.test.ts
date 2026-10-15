@@ -540,6 +540,71 @@ suite('Imputación de cobros y antigüedad de saldos', () => {
     expect(bitacora.rows.map((x) => x.action)).toEqual(['IMPUTAR_COBRO', 'ANULAR_IMPUTACION']);
   });
 
+  it('una anulación que llega mientras OTRA está sin confirmar espera, y después se rechaza sin pisar el motivo (determinístico)', async () => {
+    const f = await factura(clienteId, cuitCliente, '575.00', haceDias(5));
+    const linea = await cobro(clienteId, '575.00');
+    const id = (
+      await pedir('POST', '/party-allocations', { taxTransactionId: f, journalEntryLineId: linea, importe: '575.00' })
+    ).json<{ id: string }>().id;
+
+    // La primera anulación está hecha pero NO confirmada: tiene la fila bloqueada.
+    const otra = await connect();
+    try {
+      await otra.query('BEGIN');
+      await otra.query("UPDATE party_allocations SET status = 'ANULADA', motivo_anulacion = 'Motivo de la primera anulación' WHERE id = $1", [id]);
+
+      let termino = false;
+      // La segunda lee «ACTIVA» (la primera no se confirmó), intenta anular y se queda esperando el candado de fila.
+      const pedido = pedir('POST', `/party-allocations/${id}/cancel`, { motivo: 'Motivo de la segunda anulación' }).then((r) => {
+        termino = true;
+        return r;
+      });
+      await new Promise((r) => setTimeout(r, 700));
+      expect(termino, 'la segunda anulación no esperó a la primera').toBe(false);
+
+      await otra.query('COMMIT');
+      const r = await pedido;
+      // Sin el `AND status = 'ACTIVA'`, el UPDATE se aplicaba igual sobre la fila ya anulada: pisaba el motivo y respondía 200.
+      expect(r.statusCode, r.body).toBe(409);
+    } finally {
+      await otra.query('ROLLBACK').catch(() => undefined);
+      await otra.end();
+    }
+
+    const fila = await db.query<{ motivo_anulacion: string }>('SELECT motivo_anulacion FROM party_allocations WHERE id = $1', [id]);
+    expect(fila.rows[0]!.motivo_anulacion).toBe('Motivo de la primera anulación');
+    const bitacora = await db.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM audit_logs WHERE object_id = $1 AND action = 'ANULAR_IMPUTACION'",
+      [f],
+    );
+    expect(bitacora.rows[0]!.n, 'la que perdió no puede dejar rastro en la bitácora').toBe('0');
+  });
+
+  it('6 anulaciones simultáneas de la misma imputación: una anula, el resto recibe 409, y el motivo y la bitácora no se duplican', async () => {
+    const f = await factura(clienteId, cuitCliente, '650.00', haceDias(5));
+    const linea = await cobro(clienteId, '650.00');
+    const id = (
+      await pedir('POST', '/party-allocations', { taxTransactionId: f, journalEntryLineId: linea, importe: '650.00' })
+    ).json<{ id: string }>().id;
+
+    const rs = await Promise.all(
+      Array.from({ length: 6 }, (_, i) => pedir('POST', `/party-allocations/${id}/cancel`, { motivo: `Motivo número ${i} de la prueba` })),
+    );
+    const codigos = rs.map((r) => r.statusCode).sort();
+    expect(codigos.filter((c) => c === 200), codigos.join(',')).toHaveLength(1);
+    expect(codigos.filter((c) => c === 409)).toHaveLength(5);
+
+    const ganador = rs.findIndex((r) => r.statusCode === 200);
+    const fila = await db.query<{ motivo_anulacion: string }>('SELECT motivo_anulacion FROM party_allocations WHERE id = $1', [id]);
+    expect(fila.rows[0]!.motivo_anulacion, 'el motivo lo pisó una anulación que perdió').toBe(`Motivo número ${ganador} de la prueba`);
+
+    const bitacora = await db.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM audit_logs WHERE object_id = $1 AND action = 'ANULAR_IMPUTACION'",
+      [f],
+    );
+    expect(bitacora.rows[0]!.n).toBe('1');
+  });
+
   it('el listado de operaciones dice con qué tercero está vinculada cada una (la consola lo deja elegido)', async () => {
     const f = await factura(clienteId, cuitCliente, '321.00', haceDias(2));
     const lista = await pedir('GET', '/tax-transactions?limite=100');

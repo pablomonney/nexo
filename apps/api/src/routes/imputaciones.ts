@@ -396,11 +396,14 @@ export async function imputacionRoutes(app: FastifyInstance): Promise<void> {
           throw conflict('La imputación ya estaba anulada');
         }
 
-        await tx.query(
+        // Condicional: la transición la decide este UPDATE. Dos anulaciones simultáneas leían las dos «ACTIVA»; la
+        // segunda pisaba el motivo de la primera y duplicaba la bitácora. Ahora la segunda espera, relee y no toca nada.
+        const anulada = await tx.query(
           `UPDATE party_allocations SET status = 'ANULADA', motivo_anulacion = $3
-            WHERE id = $1 AND company_id = $2`,
+            WHERE id = $1 AND company_id = $2 AND status = 'ACTIVA'`,
           [allocationId, tenant.companyId, body.motivo],
         );
+        if (anulada.rowCount === 0) throw conflict('La imputación ya estaba anulada');
 
         await recordAudit(tx, tenant.companyId, {
           actorType: 'USER',

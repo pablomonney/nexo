@@ -120,8 +120,9 @@ function leerArgumento(texto: string, desde: number): { expresion: string; fin: 
 export function llamadasDe(html: string): { metodo: string; url: string }[] {
   const salida: { metodo: string; url: string }[] = [];
 
-  // api('GET', <url>, …)
-  const porApi = /api\(\s*'(GET|POST|PATCH|PUT|DELETE)'\s*,\s*/g;
+  // api('GET', <url>, …) y apiIdempotente('POST', <url>, <cuerpo>, <intención>): la segunda es la misma llamada con
+  // una Idempotency-Key (docs/DISENO_IDEMPOTENCIA.md §9).
+  const porApi = /api(?:Idempotente)?\(\s*'(GET|POST|PATCH|PUT|DELETE)'\s*,\s*/g;
   let m: RegExpExecArray | null;
   while ((m = porApi.exec(html)) !== null) {
     const url = reconstruir(leerArgumento(html, porApi.lastIndex).expresion);

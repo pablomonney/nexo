@@ -66,6 +66,16 @@ const CHECKS = [
   ['products', 'products_lote_exige_stock', 'Un producto sin existencias no tiene lotes'],
   ['stock_counts', 'sc_cerrado_firmado', 'Un recuento cerrado dice quién y cuándo'],
   ['stock_counts', 'sc_anulado_con_motivo', 'Anular un recuento exige decir por qué'],
+  // 0133 · La clave de idempotencia viaja en la fila del movimiento: con la forma esperada y siempre junto a su huella.
+  ['cash_movements', 'cmv_clave_valida', '0133: la clave de idempotencia tiene la forma esperada'],
+  ['cash_movements', 'cmv_huella_valida', '0133: la huella de la operación es un SHA-256'],
+  ['cash_movements', 'cmv_clave_con_huella', '0133: una clave sin huella (o al revés) no distingue un reintento de un error'],
+  ['stock_movements', 'sm_clave_valida', '0133: la clave de idempotencia tiene la forma esperada'],
+  ['stock_movements', 'sm_huella_valida', '0133: la huella de la operación es un SHA-256'],
+  ['stock_movements', 'sm_clave_con_huella', '0133: una clave sin huella (o al revés) no distingue un reintento de un error'],
+  ['cash_sessions', 'cs_clave_valida', '0133: la clave de idempotencia tiene la forma esperada'],
+  ['cash_sessions', 'cs_huella_valida', '0133: la huella de la operación es un SHA-256'],
+  ['cash_sessions', 'cs_clave_con_huella', '0133: una clave sin huella (o al revés) no distingue un reintento de un error'],
   // 0068 · Una caja cerrada sin lo contado no es un arqueo: es una caja que
   // alguien dio por terminada sin contar.
   ['cash_sessions', 'cs_cerrada_completa', '0068: una sesión cerrada dice cuánto se contó, cuándo y quién'],
@@ -218,6 +228,9 @@ const TRIGGERS = [
   ['cash_movements', 'cmv_no_update', 'El libro de caja no se edita'],
   ['cash_movements', 'cmv_no_delete', 'El libro de caja no se borra'],
   ['cash_movements', 'cmv_sesion_abierta', '0068: no se le agrega un movimiento a una caja ya arqueada'],
+  // 0133 · Una sesión arqueada no vuelve a cambiar; un recuento cerrado, tampoco.
+  ['cash_sessions', 'cs_transicion', '0133: una sesión arqueada no se vuelve a modificar (se arquea una sola vez)'],
+  ['stock_counts', 'sc_transicion', '0133: un recuento cerrado no se vuelve a cerrar (sus ajustes se aplican una vez)'],
   // 0069 · El embudo solo sirve si es comparable: una oportunidad se pierde con
   // motivo y no se borra, el libro de etapas no se edita, y lo cerrado no se
   // reabre.
@@ -324,6 +337,10 @@ const INDICES = [
   // 0068 · Con dos sesiones abiertas en la misma caja, un movimiento no sabría
   // a cuál pertenece y el arqueo dejaría de significar algo.
   ['cs_una_abierta_por_caja', 'Una sola sesión abierta por caja'],
+  // 0133 · Una operación, un movimiento: el árbitro de la idempotencia es el índice único de la propia tabla.
+  ['cmv_clave_unica', '0133: la misma clave (y parte) no genera dos movimientos de caja'],
+  ['sm_clave_unica', '0133: la misma clave (y parte) no genera dos movimientos de stock'],
+  ['cs_clave_unica', '0133: la misma clave no abre dos sesiones de caja'],
   ['cst_code_unico', '0069: un código, una etapa del embudo, por empresa'],
   ['cst_orden_unico', '0069: dos etapas en la misma posición dejan el embudo sin orden'],
   ['pj_code_unico', '0070: un código, un proyecto, por empresa'],

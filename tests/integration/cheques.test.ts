@@ -246,6 +246,52 @@ suite('Cheques', () => {
       .toBe(asientosAntes.rows[0]!.n);
   });
 
+  describe('los movimientos de un cheque se serializan (I5, docs/DISENO_IDEMPOTENCIA.md §6)', () => {
+    const depositar = (c: Client, id: string) =>
+      c.query(
+        `INSERT INTO check_movements (company_id, check_id, tipo, fecha, bank_account_id, created_by)
+         VALUES ($1, $2, 'DEPOSITADO', $3, $4, 'prueba')`,
+        [empresa, id, enDias(0), cuentaBancaria],
+      );
+
+    it('un movimiento sin confirmar sobre el cheque hace ESPERAR al siguiente (determinístico)', async () => {
+      const id = await chequeRecibido('1500.00', enDias(10));
+      const a = await connect();
+      const b = await connect();
+      try {
+        await b.query("SET lock_timeout = '800ms'");
+        await a.query('BEGIN');
+        await depositar(a, id); // todavía sin confirmar
+        await b.query('BEGIN');
+        // Sin el candado sobre la fila del cheque, B no ve el depósito de A, lo toma por «primer depósito» y entra.
+        await expect(depositar(b, id)).rejects.toMatchObject({ code: '55P03' });
+      } finally {
+        await a.query('ROLLBACK').catch(() => undefined);
+        await b.query('ROLLBACK').catch(() => undefined);
+        await a.end();
+        await b.end();
+      }
+    });
+
+    it('6 depósitos simultáneos por la API: el cheque queda depositado UNA vez', async () => {
+      const id = await chequeRecibido('1700.00', enDias(10));
+      const rs = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          pedir('POST', `/checks/${id}/movimientos`, { tipo: 'DEPOSITADO', fecha: enDias(0), cuentaBancariaId: cuentaBancaria }),
+        ),
+      );
+      const codigos = rs.map((r) => r.statusCode).sort();
+      expect(codigos.filter((c) => c === 201), codigos.join(',')).toHaveLength(1);
+      expect(codigos.filter((c) => c >= 500), 'una carrera no puede terminar en 500').toHaveLength(0);
+
+      const filas = await db.query<{ n: string }>(
+        "SELECT count(*)::text AS n FROM check_movements WHERE check_id = $1 AND tipo = 'DEPOSITADO'",
+        [id],
+      );
+      expect(filas.rows[0]!.n).toBe('1');
+    });
+  });
+
   it('el mismo banco no emite dos veces el mismo número', async () => {
     numero += 1;
     const cuerpo = {

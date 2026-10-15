@@ -430,6 +430,72 @@ suite('Recepción de mercadería y conciliación de compras', () => {
     expect(r.items[0]!.recibido).toBe('0.0000');
   });
 
+  describe('confirmar y anular: reintento y concurrencia (docs/DISENO_IDEMPOTENCIA.md §6)', () => {
+    const PARALELO = 6;
+
+    async function recepcionEnBorrador(unidades: string): Promise<string> {
+      const orden = await ordenAceptada(unidades);
+      const alta = await pedir('POST', '/goods-receipts', { ordenId: orden, proveedorId, fecha: '2026-03-03', remito: `C-${stamp}`, depositoId });
+      expect(alta.statusCode, alta.body).toBe(201);
+      const id = alta.json<{ id: string }>().id;
+      expect(
+        (await pedir('PUT', `/goods-receipts/${id}/lines`, { renglones: [{ productoId, descripcion: 'Mercadería', cantidad: unidades }] })).statusCode,
+      ).toBe(200);
+      return id;
+    }
+
+    const movimientosDe = async (recepcion: string): Promise<number> =>
+      Number(
+        (
+          await db.query<{ n: string }>(
+            "SELECT count(*)::text AS n FROM stock_movements WHERE company_id = $1 AND origen_tipo = 'RECEPCION' AND origen_id = $2",
+            [empresa, recepcion],
+          )
+        ).rows[0]!.n,
+      );
+
+    const auditorias = async (accion: string, recepcion: string): Promise<number> =>
+      Number(
+        (
+          await db.query<{ n: string }>('SELECT count(*)::text AS n FROM audit_logs WHERE company_id = $1 AND action = $2 AND object_id = $3', [
+            empresa,
+            accion,
+            recepcion,
+          ])
+        ).rows[0]!.n,
+      );
+
+    it(`${PARALELO} confirmaciones simultáneas: el stock entra UNA vez y se audita UNA vez`, async () => {
+      const id = await recepcionEnBorrador('7');
+      const rs = await Promise.all(Array.from({ length: PARALELO }, () => pedir('POST', `/goods-receipts/${id}/confirm`)));
+      expect(rs.map((r) => r.statusCode), rs.map((r) => r.body).join('\n')).toEqual(Array(PARALELO).fill(200));
+      expect(rs.filter((r) => r.headers['idempotent-replayed'] === 'true')).toHaveLength(PARALELO - 1);
+      expect(await movimientosDe(id), 'el stock de la recepción se proyectó más de una vez').toBe(1);
+      expect(await auditorias('CONFIRMAR_RECEPCION', id)).toBe(1);
+    });
+
+    it(`${PARALELO} anulaciones simultáneas con el mismo motivo: se anula UNA vez y el stock se revierte UNA vez`, async () => {
+      const id = await recepcionEnBorrador('5');
+      expect((await pedir('POST', `/goods-receipts/${id}/confirm`)).statusCode).toBe(200);
+      const motivo = 'Se cargó contra la orden equivocada (concurrencia)';
+      const rs = await Promise.all(Array.from({ length: PARALELO }, () => pedir('POST', `/goods-receipts/${id}/cancel`, { motivo })));
+      expect(rs.map((r) => r.statusCode), rs.map((r) => r.body).join('\n')).toEqual(Array(PARALELO).fill(200));
+      expect(await auditorias('ANULAR_RECEPCION', id)).toBe(1);
+      // Entrada + su reversión = 2 movimientos; una segunda reversión los dejaría en 3.
+      expect(await movimientosDe(id)).toBeLessThanOrEqual(2);
+    });
+
+    it('anular de nuevo con OTRO motivo no pisa el que quedó escrito', async () => {
+      const id = await recepcionEnBorrador('3');
+      const motivo = 'Motivo original de la anulación';
+      expect((await pedir('POST', `/goods-receipts/${id}/cancel`, { motivo })).statusCode).toBe(200);
+      const otra = await pedir('POST', `/goods-receipts/${id}/cancel`, { motivo: 'Otro motivo que no debería pisarlo' });
+      expect(otra.statusCode, otra.body).toBe(409);
+      const fila = await db.query<{ motivo_anulacion: string }>('SELECT motivo_anulacion FROM goods_receipts WHERE id = $1', [id]);
+      expect(fila.rows[0]!.motivo_anulacion).toBe(motivo);
+    });
+  });
+
   it('no se recibe contra la orden de otro proveedor', async () => {
     const orden = await ordenAceptada('10');
     const r = await pedir('POST', '/goods-receipts', {

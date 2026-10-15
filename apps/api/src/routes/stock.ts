@@ -32,6 +32,13 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { badRequest, conflict, notFound, unprocessable } from '../http/errors.js';
+import {
+  claveDeIdempotencia,
+  exigirLaMismaOperacion,
+  filasPorClave,
+  huellaDeLaOperacion,
+  responderRepeticion,
+} from '../http/idempotencia.js';
 import { armarPagina, corteDe, parametrosDeCorte } from '../http/paginacion.js';
 
 const cantidad = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Cantidad con hasta cuatro decimales');
@@ -268,9 +275,12 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       origenId: body.taxTransactionId,
       motivo: null,
       ...body,
+      clave: claveDeIdempotencia(request),
+      huella: huellaDeLaOperacion('stock.salida', { empresa: tenant.companyId, ...body }),
     });
-    reply.code(201);
-    return creado;
+    if (creado.repetida) responderRepeticion(reply);
+    else reply.code(201);
+    return { id: creado.id };
   });
 
   /**
@@ -329,9 +339,12 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       fecha: body.fecha,
       motivo: body.motivo,
       ...(body.costoUnitario === undefined ? {} : { costoUnitario: body.costoUnitario }),
+      clave: claveDeIdempotencia(request),
+      huella: huellaDeLaOperacion('stock.ajuste', { empresa: tenant.companyId, ...body }),
     });
-    reply.code(201);
-    return creado;
+    if (creado.repetida) responderRepeticion(reply);
+    else reply.code(201);
+    return { id: creado.id };
   });
 
   /**
@@ -361,27 +374,59 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       throw badRequest('El depósito de origen y el de destino son el mismo');
     }
 
+    const clave = claveDeIdempotencia(request);
+    const huella = huellaDeLaOperacion('stock.transferencia', {
+      empresa: tenant.companyId,
+      ...body,
+      motivo: body.motivo ?? null,
+    });
+
     try {
-      const ids = await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
-          const inserta = async (deposito: string, tipo: string): Promise<string> => {
+          // Parte 0 = la salida, parte 1 = la entrada. Las dos llevan la misma clave: el índice único incluye la
+          // parte, así que la operación entera es UNA sola y no puede quedar con una mitad.
+          const inserta = async (deposito: string, tipo: string, parte: number): Promise<string | null> => {
             const r = await tx.query<{ id: string }>(
               `INSERT INTO stock_movements
                  (company_id, product_id, warehouse_id, tipo, cantidad, fecha,
-                  origen_tipo, motivo, created_by)
-               VALUES ($1,$2,$3,$4,$5,$6,'TRANSFERENCIA',$7,$8)
+                  origen_tipo, motivo, created_by, idempotency_key, idempotency_part, request_hash)
+               VALUES ($1,$2,$3,$4,$5,$6,'TRANSFERENCIA',$7,$8,$9,$10,$11)
+               ON CONFLICT (company_id, idempotency_key, idempotency_part)
+                 WHERE idempotency_key IS NOT NULL DO NOTHING
                RETURNING id`,
               [
                 tenant.companyId, body.productoId, deposito, tipo, body.cantidad,
-                body.fecha, body.motivo ?? null, `user:${auth.user.userId}`,
+                body.fecha, body.motivo ?? null, `user:${auth.user.userId}`, clave, parte, huella,
               ],
             );
-            return r.rows[0]!.id;
+            return r.rows[0]?.id ?? null;
           };
 
-          const salida = await inserta(body.origenDepositoId, 'TRANSFERENCIA_SALIDA');
-          const entrada = await inserta(body.destinoDepositoId, 'TRANSFERENCIA_ENTRADA');
+          const salidaNueva = await inserta(body.origenDepositoId, 'TRANSFERENCIA_SALIDA', 0);
+          if (salidaNueva === null) {
+            // Un reintento. Las dos filas se crearon juntas, así que están las dos o no está ninguna.
+            const previas = await filasPorClave(tx, 'stock_movements', tenant.companyId, clave);
+            exigirLaMismaOperacion(previas, huella);
+            const salidaPrevia = previas.find((f) => f.parte === 0);
+            const entradaPrevia = previas.find((f) => f.parte === 1);
+            if (salidaPrevia === undefined || entradaPrevia === undefined) {
+              throw unprocessable(
+                'IDEMPOTENCIA_RESULTADO_INCIERTO',
+                'La operación anterior con esta clave quedó incompleta. No se registró nada nuevo: avisá a soporte.',
+              );
+            }
+            return { ids: { salida: salidaPrevia.id, entrada: entradaPrevia.id }, repetida: true };
+          }
+          const salida = salidaNueva;
+          const entrada = await inserta(body.destinoDepositoId, 'TRANSFERENCIA_ENTRADA', 1);
+          if (entrada === null) {
+            throw unprocessable(
+              'IDEMPOTENCIA_RESULTADO_INCIERTO',
+              'La entrada de la transferencia ya existía con otra salida. No se registró nada.',
+            );
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -401,11 +446,12 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return { salida, entrada };
+          return { ids: { salida, entrada }, repetida: false };
         },
       );
-      reply.code(201);
-      return ids;
+      if (resultado.repetida) responderRepeticion(reply);
+      else reply.code(201);
+      return resultado.ids;
     } catch (error) {
       throw traducirStock(error);
     }
@@ -573,13 +619,24 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       })
       .parse(request.body);
 
+    const clave = claveDeIdempotencia(request);
+    const huella = huellaDeLaOperacion('stock.salida-de-comprobante', {
+      empresa: tenant.companyId,
+      taxTransactionId,
+      ...body,
+    });
+
     try {
-      const ids = await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
+          // FOR NO KEY UPDATE: serializa las salidas de ESTE comprobante. Sin esto, dos peticiones con claves
+          // distintas leían las dos «todavía no hay salida» y registraban las dos (I4): la clave de idempotencia
+          // protege el reintento de UNA operación, no a dos operaciones distintas sobre el mismo comprobante.
           const cbte = await tx.query<{ fecha: string; direction: string }>(
             `SELECT cbte_fecha::text AS fecha, direction
-               FROM tax_transactions WHERE id = $1 AND company_id = $2`,
+               FROM tax_transactions WHERE id = $1 AND company_id = $2
+                FOR NO KEY UPDATE`,
             [taxTransactionId, tenant.companyId],
           );
           if (cbte.rowCount === 0) throw notFound('Comprobante no encontrado');
@@ -589,6 +646,13 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
               'La salida por venta se registra sobre un comprobante de ventas. Lo que entra ' +
                 'por una compra lo registra la recepción de mercadería.',
             );
+          }
+
+          // ¿Es un reintento? Con el comprobante bloqueado, nadie más puede estar registrando su salida.
+          const previas = await filasPorClave(tx, 'stock_movements', tenant.companyId, clave);
+          if (previas.length > 0) {
+            exigirLaMismaOperacion(previas, huella);
+            return { ids: previas.map((f) => f.id), repetida: true };
           }
 
           const yaHay = await tx.query<{ n: string }>(
@@ -603,20 +667,35 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
             );
           }
 
+          // Una fila por línea; la parte es el número de línea. Todas en esta transacción: o quedan todas o ninguna.
           const creados: string[] = [];
-          for (const linea of body.lineas) {
+          for (const [parte, linea] of body.lineas.entries()) {
             const r = await tx.query<{ id: string }>(
               `INSERT INTO stock_movements
                  (company_id, product_id, warehouse_id, tipo, cantidad, fecha,
-                  origen_tipo, origen_id, created_by)
-               VALUES ($1,$2,$3,'SALIDA',$4,$5,'VENTA',$6,$7)
+                  origen_tipo, origen_id, created_by, idempotency_key, idempotency_part, request_hash)
+               VALUES ($1,$2,$3,'SALIDA',$4,$5,'VENTA',$6,$7,$8,$9,$10)
+               ON CONFLICT (company_id, idempotency_key, idempotency_part)
+                 WHERE idempotency_key IS NOT NULL DO NOTHING
                RETURNING id`,
               [
                 tenant.companyId, linea.productoId, body.depositoId,
                 linea.cantidad, cbte.rows[0]!.fecha, taxTransactionId,
-                `user:${auth.user.userId}`,
+                `user:${auth.user.userId}`, clave, parte, huella,
               ],
             );
+            if (r.rowCount === 0) {
+              // Otra petición con la misma clave ganó entre la lectura de arriba y esta inserción (el comprobante
+              // era otro, así que no estaba bloqueado): la huella dice si era la misma operación.
+              exigirLaMismaOperacion(
+                await filasPorClave(tx, 'stock_movements', tenant.companyId, clave),
+                huella,
+              );
+              throw unprocessable(
+                'IDEMPOTENCIA_RESULTADO_INCIERTO',
+                'La operación anterior con esta clave quedó incompleta. No se registró nada nuevo.',
+              );
+            }
             creados.push(r.rows[0]!.id);
           }
 
@@ -634,11 +713,12 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return creados;
+          return { ids: creados, repetida: false };
         },
       );
-      reply.code(201);
-      return { movimientos: ids.length, ids };
+      if (resultado.repetida) responderRepeticion(reply);
+      else reply.code(201);
+      return { movimientos: resultado.ids.length, ids: resultado.ids };
     } catch (error) {
       throw traducirStock(error);
     }
@@ -660,24 +740,37 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
       motivo: string | null;
       /** Solo en entradas: la base lo exige con `sm_costo_solo_en_entradas`. */
       costoUnitario?: string | null;
+      /** La clave de idempotencia de la operación y la huella de sus datos. */
+      clave: string;
+      huella: string;
     },
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; repetida: boolean }> {
     try {
-      const id = await withCompany(
+      return await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const r = await tx.query<{ id: string }>(
             `INSERT INTO stock_movements
                (company_id, product_id, warehouse_id, tipo, cantidad, fecha,
-                origen_tipo, origen_id, motivo, costo_unitario, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                origen_tipo, origen_id, motivo, costo_unitario, created_by,
+                idempotency_key, request_hash)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+             ON CONFLICT (company_id, idempotency_key, idempotency_part)
+               WHERE idempotency_key IS NOT NULL DO NOTHING
              RETURNING id`,
             [
               tenant.companyId, datos.productoId, datos.depositoId, datos.tipo,
               datos.cantidad, datos.fecha, datos.origenTipo, datos.origenId,
               datos.motivo, datos.costoUnitario ?? null, `user:${auth.user.userId}`,
+              datos.clave, datos.huella,
             ],
           );
+
+          if (r.rowCount === 0) {
+            const previas = await filasPorClave(tx, 'stock_movements', tenant.companyId, datos.clave);
+            exigirLaMismaOperacion(previas, datos.huella);
+            return { id: previas[0]!.id, repetida: true };
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -697,10 +790,9 @@ export async function stockRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return r.rows[0]!.id;
+          return { id: r.rows[0]!.id, repetida: false };
         },
       );
-      return { id };
     } catch (error) {
       throw traducirStock(error);
     }

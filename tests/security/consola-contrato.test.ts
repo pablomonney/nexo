@@ -114,8 +114,10 @@ function leerArgumento(texto: string, desde: number): { expresion: string; fin: 
 function llamadasDe(html: string): { metodo: string; url: string }[] {
   const salida: { metodo: string; url: string }[] = [];
 
-  // api('GET', <url>, …)
-  const porApi = /api\(\s*'(GET|POST|PATCH|PUT|DELETE)'\s*,\s*/g;
+  // api('GET', <url>, …) y apiIdempotente('POST', <url>, <cuerpo>, <intención>): la segunda es la misma llamada con
+  // una Idempotency-Key (docs/DISENO_IDEMPOTENCIA.md §9). Que este barrido no la viera hacía que la consola
+  // «dejara de nombrar» seis rutas: el instrumento estaba ciego a una forma de llamada.
+  const porApi = /api(?:Idempotente)?\(\s*'(GET|POST|PATCH|PUT|DELETE)'\s*,\s*/g;
   let m: RegExpExecArray | null;
   while ((m = porApi.exec(html)) !== null) {
     const url = reconstruir(leerArgumento(html, porApi.lastIndex).expresion);

@@ -28,6 +28,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { notFound, unprocessable } from '../http/errors.js';
+import { responderRepeticion } from '../http/idempotencia.js';
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha ISO (YYYY-MM-DD)');
 const monto = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Importe con hasta dos decimales');
@@ -332,24 +333,34 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** Aprueba la orden. Deja constancia de quién y cuándo. */
-  app.post('/payment-orders/:ordenId/aprobar', async (request) => {
+  app.post('/payment-orders/:ordenId/aprobar', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'payment_order:approve');
     const auth = requireAuth(request);
     const { ordenId } = z.object({ ordenId: z.string().uuid() }).parse(request.params);
 
     try {
-      return await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
+          // Condicional por estado: la transición la decide este UPDATE, no una lectura previa. Con dos
+          // aprobaciones simultáneas la segunda espera el candado de fila, relee el estado y no actualiza nada.
           const r = await tx.query(
             `UPDATE payment_orders
                 SET status = 'APROBADA', aprobada_at = now(), aprobada_por = $3
-              WHERE id = $1 AND company_id = $2
+              WHERE id = $1 AND company_id = $2 AND status = 'BORRADOR'
               RETURNING numero::text`,
             [ordenId, tenant.companyId, `user:${auth.user.userId}`],
           );
-          if (r.rowCount === 0) throw notFound('Orden de pago no encontrada');
+          if (r.rowCount === 0) {
+            const actual = await estadoDeLaOrden(tx, ordenId, tenant.companyId);
+            // Ya aprobada POR LA MISMA PERSONA: es un reintento. Se responde lo mismo y no se reescribe quién ni
+            // cuándo aprobó (lo que firma una transición es un hecho).
+            if (actual.status === 'APROBADA' && actual.aprobada_por === `user:${auth.user.userId}`) {
+              return { cuerpo: { estado: 'APROBADA' }, repetida: true };
+            }
+            throw transicionInvalida(actual.status, 'aprobar');
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -363,16 +374,18 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return { estado: 'APROBADA' };
+          return { cuerpo: { estado: 'APROBADA' }, repetida: false };
         },
       );
+      if (resultado.repetida) responderRepeticion(reply);
+      return resultado.cuerpo;
     } catch (error) {
       throw traducirOrden(error);
     }
   });
 
   /** Anula la orden, con motivo. No se borra: el número quedaría sin explicación. */
-  app.post('/payment-orders/:ordenId/anular', async (request) => {
+  app.post('/payment-orders/:ordenId/anular', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'payment_order:approve');
     const auth = requireAuth(request);
@@ -380,17 +393,24 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
     const { motivo } = z.object({ motivo: z.string().min(5).max(2000) }).parse(request.body);
 
     try {
-      return await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const r = await tx.query(
             `UPDATE payment_orders
                 SET status = 'ANULADA', motivo_anulacion = $3
-              WHERE id = $1 AND company_id = $2
+              WHERE id = $1 AND company_id = $2 AND status IN ('BORRADOR', 'APROBADA')
               RETURNING numero::text`,
             [ordenId, tenant.companyId, motivo],
           );
-          if (r.rowCount === 0) throw notFound('Orden de pago no encontrada');
+          if (r.rowCount === 0) {
+            const actual = await estadoDeLaOrden(tx, ordenId, tenant.companyId);
+            // Ya anulada con ESE motivo: reintento. Con otro motivo, el que quedó escrito no se pisa.
+            if (actual.status === 'ANULADA' && actual.motivo_anulacion === motivo) {
+              return { cuerpo: { estado: 'ANULADA' }, repetida: true };
+            }
+            throw transicionInvalida(actual.status, 'anular');
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -404,9 +424,11 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
             userAgent: request.headers['user-agent'] ?? null,
           });
 
-          return { estado: 'ANULADA' };
+          return { cuerpo: { estado: 'ANULADA' }, repetida: false };
         },
       );
+      if (resultado.repetida) responderRepeticion(reply);
+      return resultado.cuerpo;
     } catch (error) {
       throw traducirOrden(error);
     }
@@ -420,7 +442,7 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
    * imputación activa sobre cada comprobante de la orden. Sin eso, «pagada»
    * sería una palabra al lado de un hecho que puede no haber ocurrido.
    */
-  app.post('/payment-orders/:ordenId/pagar', async (request) => {
+  app.post('/payment-orders/:ordenId/pagar', async (request, reply) => {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'payment_order:approve');
     const auth = requireAuth(request);
@@ -428,17 +450,25 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
     const { asientoId } = z.object({ asientoId: z.string().uuid() }).parse(request.body);
 
     try {
-      return await withCompany(
+      const resultado = await withCompany(
         { companyId: tenant.companyId, actorId: `user:${auth.user.userId}` },
         async (tx) => {
           const r = await tx.query(
             `UPDATE payment_orders
                 SET status = 'PAGADA', entry_id = $3, pagada_at = now()
-              WHERE id = $1 AND company_id = $2
+              WHERE id = $1 AND company_id = $2 AND status = 'APROBADA'
               RETURNING numero::text`,
             [ordenId, tenant.companyId, asientoId],
           );
-          if (r.rowCount === 0) throw notFound('Orden de pago no encontrada');
+          let repetida = false;
+          if (r.rowCount === 0) {
+            const actual = await estadoDeLaOrden(tx, ordenId, tenant.companyId);
+            // Ya pagada con ESE asiento: reintento. Con otro asiento sería pagar dos veces: se rechaza.
+            if (actual.status !== 'PAGADA' || actual.entry_id !== asientoId) {
+              throw transicionInvalida(actual.status, 'pagar');
+            }
+            repetida = true;
+          }
 
           const estado = await tx.query<{ situacion: string; imputado: string | null }>(
             `SELECT situacion, imputado_por_el_asiento::text AS imputado
@@ -446,6 +476,17 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
               WHERE payment_order_id = $1 AND company_id = $2`,
             [ordenId, tenant.companyId],
           );
+
+          if (repetida) {
+            return {
+              cuerpo: {
+                estado: 'PAGADA',
+                imputadoPorElAsiento: estado.rows[0]?.imputado ?? null,
+                situacion: estado.rows[0]?.situacion ?? null,
+              },
+              repetida: true,
+            };
+          }
 
           await recordAudit(tx, tenant.companyId, {
             actorType: 'USER',
@@ -462,16 +503,50 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
           });
 
           return {
-            estado: 'PAGADA',
-            imputadoPorElAsiento: estado.rows[0]?.imputado ?? null,
-            situacion: estado.rows[0]?.situacion ?? null,
+            cuerpo: {
+              estado: 'PAGADA',
+              imputadoPorElAsiento: estado.rows[0]?.imputado ?? null,
+              situacion: estado.rows[0]?.situacion ?? null,
+            },
+            repetida: false,
           };
         },
       );
+      if (resultado.repetida) responderRepeticion(reply);
+      return resultado.cuerpo;
     } catch (error) {
       throw traducirOrden(error);
     }
   });
+}
+
+interface FilaDeOrden {
+  status: string;
+  aprobada_por: string | null;
+  motivo_anulacion: string | null;
+  entry_id: string | null;
+}
+
+/** El estado actual de la orden, o 404. Se lee cuando el UPDATE condicional no tocó nada, para saber por qué. */
+async function estadoDeLaOrden(
+  tx: { query: <R extends object>(t: string, v?: readonly unknown[]) => Promise<{ rows: R[]; rowCount: number | null }> },
+  ordenId: string,
+  empresaId: string,
+): Promise<FilaDeOrden> {
+  const r = await tx.query<FilaDeOrden>(
+    `SELECT status, aprobada_por, motivo_anulacion, entry_id
+       FROM payment_orders WHERE id = $1 AND company_id = $2`,
+    [ordenId, empresaId],
+  );
+  if (r.rowCount === 0) throw notFound('Orden de pago no encontrada');
+  return r.rows[0]!;
+}
+
+function transicionInvalida(estado: string, accion: string): unknown {
+  return unprocessable(
+    'TRANSICION_INVALIDA',
+    `La orden está ${estado.toLowerCase()} y no se puede ${accion}. Un estado firmado no se reescribe.`,
+  );
 }
 
 /**
@@ -531,6 +606,11 @@ function traducirOrden(error: unknown): unknown {
       'E_OP_TRANSICION',
       'TRANSICION_INVALIDA',
       'Ese estado no puede seguir al anterior.',
+    ],
+    [
+      'E_OP_YA_FIRMADA',
+      'ORDEN_YA_FIRMADA',
+      'La orden ya pasó por esa transición y lo que quedó firmado (quién, cuándo, el asiento del pago, el motivo) no se reescribe.',
     ],
     [
       'E_OP_NO_SE_BORRA',

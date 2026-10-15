@@ -505,6 +505,103 @@ suite('Órdenes de pago', () => {
     expect(revivir.json<{ error: string }>().error).toBe('TRANSICION_INVALIDA');
   });
 
+  // ── Transiciones bajo reintento y concurrencia (docs/DISENO_IDEMPOTENCIA.md §6) ─────────────────────────
+  describe('transiciones: reintento y concurrencia', () => {
+    const PARALELO = 6;
+
+    it(`${PARALELO} aprobaciones simultáneas: se aprueba UNA vez, quién y cuándo no se reescriben`, async () => {
+      const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '1100.00');
+      const orden = await armar([{ comprobanteId: c, importe: '1100.00' }]);
+      const antes = await db.query<{ n: string }>(
+        "SELECT count(*)::text AS n FROM audit_logs WHERE company_id = $1 AND action = 'APROBAR_ORDEN_DE_PAGO'",
+        [empresa],
+      );
+
+      const rs = await Promise.all(Array.from({ length: PARALELO }, () => pedir('POST', `/payment-orders/${orden}/aprobar`)));
+      // La misma persona reintentando: todas responden 200, una sola es la aprobación y las demás su repetición.
+      expect(rs.map((r) => r.statusCode), rs.map((r) => r.body).join('\n')).toEqual(Array(PARALELO).fill(200));
+      expect(rs.filter((r) => r.headers['idempotent-replayed'] === 'true')).toHaveLength(PARALELO - 1);
+
+      const despues = await db.query<{ n: string }>(
+        "SELECT count(*)::text AS n FROM audit_logs WHERE company_id = $1 AND action = 'APROBAR_ORDEN_DE_PAGO'",
+        [empresa],
+      );
+      expect(Number(despues.rows[0]!.n) - Number(antes.rows[0]!.n), 'se auditó más de una aprobación').toBe(1);
+    });
+
+    it('repetir «aprobar» mucho después no cambia quién ni cuándo aprobó', async () => {
+      const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '1300.00');
+      const orden = await armar([{ comprobanteId: c, importe: '1300.00' }]);
+      expect((await pedir('POST', `/payment-orders/${orden}/aprobar`)).statusCode).toBe(200);
+      const firma = async () =>
+        (await db.query<{ aprobada_at: string; aprobada_por: string }>('SELECT aprobada_at::text, aprobada_por FROM payment_orders WHERE id = $1', [orden])).rows[0]!;
+      const primera = await firma();
+
+      const otra = await pedir('POST', `/payment-orders/${orden}/aprobar`);
+      expect(otra.statusCode, otra.body).toBe(200);
+      expect(otra.headers['idempotent-replayed']).toBe('true');
+      expect(await firma()).toEqual(primera);
+    });
+
+    it('aprobar y anular a la vez: gana una, la otra se rechaza, y la orden queda en un estado coherente', async () => {
+      const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '1400.00');
+      const orden = await armar([{ comprobanteId: c, importe: '1400.00' }]);
+      const [a, b] = await Promise.all([
+        pedir('POST', `/payment-orders/${orden}/aprobar`),
+        pedir('POST', `/payment-orders/${orden}/anular`, { motivo: 'Cruce de prueba con la aprobación' }),
+      ]);
+      const estado = (await ver(orden)).orden.estado;
+      // Cualquiera de los dos órdenes es válido: BORRADOR→APROBADA→ANULADA (ambos 200) o BORRADOR→ANULADA (la
+      // aprobación rechazada). Lo que NO puede pasar es una orden aprobada después de anulada.
+      expect(estado).toBe('ANULADA');
+      expect([a.statusCode, b.statusCode].filter((s) => s >= 500)).toEqual([]);
+      if (a.statusCode !== 200) expect(a.json<{ error: string }>().error).toBe('TRANSICION_INVALIDA');
+    });
+
+    it('pagar dos veces con el MISMO asiento es un reintento; con OTRO asiento se rechaza y el pago no cambia', async () => {
+      const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '2100.00');
+      const orden = await armar([{ comprobanteId: c, importe: '2100.00' }]);
+      expect((await pedir('POST', `/payment-orders/${orden}/aprobar`)).statusCode).toBe(200);
+      const { entryId, lineaId } = await asientoDePago('2100.00', proveedorId);
+      await imputar(c, lineaId, '2100.00');
+
+      const rs = await Promise.all(Array.from({ length: PARALELO }, () => pedir('POST', `/payment-orders/${orden}/pagar`, { asientoId: entryId })));
+      expect(rs.map((r) => r.statusCode), rs.map((r) => r.body).join('\n')).toEqual(Array(PARALELO).fill(200));
+      expect(new Set(rs.map((r) => JSON.stringify(r.json()))).size).toBe(1);
+
+      const otro = await asientoDePago('2100.00', proveedorId);
+      const distinto = await pedir('POST', `/payment-orders/${orden}/pagar`, { asientoId: otro.entryId });
+      expect(distinto.statusCode, distinto.body).toBe(422);
+      const fila = await db.query<{ entry_id: string }>('SELECT entry_id FROM payment_orders WHERE id = $1', [orden]);
+      expect(fila.rows[0]!.entry_id).toBe(entryId);
+    });
+
+    it('anular dos veces con el mismo motivo es un reintento; con otro motivo, el escrito no se pisa', async () => {
+      const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '1500.00');
+      const orden = await armar([{ comprobanteId: c, importe: '1500.00' }]);
+      const motivo = 'Se anula porque el proveedor facturó dos veces';
+      expect((await pedir('POST', `/payment-orders/${orden}/anular`, { motivo })).statusCode).toBe(200);
+
+      const repetida = await pedir('POST', `/payment-orders/${orden}/anular`, { motivo });
+      expect(repetida.statusCode, repetida.body).toBe(200);
+      expect(repetida.headers['idempotent-replayed']).toBe('true');
+
+      const otra = await pedir('POST', `/payment-orders/${orden}/anular`, { motivo: 'Otro motivo distinto del escrito' });
+      expect(otra.statusCode, otra.body).toBe(422);
+      const fila = await db.query<{ motivo_anulacion: string }>('SELECT motivo_anulacion FROM payment_orders WHERE id = $1', [orden]);
+      expect(fila.rows[0]!.motivo_anulacion).toBe(motivo);
+    });
+
+    it('por SQL directo tampoco se reescribe la firma de una orden ya firmada', async () => {
+      const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '1600.00');
+      const orden = await armar([{ comprobanteId: c, importe: '1600.00' }]);
+      expect((await pedir('POST', `/payment-orders/${orden}/aprobar`)).statusCode).toBe(200);
+      await expect(
+        db.query("UPDATE payment_orders SET status = 'APROBADA', aprobada_por = 'otra-persona' WHERE id = $1", [orden]),
+      ).rejects.toThrow(/E_OP_YA_FIRMADA/u);
+    });
+  });
+
   it('lo pagable sale del pendiente, no del total del comprobante', async () => {
     const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '5500.00');
     const { lineaId } = await asientoDePago('500.00', proveedorId);

@@ -4207,11 +4207,61 @@ function terminoUnPedido() {
   E('cargando').hidden = true;
 }
 
+/**
+ * Clave de idempotencia: una por INTENCIÓN de la persona, no una por clic.
+ *
+ * Las operaciones que crean un movimiento (caja, stock) exigen el encabezado `Idempotency-Key`: con la red
+ * cortada, el navegador no sabe si el servidor llegó a procesar el pedido, y reintentar a ciegas lo duplicaría.
+ * La regla (docs/DISENO_IDEMPOTENCIA.md §3):
+ *
+ *   · la clave se genera UNA vez para «esta operación con estos datos» y se REUTILIZA en cada reintento;
+ *   · se RENUEVA cuando la operación salió bien (la próxima, aunque tenga los mismos datos, es otra) y
+ *     cuando cambian los datos (es otra operación: la API rechazaría la misma clave con otro contenido);
+ *   · vive en memoria: recargar la página es empezar de cero, y eso es seguro porque la pantalla se vuelve a
+ *     leer y la persona ve si el movimiento ya está.
+ */
+const clavesPendientes = new Map();
+
+function nuevaClave() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  // Contextos no seguros (http sin localhost): sin randomUUID, pero con getRandomValues.
+  const b = new Uint8Array(16);
+  window.crypto.getRandomValues(b);
+  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+function claveDeOperacion(intencion, cuerpo) {
+  const huella = JSON.stringify(cuerpo);
+  const previa = clavesPendientes.get(intencion);
+  if (previa && previa.huella === huella) return previa.clave;
+  const clave = nuevaClave();
+  clavesPendientes.set(intencion, { clave, huella });
+  return clave;
+}
+
+/** Llamar cuando la operación salió bien: la próxima será otra intención. */
+function operacionTerminada(intencion) {
+  clavesPendientes.delete(intencion);
+}
+
+/**
+ * Pide una operación con clave de idempotencia. Un `200` con `Idempotent-Replayed` es un reintento que el
+ * servidor ya había procesado: para la persona es un éxito igual que el `201`.
+ */
+async function apiIdempotente(method, url, cuerpo, intencion) {
+  const r = await api(method, url, cuerpo, false, claveDeOperacion(intencion, cuerpo));
+  if (r.ok) operacionTerminada(intencion);
+  // Estas operaciones responden 201 la primera vez; un 200 es el servidor diciendo «esto ya estaba registrado».
+  r.repetida = r.ok && r.status === 200;
+  return r;
+}
+
 /** Único punto de contacto con la API. La empresa viaja en la cabecera, siempre. */
-async function api(method, url, cuerpo, esForma) {
+async function api(method, url, cuerpo, esForma, claveDeIdempotencia) {
   const cab = { accept: 'application/json' };
   if (estado.empresa) cab['x-company-id'] = estado.empresa;
   if (cuerpo !== undefined && !esForma) cab['content-type'] = 'application/json';
+  if (claveDeIdempotencia) cab['idempotency-key'] = claveDeIdempotencia;
 
   empezoUnPedido();
   try {
@@ -4279,7 +4329,10 @@ function decir(destino, resultado, exito) {
     // Si la respuesta trae una frase escrita para una persona, esa es la
     // respuesta. `siguiente` es la del alta: dice qué hacer ahora.
     const frase = (d && (d.mensaje || d.siguiente)) || '';
-    caja.innerHTML = '<div class="aviso ok"><strong>' + escapar(exito || 'Listo') + '</strong>' +
+    const titulo = resultado.repetida
+      ? 'Ya estaba registrado: el pedido había llegado antes y no se duplicó.'
+      : (exito || 'Listo');
+    caja.innerHTML = '<div class="aviso ok"><strong>' + escapar(titulo) + '</strong>' +
       (frase ? ' ' + conEnfasis(frase) : '') + tecnico + '</div>';
     return;
   }
@@ -8499,10 +8552,10 @@ async function ventasSinSalida() {
 
     const boton = tr.querySelector('.clic');
     if (boton) boton.onclick = async () => {
-      const c = await api('POST', '/tax-transactions/' + item.entityId + '/salida', {
+      const c = await apiIdempotente('POST', '/tax-transactions/' + item.entityId + '/salida', {
         depositoId: tr.querySelector('.dep').value,
         lineas: lineas.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
-      });
+      }, 'salida-comprobante:' + item.entityId);
       decir('stk-pend-msg', c, 'Salida registrada');
       if (c.ok) { await listarStock(); await ventasSinSalida(); }
     };
@@ -8606,12 +8659,9 @@ E('stk-m-tipo').onchange = () => {
 };
 
 E('b-stk-mover').onclick = async () => {
-  // Deshabilitado mientras viaja: un ajuste o una transferencia no citan un
-  // comprobante que la base pueda usar para no repetirlos, y una salida
-  // puede legítimamente repetirse para la misma venta (despacho parcial) —
-  // la base no tiene con qué distinguir eso de un doble click. Esto es lo
-  // único que se puede hacer sin una decisión de producto sobre claves de
-  // idempotencia.
+  // Deshabilitado mientras viaja (el doble clic ni siquiera sale) y, además, cada operación lleva su clave de
+  // idempotencia: si la respuesta se pierde y la persona reintenta, el servidor devuelve el movimiento que ya
+  // registró en vez de crear otro. La clave se renueva al salir bien (apiIdempotente).
   E('b-stk-mover').disabled = true;
   try {
     const t = E('stk-m-tipo').value;
@@ -8622,22 +8672,22 @@ E('b-stk-mover').onclick = async () => {
     };
     let r;
     if (t === 'salida') {
-      r = await api('POST', '/stock-movements/salida', Object.assign({}, comun, {
+      r = await apiIdempotente('POST', '/stock-movements/salida', Object.assign({}, comun, {
         depositoId: E('stk-m-dep').value,
         taxTransactionId: E('stk-m-venta').value,
-      }));
+      }), 'stock-salida');
     } else if (t === 'ajuste') {
-      r = await api('POST', '/stock-movements/ajuste', Object.assign({}, comun, {
+      r = await apiIdempotente('POST', '/stock-movements/ajuste', Object.assign({}, comun, {
         depositoId: E('stk-m-dep').value,
         sentido: E('stk-m-sentido').value,
         motivo: E('stk-m-motivo').value,
-      }));
+      }), 'stock-ajuste');
     } else {
-      r = await api('POST', '/stock-movements/transferencia', Object.assign({}, comun, {
+      r = await apiIdempotente('POST', '/stock-movements/transferencia', Object.assign({}, comun, {
         origenDepositoId: E('stk-m-dep').value,
         destinoDepositoId: E('stk-m-destino').value,
         motivo: E('stk-m-motivo').value || undefined,
-      }));
+      }), 'stock-transferencia');
     }
     decir('stk-m-msg', r, 'Movimiento registrado');
     if (r.ok) listarStock();
@@ -10979,27 +11029,27 @@ E('b-caja-alta').onclick = async () => {
 };
 
 E('b-caja-abrir').onclick = async () => {
-  const r = await api('POST', '/cash-sessions', {
+  const r = await apiIdempotente('POST', '/cash-sessions', {
     cajaId: E('caja-n-caja').value,
     fecha: E('caja-n-fecha').value,
     saldoInicial: E('caja-n-inicial').value,
-  });
+  }, 'caja-abrir');
   decir('caja-abrir-msg', r, 'Caja abierta. Desde acá el teórico se deriva de los movimientos.');
   if (r.ok) listarCaja();
 };
 
 E('b-caja-mov').onclick = async () => {
-  // Deshabilitado mientras viaja: no hay con qué distinguir un doble click de
-  // dos movimientos reales iguales, porque un movimiento manual de caja no
-  // cita ningún comprobante que la base pueda usar para no repetirlo.
+  // Deshabilitado mientras viaja, y con clave de idempotencia: un reintento tras un corte de red devuelve el
+  // movimiento ya registrado; dos movimientos reales iguales, uno después del otro, llevan claves distintas
+  // porque la clave se renueva al salir bien (apiIdempotente).
   E('b-caja-mov').disabled = true;
   try {
-    const r = await api('POST', '/cash-sessions/' + estado.sesionCaja + '/movimientos', {
+    const r = await apiIdempotente('POST', '/cash-sessions/' + estado.sesionCaja + '/movimientos', {
       tipo: E('caja-m-tipo').value,
       importe: E('caja-m-importe').value,
       fecha: E('caja-m-fecha').value,
       concepto: E('caja-m-concepto').value,
-    });
+    }, 'caja-mov:' + estado.sesionCaja);
     decir('caja-m-msg', r, 'Movimiento registrado');
     if (r.ok) {
       E('caja-m-importe').value = '';
