@@ -47,6 +47,8 @@ interface Entorno {
   bin: string;
   commit1: string;
   commit2: string;
+  /** Sólo con `commitPosterior`: un commit MÁS NUEVO que `commit2` ya publicado en el origen. */
+  commit3?: string;
 }
 
 function git(cwd: string, ...args: string[]): string {
@@ -82,7 +84,7 @@ suite('desplegar.sh — ejecutado de verdad', () => {
    * Arma un servidor: origen con dos commits (c1 < c2), servidor clonado en c1, estado de Docker simulado
    * (sirviendo la versión `b412b9e` con 130 migraciones) y un `.env` con la línea que rompía `. .env`.
    */
-  function armar(opciones: { cambiarElGuionEnC2?: boolean } = {}): Entorno {
+  function armar(opciones: { cambiarElGuionEnC2?: boolean; commitPosterior?: boolean } = {}): Entorno {
     const base = join(trabajo, `caso-${n++}`);
     mkdirSync(base);
     const origen = aBash(join(base, 'origen.git'));
@@ -127,6 +129,17 @@ suite('desplegar.sh — ejecutado de verdad', () => {
     git(trabajoGit, 'push', '-q', 'origin', 'main');
     const commit2 = git(trabajoGit, 'rev-parse', 'HEAD');
 
+    // c3 (opcional): lo que se publicó DESPUÉS del commit que se quiere desplegar, con una migración nueva (la 0133).
+    let commit3: string | undefined;
+    if (opciones.commitPosterior) {
+      writeFileSync(join(trabajoGit, 'infrastructure', 'db', 'migrations', '0133_posterior.sql'), '-- 133\n');
+      writeFileSync(join(trabajoGit, 'posterior.txt'), 'c3\n');
+      git(trabajoGit, 'add', '-A');
+      git(trabajoGit, 'commit', '-q', '-m', 'c3');
+      git(trabajoGit, 'push', '-q', 'origin', 'main');
+      commit3 = git(trabajoGit, 'rev-parse', 'HEAD');
+    }
+
     // Lo que el servidor tiene y Git no: el `.env` (con la línea que rompía `. .env`) y una copia `.bak`.
     writeFileSync(
       join(servidor, '.env'),
@@ -147,7 +160,7 @@ suite('desplegar.sh — ejecutado de verdad', () => {
       chmodSync(join(bin, nombre), 0o755);
     }
 
-    return { base, servidor, origen, estado, log, bin, commit1, commit2 };
+    return { base, servidor, origen, estado, log, bin, commit1, commit2, ...(commit3 === undefined ? {} : { commit3 }) };
   }
 
   function correr(e: Entorno, args: string[], extra: Record<string, string> = {}) {
@@ -323,6 +336,28 @@ suite('desplegar.sh — ejecutado de verdad', () => {
       const r = correr(e, ['--commit', e.commit2]);
       expect(r.codigo, r.salida).toBe(0);
       expect(readFileSync(join(e.servidor, 'docker-compose.prod.yml.bak.20260915131651'), 'utf8')).toBe('viejo\n');
+    });
+
+    it('despliega EXACTAMENTE el commit pedido aunque el origen ya tenga commits posteriores con una migración nueva (la 0133)', () => {
+      const e = armar({ commitPosterior: true });
+      expect(e.commit3, 'el caso necesita un commit posterior').toBeDefined();
+      const r = correr(e, ['--commit', e.commit2]);
+      expect(r.codigo, r.salida).toBe(0);
+
+      // El servidor terminó en c2 y NO en la punta del origen.
+      expect(HEAD(e)).toBe(e.commit2);
+      expect(HEAD(e)).not.toBe(e.commit3);
+      // El árbol que se construyó no tiene la migración posterior, ni el archivo posterior.
+      expect(existsSync(join(e.servidor, 'infrastructure', 'db', 'migrations', '0133_posterior.sql'))).toBe(false);
+      expect(existsSync(join(e.servidor, 'posterior.txt'))).toBe(false);
+      // El servidor SÍ vio el commit posterior (git fetch trae todo): lo que lo deja afuera es el `--ff-only <sha>`, no la falta de red.
+      expect(git(e.servidor, 'rev-parse', 'origin/main')).toBe(e.commit3);
+      // La imagen se construyó una sola vez y la base quedó en 132, no en 133.
+      expect(r.registro.filter((l) => /^docker build/u.test(l))).toHaveLength(1);
+      const registro = readFileSync(join(e.servidor, 'var', 'despliegues', 'ultimo.env'), 'utf8');
+      expect(registro).toContain(`COMMIT_NUEVO=${e.commit2}`);
+      expect(registro).toContain('MIGRACIONES_DESPUES=132');
+      expect(registro).not.toContain(e.commit3 as string);
     });
 
     it('sobrevive a que el `git merge` REEMPLACE el propio guion mientras corre', () => {
