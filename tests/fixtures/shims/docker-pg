@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Hace de `docker` para probar infrastructure/systemd/respaldar.sh SIN Docker: traduce
+#
+#   docker inspect <contenedor>                         → éxito
+#   docker exec [-i] [-e NOMBRE] <contenedor> <cmd...>  → corre <cmd> con los binarios locales de PostgreSQL
+#   docker run --rm [-i] <imagen> <cmd...>              → ídem
+#
+# contra el PostgreSQL local (FAKE_PGHOST / FAKE_PGPORT). Lo que sigue son fallas inyectables, para
+# probar los caminos de error del guion con el mismo código que corre en el servidor:
+#
+#   FAKE_PGDUMP_MAL=1        pg_dump termina con error y sin datos
+#   FAKE_LISTA_MAL=1         pg_restore --list devuelve un índice vacío (volcado ilegible)
+#   FAKE_RESTORE_MAL=1       pg_restore (restauración) termina con error
+#   FAKE_RESTORE_SQL="..."   SQL que se ejecuta sobre la base restaurada justo después de restaurarla
+#                            (para simular una restauración incompleta o alterada)
+#
+# Registra cada invocación en $FAKE_LOG (si está definido).
+
+[[ -n "${FAKE_LOG:-}" ]] && printf 'docker %s\n' "$*" >> "$FAKE_LOG"
+
+export PGHOST="${FAKE_PGHOST:-localhost}" PGPORT="${FAKE_PGPORT:-5432}"
+
+binario() {
+  if [[ -n "${PG_BIN:-}" ]]; then printf '%s/%s' "$PG_BIN" "$1"; else printf '%s' "$1"; fi
+}
+
+case "${1:-}" in
+  inspect) exit 0 ;;
+  exec|run)
+    modo="$1"; shift
+    while [[ "${1:-}" == -* ]]; do
+      case "$1" in -e) shift ;; esac
+      shift
+    done
+    shift   # contenedor o imagen
+    cmd="${1:-}"; shift
+
+    case "$cmd" in
+      pg_dump)
+        [[ -n "${FAKE_PGDUMP_MAL:-}" ]] && { echo "pg_dump: error simulado" >&2; exit 1; }
+        ;;
+      pg_restore)
+        if [[ "${1:-}" == "--list" ]]; then
+          [[ -n "${FAKE_LISTA_MAL:-}" ]] && exit 0
+        else
+          [[ -n "${FAKE_RESTORE_MAL:-}" ]] && { echo "pg_restore: error simulado" >&2; exit 1; }
+          "$(binario pg_restore)" "$@"
+          estado=$?
+          # La base restaurada es el valor que sigue a -d.
+          base=""; usuario=""
+          argumentos=("$@")
+          for i in "${!argumentos[@]}"; do
+            [[ "${argumentos[$i]}" == "-d" ]] && base="${argumentos[$((i + 1))]}"
+            [[ "${argumentos[$i]}" == "-U" ]] && usuario="${argumentos[$((i + 1))]}"
+          done
+          if [[ -n "${FAKE_RESTORE_SQL:-}" && -n "$base" ]]; then
+            "$(binario psql)" -X -q -U "$usuario" -d "$base" -c "$FAKE_RESTORE_SQL" >/dev/null 2>&1
+          fi
+          exit "$estado"
+        fi
+        ;;
+    esac
+    exec "$(binario "$cmd")" "$@"
+    ;;
+  *) echo "docker-pg: subcomando no soportado: $*" >&2; exit 99 ;;
+esac

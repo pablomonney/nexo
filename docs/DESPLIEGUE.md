@@ -81,8 +81,11 @@ corre después— está en `docs/CORREO_RESEND.md`.
 Las migraciones **no corren al arrancar el contenedor**. Con dos réplicas, cada
 una intentaría migrar y las dos correrían contra la misma base. El orden es:
 
-1. Backup verificado de la base (`npm run db:backup`).
-2. Migrar, **una sola vez**, desde un trabajo aparte: `npm run db:migrate`.
+1. Backup verificado de la base. **Lo hace `scripts/desplegar.sh`** (`respaldar.sh --etiqueta predeploy-<commit>
+   --verificar-restauracion`): lo restaura de verdad en una base descartable y compara filas contra la viva. Sin esa copia no
+   se sigue.
+2. Migrar, **una sola vez**, desde un trabajo aparte. También lo hace `desplegar.sh`, con el `migrate.mjs` de la propia
+   imagen, y se detiene si una migración falla (`npm run db:migrate` queda para desarrollo).
 3. Desplegar la imagen nueva.
 4. Comprobar `GET /health/db`: informa cuántas migraciones aplicó.
 5. Correr `npm run ledger:verify` y `npm run audit:cadena` contra la base
@@ -420,12 +423,16 @@ se puede editar**. Corregir algo es una migración nueva.
 
 ```bash
 cd /opt/nexo
-git pull                                   # el código, no ediciones a mano
-docker build -t nexo:production .
-BUILD_ID=$(git rev-parse --short HEAD) \
-  docker compose -f docker-compose.prod.yml up -d
+bash scripts/desplegar.sh --auditar                 # solo informa; no cambia nada
+bash scripts/desplegar.sh --commit <sha>            # despliega exactamente ese commit
 docker compose -f docker-compose.prod.yml ps
 ```
+
+`desplegar.sh` exige `--commit`: un despliegue dice **qué** se despliega, y el guion se niega si el servidor no termina en
+ese commit. Hace, en este orden: comprueba el entorno → avanza el código a ese commit (solo avance rápido, nunca fuerza) →
+etiqueta la imagen anterior → construye → inspecciona la imagen → **copia de resguardo verificada y probada
+restaurándola** → migraciones → levanta → verifica. Hasta la copia, producción no cambió nada. Un argumento que no
+conoce termina en error; no despliega.
 
 `NEXO_DOMAIN` y `TRAEFIK_CERTRESOLVER` salen del entorno o de `/opt/nexo/.env`.
 Mientras el dominio no resuelva, el contenedor corre igual y el enrutador de
@@ -464,13 +471,43 @@ credencial y devolvió la cookie.
 
 ### 7.5 · Volver atrás
 
-Redesplegar la etiqueta anterior. El esquema **no** se revierte: por eso ninguna
-migración de este repositorio renombra ni borra una columna en uso — para que la
-versión anterior siga funcionando contra el esquema nuevo.
+Hay **dos cosas distintas** que volver atrás, y se hacen por separado.
 
-Una migración que sí rompiera esa compatibilidad convierte el rollback en una
-restauración de copia, y eso pierde lo escrito desde el backup. Es el motivo de
-la regla, y la regla es lo que hace barato volver atrás.
+**1 · La aplicación** (lo habitual):
+
+```bash
+bash scripts/desplegar.sh --revertir
+```
+
+`desplegar.sh` etiqueta la imagen que estaba sirviendo como `nexo:previo-<fecha>` **antes** de construir la nueva, y deja
+el registro en `var/despliegues/ultimo.env` (versión anterior, imagen anterior, migraciones antes y después, copia previa y su
+huella). `--revertir` vuelve esa imagen a `nexo:production` y levanta la versión anterior. **No toca la base.**
+
+El esquema **no** se revierte: por eso ninguna migración de este repositorio renombra ni borra una columna en uso — para que
+la versión anterior siga funcionando contra el esquema nuevo.
+
+**2 · Los datos** (solo si algo los dañó; casi nunca):
+
+Una migración que rompiera esa compatibilidad, o un daño de datos, convierten el rollback en una restauración de copia, y eso
+**pierde lo escrito desde el backup**. El despliegue deja una copia `…-predeploy-<commit>.dump` con su `.sha256`, ya probada
+restaurándola en una base descartable. Para usarla:
+
+1. Verificar la huella: `sha256sum -c <copia>.dump.sha256` desde la carpeta de copias.
+2. Restaurarla en una base **nueva** (`aai_restauracion_<fecha>`, ver §7.7) y comparar contra la viva.
+3. Con autorización expresa, parar la aplicación y cambiar de base; no se pisa la viva.
+
+Es el motivo de la regla de compatibilidad, y la regla es lo que hace barato volver atrás.
+
+### 7.5.1 · Qué pasa si el despliegue falla a medias
+
+`desplegar.sh` se detiene ante cualquier `✘` **antes** de levantar la imagen nueva y dice en qué estado queda producción:
+
+| Falla | Estado de producción |
+|---|---|
+| El commit pedido no existe o no es un avance rápido; archivos versionados modificados; la construcción o la inspección de la imagen | **Sin cambios.** La versión anterior sigue sirviendo |
+| La copia de resguardo o su prueba de restauración | **Sin cambios** |
+| Una migración | La que falló no dejó nada (cada una corre en su transacción); las anteriores de esa corrida sí quedaron. **La aplicación anterior sigue sirviendo y es compatible con el esquema nuevo** |
+| La sonda de la imagen nueva no pasa a `healthy` | La imagen nueva está levantada: `--revertir` |
 
 ### 7.6 · Logs
 

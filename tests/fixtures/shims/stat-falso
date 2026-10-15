@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Hace de `stat` para probar desplegar.sh: el dueño de var/documents siempre es el uid 1000 (el de `node` en la imagen).
+# Lo demás lo contesta el `stat` de verdad. Sin esto, la prueba dependería de ser root en el equipo que la corre.
+case "$*" in
+  *"%u:%g"*) echo "1000:1000" ;;
+  *"%u"*) echo "1000" ;;
+  *) for real in /usr/bin/stat /bin/stat; do [[ -x "$real" ]] && exec "$real" "$@"; done; exit 127 ;;
+esac

@@ -138,8 +138,8 @@ entorno se leen al crearlo, no en caliente.
 cd /opt/nexo && BUILD_ID=$(git rev-parse --short HEAD) docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d --force-recreate nexo
 ```
 
-Volver a correr `bash scripts/desplegar.sh` también sirve y además vuelve a
-pasar las sondas; es el camino preferible si no hay apuro.
+Volver a correr `bash scripts/desplegar.sh --commit <sha del commit actual>` también sirve y además vuelve a
+pasar las sondas (hace una copia de resguardo antes de tocar nada); es el camino preferible si no hay apuro.
 
 ---
 

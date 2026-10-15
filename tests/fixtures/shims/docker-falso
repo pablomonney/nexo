@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Hace de `docker` para probar scripts/desplegar.sh SIN Docker y sin tocar nada real.
+#
+# Es un simulador con ESTADO (en $FAKE_ESTADO): qué imagen lleva cada etiqueta, qué imagen corre
+# `nexo-app`, cuántas migraciones tiene la base. Cada invocación queda en $FAKE_LOG, que es lo que los
+# tests leen para comprobar el ORDEN de las operaciones (etiquetar → construir → copia → migrar → levantar).
+#
+# Fallas inyectables por variable de entorno:
+#   FAKE_BUILD_EXIT=1        docker build falla
+#   FAKE_MIGRA_EXIT=1        migrate.mjs up termina con error
+#   FAKE_MIGRA_NO_APLICA=1   migrate.mjs up dice que anduvo pero no aplica nada
+#   FAKE_RUTA_FALTA=1        falta una ruta dentro de la imagen
+#   FAKE_SALUD=unhealthy     la sonda de nexo-app nunca pasa a healthy
+#   FAKE_N_MIG_IMAGEN=N      cuántos .sql trae la imagen (por defecto 132)
+#   FAKE_DB_CAIDA=1          nexo-postgres no responde a psql
+
+printf 'docker %s\n' "$*" >> "$FAKE_LOG"
+
+est() { printf '%s/%s' "$FAKE_ESTADO" "$1"; }
+etiqueta_archivo() { printf '%s/tag_%s' "$FAKE_ESTADO" "$(printf '%s' "$1" | tr ':/' '__')"; }
+n_imagen() { printf '%s' "${FAKE_N_MIG_IMAGEN:-132}"; }
+
+case "${1:-}" in
+  --version) echo "Docker version 27.0.0, build falso" ;;
+
+  network) exit "${FAKE_RED_EXIT:-0}" ;;
+
+  compose)
+    shift
+    while [[ "${1:-}" == "-f" ]]; do shift 2; done
+    case "${1:-}" in
+      version) [[ "${2:-}" == "--short" ]] && echo "2.29.0" || echo "Docker Compose version v2.29.0" ;;
+      up)
+        # El contenedor nuevo corre la imagen que lleve hoy `nexo:production`.
+        cp "$(etiqueta_archivo nexo:production)" "$(est app_image)"
+        printf '%s' "${BUILD_ID:-}" > "$(est app_build_id)"
+        echo "Container nexo-app Started"
+        exit "${FAKE_UP_EXIT:-0}"
+        ;;
+      logs) echo "(sin logs)" ;;
+    esac
+    ;;
+
+  image)
+    shift   # inspect
+    shift
+    tags=(); formato=""
+    while (( $# > 0 )); do
+      if [[ "$1" == "--format" ]]; then formato="$2"; shift 2; else tags+=("$1"); shift; fi
+    done
+    for t in "${tags[@]}"; do [[ -f "$(etiqueta_archivo "$t")" ]] || exit 1; done
+    for t in "${tags[@]}"; do
+      case "$formato" in
+        *Created*) echo "2026-10-15T10:00:00.000000000Z" ;;
+        *Id*) cat "$(etiqueta_archivo "$t")"; echo ;;
+      esac
+    done
+    ;;
+
+  tag)
+    origen="$2"; destino="$3"
+    if [[ -f "$(etiqueta_archivo "$origen")" ]]; then
+      cp "$(etiqueta_archivo "$origen")" "$(etiqueta_archivo "$destino")"
+    else
+      printf '%s' "$origen" > "$(etiqueta_archivo "$destino")"   # un id suelto
+    fi
+    ;;
+
+  build)
+    [[ "${FAKE_BUILD_EXIT:-0}" != "0" ]] && { echo "build simulado: falló"; exit "$FAKE_BUILD_EXIT"; }
+    nuevo="sha256:nueva-$(date +%s%N)"
+    shift
+    while (( $# > 0 )); do
+      if [[ "$1" == "-t" ]]; then printf '%s' "$nuevo" > "$(etiqueta_archivo "$2")"; shift 2; else shift; fi
+    done
+    echo "build simulado: $nuevo"
+    ;;
+
+  ps)
+    if [[ -n "${FAKE_PS_LENTO:-}" ]]; then
+      # Escribe de a UNA línea y con pausa. Un `docker ps | grep -q` cierra la tubería en la primera coincidencia y,
+      # con `set -o pipefail`, el productor que sigue escribiendo muere por SIGPIPE: el pipeline da «no está» sobre un
+      # contenedor que sí está. Con un `docker` real que escribe de una vez la carrera es rara; con este es segura.
+      if [[ "$*" == *Image* ]]; then
+        printf 'nexo-postgres\tpostgres:18-alpine\n'; sleep 0.3
+        printf 'nexo-app\tnexo:production\n'; sleep 0.3
+        printf 'traefik\ttraefik:v3\n'
+      else
+        printf 'nexo-postgres\n'; sleep 0.3
+        printf 'nexo-app\n'; sleep 0.3
+        printf 'traefik\n'
+      fi
+      exit 0
+    fi
+    if [[ "$*" == *Image* ]]; then
+      printf 'nexo-postgres\tpostgres:18-alpine\nnexo-app\tnexo:production\ntraefik\ttraefik:v3\n'
+    else
+      printf 'nexo-postgres\nnexo-app\ntraefik\n'
+    fi
+    ;;
+
+  inspect)
+    shift; nombre="$1"; shift
+    formato="$*"
+    case "$formato" in
+      *Config.Env*) printf 'NODE_ENV=production\nBUILD_ID=%s\n' "$(cat "$(est app_build_id)")" ;;
+      *"{{.Image}}"*) cat "$(est app_image)"; echo ;;
+      *Health*) echo "${FAKE_SALUD:-healthy}" ;;
+      *Ports*) echo "{}" ;;
+      *IPAddress*) echo "172.18.0.2" ;;
+      *Networks*) echo "nexo " ;;
+      *Mounts*) echo "datos:/var/lib/postgresql/data " ;;
+      *RestartPolicy*) echo "unless-stopped" ;;
+      *ReadonlyRootfs*) echo "true" ;;
+      *NetworkMode*) echo "host" ;;
+    esac
+    ;;
+
+  run)
+    cmd="${*: -1}"
+    case "$cmd" in
+      *"migrate.mjs up"*)
+        printf 'MIGRATE %s\n' "$*" >> "$FAKE_LOG"
+        [[ "${FAKE_MIGRA_EXIT:-0}" != "0" ]] && { echo "migración simulada: falló"; exit "$FAKE_MIGRA_EXIT"; }
+        [[ -z "${FAKE_MIGRA_NO_APLICA:-}" ]] && n_imagen > "$(est migraciones)"
+        echo "migrate up simulado"
+        ;;
+      *"ls /app/infrastructure/db/migrations"*) n_imagen; echo ;;
+      *"id -un"*) echo "node" ;;
+      *"[ -e /app/.env ]"*) exit 1 ;;
+      *"[ -e "*|*"[ -f "*) exit "${FAKE_RUTA_FALTA:-0}" ;;
+      *"fetch("*) echo '{"status":"ok","migrations":'"$(cat "$(est migraciones)")"',"version":"x"}' ;;
+    esac
+    ;;
+
+  exec)
+    shift
+    while [[ "${1:-}" == -* ]]; do case "$1" in -e) shift ;; esac; shift; done
+    contenedor="$1"; shift
+    if [[ "$contenedor" == "nexo-app" ]]; then
+      case "$*" in
+        "id -un") echo "node" ;;
+        *"printf ok >"*)
+          archivo=$(printf '%s' "$*" | sed "s/.*> '\\(.*\\)'.*/\\1/")
+          mkdir -p "$NEXO_RAIZ/var/documents"
+          printf ok > "$NEXO_RAIZ/var/documents/$(basename "$archivo")" ;;
+        *"prueba-rofs"*) exit 1 ;;
+      esac
+      exit 0
+    fi
+    # nexo-postgres: psql con la consulta como último argumento.
+    [[ -n "${FAKE_DB_CAIDA:-}" ]] && exit 2
+    consulta="${*: -1}"
+    case "$consulta" in
+      "SELECT 1") echo 1 ;;
+      *"count(*) FROM schema_migrations"*) cat "$(est migraciones)"; echo ;;
+      *"name FROM schema_migrations ORDER BY name DESC LIMIT 1"*) echo "0130_el_mapeo_tambien_apunta_a_una_cuenta_viva.sql" ;;
+      *"concat(rolcanlogin"*) echo 100 ;;
+      *"pg_has_role"*) echo t ;;
+      *"rolbypassrls FROM pg_roles"*) echo f ;;
+      *"relforcerowsecurity"*) echo 0 ;;
+      *"pg_policies"*) echo 126 ;;
+    esac
+    ;;
+
+  *) echo "docker-falso: subcomando no soportado: $*" >&2; exit 99 ;;
+esac

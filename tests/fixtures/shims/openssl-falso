@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Hace de `openssl` para probar desplegar.sh.
+cat > /dev/null 2>&1 || true
+case "$*" in
+  *s_client*) echo "fake" ;;
+  *x509*) echo "issuer=CN=falso" ;;
+esac
+exit 0

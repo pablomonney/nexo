@@ -107,6 +107,7 @@ const CON_ZONA = [
   'metricas-saas.mjs',
   'factura-demo.mjs',
   'fixtures-invariantes.mjs',
+  'cobro-manual.mjs',
 ] as const;
 
 /**

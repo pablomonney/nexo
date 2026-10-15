@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Hace de `curl` para probar desplegar.sh: nunca sale a la red.
+printf 'curl %s\n' "$*" >> "$FAKE_LOG"
+if [[ "$*" == *"%{http_code}"* ]]; then printf '301'; exit 0; fi
+printf '{"status":"ok","version":"x"}'

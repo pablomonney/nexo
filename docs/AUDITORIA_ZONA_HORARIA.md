@@ -1,11 +1,12 @@
 # Auditoría integral de la zona horaria de negocio — 2026-10-07
 
 Segunda auditoría, independiente de la primera, sobre los commits `6b20f86`,
-`ddd8d58` y `e1b9007` (HEAD y `origin/main` coinciden en `e1b9007`). Se pidió
-**no confirmar**, sino buscar lo que todavía pueda romperse.
+`ddd8d58` y `e1b9007`. Se pidió **no confirmar**, sino buscar lo que todavía pueda romperse. Las correcciones de
+esta auditoría quedaron en el commit `8d867d3` (publicado en `origin/main`); el ensayo A.4b se cerró el 2026-10-08
+(§10).
 
-> **Veredicto: PASS LISTO PARA COMMIT (árbol local) — NO cerrado, NO listo para deploy.**
-> Se hicieron dos pasadas. La primera encontró y corrigió, **sin commitear**, tres
+> **Veredicto: PASS CON OBSERVACIONES — publicado (`8d867d3`); A.4b: PASS CON OBSERVACIÓN; NO cerrado, NO desplegado.**
+> Se hicieron dos pasadas. La primera encontró y corrigió tres
 > defectos P1 de interfaz, siete P2 y dos P3, incluido un falso PASS de un test
 > que la auditoría anterior había dado por bueno. La segunda —la revisión técnica
 > final del árbol local— encontró y corrigió otros cuatro P2 y tres P3 (hallazgos
@@ -14,9 +15,11 @@ Segunda auditoría, independiente de la primera, sobre los commits `6b20f86`,
 > da 202 archivos y 3272 pruebas verdes con la base de pruebas en UTC y en Argentina, y
 > `npm run verify` sale con código 0 contra `aai_test`.
 >
-> Lo que **no** está hecho, porque requiere el servidor: **A.4b** (ensayo de la 0132 sobre
-> `aai_restauracion_tz`), el build de la imagen Docker, el deploy y **V7**. Nada de eso
-> se simuló. Ver «Qué falta para decir cerrado».
+> **A.4b** (ensayo de la 0132 sobre `aai_restauracion_tz`) se ejecutó en el servidor el 2026-10-08 y quedó en
+> **PASS CON OBSERVACIÓN**: la única observación es que la huella histórica pre-0132 no es reproducible
+> (falta el algoritmo original); no es un fallo de la migración. Ver §10. **V2** (el script de zona dentro de la
+> imagen de ensayo `nexo:ensayo-tz`) se ejecutó el 2026-10-09 y dio **PASS**; ver §11. Lo que **no** está hecho: el
+> deploy, V1, V3–V6 en producción y **V7**. Nada de eso se simuló. Ver «Qué falta para decir cerrado».
 
 ## 1. Hallazgos
 
@@ -42,7 +45,7 @@ falso resultado · **P3** calidad, documentación, pruebas.
 | 14 | P3 | `packages/db/src/tenancy.ts` | El pool **no tiene `pool.on('error')`**: una conexión ociosa cortada (reinicio de PostgreSQL) emite un `error` sin oyente y tira el proceso. Anterior a este trabajo y sin relación con la zona | `grep` | **No corregido** (fuera de alcance); `restart: unless-stopped` lo levanta |
 | 15 | P3 | funciones de hash | `audit_logs` y `digest()` se resuelven con el `search_path` de la sesión. Falla de forma visible, no cambia el hash | `pg_get_functiondef` | **No corregido**, anotado en la 0132 |
 | 16 | P3 | `studio.ts:174` | `fiscalYearEnd` solo se valida con `^\d{2}-\d{2}$`: acepta `13-45`. La consola ahora lo trata como 31/12 y el servidor sigue siendo la autoridad | — | No corregido (API no relacionada) |
-| 17 | P3 | imagen Docker | `hoyEnZonaDeNegocio` usa `Intl` con `timeZone`: necesita ICU completo (la imagen oficial `node:22-alpine` lo trae). **No se pudo comprobar dentro de la imagen** (esta máquina no tiene Docker) | — | **Requiere prueba en el servidor** (V2 la cubre) |
+| 17 | P3 | imagen Docker | `hoyEnZonaDeNegocio` usa `Intl` con `timeZone`: necesita ICU completo (la imagen oficial `node:22-alpine` lo trae). **No se pudo comprobar dentro de la imagen** (esta máquina no tiene Docker) | — | **V2 PASS en la imagen de ensayo** (§11): `Intl` resolvió la zona y produjo la matriz. Evidencia funcional; ICU no auditado de forma exhaustiva |
 | 18 | P2 | `consola.html`, `diaDeUnInstante` / `momentoDeUnInstante` | Sin guarda para una fecha `AAAA-MM-DD`: `new Date('2026-03-01')` es la medianoche UTC y pasaba al 28/02 en Argentina (**doble conversión**). Hoy se llaman solo con `timestamptz`, pero cualquier campo `date` mal cableado habría corrido un día | Test con mutación (sin la guarda → falla) | Corregido: una fecha sin hora se devuelve tal cual |
 | 19 | P2 | `tests/security/helpers/fechas-en-utc.ts` (S-37) | Seguía sin ver el ISO guardado en una variable (`const iso = d.toISOString(); iso.slice(0, 10)`), `toJSON()`, `.replace('T', ' ')` y `getTimezoneOffset()`. Y `calendar-date.ts` estaba exceptuado **entero** por archivo: un `getUTC*` nuevo ahí pasaba sin mirarse | Mutación S37-M3: **no detectada** al principio | Corregido: detector ampliado, excepción por línea (`s37-permite`) y un test que comprueba que **cada** anotación tape algo real |
 | 20 | P2 | `tests/security/zona-de-negocio-en-conexiones.test.ts` (S-45) | Aceptaba una zona equivocada escrita a mano (`-c timezone=UTC`), el helper `opcionesDeConexion()` pisado por otra `options:` y no tenía caso para una segunda conexión | Autopruebas nuevas; 8 mutaciones | Corregido |
@@ -51,6 +54,7 @@ falso resultado · **P3** calidad, documentación, pruebas.
 | 23 | P3 | `scripts/verificar-zona-de-negocio.mjs` | `fechaOk` comparaba el `CURRENT_DATE` de la base con un «hoy» calculado **después**: falla un instante justo en la medianoche argentina | Razonamiento | Corregido: acepta el día de antes y el de después de la consulta |
 | 24 | P3 | `packages/document-engine/src/parsers/fecha.ts` | El año de referencia ya usaba `hoyEnZonaDeNegocio()`, pero ningún test dinámico lo cubría: la mutación a `getUTCFullYear()` pasaba (solo la veía S-37) | Mutación AN-6: **no detectada** por los tests del motor | Corregido: test con reloj fijo en el 31/12 entre las 21:00 y las 24:00 ART |
 | 25 | P3 | anotaciones `s37-permite` | Tres comentarios de dos líneas repetidos y un `);` suelto dentro de un comentario de `arca-check.mjs` | Lectura del diff | Corregido |
+| 26 | P3 | procedimiento A.4b.1 del plan | La huella del historial se guardaba solo como un md5, sin el comando ni el contenido: la huella pre-0132 del ensayo (`03ad8399…`) **no se pudo reproducir** | Búsqueda en el repo, en la historia de git y en las sesiones: nada | **Observación abierta de A.4b** (§10.2); procedimiento corregido (§10.6). No invalida la conclusión |
 
 ### Lo que se revisó y está bien
 
@@ -136,8 +140,8 @@ ejecutó ni la puede verificar.
 | Control | Qué afirma | Evidencia hoy | ¿Puede dar falso PASS? | Estado |
 |---|---|---|---|---|
 | **V1** versión y migraciones | Lo que corre es lo publicado y el esquema está al día | Ninguna en producción (sin deploy) | `version` sale de `BUILD_ID`, que se pasa al desplegar: una imagen vieja con un `BUILD_ID` nuevo daría el hash correcto. `migrations` cuenta filas: es sólido | **No ejecutado.** Ahora espera 132 (131 + 0132) |
-| **V2** zona de las conexiones | `initPool` compilado entrega la zona de negocio | Local: matriz de 14 instantes fijos, exit 0 con el cliente crudo en UTC y en Argentina; mutaciones (sin la opción, con otra zona) → exit 1 | La versión anterior **sí**: dependía del reloj. La actual no: ningún test depende de estar entre las 21:00 y las 24:00, y `fechaOk` tolera la medianoche | **Mejorado**; falta correrlo dentro de la imagen y contra la base real (**pendiente, servidor**) |
-| **V3** cadena íntegra | El historial verifica desde cualquier sesión | P1–P3 sobre la copia del backup real (informado): UTC 0, Argentina 1 antes de la 0131 y 0 después. Local: 10 zonas × 6 estilos, cadena por empresa y normativa | Si la base real tuviera 0 filas. Tiene 17. **No hay función verificadora de `normative_audit_logs`**: ahora la cubre `recalcular-cadena.mjs` | **Reforzado**. Falta la 0132 en la copia (A.4b, **pendiente, servidor**) |
+| **V2** zona de las conexiones | `initPool` compilado entrega la zona de negocio | Local: matriz de 14 instantes fijos, exit 0 con el cliente crudo en UTC y en Argentina; mutaciones (sin la opción, con otra zona) → exit 1 | La versión anterior **sí**: dependía del reloj. La actual no: ningún test depende de estar entre las 21:00 y las 24:00, y `fechaOk` tolera la medianoche | **PASS en la imagen de ensayo** (2026-10-09, §11): `desdeLaAplicacion.zona` = `America/Argentina/Buenos_Aires`, `conexionCruda.zona` = `UTC`, `zonaOk`/`matrizOk`/`fechaOk`/`distingue` = `true`. Base: `aai_restauracion_tz`. Falta repetirlo con la imagen desplegada (**pendiente, deploy**) |
+| **V3** cadena íntegra | El historial verifica desde cualquier sesión | P1–P3 sobre la copia del backup real (informado): UTC 0, Argentina 1 antes de la 0131 y 0 después. Local: 10 zonas × 6 estilos, cadena por empresa y normativa | Si la base real tuviera 0 filas. Tiene 17. **No hay función verificadora de `normative_audit_logs`**: ahora la cubre `recalcular-cadena.mjs` | **Reforzado**. En la copia del backup real: 0131 y 0132 aplicadas, matriz 24/24 y recálculo en Node sin roturas (**A.4b, PASS CON OBSERVACIÓN, §10**). Sigue sin ejecutarse en producción |
 | **V4** funciones fijadas | Las tres tienen `TimeZone=UTC` y `DateStyle=ISO` | `check-structure` y `pg_proc` locales | No | Reforzado: exige las dos fijaciones y una sola función por nombre |
 | **V5** filas nuevas | Lo que escribe la API (Argentina) verifica | Local: `scripts/recalcular-cadena.mjs` (SHA-256 en Node, fórmula propia) sobre las últimas 50 filas de las 1 875 cadenas de `aai_test`: 21 429 filas, 0 rotas; control negativo con campo, hash y enlace alterados; 7 mutaciones detectadas | Era **circular** (trigger y verificador fijados igual); el recálculo en Node ya no lo es. Sigue sin probar la fila **real** de producción | **Resuelto en local**; correrlo en producción tras el deploy (**pendiente**) |
 | **V6** otros verificadores | `ledger:verify` etc. siguen verdes | Local: `npm run verify` exit 0 | **No demuestra nada de zona**: pasarían igual con la zona rota. Solo descarta regresión | Aclarado en el plan |
@@ -170,8 +174,8 @@ Producción, escrita en UTC, no tiene ese problema (P1 = 0 roturas).
 ## 7. Riesgos restantes
 
 1. **Sin deploy y sin V7.** Los tres bugs siguen presentes en producción hasta desplegar.
-2. **A.4b está PENDIENTE y no se simuló**: la copia de ensayo no tiene la 0132. Hay que correr el procedimiento del plan (estado previo, huella del historial, control negativo, migrar, matriz de 24 sesiones, recálculo en Node).
-3. **Imagen Docker no probada** (sin Docker ni WSL local): ICU completo para `Intl` y el script dentro de la imagen. Análisis estático en §9: `node:22-alpine` trae ICU completo; si no lo trajera, `@aai/shared` falla **al importarse** (`RangeError`), de forma visible y antes de servir tráfico.
+2. **A.4b: PASS CON OBSERVACIÓN** (§10). La copia de ensayo tiene la 0131 y la 0132 y verifica. Queda abierta una observación: la huella histórica pre-0132 no es reproducible (se sustituyó por la comparación backup/restauración). La 0132 **no** está aplicada en producción.
+3. **Imagen Docker**: V2 dio PASS en la imagen de ensayo (§11). Queda como limitación que el ICU no se auditó de forma exhaustiva (no hay un indicador propio) y que la imagen se identificó por SHA-256 de cinco archivos, no por metadatos. Si un ICU reducido no tuviera la zona, `@aai/shared` falla **al importarse** (`RangeError`), de forma visible y antes de servir tráfico. La imagen que importa para producción es la que se construya al desplegar.
 4. **Escritores manuales en UTC** (`psql`) siguen pudiendo dejar `valid_from` de mañana. Decisión
    pendiente del usuario: fijar también la zona por defecto de la base (ahora segura para la cadena).
 5. **`normative_audit_logs`** no tiene verificador en la base; `recalcular-cadena.mjs` lo cubre, pero **todavía no se corrió contra producción**. En `aai_test` esa tabla está vacía: la fórmula normativa se prueba con filas escritas dentro de una transacción.
@@ -182,9 +186,9 @@ Producción, escrita en UTC, no tiene ese problema (P1 = 0 roturas).
 
 ## 8. Qué falta para decir «cerrado»
 
-1. Revisar y commitear estos cambios (**listo para commit; no para deploy**). Hace falta pushearlos: A.4b necesita la 0132 en el remoto.
-2. **A.4b** sobre la copia (`aai_restauracion_tz`): estado previo, huella del historial antes y después, control negativo, 0132, matriz de 24 sesiones con una sola línea por empresa, `recalcular-cadena.mjs` en 0. **Pendiente: requiere el servidor.**
-3. Construir la imagen en el servidor y correr V2 adentro (ICU completo, `initPool` compilado). **Pendiente.**
+1. ~~Revisar y commitear estos cambios~~ **Hecho**: commit `8d867d3`, publicado en `origin/main`.
+2. ~~A.4b sobre la copia~~ **Hecho: PASS CON OBSERVACIÓN** (2026-10-08, §10).
+3. ~~V2 dentro de la imagen~~ **Hecho: V2 PASS** (2026-10-09, §11) con `nexo:ensayo-tz`, construida desde `8d867d3` (identificada por SHA-256 de cinco archivos).
 4. Deploy de día (09:00–18:00 ART), con `scripts/desplegar.sh`.
 5. V7 entre 21:00 y 24:00 ART. Solo entonces: *«Bugs #3/#4/#5 corregidos y verificados en producción.»*
    Hasta entonces: *«Corrección implementada y desplegada; pendiente de confirmación en producción
@@ -249,5 +253,187 @@ No hay Docker ni WSL en esta máquina: **no se pudo construir ni probar la image
 `Dockerfile`: base `node:22-alpine` (Node con ICU completo según la documentación de la imagen oficial, **no verificado aquí**; la zona sale de los datos de ICU, no del paquete `tzdata`
 del sistema), `npm ci` + `npm run build` + `npm prune --omit=dev`, y `scripts/` e `infrastructure/` se copian enteros, así que
 `recalcular-cadena.mjs` y la 0132 llegan a la imagen sin tocar el `Dockerfile`. Localmente se corrió con Node 24.19 /
-ICU 78.3 / tz 2026b, no con la versión de la imagen: eso, y que `initPool` compilado entregue la zona, **requiere
-la prueba en el servidor**. No se instaló ninguna dependencia.
+ICU 78.3 / tz 2026b, no con la versión de la imagen: eso, y que `initPool` compilado entregue la zona, requería
+la prueba en el servidor (hecha después: V2 PASS, ver abajo y §11). No se instaló ninguna dependencia.
+
+**Actualización del 2026-10-08.** En el servidor se construyó la imagen de ensayo `nexo:ensayo-tz` desde `8d867d3`
+y `recalcular-cadena.mjs` se ejecutó correctamente dentro de ella: el *build* y la inclusión de `scripts/` quedaron
+probados.
+
+**Actualización del 2026-10-09.** `verificar-zona-de-negocio.mjs` (V2) se ejecutó en esa imagen y dio **PASS**
+(§11): la zona de la aplicación fue `America/Argentina/Buenos_Aires` y la matriz de 14 instantes coincidió entera.
+Es evidencia **funcional** de que el ICU de la imagen resuelve la zona; no una auditoría exhaustiva del ICU.
+
+## 10. A.4b — cierre formal (2026-10-08)
+
+### Veredicto: **A.4b — PASS CON OBSERVACIÓN**
+
+La única observación pendiente es que **no se pudo reproducir la huella histórica pre-0132**, porque no se
+recuperó el algoritmo exacto con el que se calculó. **No es un fallo de la migración**, y no invalida las pruebas
+deterministas de integridad que sí se hicieron (ver «Por qué la limitación no invalida la conclusión»).
+
+**Alcance.** Ensayo de las migraciones 0131 y 0132 sobre `aai_restauracion_tz`, la copia descartable del backup
+`aai-20261005T023159Z-auto.dump`, con la imagen de ensayo `nexo:ensayo-tz` construida desde el commit
+`8d867d3f9e4e88fb40fbe2cd054862aa18877a19`.
+
+**Procedencia de la evidencia.** La ejecutó el usuario en el servidor (SSH) y la informó a la sesión que escribe
+este documento. Esa sesión **no tiene acceso al servidor y no pudo verificarla por su cuenta**; la única parte que
+sí comprobó es que los checksums de las dos migraciones coinciden con los archivos del commit `8d867d3`
+(`sha256sum` sobre `git show`). No se tocó `aai`, ni la imagen `nexo:production`, ni `/opt/nexo` (que sigue en
+`e1b9007` a propósito), y no hubo deploy, reinicio ni migración en producción.
+
+### 10.1 Evidencia cerrada
+
+| # | Evidencia | Resultado |
+|---|---|---|
+| 1 | **Migración 0131** (`0131_funciones_de_hash_en_utc.sql`): `ALTER FUNCTION … SET timezone = 'UTC'` en `audit_chain_link()`, `normative_audit_chain_link()` y `verify_audit_chain(uuid)` | Registrada en `schema_migrations`. Checksum `67534b7e3b0d6ffeef78c21a79ba6d7514e2e99206bcd8cd40ec4bfab66eed99` (coincide con el commit) |
+| 2 | **Migración 0132** (`0132_funciones_de_hash_en_formato_iso.sql`): `ALTER FUNCTION … SET datestyle = 'ISO, MDY'` en las mismas tres funciones | Registrada en `schema_migrations`. Checksum `fd1546d9b9eba6e5784d16f2a9d486ea5222266dac318795bfb22168dcdfd5ff` (coincide con el commit) |
+| 3 | **Configuración final** de las tres funciones, comprobada **después** del `ROLLBACK` del control negativo | `{TimeZone=UTC,"DateStyle=ISO, MDY"}` en las tres. El `ROLLBACK` no dejó cambios persistentes |
+| 4 | **Verificador oficial** `scripts/recalcular-cadena.mjs --ultimas 100000` dentro de `nexo:ensayo-tz`, empresa `01a0b566-f889-79b1-945b-091397ce9b85` | `ok: true`, **17 filas revisadas** (toda la historia), 0 hashes rotos, 0 enlaces rotos, `rotas: 0`. La bitácora normativa tiene 0 filas: no aporta evidencia sobre esa cadena |
+| 5 | **Matriz determinista**: 4 zonas (UTC, `America/Argentina/Buenos_Aires`, `Asia/Kolkata`, `Pacific/Kiritimati`) × 6 estilos (`ISO, MDY`; `ISO, DMY`; `SQL, MDY`; `SQL, DMY`; `Postgres, MDY`; `German, DMY`), con `verify_audit_chain` sobre la empresa real | **24 combinaciones, 24 PASS, 0 FAIL, máximo de roturas 0.** Es la evidencia principal de independencia respecto de la sesión |
+| 6 | **Dependencia real de `DateStyle`**: un mismo `timestamptz` de `audit_logs` convertido a texto | `ISO, MDY` y `ISO, DMY` → `2026-09-18 16:43:39.517235+00`; `SQL, DMY` → `18/09/2026 16:43:39.517235 UTC`; `Postgres, DMY` → `Fri 18 Sep 16:43:39.517235 2026 UTC`; `German, DMY` → `18.09.2026 16:43:39.517235 UTC`. El texto que entra al payload del hash **depende** de `DateStyle` |
+| 7 | **Control negativo causal.** Con la función fijada: `DateStyle = ISO, MDY`, 0 roturas. Luego, dentro de una transacción: `ALTER FUNCTION public.verify_audit_chain(uuid) RESET datestyle;` y `SET LOCAL datestyle = 'SQL, DMY'` (`funcion_fija = f`) | **1 rotura** (la única empresa con filas). Después, `ROLLBACK` y la configuración volvió a la del punto 3. Demuestra que la fijación dentro de la función es lo que evita la rotura |
+| 8 | **Backup contra restauración**: `audit_logs` extraído del dump y de la copia, comparando `id`, `seq`, `prev_hash` y `hash` con el mismo algoritmo en ambos lados | Backup: 17 filas, `d6a79573a700842489d0c496f852b8ea`. Restauración: 17 filas, `d6a79573a700842489d0c496f852b8ea`. **Diferencias backup-no-restauración: 0**. Es la evidencia independiente de que el historial conserva la cadena original |
+| 9 | **No reescritura** (auxiliar): `xmin` de las 17 filas de `audit_logs` | `xmin_min = xmin_max = 10597`; las migraciones quedaron después: 0131 → `xmin` 12500, 0132 → `xmin` 12501. Ninguna fila se creó ni reescribió después de la restauración. (`ctid` se miró solo como dato auxiliar; **no se presenta como prueba de integridad**) |
+
+La prueba fuerte es la combinación de 8 (el historial es el del backup), 4 (cada hash es el SHA-256 de su payload
+canónico y la cadena es continua), 5 (da lo mismo desde 24 sesiones) y 7 (la fijación importa).
+
+### 10.2 Observación pendiente: la huella histórica pre-0132 no es reproducible
+
+Antes de la 0132 se guardó `/tmp/tz-huella-canónica-pre-0132.txt`:
+
+```text
+audit_logs           | 17 | 03ad8399d3e7643b68383df6a509f9ac
+normative_audit_logs |  0 | d41d8cd98f00b204e9800998ecf8427e
+```
+
+**No se recuperó el algoritmo exacto que la produjo.** Se buscó en el historial de la shell del servidor, en el
+repositorio (árbol y historia de git), en `docs/PLAN_ZONA_HORARIA.md` y en las sesiones de trabajo conservadas; el
+único `md5(string_agg(…))` del repositorio es el que escribió el propio plan para A.4b.1 y no coincide (devuelve
+`'-'` para una tabla vacía; la huella perdida devolvió `md5('')`). Existen otras dos huellas que **no son una
+referencia válida**: `425efe94bcf6e58f6d8b53186da7b63f` (`/tmp/tz-huella-antes-0131.txt`, de un procedimiento que
+después resultó no reproducible) y `e23f5bb5664527dc3a2616af315ea91d` (posterior a la 0132, con otro algoritmo, por
+lo tanto **no comparable** con `03ad8399…`). Ninguna de las tres se usa como comparación.
+
+> La comparación contra la huella histórica pre-0132 no pudo reproducirse porque no se recuperó el algoritmo
+> original de cálculo. Esta limitación no invalida las pruebas deterministas actuales de integridad, que incluyen
+> comparación independiente backup/restauración, verificación criptográfica de la cadena, matriz 24/24 y negative
+> control causal.
+
+### 10.3 Por qué la limitación no invalida la conclusión técnica
+
+1. La huella respondía a una sola pregunta: *¿cambió algún hash histórico?* Esa pregunta tiene respuesta por otra
+   vía, y más fuerte: el testigo es el **propio backup** (punto 8), no un valor guardado a mano. Los cuatro campos
+   que determinan la cadena (`id`, `seq`, `prev_hash`, `hash`) son idénticos en las 17 filas.
+2. `ALTER FUNCTION … SET` modifica solo el catálogo (`pg_proc.proconfig`), nunca las filas de una tabla; además
+   `audit_logs` tiene el disparador `audit_logs_immutable` (`BEFORE UPDATE OR DELETE`) que impide modificarlas.
+   El punto 9 confirma por otro camino que no hubo reescritura.
+3. El recálculo en Node (punto 4) parte de las columnas crudas y no usa ninguna función de la base: cada hash
+   almacenado es hoy el SHA-256 de su payload en la representación canónica. Si algún hash histórico hubiera
+   cambiado, o ya no sería el del backup (punto 8) o no sería el de su payload (punto 4).
+4. La matriz y el control negativo prueban la propiedad que importa a futuro: el resultado no depende de la sesión.
+
+### 10.4 Desvíos respecto del criterio escrito en el plan (A.4b)
+
+Se dejan a la vista, para que «PASS CON OBSERVACIÓN» no se lea como «PASS».
+
+| Criterio del plan | Lo que se hizo | Efecto |
+|---|---|---|
+| 2 · `diff` de huellas antes/después | No fue posible (observación 10.2). Se sustituyó por backup contra restauración, recálculo en Node y `xmin` | **Desvío, compensado** |
+| 3 · matriz con una línea por empresa y contador 24 | 24 combinaciones, 24 PASS, sobre la única empresa con auditoría de la copia | Cumplido en sustancia |
+| 4 · control negativo **antes** de la 0132 | Se hizo **después**, devolviendo la función `verify_audit_chain` al estado sin `DateStyle` dentro de una transacción con `ROLLBACK`. Solo sobre el verificador (no sobre los dos disparadores) | **Desvío, equivalente en lo esencial.** La rotura al *escribir* con otro estilo (los disparadores) se demuestra en local (P4b, P5), no en la copia |
+| 5 · recálculo en Node sobre toda la historia | `--ultimas 100000` → 17 de 17 filas | Cumplido |
+| 6 · `audit_logs > 0` | 17 | Cumplido |
+
+### 10.5 Lo que A.4b **no** demuestra
+
+- Que la 0132 esté en producción: **no está aplicada en `aai`** y no hubo deploy.
+- Nada sobre la bitácora normativa (0 filas en la copia).
+- Nada sobre empresas distintas de la única con auditoría en la copia (17 filas).
+- Que `initPool` compilado entregue la zona de negocio dentro de la imagen, ni el ICU de la imagen: eso es V2, que se cerró aparte (§11).
+
+### 10.6 Corrección del procedimiento
+
+La huella de A.4b.1 se guardaba solo como un md5, sin el comando que la generó ni el contenido que resumía, y por eso
+no pudo repetirse. En una próxima corrida hay que guardar **el contenido** y no solo su resumen:
+
+```bash
+# Contenido del historial (id|seq|prev_hash|hash) + su sha256, con el comando en la cabecera del archivo.
+psqlc -d "$DESCARTABLE" -At -c "SELECT id, seq, prev_hash, hash FROM audit_logs ORDER BY seq" > /tmp/tz-historia-antes.txt
+sha256sum /tmp/tz-historia-antes.txt | tee /tmp/tz-historia-antes.sha256
+# después: la misma orden a /tmp/tz-historia-despues.txt y `diff` de los dos archivos
+```
+
+### 10.7 Siguiente control pendiente
+
+En el momento de cerrar A.4b era V2 dentro de la imagen; V2 se ejecutó después y dio PASS (§11). El siguiente
+control pendiente está en §11.3.
+
+## 11. V2 — resultado en la imagen de ensayo (2026-10-09)
+
+### Veredicto: **V2 — PASS**
+
+**Qué es.** El control V2 del plan: `scripts/verificar-zona-de-negocio.mjs` ejecutado **dentro de la imagen**, con el
+mismo `initPool` compilado que usa la API, para comprobar que las conexiones de la aplicación cuentan los días en la
+zona de negocio aunque la base esté en UTC.
+
+**Procedencia.** Lo ejecutó el usuario en el servidor y lo informó a la sesión que escribe este documento; esa sesión
+no tiene acceso al servidor y no volvió a correrlo ni pudo verificarlo por su cuenta. Los SHA-256 esperados sí se
+calcularon aquí (`git show 8d867d3:<archivo> | sha256sum`).
+
+| Dato | Valor |
+|---|---|
+| Imagen | `nexo:ensayo-tz` |
+| Identificación de la imagen | **Por contenido, no por metadatos de Docker.** El `Dockerfile` no tiene `LABEL` ni `ARG` de commit, así que la imagen no dice de qué commit salió. Se compararon los SHA-256 de cinco archivos con los de `8d867d3` y **coincidieron los cinco**: `scripts/verificar-zona-de-negocio.mjs` (`1753047e…8555`), `scripts/recalcular-cadena.mjs` (`898dc567…537b`), `packages/db/src/tenancy.ts` (`e34dbca3…ed6c`), `packages/shared/src/calendar-date.ts` (`da9563c4…22fd`) y `infrastructure/db/migrations/0132_funciones_de_hash_en_formato_iso.sql` (`fd1546d9…d5ff`) |
+| Script | `scripts/verificar-zona-de-negocio.mjs` (el oficial, sin sustituirlo por una prueba manual) |
+| Base utilizada | `aai_restauracion_tz`, indicada de forma explícita en la conexión. **Producción (`aai`) no se usó como base de V2.** El script solo ejecuta `SELECT` |
+| `zonaDeNegocio` | `America/Argentina/Buenos_Aires` |
+| `desdeLaAplicacion.zona` | `America/Argentina/Buenos_Aires` (la conexión abierta con `initPool`) |
+| `conexionCruda.zona` | `UTC` (el control: una conexión sin la opción de zona, como la del clúster de producción) |
+| `zonaOk`, `matrizOk`, `fechaOk`, `distingue` | `true`, `true`, `true`, `true` |
+| `funcionesDeHash` | las tres con `TimeZone=UTC \| DateStyle=ISO, MDY` |
+| Cierre del script | Terminó con `OK` y confirmó que la conexión cruda y la de la aplicación difieren en al menos un instante de prueba |
+
+### 11.1 Qué prueba la matriz (muestra de los límites)
+
+La matriz del script son 14 instantes fijos, definidos en el repositorio, que no dependen del reloj. El informe del
+servidor dio `matrizOk: true`: **en los 14, el día que devolvió la conexión de la aplicación es igual al día argentino
+calculado fuera de la base**. La tabla muestra una muestra de esos instantes. La segunda columna es la que debe devolver
+la aplicación (y devolvió, por `matrizOk`); la tercera es lo que daría una sesión en UTC por definición de la zona —no es
+un valor leído del informe, que a esta sesión no se le pasó instante por instante—, y es donde `distingue` mide la
+diferencia.
+
+| Instante (UTC) | Hora argentina | Día argentino (aplicación) | Día que daría una sesión UTC |
+|---|---|---|---|
+| `2026-10-05T23:59:59Z` | 20:59:59 | 2026-10-05 | 2026-10-05 |
+| `2026-10-06T00:00:00Z` | 21:00:00 | **2026-10-05** | 2026-10-06 |
+| `2026-10-06T02:59:59Z` | 23:59:59 | **2026-10-05** | 2026-10-06 |
+| `2026-10-06T03:00:00Z` | 00:00:00 | 2026-10-06 | 2026-10-06 |
+| `2026-11-01T00:00:00Z` | 21:00 del 31/10 (fin de mes) | **2026-10-31** | 2026-11-01 |
+| `2027-01-01T00:00:00Z` | 21:00 del 31/12 (fin de año) | **2026-12-31** | 2027-01-01 |
+| `2027-01-01T03:00:00Z` | 00:00 del 01/01 | 2027-01-01 | 2027-01-01 |
+| `2027-03-01T02:59:59Z` | 23:59:59 del 28/02 (año común) | **2027-02-28** | 2027-03-01 |
+| `2028-03-01T02:59:59Z` | 23:59:59 del 29/02 (bisiesto) | **2028-02-29** | 2028-03-01 |
+
+### 11.2 Limitaciones que deben quedar claras
+
+1. **ICU no se auditó de forma exhaustiva.** El script **no** informa un indicador `ICU: PASS` independiente. Lo que
+   hay es evidencia funcional: con el ICU de Node de la imagen, `Intl` resolvió `America/Argentina/Buenos_Aires` y
+   produjo la matriz de 14 instantes (si el ICU no tuviera la zona, `@aai/shared` habría fallado al importarse). No se
+   revisaron otras zonas, otras versiones de datos de zona ni otros usos de `Intl`.
+2. **El commit de la imagen no se verificó con metadatos de Docker**, sino comparando el SHA-256 de cinco archivos
+   relevantes. Es una identificación fuerte para esos archivos; no es una prueba de que **todo** el contenido de la
+   imagen sea el de `8d867d3`.
+3. **La base de V2 fue la copia del backup**, no producción. V2 prueba el mecanismo de la imagen (zona del pool y
+   conversión de instantes); **no** prueba que la aplicación desplegada, con su `.env` real, se comporte así. Eso
+   es V1 y V7 en producción.
+4. V2 corrió con la imagen **de ensayo**, no con `nexo:production`: esa imagen no se tocó y todavía tiene el código
+   anterior.
+
+### 11.3 Siguiente control pendiente
+
+Según el §8 de esta auditoría (ya sin los puntos 1 a 3): el **deploy de día (09:00–18:00 ART)** con
+`scripts/desplegar.sh`, que requiere autorización expresa. Después, en este orden y sin saltear ninguno: V1 y V3–V6 en
+producción con la imagen desplegada, y **V7** entre las 21:00 y las 24:00 ART. Hasta que V7 pase, los bugs #3/#4/#5
+siguen **no corregidos y verificados en producción**.

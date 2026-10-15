@@ -1,11 +1,12 @@
 # Plan — zona horaria de negocio (defectos de fechas #3, #4 y #5)
 
-Estado (2026-10-07): **plan aprobado con dos modificaciones; implementado y
-verificado localmente; commits `6b20f86`, `ddd8d58` y `e1b9007` en el remoto; P0–P2
-y P3 (solo con la 0131) ejecutadas en el servidor por el usuario. La auditoría
-integral del 2026-10-07 agregó la migración 0132 y otros cambios, SIN COMMITEAR
-(ver el apartado «Actualización del 2026-10-07» al final de este documento y
-`docs/AUDITORIA_ZONA_HORARIA.md`). Sin deploy.**
+Estado (2026-10-08): **plan aprobado con dos modificaciones; implementado y
+verificado localmente; commits `6b20f86`, `ddd8d58`, `e1b9007` y `8d867d3` en el
+remoto; P0–P3 y A.4b ejecutadas en el servidor por el usuario. La auditoría integral
+del 2026-10-07 agregó la migración 0132 y otros cambios (commit `8d867d3`; ver el
+apartado «Actualización del 2026-10-07» al final de este documento y
+`docs/AUDITORIA_ZONA_HORARIA.md`). A.4b: PASS CON OBSERVACIÓN (§10 de la
+auditoría). Sin deploy.**
 
 **Resultados de P0–P2 — informados por el usuario, no ejecutados ni verificados
 por la sesión que escribió este plan**, sobre una copia aislada
@@ -19,8 +20,10 @@ por la sesión que escribió este plan**, sobre una copia aislada
   producción y no hubo deploy. La copia `aai_restauracion_tz` queda sin borrar
   hasta decidir la limpieza (A.6), posterior a P3.
 
-Pendiente: **P3** (la 0131 sobre la copia, Anexo A.4), que exige que el commit
-esté en el remoto; y el resto de P12 en el servidor (A.5).
+Hecho después: **P3** (la 0131 sobre la copia, Anexo A.4) y **A.4b** (la 0132 sobre la
+misma copia: PASS CON OBSERVACIÓN, 2026-10-08) y **V2** en la imagen de ensayo
+(PASS, 2026-10-09; auditoría §11). Pendiente: el resto de P12 en el servidor (A.5),
+el deploy, V1 y V3–V6 en producción, y V7.
 
 **Decisiones del usuario sobre el plan original:**
 1. **No se agregan campos a `/health/db`.** La sonda pública queda con el mínimo.
@@ -299,7 +302,7 @@ informar `NO EJERCITADO` solo si P0b dio 0 filas.
 | # | Qué se comprueba | Cómo | Aprueba si |
 |---|---|---|---|
 | **V1** | Versión y migraciones | `curl -fsS https://nexointelligence.com.ar/health/db` | `version` = el nuevo commit y `migrations` = 132 (131 + 0132) |
-| **V2** | Las conexiones de la aplicación usan la zona de negocio | `scripts/verificar-zona-de-negocio.mjs` dentro de un contenedor de la imagen desplegada (ver C3) | Código 0; `desdeLaAplicacion.zona` = `America/Argentina/Buenos_Aires`; `conexionCruda.zona` = `UTC` (la base sigue en UTC); `matrizOk` = true y `distingue` = true **a cualquier hora**, porque la prueba principal convierte 14 instantes fijos (20:59:59, 21:00:00, 21:00:01, 23:59:59 y 00:00:00 ART, fin de mes, fin de año y los dos febreros) y no depende del reloj |
+| **V2** | Las conexiones de la aplicación usan la zona de negocio | `scripts/verificar-zona-de-negocio.mjs` dentro de un contenedor de la imagen desplegada (ver C3) | Código 0; `desdeLaAplicacion.zona` = `America/Argentina/Buenos_Aires`; `conexionCruda.zona` = `UTC` (la base sigue en UTC); `matrizOk` = true y `distingue` = true **a cualquier hora**, porque la prueba principal convierte 14 instantes fijos (20:59:59, 21:00:00, 21:00:01, 23:59:59 y 00:00:00 ART, fin de mes, fin de año y los dos febreros) y no depende del reloj **Ensayo previo al deploy hecho el 2026-10-09 con `nexo:ensayo-tz` contra `aai_restauracion_tz`: PASS** (auditoría §11). Este control se repite con la imagen desplegada. |
 | **V3** | El historial de auditoría sigue íntegro | `audit:cadena --observacional` desde la imagen nueva contra la base real, con `PGOPTIONS='-c timezone=UTC'` y otra vez con `PGOPTIONS='-c timezone=America/Argentina/Buenos_Aires'` (`pg` respeta `PGOPTIONS`; verificado) | 0 roturas en ambas corridas, salidas idénticas. Reforzar con `PGOPTIONS='-c datestyle=SQL,DMY'` y `-c timezone=Pacific/Kiritimati`: también 0 roturas (la brecha de `DateStyle` la cierra la 0132) |
 | **V4** | Las funciones de hash usan UTC | `SELECT proname, proconfig FROM pg_proc WHERE proname IN ('audit_chain_link','normative_audit_chain_link','verify_audit_chain')` | `TimeZone=UTC` **y** `DateStyle=ISO, MDY` en las tres |
 | **V5** | Las filas nuevas (escritas por la API en zona Argentina) verifican | Tras una acción real que escriba auditoría (un inicio de sesión), repetir V3 **y** correr `scripts/recalcular-cadena.mjs --ultimas 50` dentro de la imagen (`npm run audit:recalcular`): recalcula en Node, con SHA-256 y su propia copia de la fórmula, el hash de las últimas 50 filas de cada empresa y de la bitácora normativa, y comprueba el enlace `prev_hash` → `hash`. Solo lee y fija su propia sesión en UTC/ISO | Código 0, `ok: true`, `rotas: 0`. (Verificar solo con `verify_audit_chain` es circular para las filas nuevas: trigger y verificador están fijados igual y podrían equivocarse juntos; el recálculo en Node no. Verificado en local sobre las últimas 50 filas de cada una de las 1 875 cadenas de `aai_test` (21 429 filas): 0 rotas) |
@@ -489,13 +492,16 @@ psqlc -d "$DESCARTABLE" -At -c "SELECT proname, coalesce(array_to_string(proconf
   diferencias; 0 filas con roturas en ambas zonas; las tres funciones muestran
   `TimeZone=UTC` (y `DateStyle=ISO, MDY` desde la 0132).
 
-### A.4b · Llevar la copia a la 0132 y comprobar las 24 sesiones — **PENDIENTE (no ejecutado)**
+### A.4b · Llevar la copia a la 0132 y comprobar las 24 sesiones — **PASS CON OBSERVACIÓN (2026-10-08)**
 
-> **Estado:** no se ejecutó. Requiere acceso al servidor (`docker`, `nexo-postgres`),
-> que esta auditoría no tiene, y **no se simuló**. Todo lo de abajo es el
-> procedimiento exacto que hay que correr, con su criterio de aprobación. Las
-> pruebas locales equivalentes (P4b, P5, P4c) son evidencia sobre `aai_test`, no
-> reemplazan este ensayo sobre la copia del backup real.
+> **Estado:** ejecutado por el usuario en el servidor sobre `aai_restauracion_tz` y
+> cerrado como **PASS CON OBSERVACIÓN**. La evidencia, los desvíos respecto del
+> criterio de abajo y la observación pendiente (la huella histórica pre-0132 no se
+> pudo reproducir porque no se recuperó su algoritmo) están en
+> `docs/AUDITORIA_ZONA_HORARIA.md` §10. Lo de abajo se conserva como el
+> procedimiento de referencia; **A.4b.1 tiene una corrección** (guardar el contenido,
+> no solo el md5): ver §10.6 de la auditoría. Las pruebas locales (P4b, P5, P4c) son
+> evidencia sobre `aai_test` y no reemplazan este ensayo.
 
 La P3 que ya se ejecutó aplicó solo la 0131 (131 migraciones). Cuando la 0132
 esté en el remoto, **sobre la misma copia** `aai_restauracion_tz` (sin tocar `aai`):
@@ -569,6 +575,10 @@ corrido "scripts/recalcular-cadena.mjs --ultimas 100000"                    # (`
 
 Con cualquier otro resultado: **se corta**, no se despliega, y la copia queda para análisis.
 
+**Resultado de la corrida del 2026-10-08:** criterios 1, 3, 5 y 6 cumplidos; criterio 2 (`diff` de
+huellas) **no reproducible** y sustituido por backup contra restauración; criterio 4 cumplido en
+sustancia pero ejecutado después de la 0132 y solo sobre el verificador. Detalle en la auditoría, §10.4.
+
 ### A.5 · P12 (parte servidor) — verificadores sobre la copia
 
 ```bash
@@ -623,7 +633,7 @@ UTC): aplicación `2026-10-05`, conexión cruda `2026-10-06`.
 
 Informe completo, con severidades, matriz V1–V7 y clasificaciones:
 `docs/AUDITORIA_ZONA_HORARIA.md`. Lo que cambió respecto del plan original, y que
-**está sin commitear**:
+quedó en el commit `8d867d3`:
 
 | Cambio | Por qué |
 |---|---|
@@ -639,6 +649,6 @@ Informe completo, con severidades, matriz V1–V7 y clasificaciones:
 | S-37 reescrito, S-45 reforzado, S-46 nuevo, test P7 corregido | S-37 dejaba pasar 7 de 9 variantes (y ahora también sigue una variable que guarda el ISO, `toJSON`, `.replace('T', …)` y `getTimezoneOffset`); la excepción de archivo para `calendar-date.ts` pasó a una anotación en su única línea y cada anotación `s37-permite` se comprueba que tape algo real. S-45 aceptaba un `import` sin uso y ahora rechaza una zona equivocada, el helper pisado por otra `options` y una segunda conexión sin zona; P7 daba falso PASS por `PGOPTIONS` y ahora prueba también el reciclaje de conexiones |
 | `verificar-zona-de-negocio.mjs` determinístico | La corrida de las 00:44 ART dio `distingue=false`: dependía del reloj. Ahora convierte 14 instantes fijos, y `fechaOk` acepta el día de antes y el de después de la consulta (no falla justo en la medianoche argentina) |
 
-Pasos nuevos para llevar esto a producción (**no se hicieron**): commit y push de
-estos cambios; **A.4b sobre la copia, que sigue PENDIENTE** (necesita el servidor y la
-0132 en el remoto); recién entonces el deploy, de día, y V7 de noche.
+Pasos para llevar esto a producción: commit y push (**hechos**, `8d867d3`); A.4b sobre la
+copia (**hecho**, PASS CON OBSERVACIÓN); V2 dentro de la imagen de ensayo (**hecho**,
+PASS); recién entonces el deploy, de día, y V7 de noche (**pendientes**).

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Hace de `getent` para probar desplegar.sh: ningún dominio resuelve, así no se pide certificado real.
+exit 2

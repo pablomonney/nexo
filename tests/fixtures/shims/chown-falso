@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Hace de `chown` para probar desplegar.sh: no cambia dueños de nada.
+exit 0
