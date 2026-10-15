@@ -190,3 +190,15 @@ describe('O-4 · el nombre de una etapa del embudo no se corta', () => {
     expect(consola).toMatch(/\.crm-ee-nombre\{min-width:\d+rem\}/u);
   });
 });
+
+describe('M-1 · el ingreso admite un código de recuperación del segundo factor', () => {
+  it('el campo del segundo factor deja escribir los 11 caracteres de un código de recuperación (XXXXX-XXXXX)', () => {
+    const campo = /<input id="mfa"[^>]*>/u.exec(consola)?.[0] ?? '';
+    expect(campo, 'no encuentro el campo #mfa').not.toBe('');
+    // La API (/auth/mfa/verify) acepta un código de recuperación; si el campo corta en 6, quien perdió el teléfono no puede usar los que guardó.
+    const max = Number(/maxlength="(\d+)"/u.exec(campo)?.[1] ?? '0');
+    expect(max, 'maxlength del campo del segundo factor').toBeGreaterThanOrEqual(11);
+    expect(campo).not.toMatch(/inputmode="numeric"/u);
+    expect(consola).toMatch(/Código de 6 dígitos o de recuperación/u);
+  });
+});

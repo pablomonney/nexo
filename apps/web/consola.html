@@ -486,8 +486,11 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
          segundo factor —se configura después, recién cuando el rol lo exige—.
          Un campo que parece pedir algo que no existe todavía frena el ingreso
          antes de empezar. -->
-    <div><label>Código de 6 dígitos <span class="opcional">— solo si ya configuraste el
-      segundo factor</span></label><input id="mfa" inputmode="numeric" maxlength="6"
+    <!-- Acepta los DOS: el código de 6 dígitos de la app y un código de recuperación (XXXXX-XXXXX, 11 caracteres). El campo
+         tenía maxlength=6 y inputmode numérico: la API acepta los códigos de recuperación desde el principio, pero desde
+         esta pantalla no se podían escribir, así que quien perdía el teléfono no podía usar los que había guardado. -->
+    <div><label>Código de 6 dígitos o de recuperación <span class="opcional">— solo si ya configuraste el
+      segundo factor</span></label><input id="mfa" maxlength="14" autocomplete="one-time-code" autocapitalize="characters"
       placeholder="dejalo vacío la primera vez"></div>
   </div>
   <!-- Qué hace y qué no hace: recuerda el CORREO en este navegador y le pide al navegador que guarde la contraseña en su

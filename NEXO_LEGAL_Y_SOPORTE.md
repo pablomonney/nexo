@@ -2,6 +2,8 @@
 
 **Actualizado:** 2026-09-08, al cerrar B-1.
 
+> **Actualización 2026-10-15.** Los borradores de la sección 1 y los procedimientos de la sección 2 **ya existen** en `docs/legal/` (ver su `README.md`): términos, privacidad, acuerdo de encargado, recuperación de cuenta, incidente y registro de consultas. Siguen **sin revisión legal** y **sin publicar**. Además, «olvidé mi contraseña» ya existe como función (migración 0134): el procedimiento manual de §2 sólo queda para el segundo factor o el correo perdidos.
+
 Este archivo **no contiene documentos legales**. Contiene la lista de lo que
 hace falta, qué tiene que decir cada uno y qué del sistema lo condiciona — para
 que quien los redacte no tenga que deducir el comportamiento del producto leyendo

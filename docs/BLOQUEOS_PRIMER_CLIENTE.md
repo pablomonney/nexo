@@ -59,11 +59,15 @@ Reemplaza la lista de `docs/FALTANTES_NEXO_2026-10-14.md` (se mantiene como inve
 
 | # | Qué | Estado |
 |---|---|---|
-| M1 | **Borradores** de términos y condiciones, política de privacidad, recuperación de cuenta e incidente de seguridad. Sin publicar | **No escritos todavía** |
+| M1 | **Borradores** de términos y condiciones, política de privacidad, acuerdo de encargado, recuperación de cuenta e incidente de seguridad. Sin publicar | **Escritos (2026-10-15)** en `docs/legal/`, **sin revisión legal** y con los datos que no se conocen marcados `[ENTRE CORCHETES]`. Los procedimientos son operativos; los textos legales esperan al abogado (B8) |
 | M2 | **Dirección de contacto** visible en la consola y en la página pública | Necesito que elijas la dirección |
-| M3 | `pool.on('error')` (una conexión ociosa cortada tira el proceso; `restart: unless-stopped` lo levanta) | Registrado como tarea aparte; no se tocó |
+| M3 | `pool.on('error')` (una conexión ociosa cortada tira el proceso; `restart: unless-stopped` lo levanta) | **Hecho y probado localmente** (commit `1431107`); **no desplegado** |
 | M4 | Verificación visual **completa**: otros anchos, tema claro, otros navegadores | Pendiente; hoy sólo 800×560, tema oscuro |
-| M5 | Corregir las observaciones O-1…O-7 de la verificación visual | Backlog |
+| M5 | Corregir las observaciones O-1…O-7 de la verificación visual | **O-3, O-4 y O-7 hechas y probadas** (no desplegadas). Quedan **O-1, O-2, O-5, O-6** (necesitan cambios de API) |
+| M7 | **«Olvidé mi contraseña»**: NEXO no lo tenía y los scripts de reseteo servían sólo para una cuenta de demostración | **Hecho y probado localmente** (migración 0134, rutas `/auth/recuperar` y `/auth/restablecer`, consola). **No desplegado.** Depende de que el correo salga (B6) |
+| M8 | **Recuperar a mano** el segundo factor perdido o el correo perdido | **Hecho y probado localmente** (migración 0135, `scripts/recuperar-cuenta.sh`); procedimiento en `docs/legal/PROCEDIMIENTO_RECUPERACION_DE_CUENTA.md`. **No desplegado** |
+| M9 | El ingreso **no dejaba escribir un código de recuperación** del segundo factor (el campo cortaba en 6 caracteres) | **Corregido y probado** localmente; no desplegado |
+| M10 | **No existe una exportación completa de la empresa** (sólo informes CSV); los borradores legales no la prometen | **Decisión tuya:** construirla antes del primer cliente o declarar entrega a pedido |
 | M6 | Unidades `systemd` de la copia externa y de los avisos | Esperan tu decisión en B3/B4 |
 
 ## 3 · Decisiones que necesito de vos
