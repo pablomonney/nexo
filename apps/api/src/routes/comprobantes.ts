@@ -389,6 +389,7 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
                   t.constatacion_at AS "constatacionAt",
                   t.document_id AS "documentId", t.entry_id AS "entryId",
                   t.period_id AS "periodoId", t.created_at AS "creadoEn",
+                  t.party_id AS "terceroId",
                   a.afectacion,
                   a.origen AS "afectacionOrigen",
                   d.id AS "decisionId", d.estado AS "decisionEstado",

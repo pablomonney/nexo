@@ -97,8 +97,13 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
     const tenant = await requireCompany(request);
     requirePermission(tenant, 'payment_order:read');
     const auth = requireAuth(request);
-    const { proveedorId } = z
-      .object({ proveedorId: z.string().uuid() })
+    const { proveedorId, excluirOrdenId } = z
+      .object({
+        proveedorId: z.string().uuid(),
+        // La orden que se está editando. Sin esto, «comprometido en otras» incluía a la propia orden (la columna
+        // decía «otras» y contaba lo que la misma orden ya tenía cargado).
+        excluirOrdenId: z.string().uuid().optional(),
+      })
       .parse(request.query);
 
     return withCompany(
@@ -122,11 +127,12 @@ export async function ordenDePagoRoutes(app: FastifyInstance): Promise<void> {
                     WHERE l.company_id = s.company_id
                       AND l.tax_transaction_id = s.tax_transaction_id
                       AND o.status IN ('BORRADOR', 'APROBADA')
+                      AND ($3::uuid IS NULL OR o.id <> $3::uuid)
                  ) c ON true
             WHERE s.company_id = $1 AND s.party_id = $2
               AND s.direction = 'COMPRAS' AND s.pendiente > 0
             ORDER BY coalesce(s.vencimiento, s.cbte_fecha), s.cbte_numero`,
-          [tenant.companyId, proveedorId],
+          [tenant.companyId, proveedorId, excluirOrdenId ?? null],
         );
 
         return {

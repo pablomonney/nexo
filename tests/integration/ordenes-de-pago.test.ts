@@ -519,4 +519,21 @@ suite('Órdenes de pago', () => {
     expect(fila!.total).toBe('5500.00');
     expect(fila!.pendiente).toBe('5000.00');
   });
+
+  it('«comprometido» cuenta TODAS las órdenes vivas, salvo la que se está editando si se la excluye', async () => {
+    const c = await comprobante('COMPRAS', proveedorId, cuitProveedor, '8000.00');
+    const propia = await armar([{ comprobanteId: c, importe: '3000.00' }]);
+    await armar([{ comprobanteId: c, importe: '1000.00' }]); // otra orden viva sobre el mismo comprobante
+
+    const comprometido = async (excluir?: string): Promise<string> => {
+      const q = `proveedorId=${proveedorId}${excluir === undefined ? '' : `&excluirOrdenId=${excluir}`}`;
+      const r = await pedir('GET', `/payment-orders/pagables?${q}`);
+      expect(r.statusCode, r.body).toBe(200);
+      return r.json<{ comprobantes: { id: string; comprometido: string }[] }>().comprobantes.find((x) => x.id === c)!.comprometido;
+    };
+
+    expect(await comprometido()).toBe('4000.00');
+    // Editando la propia: «en otras órdenes» es solo lo de la otra. Sin la exclusión decía 4000 (contaba la propia).
+    expect(await comprometido(propia)).toBe('1000.00');
+  });
 });

@@ -540,6 +540,15 @@ suite('Imputación de cobros y antigüedad de saldos', () => {
     expect(bitacora.rows.map((x) => x.action)).toEqual(['IMPUTAR_COBRO', 'ANULAR_IMPUTACION']);
   });
 
+  it('el listado de operaciones dice con qué tercero está vinculada cada una (la consola lo deja elegido)', async () => {
+    const f = await factura(clienteId, cuitCliente, '321.00', haceDias(2));
+    const lista = await pedir('GET', '/tax-transactions?limite=100');
+    expect(lista.statusCode, lista.body).toBe(200);
+    const fila = lista.json<{ operaciones: { id: string; terceroId: string | null }[] }>().operaciones.find((o) => o.id === f);
+    expect(fila, 'la operación recién cargada no está en el listado').toBeDefined();
+    expect(fila!.terceroId).toBe(clienteId);
+  });
+
   it('el movimiento vuelve a estar disponible después de anular', async () => {
     const f = await factura(clienteId, cuitCliente, '900.00', haceDias(5));
     const linea = await cobro(clienteId, '900.00');

@@ -1572,7 +1572,8 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
         después aparece como un saldo que crece sin motivo.</p>
       <div class="fila">
         <div style="flex:1"><label>Tercero</label><select id="op-party-sel">
-          <option value="">— ninguno (desvincular) —</option>
+          <option value="">— elegí un tercero —</option>
+          <option value="__ninguno__">— desvincular (ningún tercero) —</option>
         </select></div>
         <div><label>&nbsp;</label><button id="b-op-party" class="sec">Vincular</button></div>
       </div>
@@ -3993,7 +3994,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 const estado = {
   empresa: null, empresas: [], permisos: [], roles: [], fueraDelPlan: [], suscripcion: null,
   vista: 'login', migas: [],
-  documento: null, campos: [], tt: null, operacion: null, asiento: null,
+  documento: null, campos: [], tt: null, operacion: null, asiento: null, terceroDeOperacion: {},
   tercero: null, comercial: null, comercialBorrador: [],
   recepcion: null, recepcionBorrador: [],
   depositos: [], stockProducto: null, activo: null, registroExterno: null, planTotal: '0',
@@ -7118,7 +7119,15 @@ async function cargarSaldoDelTercero(id) {
   const pend = E('t-ter-pend').querySelector('tbody');
   pend.innerHTML = '';
   const sel = E('ter-i-cbte');
-  sel.innerHTML = '';
+  // Los CUATRO selects de comprobante se vacían: antes solo se vaciaba este, y los otros tres seguían sumando opciones
+  // de cada tercero que se abría. Al pasar de un cliente a otro, el segundo veía las facturas del primero (con saldos
+  // de antes de imputar) y se podía elegir una ajena para imputar, corregir o declarar su plan de pagos.
+  for (const s of [sel, E('ter-p-cbte'), E('ter-imp-cbte'), E('ter-corr-cbte')]) s.innerHTML = '';
+  // Y lo que se había consultado de OTRO tercero: las imputaciones y correcciones del comprobante anterior seguían
+  // dibujadas debajo del select del nuevo (se vio con las de un cliente bajo la ficha de otro), y parecían suyas.
+  for (const t of ['t-ter-imp', 't-ter-corr']) E(t).querySelector('tbody').innerHTML = '';
+  limpiar('ter-imp-msg');
+  limpiar('ter-corr-msg');
   for (const c of (r.datos.comprobantes || [])) {
     const tr = document.createElement('tr');
     // La mora se muestra solo si está fundada. Sin condición declarada va un
@@ -7400,11 +7409,12 @@ async function cancelarImputacion(allocationId, tt) {
   const r = await api('POST', '/party-allocations/' + allocationId + '/cancel', {
     motivo: motivo.trim(),
   });
-  decir('ter-imp-msg', r, 'Imputación cancelada.');
+  // Primero se vuelve a leer y DESPUÉS se avisa: `cargarImputaciones` limpia el mensaje (ver la corrección de abajo).
   if (r.ok) {
     await cargarImputaciones(tt);
     if (estado.tercero) await cargarSaldoDelTercero(estado.tercero);
   }
+  decir('ter-imp-msg', r, 'Imputación cancelada.');
 }
 
 // ── Correcciones de un comprobante (notas de crédito/débito aplicadas) ─────
@@ -7462,11 +7472,13 @@ async function cancelarCorreccion(correccionId, tt) {
   const r = await api('POST', '/tax-transaction-corrections/' + correccionId + '/cancel', {
     motivo: motivo.trim(),
   });
-  decir('ter-corr-msg', r, 'Corrección cancelada.');
+  // Primero se vuelve a leer y DESPUÉS se avisa: `cargarCorrecciones` limpia el mensaje, y con el orden de antes
+  // «Corrección cancelada.» se escribía y se borraba en el mismo instante (la persona no veía que había salido bien).
   if (r.ok) {
     await cargarCorrecciones(tt);
     if (estado.tercero) await cargarSaldoDelTercero(estado.tercero);
   }
+  decir('ter-corr-msg', r, 'Corrección cancelada.');
 }
 
 /**
@@ -7676,6 +7688,8 @@ async function listarOperaciones(cursor) {
           ? escapar(o.decisionResultado)
           : '<span class="p p-ojo">falta</span>') + '</td>' +
       '<td><span class="clic">abrir</span></td>';
+    // El tercero ya vinculado viaja en la fila: la ficha lo deja elegido (ver abrirOperacion).
+    estado.terceroDeOperacion[o.id] = o.terceroId || null;
     tr.querySelector('.clic').onclick = () => abrirOperacion(o.id);
     cuerpo.appendChild(tr);
   }
@@ -7719,7 +7733,12 @@ async function abrirOperacion(id) {
   // ── Vincular a un tercero ─────────────────────────────────────────────
   E('op-party').hidden = !puede('tax_affectation:declare') || !puede('party:read');
   limpiar('op-party-msg');
-  if (!E('op-party').hidden) await cargarPartiesParaVinculo();
+  if (!E('op-party').hidden) {
+    await cargarPartiesParaVinculo();
+    // Se deja elegido el tercero con el que YA está vinculado (si la fila lo trae: abierto desde la bandeja no se sabe).
+    const vinculado = estado.terceroDeOperacion[id];
+    if (vinculado) E('op-party-sel').value = vinculado;
+  }
 
   // ── Renglones ───────────────────────────────────────────────────────────
   E('op-lineas').hidden = !puede('journal_entry:read');
@@ -7741,7 +7760,10 @@ async function cargarPartiesParaVinculo() {
   const r = await api('GET', '/parties?status=ACTIVO&limite=200');
   if (!r.ok) return;
   const sel = E('op-party-sel');
-  sel.innerHTML = '<option value="">— ninguno (desvincular) —</option>';
+  // «Sin elegir» y «desvincular» son dos cosas distintas. Antes había UNA sola opción vacía que decía «desvincular» y era
+  // la que quedaba elegida: abrir un comprobante ya vinculado y apretar «Vincular» sin tocar nada LO DESVINCULABA, y la
+  // pantalla nunca mostraba con quién estaba vinculado.
+  sel.innerHTML = '<option value="">— elegí un tercero —</option><option value="__ninguno__">— desvincular (ningún tercero) —</option>';
   for (const t of (r.datos.terceros || [])) {
     const o = document.createElement('option');
     o.value = t.id;
@@ -7751,10 +7773,12 @@ async function cargarPartiesParaVinculo() {
 }
 
 E('b-op-party').onclick = async () => {
-  const r = await api('POST', '/tax-transactions/' + estado.tt + '/party', {
-    partyId: E('op-party-sel').value || null,
-  });
-  decir('op-party-msg', r, 'Tercero vinculado.');
+  const elegido = E('op-party-sel').value;
+  if (elegido === '') return avisoMal('op-party-msg', 'Elegí a qué tercero vincularlo, o «desvincular» para dejarlo sin tercero.');
+  const partyId = elegido === '__ninguno__' ? null : elegido;
+  const r = await api('POST', '/tax-transactions/' + estado.tt + '/party', { partyId });
+  if (r.ok) estado.terceroDeOperacion[estado.tt] = partyId;
+  decir('op-party-msg', r, partyId === null ? 'Tercero desvinculado.' : 'Tercero vinculado.');
 };
 
 // El reemplazo completo vive en memoria hasta guardar, igual que los
@@ -7900,8 +7924,9 @@ E('b-op-sup').onclick = async () => {
     resultado: E('op-sup-resultado').value,
     supersedeId: estado.decisionVigenteId,
   });
-  decir('op-sup-msg', r, 'Decisión corregida. La anterior queda conservada como superada.');
   if (r.ok) { await listarOperaciones(); await abrirOperacion(estado.tt); }
+  // Después de releer: `abrirOperacion` redibuja la pantalla y el aviso se perdía.
+  decir('op-sup-msg', r, 'Decisión corregida. La anterior queda conservada como superada.');
 };
 
 E('b-constatar').onclick = async () => {
@@ -9169,7 +9194,11 @@ async function listarBancos() {
       destino.appendChild(o);
     }
   }
-  sel.value = previo;
+  // Se conserva la cuenta que estaba elegida; si no había ninguna (primera vez) se elige la primera. Antes se hacía
+  // `sel.value = previo` a secas, y con `previo === ''` eso deja el select SIN selección (selectedIndex −1): «Proponer»
+  // mandaba `/banks/accounts//reconciliations/propose` y la API contestaba «bankAccountId: No es un identificador válido».
+  if (previo && [...sel.options].some((o) => o.value === previo)) sel.value = previo;
+  else if (sel.options.length > 0) sel.selectedIndex = 0;
 
   await listarMapeos();
   await listarConciliaciones();
@@ -9212,7 +9241,11 @@ async function listarMapeos() {
     o.textContent = m.nombre + ' · ' + m.banco;
     sel.appendChild(o);
   }
-  sel.value = previo;
+  // La opción vacía decía «sin mapeos cargados» aunque los hubiera, y era la que quedaba elegida: la persona leía que
+  // no había mapeos teniendo uno. Dice lo que es cada caso.
+  if ((r.datos.mapeos || []).length > 0) sel.options[0].textContent = '— elegí un mapeo —';
+  if (previo && [...sel.options].some((o) => o.value === previo)) sel.value = previo;
+  else sel.selectedIndex = 0;
 }
 
 E('b-ban').onclick = () => listarBancos();
@@ -9324,7 +9357,10 @@ async function listarConciliaciones() {
       sel.appendChild(o);
     }
   }
-  sel.value = previo;
+  // Si había una elegida se conserva; si no, y hay una abierta, queda ELEGIDA esa. Antes quedaba «— ninguna abierta —»
+  // aunque la lista de abajo mostrara una en borrador: «confirmar esta» contestaba «no hay ninguna conciliación abierta».
+  if (previo && [...sel.options].some((o) => o.value === previo)) sel.value = previo;
+  else sel.selectedIndex = sel.options.length > 1 ? 1 : 0;
 }
 
 /**
@@ -9460,9 +9496,11 @@ async function mostrarTrazaDeMatch(matchId) {
   E('ban-prop-msg').innerHTML +=
     '<div class="aviso ok"><strong>De dónde sale</strong>' +
     '<dl class="kv">' +
-    fila('Movimiento', t.movimiento_fecha + ' · ' + t.movimiento_descripcion + ' · ' +
+    // La API devuelve las fechas de la vista como instantes ISO (`2026-10-12T03:00:00.000Z`, la medianoche de Buenos
+    // Aires): para una fecha de calendario se muestra el día, que es lo único que dice algo.
+    fila('Movimiento', String(t.movimiento_fecha).slice(0, 10) + ' · ' + t.movimiento_descripcion + ' · ' +
       t.movimiento_importe) +
-    fila('Asiento', t.journal_code + ' N.° ' + t.entry_number + ' · ' + t.entry_date) +
+    fila('Asiento', t.journal_code + ' N.° ' + t.entry_number + ' · ' + String(t.entry_date).slice(0, 10)) +
     '</dl></div>';
 }
 
@@ -9948,7 +9986,8 @@ async function abrirOrdenDePago(id, titulo) {
 // precargado: lo que ya está en el borrador queda tildado con su importe
 // actual, y el resto aparece sin tildar para agregar.
 async function cargarEdicionDeOrden(proveedorId, renglonesActuales) {
-  const r = await api('GET', '/payment-orders/pagables?proveedorId=' + proveedorId);
+  // Se excluye la orden que se edita: «En otras órdenes» no puede contar lo que ESTA orden ya tiene cargado.
+  const r = await api('GET', '/payment-orders/pagables?proveedorId=' + proveedorId + '&excluirOrdenId=' + estado.ordenDePago);
   if (!r.ok) return decir('odp-e-msg', r);
 
   const actuales = new Map((renglonesActuales || []).map((l) => [l.comprobanteId, l.importe]));
@@ -10332,8 +10371,14 @@ E('b-cms-editar').onclick = async () => {
     nombre: E('cms-ed-nombre').value,
     status: E('cms-ed-status').value,
   });
+  if (r.ok) {
+    await listarComisiones();
+    // El título lleva el nombre: si se acaba de cambiar, el de antes quedaba escrito arriba de la ficha ya renombrada.
+    const codigo = String(estado.vendedorTitulo || '').split(' — ')[0];
+    await abrirVendedor(estado.vendedor, codigo + ' — ' + E('cms-ed-nombre').value);
+  }
+  // Después de releer: `abrirVendedor` limpia este mensaje y «Vendedor actualizado.» no llegaba a verse.
   decir('cms-ed-msg', r, 'Vendedor actualizado.');
-  if (r.ok) { await listarComisiones(); await abrirVendedor(estado.vendedor, estado.vendedorTitulo); }
 };
 
 E('b-cms-esquema').onclick = async () => {
@@ -13816,14 +13861,22 @@ async function cargarConfig() {
         '</div>' +
         '<button id="b-cfg-marco" class="sec">Declarar</button>' +
         '<div id="cfg-marco-msg"></div>';
-      E('b-cfg-marco').onclick = async () => {
-        const r = await api('POST', '/companies/current/reporting-framework', {
-          framework: E('cfg-marco-framework').value,
-          validFrom: E('cfg-marco-desde').value,
+      // Por delegación y no con `onclick` sobre el botón: esta pantalla se arma con `caja.innerHTML += …` y cada `+=`
+      // vuelve a parsear el contenedor entero, así que un handler puesto sobre el botón se perdía con el bloque que se
+      // dibuja después («Tu acceso», «Personas con acceso»…). El botón «Declarar» quedaba dibujado y MUERTO: se apretaba
+      // y no pasaba nada (se vio abriendo la pantalla en el navegador; ver `engancharCargaDeCertificado`).
+      if (!caja.dataset.marcoEnganchado) {
+        caja.dataset.marcoEnganchado = 'si';
+        caja.addEventListener('click', async (ev) => {
+          if (!ev.target.closest || !ev.target.closest('#b-cfg-marco')) return;
+          const r = await api('POST', '/companies/current/reporting-framework', {
+            framework: E('cfg-marco-framework').value,
+            validFrom: E('cfg-marco-desde').value,
+          });
+          if (r.ok) await cargarConfig();
+          decir('cfg-marco-msg', r, 'Marco contable declarado');
         });
-        decir('cfg-marco-msg', r, 'Marco contable declarado');
-        if (r.ok) cargarConfig();
-      };
+      }
     }
     // El rol adelante; los códigos de permiso, plegados.
     //
