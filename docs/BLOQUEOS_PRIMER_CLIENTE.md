@@ -20,7 +20,7 @@ Reemplaza la lista de `docs/FALTANTES_NEXO_2026-10-14.md` (se mantiene como inve
 | **Consola: 16 pantallas de detalle** (Y2) | 15 verificadas abriéndolas en un navegador (con 11 defectos hallados y corregidos); 1 bloqueada (#3, ver B10); capturas en `var/visual/capturas/` | — | — |
 | **Cobro manual por transferencia** (registro, conciliación, comprobante) | 30 pruebas unitarias + 10 de integración que ejecutan el script real; 9 mutaciones detectadas. `docs/COBRO_MANUAL_POR_TRANSFERENCIA.md` | Nunca ejecutado en el servidor (entra con la próxima imagen) | **No habilitado.** Sin Mercado Pago ni cobros automáticos |
 | **`.claude/launch.json`** | Sólo existe `nexo-pruebas`; S-48 lo controla (5 pruebas) | — | — |
-| Suite completa | Ver el informe de cierre de esta pasada para la corrida final | — | — |
+| Suite completa (árbol final, 2026-10-15) | **214 archivos / 3497 pruebas verdes**, en hora de Argentina y en UTC; `typecheck`, `lint`, `lint:arch`, `check:no-float` y `audit:estructura` (**456** objetos) en verde | — | — |
 
 ## 2 · Bloqueos — sin esto no conviene abrir a un cliente real
 
