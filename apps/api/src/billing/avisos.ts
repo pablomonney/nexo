@@ -42,7 +42,9 @@
  */
 
 import type { Tx } from '@aai/db';
+import { config } from '../config.js';
 import { encolarSinEnviar, type Mensaje } from '../correo/puerto.js';
+import { instruccionesDeTransferencia } from './datos-de-cobro.js';
 
 /** Cuál de los cuatro. */
 export type ClaseDeAviso =
@@ -64,13 +66,23 @@ export interface DatosDelAviso {
   readonly diasParaLaSuspension: number | null;
   /** Qué módulos quedaron en pausa. Solo lo usa `ACCESO_DEGRADADO`. */
   readonly modulosEnPausa?: readonly string[];
+  /**
+   * Cómo pagar por transferencia (`instruccionesDeTransferencia`). `null` o ausente: el aviso no dice nada de transferencias.
+   * Va en los avisos de mora y suspensión; **no** en `RECHAZO_INICIAL`, que habla de una tarjeta y de una pasarela que no
+   * aplican al cobro manual.
+   */
+  readonly instruccionesDePago?: string | null;
 }
 
 /** El pie que llevan los cuatro. Un solo lugar donde cambiarlo. */
-const PIE =
-  '\n\nPodés ver el detalle y regularizar en la sección Suscripciones de NEXO.\n' +
-  'Si ya pagaste, ignorá este mensaje: el aviso se corta solo en cuanto se ' +
-  'registra el cobro.\n';
+function pie(instruccionesDePago: string | null | undefined): string {
+  return (
+    '\n\nPodés ver el detalle y regularizar en la sección Suscripciones de NEXO.\n' +
+    (instruccionesDePago ? `\n${instruccionesDePago}\n\n` : '') +
+    'Si ya pagaste, ignorá este mensaje: el aviso se corta solo en cuanto se ' +
+    'registra el cobro.\n'
+  );
+}
 
 function enCuantosDias(dias: number | null): string {
   if (dias === null) return 'en los próximos días';
@@ -92,7 +104,7 @@ export function textoDelAviso(
           `Hola,\n\nEl cobro de la suscripción de ${datos.empresa} fue rechazado. ` +
           'Suele ser una tarjeta vencida o un límite, y se resuelve actualizando el medio ' +
           'de pago.\n\nNo cambió nada todavía: el sistema funciona igual que siempre.' +
-          PIE,
+          pie(null),
       };
 
     case 'SUSPENSION_PROXIMA':
@@ -103,7 +115,7 @@ export function textoDelAviso(
           `el pago, el acceso se suspende ${enCuantosDias(datos.diasParaLaSuspension)}.\n\n` +
           'Los datos, la contabilidad y el historial se conservan enteros en cualquier ' +
           'caso: una suspensión corta el acceso y no borra nada.' +
-          PIE,
+          pie(datos.instruccionesDePago),
       };
 
     case 'ACCESO_DEGRADADO': {
@@ -120,7 +132,7 @@ export function textoDelAviso(
           'Todo lo que tiene un plazo legal sigue disponible: podés emitir comprobantes, ' +
           'registrar asientos, cerrar el período y presentar ante ARCA con normalidad. ' +
           'Nada se borró, y lo que está en pausa vuelve entero al pagar.' +
-          PIE,
+          pie(datos.instruccionesDePago),
       };
     }
 
@@ -132,7 +144,7 @@ export function textoDelAviso(
           'Los datos siguen estando: la contabilidad, los comprobantes y el historial se ' +
           'conservan enteros. Al registrarse el pago el acceso se restablece con todo ' +
           'adentro, sin volver a cargar nada.' +
-          PIE,
+          pie(datos.instruccionesDePago),
       };
   }
 }
@@ -224,7 +236,11 @@ export async function encolarAvisoDeCobranza(
   const destinatarios = await destinatariosDeCobranza(tx, companyId);
   if (destinatarios.length === 0) return { estado: 'SIN_DESTINATARIOS' };
 
-  const { asunto, cuerpo } = textoDelAviso(clase, datos);
+  // Si quien llama no dijo cómo se paga, se toma lo declarado en el entorno de la instalación (que puede ser nada).
+  const { asunto, cuerpo } = textoDelAviso(clase, {
+    ...datos,
+    instruccionesDePago: datos.instruccionesDePago ?? instruccionesDeTransferencia(config.cobro.datos),
+  });
   for (const destinatario of destinatarios) {
     const mensaje: Mensaje = { destinatario, asunto, cuerpo, tipo: 'AVISO_DE_COBRANZA' };
     await encolarSinEnviar(tx, mensaje);

@@ -305,6 +305,17 @@ export function crearProveedorDePagos(
 }
 
 /**
+ * Qué dice el banner de los datos bancarios del cobro manual (`NEXO_COBRO_*`). Un modo degradado no puede ser invisible:
+ * «sin datos» significa que los avisos de cobranza no le dicen al cliente a dónde transferir, y «datos que no sirven» (un CBU
+ * con un error de tipeo) significa lo mismo pero hay que corregirlo.
+ */
+function datosDeTransferenciaParaElBanner(): string {
+  if (config.cobro.problema !== null) return `¡LOS DATOS DE TRANSFERENCIA DECLARADOS NO SIRVEN y no se muestran!: ${config.cobro.problema}.`;
+  if (config.cobro.datos === null) return 'Sin datos bancarios declarados (NEXO_COBRO_*): los avisos no dicen a dónde transferir.';
+  return `Datos de transferencia declarados (titular: ${config.cobro.datos.titular}).`;
+}
+
+/**
  * En qué modo corre el cobro, para el banner del arranque.
  *
  * Esta fila la pidió la auditoría B-2 junto con la del correo: el banner existe
@@ -325,7 +336,8 @@ export function modoDePagos(pagos: ConfiguracionDePagos = config.pagos): {
         real: false,
         detalle:
           'no hay pasarela: el ciclo emite y lleva la cobranza igual, y los cobros por ' +
-          'transferencia se registran a mano',
+          'transferencia se registran a mano. ' +
+          datosDeTransferenciaParaElBanner(),
       };
 
     case 'PREPARADO':

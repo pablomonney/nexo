@@ -202,3 +202,14 @@ describe('M-1 · el ingreso admite un código de recuperación del segundo facto
     expect(consola).toMatch(/Código de 6 dígitos o de recuperación/u);
   });
 });
+
+describe('C-1 · la pantalla de Suscripción dice a dónde transferir (cobro manual)', () => {
+  it('muestra los datos que trae el servidor, y dice que no hay cuando no los hay (no inventa una cuenta)', () => {
+    const cuerpo = bloqueDesde('async function cargarSuscripcion');
+    expect(cuerpo).toContain('const cobro = r.datos.cobro;');
+    for (const campo of ['cobro.titular', 'cobro.cbu', 'cobro.alias', 'cobro.banco']) expect(cuerpo, `no muestra ${campo}`).toContain(campo);
+    expect(cuerpo).toContain('Todavía no hay datos de transferencia cargados en esta instalación.');
+    // Los datos bancarios no están escritos en la consola: vienen siempre del servidor.
+    expect(consola).not.toMatch(/\b\d{22}\b/u);
+  });
+});

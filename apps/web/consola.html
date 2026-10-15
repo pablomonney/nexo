@@ -13274,6 +13274,15 @@ async function cargarSuscripcion() {
       fila('Desde', p.vigenciaDesde) + fila('Hasta', p.vigenciaHasta || 'sin fin') +
       (p.motivo ? fila('Motivo', p.motivo) : '');
 
+  // Cómo pagar. Sale del servidor (los datos bancarios son de la instalación, no de la consola): si no hay datos válidos se
+  // dice que no los hay, en vez de mostrar una cuenta a medias.
+  const cobro = r.datos.cobro;
+  E('sub-plan').innerHTML += cobro
+    ? fila('Cómo pagar', 'Transferencia bancaria') + fila('Titular', cobro.titular + (cobro.cuit ? ' (CUIT ' + cobro.cuit + ')' : '')) +
+      fila('CBU', cobro.cbu) + (cobro.alias ? fila('Alias', cobro.alias) : '') + (cobro.banco ? fila('Banco', cobro.banco) : '') +
+      fila('Al transferir', 'Guardá el número de operación y avisanos: sin él no podemos conciliar el pago.')
+    : fila('Cómo pagar', 'Todavía no hay datos de transferencia cargados en esta instalación.');
+
   const uso = E('t-sub-uso').querySelector('tbody');
   uso.innerHTML = '';
   for (const x of r.datos.recursos || []) {

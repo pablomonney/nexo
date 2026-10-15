@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { leerDatosBancarios } from './billing/datos-de-cobro.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -356,6 +357,12 @@ export const config = {
      */
     provider: process.env.SECRETS_PROVIDER ?? 'env',
   },
+
+  /**
+   * A dónde se transfiere para pagar NEXO (cobro manual). Sale del entorno de la instalación y no del repositorio. Si falta
+   * algo o el CBU no es válido, `datos` es `null` y `problema` dice por qué: ver `billing/datos-de-cobro.ts`.
+   */
+  cobro: leerDatosBancarios(process.env),
 
   /** Registrar la IP en la bitácora queda sujeto a evaluación legal (§21). */
   recordIpInAudit: process.env.AUDIT_RECORD_IP === 'true',

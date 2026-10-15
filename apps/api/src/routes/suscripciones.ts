@@ -55,6 +55,7 @@
 import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { config } from '../config.js';
 import { clientIp, requireAuth, requireCompany, requirePermission } from '../http/context.js';
 import { conflict, conflictoTipado, notFound } from '../http/errors.js';
 import { convertirPrueba } from '../billing/prueba.js';
@@ -243,6 +244,9 @@ async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada):
                 },
           recursos,
           historial: historial.rows,
+          // A dónde transferir para pagar (cobro manual). `null` si la instalación no declaró datos bancarios válidos: la pantalla
+          // lo dice en vez de inventar una cuenta. Ver `billing/datos-de-cobro.ts`.
+          cobro: config.cobro.datos === null ? null : { medio: 'TRANSFERENCIA' as const, ...config.cobro.datos },
           alcance:
             'Exceder un tope **no bloquea nada**: un sistema contable que se niega a ' +
             'registrar un hecho por una cuestión comercial deja los libros incompletos, y ' +
