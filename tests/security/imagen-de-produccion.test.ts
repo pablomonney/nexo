@@ -135,6 +135,20 @@ describe('S-43 — la imagen de producción lleva lo que el arranque lee', () =>
   });
 
   /**
+   * Lo compilado se excluye completo: `dist` Y `tsconfig.tsbuildinfo`.
+   *
+   * Pasó el 2026-10-15 en el primer despliegue de la 0131/0132: el árbol del servidor tenía 17 `tsconfig.tsbuildinfo` viejos
+   * (de una compilación del 2026-10-07, ignorados por Git) y el `.dockerignore` excluía `dist` pero no ellos. Dentro del
+   * build, `tsc --build` leyó «ya está compilado», no emitió ningún `.d.ts` y falló con 1073 errores («Cannot find module
+   * '@aai/shared'»). Quien despliega desde un árbol con restos de otra compilación no puede quedar a merced de ellos.
+   */
+  it('el contexto de build no arrastra restos de una compilación anterior (dist ni tsbuildinfo)', async () => {
+    const ignorados = await readFile(join(RAIZ, '.dockerignore'), 'utf8');
+    expect(ignorados).toMatch(/^\*\*\/dist$/mu);
+    expect(ignorados).toMatch(/^\*\*\/\*\.tsbuildinfo$/mu);
+  });
+
+  /**
    * El contenedor corre con el sistema de archivos de solo lectura.
    *
    * `docker-compose.prod.yml` declara `read_only: true`, y eso es una promesa

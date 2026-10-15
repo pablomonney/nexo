@@ -9,6 +9,11 @@
 node_modules
 **/node_modules
 **/dist
+# Los `tsconfig.tsbuildinfo` van con los `dist`, no sin ellos. Con el `dist` excluido y un `.tsbuildinfo` viejo adentro del
+# contexto, `tsc --build` cree que ya compiló, no emite nada, y el build entero falla con «Cannot find module '@aai/shared'»
+# (1073 errores). Pasó el 2026-10-15: el servidor tenía 17 de una compilación del 2026-10-07 y el primer despliegue de la
+# 0131/0132 se cortó en `npm run build`. Un build tiene que dar lo mismo desde un clon limpio y desde el árbol del servidor.
+**/*.tsbuildinfo
 coverage
 var
 .git
