@@ -23,6 +23,22 @@ de prueba (`docs/VERIFICACION_VISUAL_16_PANTALLAS.md` §5, captura `03-estados-s
 
 Una plantilla trae además `scope_types` y `scope_fundamento` (qué rubros expone y la norma de la que salen): son parte de lo que habría que cargar.
 
+### Inventario real de plantillas (consulta de solo lectura a `aai_test`, 2026-10-15)
+
+La consulta se hizo dentro de una transacción `READ ONLY` contra la base de pruebas local. **No se consultó producción**: qué plantillas tiene el VPS es **NO VERIFICADO** (la auditoría del servidor no miró esa tabla).
+
+| Alcance | Tipo de estado | Marco | Tipo de ente | Regulador | Versión | Vigente desde | Fundamento |
+|---|---|---|---|---|---|---|---|
+| Global (`company_id` nulo) | `ESP` (situación patrimonial), con ecuación patrimonial | `RT_FACPCE` | **`SA`** | `IGJ` | 1 | 1984-03-30 | Ley 19.550 (T.O. 1984), art. 63 |
+| Global | `ER` (resultados) | `RT_FACPCE` | **`SA`** | `IGJ` | 1 | 1984-03-30 | Ley 19.550 (T.O. 1984), art. 64 |
+
+- **Total de plantillas globales: 2.** Es todo lo que NEXO trae.
+- Las otras **49 filas** de la tabla son de empresas de prueba, creadas por las pruebas automáticas (`created_by = 'tester'`), todas `ESP` de `SA`: **no son una capacidad del producto** y no deben leerse como tal.
+- **`EEPN` (evolución del patrimonio neto) y `EFE` (flujo de efectivo):** el esquema los admite como tipos de estado, pero **no existe ninguna plantilla** de esos tipos, ni global ni de empresa. No hay constancia de que el producto arme esos estados.
+- **Tipos de ente que NEXO acepta al dar de alta una empresa (12):** `SA`, `SA_299`, `SRL`, `SAS`, `SOCIEDAD_SIMPLE`, `ASOC_CIVIL`, `FUNDACION`, `COOPERATIVA`, `MUTUAL`, `SUCURSAL_EXTRANJERA`, `UNIPERSONAL`, `FIDEICOMISO`. **Sólo `SA` tiene plantilla.** Los otros 11 (incluidos `SRL` y `SA_299`) responden «FUENTE NO ENCONTRADA».
+- La coincidencia es **exacta en cuatro ejes** (tipo, marco, ente, regulador): una SA cuyo regulador declarado no sea `IGJ` (por ejemplo `CNV`) tampoco encuentra plantilla. Que el catálogo diga `SA` no implica que cualquier SA esté cubierta.
+- Las plantillas globales usan **prefijos de código de cuentas** (1.1.\*, 2.1.\*, …). Una empresa con otro plan de cuentas no las puede usar tal cual: el control `CUENTA_SIN_RUBRO` lo señala, no lo disimula.
+
 ## 3 · Qué falta para soportar una SRL
 
 Se separa lo que es trabajo de lo que es **decisión con norma detrás**.
