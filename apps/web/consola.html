@@ -471,11 +471,14 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 <!-- ══ Ingresar ═══════════════════════════════════════════════════════════ -->
 <section id="v-login">
   <h2>Ingresar</h2>
-  <p class="ayuda">El mismo login que usa la API. La consola no guarda credenciales:
+  <p class="ayuda">El mismo login que usa la API. La consola no guarda tu contraseña:
     la sesión vive en la cookie que emite el servidor.</p>
+  <!-- Es un <form> para que el navegador reconozca el par correo/contraseña y ofrezca guardarlo en SU gestor de
+       contraseñas. El envío se corta en el handler (la consola habla con la API, no navega). -->
+  <form id="f-login" autocomplete="on" novalidate>
   <div class="fila">
-    <div><label>Correo</label><input id="email" type="email" autocomplete="username"></div>
-    <div><label>Contraseña</label><input id="pass" type="password" autocomplete="current-password"></div>
+    <div><label>Correo</label><input id="email" type="email" name="username" autocomplete="username"></div>
+    <div><label>Contraseña</label><input id="pass" type="password" name="password" autocomplete="current-password"></div>
     <!-- «Si ya lo configuraste» y no «Código MFA»: el campo estaba rotulado como
          si fuera obligatorio, y quien entra por primera vez todavía no tiene
          segundo factor —se configura después, recién cuando el rol lo exige—.
@@ -485,7 +488,14 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
       segundo factor</span></label><input id="mfa" inputmode="numeric" maxlength="6"
       placeholder="dejalo vacío la primera vez"></div>
   </div>
-  <button id="b-login">Ingresar</button>
+  <!-- Qué hace y qué no hace: recuerda el CORREO en este navegador y le pide al navegador que guarde la contraseña en su
+       gestor de contraseñas (cifrado por el sistema). La consola nunca guarda la contraseña en la página: ahí la leería
+       cualquier script que llegara a correr en ella. Sólo en un dispositivo propio. -->
+  <label class="chk"><input type="checkbox" id="recordar"> Recordar en este dispositivo</label>
+  <p class="ayuda" id="recordar-ayuda">Recuerda tu correo y le pide a tu navegador que guarde la contraseña. Usalo
+    solo en un dispositivo tuyo.</p>
+  <button id="b-login" type="submit">Ingresar</button>
+  </form>
 
   <div id="login-msg"></div>
 
@@ -4703,9 +4713,51 @@ E('b-alta-reenviar').onclick = async () => {
   decir('alta-re-msg', r);
 };
 
+/**
+ * «Recordar en este dispositivo».
+ *
+ * Se recuerda el CORREO (localStorage de este navegador) y se le PIDE al navegador que guarde la contraseña en su
+ * gestor (`PasswordCredential`, donde existe; en los demás, el propio navegador ofrece guardarla por los atributos
+ * `autocomplete` del formulario). La consola no guarda la contraseña: ni en localStorage ni en ningún otro lado de la
+ * página. `localStorage` puede tirar (ventana privada, cookies bloqueadas): todo va envuelto y sin él no pasa nada.
+ */
+const CLAVE_CORREO_RECORDADO = 'nexo-correo-recordado';
+
+function correoRecordado() {
+  try { return localStorage.getItem(CLAVE_CORREO_RECORDADO) || ''; } catch (e) { return ''; }
+}
+
+function olvidarCorreo() {
+  try { localStorage.removeItem(CLAVE_CORREO_RECORDADO); } catch (e) { /* sin acceso: nada que olvidar */ }
+}
+
+(function precargarElCorreo() {
+  const correo = correoRecordado();
+  if (correo !== '') {
+    E('email').value = correo;
+    E('recordar').checked = true;
+  }
+})();
+
+async function recordarEsteDispositivo(correo, contrasena) {
+  try { localStorage.setItem(CLAVE_CORREO_RECORDADO, correo); } catch (e) { /* sin guardar */ }
+  // Se lo pedimos al gestor de contraseñas del navegador (cifrado por el sistema). Si no existe, no pasa nada.
+  try {
+    if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
+      await navigator.credentials.store(new window.PasswordCredential({ id: correo, password: contrasena, name: correo }));
+    }
+  } catch (e) { /* el navegador no quiso o no puede: sigue ofreciendo guardar por su cuenta */ }
+}
+
+E('f-login').onsubmit = (ev) => { ev.preventDefault(); };
+
 E('b-login').onclick = async () => {
+  const correo = E('email').value.trim();
   const login = await api('POST', '/auth/login', { email: E('email').value, password: E('pass').value });
   if (!login.ok) return decir('login-msg', login);
+
+  if (E('recordar').checked) await recordarEsteDispositivo(correo, E('pass').value);
+  else olvidarCorreo();
 
   if (E('mfa').value.trim() !== '') {
     const mfa = await api('POST', '/auth/mfa/verify', { code: E('mfa').value.trim() });
