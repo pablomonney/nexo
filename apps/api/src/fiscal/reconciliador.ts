@@ -54,8 +54,8 @@ export type ResultadoDeReconciliacion =
   /** ARCA lo autorizó, y se pudo recuperar la evidencia completa. */
   | { readonly estado: 'AUTORIZADO'; readonly evidencia: EvidenciaDeAutorizacion }
   /**
-   * ARCA nunca lo autorizó. El número quedó consumido igual: se sabe que ese
-   * comprobante no existe, no que el número se pueda reusar.
+   * ARCA nunca lo autorizó. Su numeración **no avanzó**: el siguiente pedido lleva ese mismo número
+   * (ARCA no tolera huecos: error 10016, medido en homologación el 2026-10-16; ver la migración 0138).
    */
   | { readonly estado: 'NO_AUTORIZADO'; readonly detalle: string }
   /**

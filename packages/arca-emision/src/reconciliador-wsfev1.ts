@@ -72,7 +72,7 @@ export class ReconciliadorWsfev1 {
         estado: 'NO_AUTORIZADO',
         detalle:
           `ARCA informa que el último autorizado es el ${String(ultimo)}: el ${String(p.numeroReservado)} nunca se autorizó. ` +
-          'El número quedó consumido (no se reutiliza).',
+          'ARCA no avanzó su numeración: el siguiente pedido lleva ese mismo número (medido en homologación el 2026-10-16: no tolera huecos).',
       };
     }
     if (ultimo < p.numeroReservado - 1) {

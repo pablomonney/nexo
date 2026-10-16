@@ -104,6 +104,22 @@ const SIN_CONSUMIDOR = new Map<string, string>([
       'recién se escribe cuando se decida levantar la regla de aislamiento y habilitar la emisión. Ver `docs/EMISION_DE_FACTURAS_PLAN.md`.',
   ],
   [
+    'emitirIntencion',
+    'El caso de uso de emisión (E4): BORRADOR → LISTA → EMITIENDO → AUTORIZADA | RECHAZADA | DESCONOCIDA, con todo lo de afuera detrás de puertos. ' +
+      'Su consumidor es el endpoint de emisión, que no existe mientras la aplicación no pueda importar `@aai/arca-emision` (E8). Está probado ' +
+      'con ARCA y la base simulados y, contra la base de verdad, en `tests/integration/emision-de-punta-a-punta.test.ts`. Ver `docs/EMISION_DE_FACTURAS_PLAN.md`.',
+  ],
+  [
+    'reconciliarPendientes',
+    'Una pasada del reconciliador periódico (recupera las EMITIENDO huérfanas y averigua las DESCONOCIDAS). Su consumidor es el temporizador que ' +
+      'arma quien habilite la emisión (E8); no hay temporizador porque no hay emisión habilitada. Ver `docs/EMISION_DE_FACTURAS_PLAN.md`.',
+  ],
+  [
+    'TransporteWsfev1',
+    'El transporte real del caso de uso de emisión, sobre el cliente WSFEv1 y la caché compartida de tickets. Se instancia donde se habilite la ' +
+      'emisión (E8); antes de eso, la aplicación no puede importar el paquete. Ver `docs/EMISION_DE_FACTURAS_PLAN.md`.',
+  ],
+  [
     'reconciliarPorUltimoAutorizado',
     'Concluye, comparando contra `FECompUltimoAutorizado`, si un comprobante en duda existe. ' +
       'Su consumidor es el reconciliador, que necesita además `FECompConsultar` para recuperar ' +

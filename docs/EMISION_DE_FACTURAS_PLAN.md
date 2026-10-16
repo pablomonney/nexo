@@ -26,7 +26,7 @@ La **seguridad** de emitir: máquina de estados de la intención fiscal (BORRADO
 | **E1 ✔ 2026-10-16** | **Prueba real en homologación** | Con el ticket ya liberado: `npm run comprobantes:generar -- --cantidad 1 …` emite una Factura C de prueba (sin efecto fiscal); luego `consultarComprobante` real para confirmar el código de «no existe» | Un CAE de homologación y la consulta devuelve ese CAE; el código de inexistente queda confirmado y archivado |
 | **E2 ✔ 2026-10-16** | **Caché de tickets compartida en la API** | Hoy la API pide un ticket por consulta (`arca_access_tickets` no tiene escritor, S-17): con dos consultas seguidas el WSAA rechaza la segunda. Escritor sobre esa tabla con un candado por CUIT+servicio | Dos procesos simultáneos reciben el **mismo** ticket; un ticket vencido se renueva una sola vez |
 | **E3 ✔ 2026-10-16** | **Del documento comercial al comprobante** (función pura) | Tipo A/B/C/M según la condición del emisor y del receptor; concepto; documento y **condición de IVA del receptor (RG 5616: sin ella, rechazo 10246)**; alícuotas e importes con decimales exactos (nada de punto flotante); moneda y cotización; fechas de servicio | `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` por construcción; pruebas por tipo de emisor/receptor |
-| **E4** | **Caso de uso `emitir`** | Intención → número reservado → EMITIENDO → ARCA → AUTORIZADA / RECHAZADA / DESCONOCIDA; al autorizar, enlaza el CAE con el documento comercial y la operación fiscal. Un **reconciliador periódico** (timer) para las que quedaron en duda | Las pruebas de §5 de B2.5.4.1 corren **con ARCA simulado** y luego en homologación; ninguna ruta reintenta desde DESCONOCIDA |
+| **E4 ✔ 2026-10-16** | **Caso de uso `emitir`** | Intención → número reservado → EMITIENDO → ARCA → AUTORIZADA / RECHAZADA / DESCONOCIDA; al autorizar, enlaza el CAE con el documento comercial y la operación fiscal. Un **reconciliador periódico** (timer) para las que quedaron en duda | Las pruebas de §5 de B2.5.4.1 corren **con ARCA simulado** y luego en homologación; ninguna ruta reintenta desde DESCONOCIDA |
 | **E5** | **Impacto contable de una emisión autorizada** | Hoy el documento pasa a FACTURADO sin CAE. Definir cuándo se asienta (al autorizar), con qué cuentas y qué pasa con un rechazo | Diseño escrito y aprobado por un contador **antes** de implementar; asiento balanceado y trazable al CAE |
 | **E6** | **Notas de crédito y de débito** | Anular o corregir una factura emitida = comprobante nuevo con `CbtesAsoc` | Una factura autorizada sólo se corrige con una NC asociada |
 | **E7** | **PDF con QR y pantalla** | El PDF que hoy genera un script pasa a la API; la consola muestra los 8 estados, el CAE, el vencimiento y descarga | Sin QR (si falta la especificación) el PDF lo dice impreso |
@@ -116,3 +116,41 @@ Se comprobó con una **mutación**: sin el candado, fallan exactamente las tres 
 Es decir: **el mismo certificado de homologación puede emitir A, B y C** —ARCA no distingue la condición del emisor en homologación—, y el armado de importes, alícuotas agrupadas, condición del receptor y concepto es aceptado por el servicio real. **Esto NO prueba** cuál es la condición del emisor real ni qué letra le corresponde en producción: eso sigue siendo la decisión **D1** (preguntarle al contador).
 
 **Pruebas:** 55 casos nuevos en `armado.test.ts`; se comprobó con dos mutaciones (letra del monotributista mal asignada, y el nodo `Iva` en una C) que fallan.
+
+## Resultado de E4 (2026-10-16): emitir y reconciliar, probados de punta a punta — y un defecto de diseño encontrado a tiempo
+
+### El hallazgo: **ARCA no tolera huecos de numeración, y un rechazo no consume número**
+
+La migración 0117 (septiembre) suponía lo contrario: «si ARCA rechaza, ese número se consumió; los huecos existen». Se **midió contra ARCA en homologación**: pedir el número *último + 2* se rechaza con el error **10016** («el número o fecha del comprobante no se corresponde con el próximo a autorizar») y el último autorizado no se mueve; un comprobante rechazado tampoco lo avanza. Con el diseño anterior, **después del primer rechazo la numeración de ese punto de venta quedaba trabada para siempre**: el contador local seguía de largo y ARCA exigía el número anterior.
+
+**Corrección (migración 0138):** el número de una intención **RECHAZADA** (y de una ANULADA) vuelve a estar libre; el de una **DESCONOCIDA / RECONCILIANDO sigue ocupado** (puede estar autorizada; reusarlo sería la doble emisión por otro camino). `reservar_numero_fiscal_correlativo(intención, último_autorizado_por_ARCA)` sincroniza el contador con ARCA y reserva **el siguiente al último autorizado**, serializando por *carril* (empresa, ambiente, punto de venta, tipo): **una sola emisión en curso por carril** (la numeración es secuencial). Se niega si ARCA informa un último menor que el que esta empresa ya tiene autorizado.
+
+### Qué se construyó
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| `emitirIntencion` | `packages/arca-emision/src/emitir.ts` | BORRADOR → LISTA → EMITIENDO → AUTORIZADA / RECHAZADA / DESCONOCIDA, con ARCA y la base detrás de puertos |
+| `reconciliarIntencion`, `reconciliarPendientes` | ídem | Averigua lo que quedó en duda y recupera las EMITIENDO huérfanas. **Nunca emite** |
+| `TransporteWsfev1` | ídem | El transporte real: `FEDummy`, `FECompUltimoAutorizado`, `FECAESolicitar` sobre el cliente WSFEv1 y la caché compartida de tickets (E2) |
+| `RepositorioSqlDeEmision` | `apps/api/src/fiscal/repositorio-de-emision.ts` | Cada método es **una transición con su precondición de estado**, en su propia transacción, con bitácora |
+| Migración 0138 | `infrastructure/db/migrations/` | La numeración correlativa (arriba) |
+
+**Las reglas que el caso de uso hace cumplir** (cada una con prueba):
+1. **De la duda no se sale emitiendo.** EMITIENDO, DESCONOCIDA o RECONCILIANDO devuelven `EN_DUDA` sin siquiera consultar a ARCA. Barrido: ninguna combinación de desenlaces y reintentos pide más de un CAE por intención.
+2. **EMITIENDO se persiste *antes* de llamar** (transacciones separadas): si el proceso muere, queda «puede haber salido» y la pasada periódica lo recupera.
+3. **Todo fallo posterior a EMITIENDO es duda**, no error: timeout, respuesta ilegible, resultado parcial, «autorizado» con evidencia que no sirve. Sólo una respuesta inequívoca cierra la intención. Si ARCA autorizó y no se pudo escribir, el CAE se devuelve para dejar constancia.
+4. **Lo que no se puede saber *antes* de enviar no toca nada**: `FEDummy` o la consulta del último autorizado que fallan → `SERVICIO_NO_DISPONIBLE`, la intención sigue como estaba.
+5. **Si el comprobante no se puede armar, no se reserva número** (un número reservado que no sale traba el punto de venta), y **lo armado tiene que ser lo declarado** (tipo y punto de venta de la intención).
+
+**Pruebas:** 35 con ARCA y repositorio simulados (el repositorio respeta la máquina de estados de la base); 12 de la numeración correlativa contra la base; 11 **de punta a punta contra la base real** (camino feliz con bitácora, timeout y cinco reintentos que no llegan a ARCA, rechazo que libera el número, dos emisiones simultáneas con **una sola** llamada a ARCA, huérfana recuperada, precondiciones, aislamiento entre empresas). Se comprobó con mutaciones que dejar emitir desde DESCONOCIDA o persistir EMITIENDO después de llamar rompe pruebas.
+
+### Contra ARCA real (homologación, CUIT 20452148324, sin efecto fiscal)
+
+- **`emitirIntencion` con el transporte real**: Factura C nº 53 **autorizada** (CAE 86421002220314), transiciones `LISTA → EMITIENDO → AUTORIZADA`; llamarla otra vez devuelve lo mismo sin pedir otro CAE.
+- **`ReconciliadorWsfev1` real**: sobre el nº 53 → `AUTORIZADO` con la evidencia completa (CAE y vencimiento, vía `FECompConsultar`); sobre el 54 → `NO_AUTORIZADO` («ARCA no avanzó su numeración»); sobre el 58 (salteado) → `SIN_RESPUESTA`/inconsistente, **sin adivinar**.
+
+### Lo que queda fuera de E4 (a propósito)
+
+- **El cableado a la aplicación** (endpoint, permisos, temporizador del reconciliador): es **E8**, porque exige levantar la regla `la-emision-no-llega-a-la-aplicacion`. Por eso tres funciones figuran en S-16 como «sin consumidor» con su motivo.
+- **Enlazar el CAE con el documento comercial y la operación fiscal**, y el asiento contable: son **E5** (decisión contable) y **E7**.
+- La clasificación «no salió / sí salió» después de EMITIENDO: **toda** falla posterior se trata como duda (la máquina de estados no tiene `EMITIENDO → LISTA`); lo común (ARCA caída) se descubre antes, sin tocar la intención.
