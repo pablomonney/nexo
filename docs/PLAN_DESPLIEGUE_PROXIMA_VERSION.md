@@ -66,3 +66,20 @@ Con la 0136 la migración llega a **136**. Qué hace y qué pasa si falla cada p
 - **V7 pasó** (esta noche). Si V7 falla, **no** se despliega esto: se arregla la zona horaria primero.
 - Que decidas **cuándo** (ventana 09:00–18:00 ART) y que alguien pueda mirar la consola después.
 - Opcional pero recomendado: cargar la cuenta bancaria (`NEXO_COBRO_*`) en el `.env` del servidor **antes**, para que los avisos de mora ya digan a dónde transferir. Editar el `.env` de producción es una acción tuya o con tu orden expresa.
+
+## 7 · Actualización del 2026-10-16 (tarde): commit definitivo y ensayo con la 0137
+
+**Commit a desplegar: `57377ee8cff9940262283e8c14736c0ba6d929f9`** (en `main`). Trae, además de lo de §1:
+
+| Cambio | Migración | Riesgo |
+|---|---|---|
+| **Exportación completa de la empresa** (ZIP con manifiesto y huellas; sólo lo pide un rol con permiso y queda en la bitácora) | **0137** (sólo filas en `audit_actions` y un permiso: aditiva) | Bajo |
+| **Rediseño de la consola y de la página pública**: barra lateral, guías paso a paso, tablero en Inicio, landing nueva (`docs/REDISENO_DE_LA_CONSOLA.md`) | — | Bajo (sólo HTML estático que la API ya servía); **es lo más visible: conviene que el titular lo mire antes** |
+| Datos de cobro como «CBU/CVU» | — | Bajo |
+| Prueba que cubría una rama de la idempotencia (cobertura de `http/` otra vez ≥ 95 %) | — | Ninguno |
+
+**Verificación sobre `57377ee`** (2026-10-16, base de pruebas reseteada): `npm run verify` en verde (**3710 pruebas**, 462 objetos de estructura, cadenas íntegras, cobertura `http/` 96,18 %) y la suite completa en **UTC: 231 archivos / 3707 pruebas verdes** (la de hora argentina corrió dentro de `verify`).
+
+**Ensayo de migración con datos reales:** copia automática de producción `aai-20261016T023231Z-auto.dump` (sha256 `1846775e…` verificado contra el `.sha256` del servidor; 132 migraciones), restaurada en una base local descartable: `migrate.mjs up` **132 → 137** sin error; `audit:estructura` **462/462**; cadena de auditoría y Libro Mayor sin discrepancias. Base y copia **borradas** al terminar. **No probado:** nada de esto en el servidor ni con Docker real.
+
+**Se desplegaría con:** `bash scripts/desplegar.sh --commit 57377ee8cff9940262283e8c14736c0ba6d929f9`. Después de V7 y con el «dale» expreso del titular; no antes.
