@@ -24,6 +24,8 @@ export interface EntornoApi {
   readonly empresa: string;
   readonly organizationId: string;
   readonly userId: string;
+  /** El token de la persona (con el segundo factor ya verificado), para las pruebas que necesitan armar el pedido a mano. */
+  readonly token: string;
   /** Un día fijo y válido (hoy, en UTC; las suites que dependen del borde horario fijan el suyo). */
   readonly hoy: string;
   pedir(
@@ -123,6 +125,7 @@ export async function crearEntorno(etiqueta: string): Promise<EntornoApi> {
     empresa,
     organizationId,
     userId,
+    token,
     hoy: new Date().toISOString().slice(0, 10),
     pedir: (method, url, payload, headers = {}) =>
       app.inject({

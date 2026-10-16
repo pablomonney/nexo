@@ -12,9 +12,11 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
+import { CODIGOS_DE_COMPROBANTE_INEXISTENTE } from './contracts.js';
 import type {
   Autenticacion,
   CabeceraLote,
+  ConsultaDeComprobante,
   DetalleComprobante,
   ErrorArca,
   Observacion,
@@ -223,6 +225,73 @@ export class ClienteWsfev1 {
     const resultado = (r['ResultGet'] ?? {}) as Record<string, unknown>;
     const fecha = resultado['CbteFch'];
     return fecha === undefined || fecha === null ? null : String(fecha);
+  }
+
+  /**
+   * `FECompConsultar` — el comprobante completo, con su CAE.
+   *
+   * Es lo que le faltaba a la reconciliación: `FECompUltimoAutorizado` dice **si** un número se autorizó; esto dice **con qué CAE**
+   * y cuándo vence, que es lo único que permite pasar una emisión en duda a AUTORIZADA con evidencia. Estructura según el WSDL
+   * archivado (`FECompConsultar` → `FeCompConsReq{CbteTipo, CbteNro, PtoVta}`; respuesta `FECompConsultaResponse{ResultGet, Errors,
+   * Events}`).
+   *
+   * Distingue tres casos y no los mezcla, porque de esa diferencia depende si se factura de nuevo:
+   *   · `ENCONTRADO`    — hay comprobante;
+   *   · `NO_EXISTE`     — ARCA lo dijo con un código de `CODIGOS_DE_COMPROBANTE_INEXISTENTE`;
+   *   · `INDETERMINADO` — cualquier otra cosa (otro error, respuesta vacía): no se sabe, y **no se asume que no existe**.
+   */
+  async consultarComprobante(
+    auth: Autenticacion,
+    ptoVta: number,
+    cbteTipo: number,
+    cbteNro: number,
+  ): Promise<ConsultaDeComprobante> {
+    const r = await this.#llamar(
+      'FECompConsultar',
+      autenticacionXml(auth) +
+        '<ar:FeCompConsReq>' +
+        `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+        `<ar:CbteNro>${cbteNro}</ar:CbteNro>` +
+        `<ar:PtoVta>${ptoVta}</ar:PtoVta>` +
+        '</ar:FeCompConsReq>',
+    );
+
+    const errores = listaDe(r['Errors'], 'Err').map(comoError);
+    if (errores.length > 0) {
+      const soloInexistente = errores.every((e) => CODIGOS_DE_COMPROBANTE_INEXISTENTE.includes(e.Code));
+      return soloInexistente
+        ? { estado: 'NO_EXISTE', errores }
+        : { estado: 'INDETERMINADO', errores, motivo: 'ARCA contestó con un error que no es el de «no existe».' };
+    }
+
+    const g = r['ResultGet'];
+    if (g === undefined || g === null || typeof g !== 'object') {
+      return { estado: 'INDETERMINADO', errores: [], motivo: 'La respuesta no trae el comprobante ni un error.' };
+    }
+    const n = g as Record<string, unknown>;
+    const texto = (v: unknown): string | null => (v === undefined || v === null || String(v).trim() === '' ? null : String(v).trim());
+    return {
+      estado: 'ENCONTRADO',
+      comprobante: {
+        Resultado: String(n['Resultado'] ?? ''),
+        CAE: texto(n['CodAutorizacion']),
+        CAEFchVto: texto(n['FchVto']),
+        EmisionTipo: texto(n['EmisionTipo']),
+        FchProceso: texto(n['FchProceso']),
+        Concepto: Number(n['Concepto'] ?? 0),
+        DocTipo: Number(n['DocTipo'] ?? 0),
+        DocNro: String(n['DocNro'] ?? ''),
+        CbteDesde: Number(n['CbteDesde'] ?? 0),
+        CbteHasta: Number(n['CbteHasta'] ?? 0),
+        CbteFch: String(n['CbteFch'] ?? ''),
+        ImpTotal: String(n['ImpTotal'] ?? ''),
+        ImpNeto: String(n['ImpNeto'] ?? ''),
+        ImpIVA: String(n['ImpIVA'] ?? ''),
+        MonId: String(n['MonId'] ?? ''),
+        MonCotiz: String(n['MonCotiz'] ?? ''),
+        Observaciones: listaDe(n['Observaciones'], 'Obs').map(comoObservacion),
+      },
+    };
   }
 
   /** `FECAESolicitar`. Un solo comprobante por llamada, por elección — ver el script. */

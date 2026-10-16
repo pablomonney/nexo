@@ -98,6 +98,12 @@ const SIN_CONSUMIDOR = new Map<string, string>([
       'AUTORIZADA. Sin emisión no hay evidencia que verificar. Ver el bloque de B2.5.4.1 arriba.',
   ],
   [
+    'ReconciliadorWsfev1',
+    'Reconcilia una emisión en duda contra ARCA (`FECompUltimoAutorizado` + `FECompConsultar`) y devuelve la evidencia (CAE) o ' +
+      'sigue en duda. `FECompConsultar` ya está implementado desde el WSDL archivado (2026-10-16). Su consumidor es el caso de uso de emisión, que ' +
+      'recién se escribe cuando se decida levantar la regla de aislamiento y habilitar la emisión. Ver `docs/EMISION_DE_FACTURAS_PLAN.md`.',
+  ],
+  [
     'reconciliarPorUltimoAutorizado',
     'Concluye, comparando contra `FECompUltimoAutorizado`, si un comprobante en duda existe. ' +
       'Su consumidor es el reconciliador, que necesita además `FECompConsultar` para recuperar ' +

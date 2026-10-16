@@ -344,16 +344,32 @@ suite('exportación completa de la empresa', () => {
       expect(r.body).toContain('company:export');
     });
 
-    it('una sola exportación por empresa a la vez: la segunda recibe 409 EXPORTACION_EN_CURSO', async () => {
-      const [x, y] = await Promise.all([
-        env.pedir('POST', '/companies/current/exportacion-completa', { motivo: MOTIVO, incluirArchivos: false }),
-        env.pedir('POST', '/companies/current/exportacion-completa', { motivo: MOTIVO, incluirArchivos: false }),
-      ]);
-      expect([x.statusCode, y.statusCode].sort()).toEqual([200, 409]);
-      const rechazada = x.statusCode === 409 ? x : y;
-      expect(rechazada.json<{ error: string }>().error).toBe('EXPORTACION_EN_CURSO');
-      // Y después de terminar, se puede pedir otra.
-      expect((await env.pedir('POST', '/companies/current/exportacion-completa', { motivo: MOTIVO, incluirArchivos: false })).statusCode).toBe(200);
+    it('una sola exportación por empresa a la vez: la segunda recibe 409 EXPORTACION_EN_CURSO (determinista: la primera queda a medio leer)', async () => {
+      // La primera se pide como flujo y NO se consume: con la contrapresión, el servidor queda esperando que alguien lea, y el
+      // candado sigue tomado. Así la segunda llega con la primera en curso sin depender de cuánto tarde cada una.
+      const primera = await env.app.inject({
+        method: 'POST',
+        url: '/companies/current/exportacion-completa',
+        headers: { authorization: `Bearer ${env.token}`, 'x-company-id': env.empresa },
+        payload: { motivo: MOTIVO, incluirArchivos: false },
+        payloadAsStream: true,
+      });
+      expect(primera.statusCode).toBe(200);
+
+      // Pase lo que pase, la primera se cierra: si quedara a medio leer, el servidor no terminaría nunca y colgaría la suite.
+      const trozos: Buffer[] = [];
+      try {
+        const segunda = await env.pedir('POST', '/companies/current/exportacion-completa', { motivo: MOTIVO, incluirArchivos: false });
+        expect(segunda.statusCode, segunda.body.slice(0, 200)).toBe(409);
+        expect(segunda.json<{ error: string }>().error).toBe('EXPORTACION_EN_CURSO');
+
+        // Se lee la primera hasta el final (libera el candado) y entonces se puede pedir otra.
+        for await (const t of primera.stream()) trozos.push(Buffer.from(t as Buffer));
+        expect(() => new ArchivoZip(Buffer.concat(trozos), LIMITES)).not.toThrow();
+        expect((await env.pedir('POST', '/companies/current/exportacion-completa', { motivo: MOTIVO, incluirArchivos: false })).statusCode).toBe(200);
+      } finally {
+        primera.stream().destroy();
+      }
     });
 
     it('sólo ADMINISTRADOR tiene el permiso company:export', async () => {

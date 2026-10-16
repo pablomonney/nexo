@@ -19,3 +19,4 @@ export * from './contracts.js';
 export * from './homologacion.js';
 export * from './qr.js';
 export * from './wsfev1.js';
+export * from './reconciliador-wsfev1.js';

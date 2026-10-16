@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 import {
+  TicketCacheFs,
   SERVICIOS_DEL_PRODUCTO,
   certificadoDesdePem,
   clasificarIntento,
@@ -31,7 +32,8 @@ import {
   esPersistible,
   resumirRelevamiento,
 } from '../packages/arca/dist/index.js';
-import { WsaaAuthenticator, WsaaFaultError } from '../packages/arca/dist/soap/wsaa.js';
+import { WsaaAuthenticator, WsaaFaultError, loginConCache } from '../packages/arca/dist/soap/wsaa.js';
+import { directorioDeTickets } from './cache-de-tickets.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 if (existsSync(join(HERE, '..', '.env'))) {
@@ -91,6 +93,15 @@ const certificate = certificadoDesdePem({
 // plausibles y nadie tenía motivo para mirar. Se destapó recién cuando
 // `NO_VERIFICABLE` empezó a decir «esto es un problema de este lado».
 const authenticator = new WsaaAuthenticator({ endpoint: endpointsFor(environment).wsaa });
+// **Con la caché compartida de tickets, igual que `arca:check` y `comprobantes:generar`.** El WSAA da UN ticket por CUIT y
+// servicio y niega el segundo mientras el primero viva (horas). Este relevamiento pedía un ticket por servicio y lo tiraba:
+// correrlo dejaba el servicio «ocupado» y el siguiente comando —el que de verdad emite— se quedaba sin ticket hasta que
+// el anterior venciera (pasó el 2026-10-16 con `wsfe`). Ahora lo que se pide se guarda y lo que ya está se reusa.
+const cacheTickets = new TicketCacheFs({
+  directorio: directorioDeTickets(args),
+  ambiente: environment,
+  raizRepositorio: join(HERE, '..'),
+});
 const ahora = new Date().toISOString();
 const habilitaciones = [];
 
@@ -98,7 +109,7 @@ for (const service of SERVICIOS_DEL_PRODUCTO) {
   process.stdout.write(`  ${service.padEnd(20)} `);
   let intento;
   try {
-    await authenticator.login(certificate, service);
+    await loginConCache(authenticator, cacheTickets, certificate, service);
     intento = {
       service,
       ok: true,

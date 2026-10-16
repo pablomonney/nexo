@@ -114,6 +114,51 @@ export interface TipoDeComprobanteArca {
   readonly FchHasta: string | null;
 }
 
+/**
+ * Un comprobante tal como lo devuelve `FECompConsultar` (`FECompConsResponse` en el WSDL archivado: el detalle que se mandó
+ * más `Resultado`, `CodAutorizacion`, `EmisionTipo`, `FchVto`, `FchProceso` y `Observaciones`).
+ *
+ * Los importes quedan como **texto**, tal como llegan: pasarlos por `number` es justo lo que este sistema no hace con plata.
+ */
+export interface ComprobanteConsultado {
+  readonly Resultado: string;
+  /** `CodAutorizacion`: el CAE (o CAEA, según `EmisionTipo`). */
+  readonly CAE: string | null;
+  /** `FchVto`, `AAAAMMDD`. */
+  readonly CAEFchVto: string | null;
+  readonly EmisionTipo: string | null;
+  readonly FchProceso: string | null;
+  readonly Concepto: number;
+  readonly DocTipo: number;
+  readonly DocNro: string;
+  readonly CbteDesde: number;
+  readonly CbteHasta: number;
+  readonly CbteFch: string;
+  readonly ImpTotal: string;
+  readonly ImpNeto: string;
+  readonly ImpIVA: string;
+  readonly MonId: string;
+  readonly MonCotiz: string;
+  readonly Observaciones: readonly Observacion[];
+}
+
+/**
+ * Los códigos con los que ARCA dice «no existe ese comprobante» al consultarlo.
+ *
+ * **A CONFIRMAR CONTRA HOMOLOGACIÓN.** El 602 es el que se espera para «no existen datos para los parámetros ingresados», pero
+ * el manual archivado no se pudo leer como texto en esta sesión y la regla de este repositorio es no escribir de memoria el
+ * contrato de un servicio ajeno. Mientras tanto se usa **sólo** para distinguir «no existe» de «no se pudo saber»; cualquier
+ * otro código se informa como indeterminado, que es el lado seguro: jamás habilita a emitir de nuevo.
+ */
+export const CODIGOS_DE_COMPROBANTE_INEXISTENTE: readonly number[] = [602];
+
+export type ConsultaDeComprobante =
+  | { readonly estado: 'ENCONTRADO'; readonly comprobante: ComprobanteConsultado }
+  /** ARCA dijo, con un código de «no existe», que no hay tal comprobante. */
+  | { readonly estado: 'NO_EXISTE'; readonly errores: readonly ErrorArca[] }
+  /** No se pudo saber: otro error, o una respuesta sin datos. **No** es «no existe». */
+  | { readonly estado: 'INDETERMINADO'; readonly errores: readonly ErrorArca[]; readonly motivo: string };
+
 /** `FECAEDetResponse`. `Resultado` es `A` (aprobado), `R` (rechazado) o `P` (parcial). */
 export interface RespuestaComprobante {
   readonly Concepto: number;
