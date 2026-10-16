@@ -1,6 +1,8 @@
 # El asistente conversacional (Claude Haiku 5.5)
 
-**Estado: construido y probado contra un proveedor de mentira. NO conectado a Claude de verdad, NO desplegado.** Hace falta una credencial de Anthropic y una llamada real de punta a punta antes de decir «conectado» (§7).
+**Estado: construido y probado contra un proveedor de mentira. NO conectado a Claude de verdad, NO desplegado. EN PAUSA POR DECISIÓN DEL TITULAR (2026-10-16): no se compra saldo de API todavía; se conecta más adelante.** Hace falta una credencial de Anthropic (con saldo; USD 5 es el mínimo) y una llamada real de punta a punta antes de decir «conectado» (§7).
+
+**Para retomarlo, una sola orden:** `ASSISTANT_API_KEY=… npm run asistente:probar` hace las llamadas reales (texto, herramienta de ida y vuelta, imagen), muestra el costo medido contra el precio declarado y sale con error si algo falla (`scripts/probar-asistente.mjs`; sin clave no llama a nadie). Después, §8. Alternativa por MCP (el Claude de cada persona, sin API propia): `docs/MCP_FUTURO.md`, diferida.
 
 Es un chat dentro de NEXO (pantalla **Asistente**): la persona escribe, manda una foto o un PDF, o le habla, y el asistente contesta con los datos de la empresa, explica cómo se hace algo y arma la carga de un cliente o proveedor.
 
@@ -77,10 +79,11 @@ Rutas: `GET /asistente/estado`, `POST /asistente/configuracion`, `GET /asistente
 
 ## 8 · Conectarlo (cuando haya credencial)
 
+0. Cargar saldo en la consola de Anthropic (créditos prepagos, mínimo USD 5, vencen al año): con USD 5 alcanza para decenas de miles de turnos al precio declarado. Lo hace el titular.
 1. Crear la clave en la consola de Anthropic **sin pegarla en el chat ni en un archivo del repo**. Ponerla en el `.env` del servidor (`ASSISTANT_API_KEY=…`) o en el gestor de secretos (`ASSISTANT_API_KEY_REF=kms:<arn>`).
 2. En el servidor: `ASSISTANT_PROVIDER=anthropic` y reiniciar. El arranque informa «preparado» si falta la clave.
 3. El prompt `ASISTENTE_V1` ya queda archivado por la migración 0136 (el despliegue no corre `prompts:register`; sin esa fila `ai_answers` rechazaría el turno y el cupo no contaría). `asistente.test.ts` comprueba que el texto archivado es idéntico al del código.
-4. **Una** llamada de punta a punta con una empresa de prueba: encender el asistente, preguntar algo del catálogo, mandar una foto de una factura; comparar el costo calculado con el de la consola de Anthropic.
+4. `npm run asistente:probar` (llamada real: texto, herramienta, imagen) y, **una vez que pase**, una prueba de punta a punta por la pantalla con una empresa de prueba: encender el asistente, preguntar algo del catálogo, mandar una foto de una factura; comparar el costo calculado con el de la consola de Anthropic.
 5. Recién ahí se enciende para un cliente real (con su aviso en la política de privacidad y en los términos, que hoy son borradores).
 6. Declarar un **cupo diario** por empresa (`POST /intelligence/quota`): sin él no hay tope de gasto.
 
