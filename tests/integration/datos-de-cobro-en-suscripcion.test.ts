@@ -26,6 +26,9 @@ suite('Datos de cobro en la suscripción y en los avisos', () => {
     process.env['NEXO_COBRO_TITULAR'] = 'NEXO Servicios SRL';
     process.env['NEXO_COBRO_CBU'] = CBU;
     process.env['NEXO_COBRO_ALIAS'] = 'nexo.cobros';
+    // Las otras dos se vacían a propósito: un `.env` local con los datos reales de cobro no puede colarse en la prueba.
+    process.env['NEXO_COBRO_BANCO'] = '';
+    process.env['NEXO_COBRO_CUIT'] = '';
     const { buildServer } = await import('@aai/api/server');
     initPool(process.env['DATABASE_URL']!);
     app = await buildServer();
@@ -50,7 +53,7 @@ suite('Datos de cobro en la suscripción y en los avisos', () => {
   });
 
   afterAll(async () => {
-    for (const k of ['NEXO_COBRO_TITULAR', 'NEXO_COBRO_CBU', 'NEXO_COBRO_ALIAS']) delete process.env[k];
+    for (const k of ['NEXO_COBRO_TITULAR', 'NEXO_COBRO_CBU', 'NEXO_COBRO_ALIAS', 'NEXO_COBRO_BANCO', 'NEXO_COBRO_CUIT']) delete process.env[k];
     await app.close();
     await db.end();
     await closePool();

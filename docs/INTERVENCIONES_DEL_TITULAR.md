@@ -6,7 +6,7 @@
 
 | # | Qué | Por qué sólo vos | Cuando esté hecho |
 |---|---|---|---|
-| A1 | **Pasar el CBU** (22 dígitos), el **titular** (nombre completo), el alias y el banco. Si querés, el CUIT del titular. | Es tu dato. No es secreto (sale en los avisos de cobranza), pero hay que decirlo. | Se carga en el `.env` del servidor (`NEXO_COBRO_*`) con el segundo lanzamiento; los avisos de mora dicen a dónde transferir. *(El mensaje anterior se cortó antes del CBU.)* |
+| ~~A1~~ | ~~Pasar el CBU~~ **RECIBIDO (2026-10-16)**: constancia de **CVU de Mercado Pago** (titular, CUIT, CVU de 22 dígitos y alias). Validado con el validador del sistema (dígitos verificadores OK) y cargado en el `.env` **local**. Se carga en el `.env` del servidor con el segundo lanzamiento (con tu «dale»). Los avisos dicen «CBU/CVU» y el banco «Mercado Pago (CVU)». | — | Hecho. *(Ojo: el titular y su CUIT van a verse en los avisos a los clientes.)* |
 | A2 | **Estar disponible el sábado 17 a las 10:00 ART** (o decir otro día) para el segundo lanzamiento y mirar la consola un rato. Decir **«dale»** ese día. | Es producción: el plan exige tu autorización específica y alguien mirando. Sólo si V7 (hoy 21:17) pasó. | Corren las migraciones 0133–0137: idempotencia, «olvidé mi contraseña», recuperación de cuenta, asistente (apagado), exportación completa. |
 | A3 | **Mantener abierta esta sesión de Claude** hoy (o decirme «corré V7» a la noche, entre las 21:00 y las 24:00 ART). | V7 sólo prueba algo cuando la fecha UTC ya es un día posterior a la argentina. | Queda confirmada la corrección de zona horaria en producción. |
 
