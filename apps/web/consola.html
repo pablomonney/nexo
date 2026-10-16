@@ -485,6 +485,90 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
        text-transform:uppercase}
 .kv dd{margin:0;font-family:var(--mono);font-size:.79rem;word-break:break-all;color:var(--tinta)}
 
+
+/* ── Guías: qué hacer en cada pantalla, y adónde ir después ─────────────────────────────────────────────────────────── */
+.btn-guia{display:inline-flex;align-items:center;gap:6px;margin:0;padding:8px 12px;border-radius:10px;background:var(--acento-cl);
+          border:1px solid transparent;color:var(--acento);font:inherit;font-size:.82rem;font-weight:650;cursor:pointer}
+.btn-guia:hover{border-color:var(--acento)}
+.app[data-sesion="no"] #b-ayuda{display:none}
+
+.guia{margin:var(--e4) 0 var(--e5);padding:var(--e4) var(--e5);background:var(--acento-cl);border:1px solid color-mix(in srgb,var(--acento) 28%,transparent);
+      border-radius:14px}
+.guia-cab{display:flex;align-items:center;gap:var(--e3);flex-wrap:wrap}
+.guia-cab .ico{color:var(--acento);width:22px;height:22px}
+.guia-cab strong{font-size:.92rem;color:var(--tinta)}
+.guia-cab .espacio{flex:1}
+.guia button{margin:0;font-size:.8rem}
+.guia .guia-ver{background:var(--acento);color:var(--acento-txt);border:0;border-radius:9px;padding:7px 12px;font-weight:650}
+.guia .guia-plegar{background:none;border:1px solid transparent;color:var(--tinta2);padding:6px 8px;border-radius:9px}
+.guia .guia-plegar:hover{border-color:var(--linea2)}
+.guia-que{margin:var(--e2) 0 var(--e3);color:var(--tinta);font-size:.92rem;max-width:80ch}
+.guia-pasos{list-style:none;counter-reset:paso;margin:0 0 var(--e3);padding:0;display:grid;gap:var(--e2)}
+.guia-pasos li{counter-increment:paso;display:flex;align-items:flex-start;gap:var(--e3);font-size:.88rem;color:var(--tinta2)}
+.guia-pasos li::before{content:counter(paso);flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;
+          justify-content:center;background:var(--alto);border:1px solid var(--acento);color:var(--acento);font-size:.76rem;font-weight:700}
+.guia-pasos .paso-t{flex:1;padding-top:2px}
+.guia-pasos .mostrame{flex:none;background:none;border:1px solid var(--linea2);color:var(--acento);padding:3px 9px;border-radius:var(--rp);
+          font-size:.74rem;font-weight:600;cursor:pointer}
+.guia-pasos .mostrame:hover{border-color:var(--acento);background:var(--alto)}
+.guia-despues{display:flex;flex-wrap:wrap;align-items:center;gap:var(--e2);font-size:.8rem;color:var(--tinta3)}
+.guia-despues button{background:var(--alto);border:1px solid var(--linea2);color:var(--tinta2);padding:5px 11px;border-radius:var(--rp);
+          cursor:pointer;font-weight:600}
+.guia-despues button:hover{border-color:var(--acento);color:var(--acento)}
+.guia[data-plegada="si"] .guia-que,.guia[data-plegada="si"] .guia-pasos,.guia[data-plegada="si"] .guia-despues{display:none}
+.guia[data-plegada="si"]{padding:var(--e2) var(--e4);margin-bottom:var(--e4)}
+.guia[data-plegada="si"] .guia-ver{background:none;color:var(--acento);border:1px solid var(--linea2)}
+
+/* El texto técnico original de cada pantalla se conserva, plegado: lo lee quien quiere saber por qué funciona así. */
+details.ayuda-tecnica{margin:var(--e2) 0 var(--e3);font-size:.82rem;color:var(--tinta3)}
+details.ayuda-tecnica summary{cursor:pointer;color:var(--tinta3);font-weight:600;font-size:.76rem;letter-spacing:.04em;text-transform:uppercase}
+details.ayuda-tecnica summary:hover{color:var(--tinta2)}
+details.ayuda-tecnica p{margin-top:var(--e2)}
+
+/* Después de una acción que salió bien: qué sigue y un botón para ir. */
+.siguiente{display:flex;flex-wrap:wrap;align-items:center;gap:var(--e2) var(--e3);margin-top:var(--e2);padding:var(--e3) var(--e4);
+           border-radius:12px;background:var(--acento-cl);border:1px dashed color-mix(in srgb,var(--acento) 45%,transparent);font-size:.86rem;
+           color:var(--tinta)}
+.siguiente .siguiente-t{flex:1;min-width:200px}
+.siguiente .siguiente-t b{color:var(--acento)}
+.siguiente button{margin:0;font-size:.8rem;padding:6px 12px}
+
+/* El elemento que se señala. */
+@keyframes pulso{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--acento) 70%,transparent)}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.pulso{animation:pulso 1s ease-out 3;outline:2px solid var(--acento);outline-offset:3px;border-radius:8px}
+@media (prefers-reduced-motion:reduce){.pulso{animation:none}}
+
+/* ── El recorrido guiado: un foco sobre el elemento y una tarjeta que lo explica ─────────────────────────────────── */
+#tour{position:fixed;inset:0;z-index:130}
+.tour-velo{position:absolute;inset:0}
+.tour-foco{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(2,8,10,.66);outline:2px solid var(--acento);outline-offset:2px;
+           pointer-events:none;transition:left .2s,top .2s,width .2s,height .2s}
+.tour-foco[data-sin="si"]{left:50%;top:50%;width:0;height:0;outline:none}
+.tour-tarjeta{position:fixed;width:min(360px,calc(100vw - 24px));padding:var(--e4) var(--e5);background:var(--alto);color:var(--tinta);
+              border:1px solid var(--linea2);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.5)}
+.tour-paso{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--acento);font-weight:700}
+.tour-tarjeta h4{margin:var(--e1) 0 var(--e2);font-size:1rem;color:var(--tinta)}
+.tour-tarjeta p{margin:0 0 var(--e4);font-size:.88rem;color:var(--tinta2)}
+.tour-nota{font-size:.78rem;color:var(--tinta3);font-style:italic}
+.tour-botones{display:flex;align-items:center;gap:var(--e2)}
+.tour-botones button{margin:0}
+.tour-barra{height:3px;border-radius:2px;background:var(--linea);margin:0 0 var(--e3);overflow:hidden}
+.tour-barra i{display:block;height:100%;background:var(--acento);transition:width .2s}
+
+/* La invitación al recorrido de bienvenida: una vez, abajo a la derecha, sin tapar nada. */
+#bienvenida{position:fixed;right:20px;bottom:20px;z-index:90;width:min(340px,calc(100vw - 32px));padding:var(--e4) var(--e5);background:var(--alto);
+            border:1px solid var(--acento);border-radius:14px;box-shadow:var(--sombra)}
+#bienvenida strong{display:block;margin-bottom:var(--e1)}
+#bienvenida p{margin:0 0 var(--e3);font-size:.86rem;color:var(--tinta2)}
+#bienvenida .fila-botones{display:flex;gap:var(--e2)}
+#bienvenida button{margin:0}
+
+@media (max-width:900px){
+  .btn-guia span{display:none}
+  .btn-guia{padding:8px 10px}
+  .guia{padding:var(--e3) var(--e4)}
+  .tour-tarjeta{left:12px!important;right:12px;bottom:12px;top:auto!important;width:auto}
+}
 </style>
 </head>
 <body>
@@ -679,6 +763,8 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
   <div class="miga" id="miga" hidden></div>
   <button id="b-paleta" class="pastilla-buscar" type="button" aria-label="Buscar pantallas y acciones (Ctrl+K)">
     <svg class="ico" width="16" height="16"><use href="#i-buscar"/></svg><span>Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
+  <button id="b-ayuda" class="btn-guia" type="button" title="Guía paso a paso de esta pantalla" hidden>
+    <svg class="ico" width="18" height="18"><use href="#i-ayuda"/></svg><span>Guía</span></button>
   <span class="quien"><span id="quien"></span>
     <span class="empresa-activa" id="empresa-activa">sin empresa</span>
     <button id="b-tema" class="icono-btn" type="button" title="Cambiar entre claro y oscuro"
@@ -1591,7 +1677,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 
 <!-- ══ Terceros ═══════════════════════════════════════════════════════════ -->
 <section id="v-terceros" hidden>
-  <h2>Terceros</h2>
+  <h2>Clientes y proveedores</h2>
   <p class="ayuda">Clientes, proveedores y demás contrapartes de <em>esta</em> empresa.
     El saldo de la cuenta corriente <strong>no se guarda</strong>: se suma del Mayor cada
     vez que se lo mira, y solo cuenta asientos aprobados.</p>
@@ -1856,7 +1942,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 </section>
 
 <section id="v-operaciones" hidden>
-  <h2>Operaciones fiscales</h2>
+  <h2>Facturas y comprobantes</h2>
   <p class="ayuda">El libro de comprobantes. Los dos sellos van separados:
     <span class="mono">constatación</span> es el resultado y
     <span class="mono">origen</span> es quién lo afirma. Un OK que declaró una persona
@@ -2025,7 +2111,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 
 <!-- ══ Stock ══════════════════════════════════════════════════════════════ -->
 <section id="v-stock" hidden>
-  <h2>Existencias</h2>
+  <h2>Stock</h2>
   <p class="ayuda">Cuánto hay y dónde. La existencia <strong>no se guarda</strong>: se suma
     del libro de movimientos cada vez que se la mira, y ese libro no admite correcciones —
     un error se arregla con otro movimiento, igual que un asiento se anula por contraasiento.
@@ -3074,7 +3160,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 <!-- ══ Caja ═══════════════════════════════════════════════════════════════ -->
 <!-- ══ Solicitudes de compra ══════════════════════════════════════════════ -->
 <section id="v-solicitudes" hidden>
-  <h2>Solicitudes de compra</h2>
+  <h2>Pedidos de compra</h2>
   <p class="ayuda">Pedir no es comprar. Una solicitud dice <strong>qué</strong> se necesita y
     <strong>cuánto</strong>, y no dice a quién comprarlo ni a cuánto: eso lo dice el proveedor
     después. Por eso no hay precios en esta pantalla — si el que pide escribe el precio, ese
@@ -3815,7 +3901,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 
 <!-- ══ Períodos y cierre ══════════════════════════════════════════════════ -->
 <section id="v-cierre" hidden>
-  <h2>Períodos y cierre</h2>
+  <h2>Cierre de períodos</h2>
   <p class="ayuda">Un período pasa de ABIERTO a BLOQUEADO a CERRADO, y no salta pasos.
     Reabrir uno cerrado exige motivo y contrafirma de otra persona: lo pide la base,
     no esta pantalla.</p>
@@ -4321,6 +4407,34 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 </main>
 </div><!-- /columna -->
 
+<!-- El recorrido guiado: un foco sobre el elemento y una tarjeta que lo explica. Lo abre el botón «Guía» de la cabecera. -->
+<div id="tour" hidden>
+  <div class="tour-velo" id="tour-velo"></div>
+  <div class="tour-foco" id="tour-foco" data-sin="si"></div>
+  <div class="tour-tarjeta" id="tour-tarjeta" role="dialog" aria-modal="true" aria-labelledby="tour-titulo">
+    <div class="tour-barra"><i id="tour-barra"></i></div>
+    <div class="tour-paso" id="tour-paso"></div>
+    <h4 id="tour-titulo"></h4>
+    <p id="tour-texto"></p>
+    <p class="tour-nota" id="tour-nota" hidden></p>
+    <div class="tour-botones">
+      <button id="b-tour-salir" class="sec" type="button">Salir</button>
+      <span style="flex:1"></span>
+      <button id="b-tour-ant" class="sec" type="button">Anterior</button>
+      <button id="b-tour-sig" type="button">Siguiente</button>
+    </div>
+  </div>
+</div>
+
+<div id="bienvenida" hidden role="region" aria-label="Recorrido de bienvenida">
+  <strong>¿Primera vez en NEXO?</strong>
+  <p>Hacé un recorrido de un minuto: te mostramos dónde está cada cosa y cómo pedir ayuda en cada pantalla.</p>
+  <div class="fila-botones">
+    <button id="b-bienv-si" type="button">Hacer el recorrido</button>
+    <button id="b-bienv-no" class="sec" type="button">Ahora no</button>
+  </div>
+</div>
+
 <div id="paleta" hidden role="dialog" aria-modal="true" aria-label="Buscar pantallas y acciones">
   <div class="paleta-caja">
     <input id="paleta-q" type="search" placeholder="¿Adónde querés ir? Probá con «factura», «caja» o «clientes»…"
@@ -4684,6 +4798,7 @@ function decir(destino, resultado, exito) {
       : (exito || 'Listo');
     caja.innerHTML = '<div class="aviso ok"><strong>' + escapar(titulo) + '</strong>' +
       (frase ? ' ' + conEnfasis(frase) : '') + tecnico + '</div>';
+    GUIA.proximoPaso(destino, caja, exito);
     return;
   }
 
@@ -4857,6 +4972,8 @@ function ir(vista, migas) {
   const partes = [empresa || 'sin empresa'].concat(migas || []);
   caja.innerHTML = partes.map((p, i) =>
     i === partes.length - 1 ? '<b>' + escapar(p) + '</b>' : escapar(p)).join(' › ');
+  GUIA.refrescar(vista);
+  if (vista === 'inicio') GUIA.ofrecerBienvenida(); else E('bienvenida').hidden = true;
 }
 
 for (const b of document.querySelectorAll('nav button')) {
@@ -4864,6 +4981,7 @@ for (const b of document.querySelectorAll('nav button')) {
     const v = b.dataset.vista;
     plegarMenu();
     ir(v, [b.dataset.nombre]);
+    window.scrollTo(0, 0);
     if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
     if (v === 'inteligencia') cargarInteligencia();
     if (v === 'asistente') cargarAsistente();
@@ -5369,6 +5487,12 @@ const PALETA = (() => {
         claves: b.dataset.claves || '', icono: b.querySelector('svg'), ejecutar: () => b.click(),
       });
     }
+    if (typeof GUIAS !== 'undefined' && GUIAS[estado.vista] !== undefined) {
+      salida.push({ nombre: 'Guía de esta pantalla', desc: 'Un recorrido paso a paso', grupo: 'Ayuda', claves: 'ayuda tutorial cómo se usa', icono: null,
+        ejecutar: () => GUIA.iniciarRecorrido(estado.vista) });
+    }
+    salida.push({ nombre: 'Recorrido de bienvenida', desc: 'Un repaso de un minuto por el menú y los atajos', grupo: 'Ayuda',
+      claves: 'ayuda tutorial empezar primera vez', icono: null, ejecutar: () => GUIA.bienvenida() });
     const claro = document.documentElement.dataset.tema === 'claro';
     salida.push({
       nombre: claro ? 'Pasar al tema oscuro' : 'Pasar al tema claro', desc: 'Cambia los colores de toda la consola', grupo: 'Acción',
@@ -5477,6 +5601,704 @@ const PALETA = (() => {
   });
 
   return { abrir, cerrar };
+})();
+
+/**
+ * Las guías, en lenguaje de todos los días.
+ *
+ * Cada pantalla del sistema tiene una tarjeta arriba que dice **para qué sirve**, **qué hacer y en qué orden**, y **adónde
+ * ir después**. Cada paso puede señalar el elemento real de la pantalla (`a`: un selector de `id`), y el botón «Recorrido
+ * guiado» los recorre uno por uno con un foco encima.
+ *
+ * Lo que dice cada paso se escribe mirando la pantalla: si un botón cambia de nombre o de lugar, la guía tiene que
+ * cambiar con él. Un test (`consola-guias`) comprueba que todo `id` al que apunta una guía existe, que toda pantalla
+ * nombrada existe y que no queda ninguna pantalla del menú sin guía.
+ *
+ * El texto técnico que antes encabezaba cada pantalla no se borró: quedó plegado en «Cómo funciona por dentro».
+ */
+const GUIAS = {
+  inicio: {
+    que: 'El resumen de tu empresa: qué falta para empezar a trabajar y qué necesita tu atención hoy.',
+    pasos: [
+      { t: 'Mirá los números de arriba: son tus pendientes. Los que impiden registrar van primero porque frenan el trabajo.' },
+      { t: 'En «Puesta en marcha» fijate qué pasos figuran como pendientes o sin declarar: son los que habilitan funciones del sistema.' },
+      { t: 'Para resolver un pendiente, andá a «Pendientes»: cada fila te lleva a la pantalla donde se arregla.' },
+    ],
+    despues: [['bandeja', 'Resolver pendientes'], ['config', 'Completar la configuración'], ['asistente', 'Preguntarle al asistente']],
+  },
+  bandeja: {
+    que: 'Todo lo que espera una decisión tuya, ordenado de lo más urgente a lo menos urgente.',
+    pasos: [
+      { t: 'Empezá por los que impiden registrar: son los que frenan el trabajo de todos.' },
+      { t: 'Si son muchos, filtrá por categoría o mirá sólo los bloqueantes.', a: '#wq-cat' },
+      { t: 'Tocá una fila: te lleva a la pantalla donde se resuelve. Desde acá no se resuelve nada.' },
+      { t: 'Cuando lo resolvés, el pendiente desaparece solo. No hay nada que tildar.', a: '#b-wq' },
+    ],
+    despues: [['inicio', 'Volver al resumen'], ['propuestas', 'Ver propuestas de IA']],
+  },
+  propuestas: {
+    que: 'Asientos contables que sugirió la inteligencia artificial. Ninguno vale hasta que una persona lo revisa.',
+    pasos: [
+      { t: 'Tocá «Ver propuestas» para listar las que esperan revisión.', a: '#b-iap' },
+      { t: 'Elegí una y mirá de qué documento sale, qué cuenta propone y qué tan segura está.' },
+      { t: 'Decidí: aprobar, modificar (elegís la cuenta correcta) o rechazar (decís por qué).', a: '#iap-decision' },
+      { t: 'Tocá «Registrar la revisión». Recién ahí queda registrado; la IA nunca contabiliza sola.', a: '#b-iap-revisar' },
+    ],
+    despues: [['documentos', 'Subir otro documento'], ['asientos', 'Ver los asientos']],
+  },
+  asistente: {
+    que: 'Un chat que contesta con los datos de tu empresa, te explica cómo se hace algo y te arma la carga de un cliente o proveedor.',
+    pasos: [
+      { t: 'Si está apagado, una persona con permiso lo enciende con «Encender el asistente».', a: '#b-as-config' },
+      { t: 'Escribí tu pregunta, o mandale una foto o un PDF de un comprobante.', a: '#b-as-enviar' },
+      { t: 'Lo que el asistente arma lo ves antes de que se guarde: nada se carga sin que lo confirmes vos.' },
+    ],
+    despues: [['inteligencia', 'Hacer una consulta de cifras'], ['terceros', 'Cargar un cliente a mano']],
+  },
+  inteligencia: {
+    que: 'Preguntale al sistema por cifras de tu empresa en lenguaje común: ventas, cobranzas, deudas, caja.',
+    pasos: [
+      { t: 'Escribí la pregunta, por ejemplo «cuánto vendí este mes».', a: '#intel-pregunta' },
+      { t: 'Tocá «Preguntar».', a: '#b-intel-preguntar' },
+      { t: 'La respuesta dice de dónde salió el número y qué no incluye. Si no sabés qué preguntar, mirá «Puedo contestar esto».' },
+    ],
+    despues: [['analitica', 'Ver gráficos y cifras'], ['analisis', 'Ver alertas y escenarios']],
+  },
+
+  comercial: {
+    que: 'Presupuestos y pedidos: lo que ofrecés o acordás antes de facturar. Todavía no tienen efecto fiscal ni contable.',
+    pasos: [
+      { t: 'Abrí «Nuevo presupuesto o pedido» y elegí si es venta o compra, el tipo y el cliente o proveedor.', a: '#com-n-tipo' },
+      { t: 'Tocá «Crear en borrador».', a: '#b-com-alta' },
+      { t: 'Abrilo desde la lista y, en «Cargar el detalle», sumá los productos con cantidad y precio. «Traer el precio» lo busca solo.', a: '#com-r-producto' },
+      { t: 'Tocá «Guardar el detalle».', a: '#b-com-r-guardar' },
+      { t: 'Cuando el cliente acepta, completá «Facturar» y tocá «Registrar la operación fiscal».', a: '#b-com-facturar' },
+    ],
+    despues: [['operaciones', 'Ver las facturas'], ['terceros', 'Cargar un cliente'], ['productos', 'Cargar un producto'], ['precios', 'Listas de precios']],
+  },
+  operaciones: {
+    que: 'El libro de todos los comprobantes (facturas, notas de crédito y débito) de venta y de compra de la empresa.',
+    pasos: [
+      { t: 'Filtrá por sentido, fechas o CUIT y tocá «Buscar».', a: '#b-ops' },
+      { t: 'Tocá un comprobante para abrirlo. Adentro podés vincularlo a un cliente o proveedor y cargar sus renglones.', a: '#op-party-sel' },
+      { t: 'Para comprobar que es válido, «Consultar a ARCA»; para el IVA, «Declarar» la afectación.', a: '#b-constatar' },
+      { t: '«Ver la propuesta» arma el asiento contable; «Cargar como asiento en borrador» lo guarda para que lo apruebes.', a: '#b-prop' },
+    ],
+    despues: [['asientos', 'Ver los asientos'], ['iva', 'Ir al IVA'], ['comercial', 'Presupuestos y pedidos']],
+  },
+  terceros: {
+    que: 'Tus clientes y proveedores: sus datos, su cuenta corriente y cuánto debe cada uno y desde cuándo.',
+    pasos: [
+      { t: 'Buscá primero: escribí el nombre o el CUIT y tocá «Buscar».', a: '#ter-q' },
+      { t: 'Si no está, cargalo en «Dar de alta un tercero»: tipo y número de documento, razón social y si es cliente, proveedor o ambos.', a: '#ter-tipo' },
+      { t: 'Tocá «Dar de alta».', a: '#b-ter-alta' },
+      { t: 'Para ver su cuenta corriente o corregir sus datos, tocá su nombre en la lista.', a: '#t-ter' },
+    ],
+    despues: [['comercial', 'Hacerle un presupuesto'], ['operaciones', 'Ver sus facturas'], ['pagos', 'Pagarle']],
+  },
+  productos: {
+    que: 'Lo que vendés y lo que comprás: productos y servicios, con su unidad, su impuesto y las cuentas contables sugeridas.',
+    pasos: [
+      { t: 'Buscá si ya existe: escribí el nombre y tocá «Buscar».', a: '#pro-q' },
+      { t: 'Si no está, completá «Dar de alta un producto o servicio»: código, nombre, tipo, unidad y cómo tributa.', a: '#pro-codigo' },
+      { t: 'Tocá «Dar de alta». El precio es opcional: se maneja mejor en una lista de precios.', a: '#b-pro-alta' },
+      { t: 'Para cambiar uno, tocalo en la lista y editá su ficha.', a: '#t-pro' },
+    ],
+    despues: [['precios', 'Ponerle precio'], ['stock', 'Cargar existencias'], ['comercial', 'Usarlo en un presupuesto']],
+  },
+  precios: {
+    que: 'Listas de precios con fecha de vigencia, para que cada operación use el precio que regía ese día.',
+    pasos: [
+      { t: 'Creá la lista: código, nombre y desde cuándo rige.', a: '#pre-codigo' },
+      { t: 'Tocá «Crear» y abrila desde la tabla.', a: '#b-pre-alta' },
+      { t: 'Agregá productos con su precio y, cuando termines, «Guardar la lista completa».', a: '#pre-i-prod' },
+      { t: 'Para saber qué precio le toca a un cliente en una fecha, usá «Resolver».', a: '#b-pre-consultar' },
+    ],
+    despues: [['terceros', 'Asignarla a un cliente'], ['comercial', 'Usarla en un presupuesto']],
+  },
+  crm: {
+    que: 'El seguimiento de tus oportunidades de venta, desde el primer contacto hasta que se ganan o se pierden.',
+    pasos: [
+      { t: 'Primero declará las etapas de tu embudo (por ejemplo: primer contacto, propuesta, ganada, perdida).', a: '#crm-e-codigo' },
+      { t: 'Cargá una oportunidad: un cliente ya registrado o el nombre de un prospecto, y el importe estimado.', a: '#crm-n-etapa' },
+      { t: 'A medida que avanza, registrá el paso para moverla de etapa y anotá cada actividad.', a: '#b-crm-mover' },
+      { t: 'Si se pierde, decí por qué: es lo único que te va a servir la próxima vez.' },
+    ],
+    despues: [['comercial', 'Hacer el presupuesto'], ['terceros', 'Cargar el cliente']],
+  },
+  comisiones: {
+    que: 'Tus vendedores, el porcentaje que ganan y cuánto devengaron por sus ventas.',
+    pasos: [
+      { t: 'Creá el vendedor. Si factura sus comisiones, elegí también su ficha de proveedor.', a: '#cms-n-nombre' },
+      { t: 'Abrilo y declará su esquema: porcentaje, sobre qué base y desde cuándo.', a: '#cms-e-base' },
+      { t: 'Atribuí las ventas a cada vendedor con «Atribuir».', a: '#b-cms-atribuir' },
+      { t: 'La comisión se calcula sola: mirala en «Devengado por comprobante».' },
+    ],
+    despues: [['operaciones', 'Ver las ventas'], ['terceros', 'Cargar un proveedor']],
+  },
+
+  documentos: {
+    que: 'Subí facturas, remitos o extractos (PDF, foto, XML, Excel): el sistema los archiva y lee lo que dicen.',
+    pasos: [
+      { t: 'Elegí el archivo y tocá «Subir».', a: '#archivo' },
+      { t: 'Abrilo desde la lista y revisá «Lo que se leyó»: el sistema nunca da por bueno un dato dudoso.' },
+      { t: 'Si algo está mal, «Corregir un campo» (con el motivo); queda registrado.', a: '#corr-campo' },
+      { t: 'Cuando está bien, «Registrar el comprobante» lo carga como factura o nota.', a: '#b-tt-crear' },
+    ],
+    despues: [['operaciones', 'Ver los comprobantes'], ['propuestas', 'Ver propuestas de IA']],
+  },
+  solicitudes: {
+    que: 'Pedidos internos de compra: qué se necesita, cuánto y para qué. Pedir no es comprar.',
+    pasos: [
+      { t: 'Indicá para cuándo la necesitás y para qué.', a: '#sol-n-necesaria' },
+      { t: 'Agregá los renglones (producto o descripción y cantidad) y tocá «Crear la solicitud».', a: '#b-sol-alta' },
+      { t: 'Abrila desde la lista y «Enviar a aprobar»: hasta entonces no la ve quien aprueba.', a: '#b-sol-enviar' },
+      { t: 'Quien aprueba la aprueba o rechaza. Si se aprueba, «Citar la orden de compra».', a: '#b-sol-aprobar' },
+    ],
+    despues: [['recepciones', 'Registrar lo que llegó'], ['pagos', 'Pagar al proveedor']],
+  },
+  recepciones: {
+    que: 'Qué mercadería llegó y cuándo. Sirve para controlar que lo pedido, lo recibido y lo facturado coincidan.',
+    pasos: [
+      { t: 'En «Registrar una recepción» elegí el proveedor y, si la hay, la orden de compra.', a: '#rec-n-prov' },
+      { t: 'Cargá el remito del proveedor y tocá «Crear en borrador».', a: '#b-rec-alta' },
+      { t: 'En «Cargar lo que llegó» agregá cada producto con su cantidad y «Guardar».', a: '#rec-r-producto' },
+      { t: 'Cuando coincide con lo que llegó de verdad, confirmala desde la lista.' },
+    ],
+    despues: [['stock', 'Ver el stock'], ['operaciones', 'Cargar la factura del proveedor']],
+  },
+  pagos: {
+    que: 'Órdenes de pago a proveedores: qué se paga, cuánto y quién lo aprobó. La orden no mueve plata: la plata sale con el asiento.',
+    pasos: [
+      { t: 'Elegí el proveedor y tocá «Ver qué se le debe».', a: '#b-odp-pagables' },
+      { t: 'Marcá los comprobantes a pagar y tocá «Armar el borrador».', a: '#b-odp-alta' },
+      { t: 'Abrí la orden desde la lista y «Aprobar».', a: '#b-odp-aprobar' },
+      { t: 'Cuando hagas el pago de verdad, «Registrar el pago».', a: '#b-odp-pagar' },
+    ],
+    despues: [['bancos', 'Conciliar el banco'], ['caja', 'Ir a la caja']],
+  },
+
+  caja: {
+    que: 'El efectivo de la empresa: abrir la caja, registrar cada ingreso y egreso, y contar al cierre.',
+    pasos: [
+      { t: 'La primera vez, «Dar de alta una caja»: código, nombre y la cuenta contable.', a: '#caja-a-codigo' },
+      { t: 'Abrí la caja con el saldo con el que arranca.', a: '#caja-n-inicial' },
+      { t: 'Durante el día registrá cada ingreso y egreso.', a: '#caja-m-tipo' },
+      { t: 'Al cerrar, contá la plata e ingresá lo contado. Si no coincide, decí por qué.', a: '#caja-c-contado' },
+    ],
+    despues: [['bancos', 'Ir a bancos'], ['libros', 'Ver los libros']],
+  },
+  bancos: {
+    que: 'Tus cuentas bancarias y la conciliación: comprobar que lo que dice el banco coincide con lo que registraste.',
+    pasos: [
+      { t: 'Dá de alta la cuenta bancaria con su cuenta contable.', a: '#ban-a-nombre' },
+      { t: 'Creá un «mapeo»: le explica al sistema qué columna del archivo del banco es cada cosa.', a: '#ban-m-nombre' },
+      { t: 'Pegá el contenido del extracto y tocá «Importar».', a: '#ban-csv' },
+      { t: 'Pedí la «Propuesta de conciliación» y confirmá de a una: no hay «aceptar todas».', a: '#b-ban-proponer' },
+    ],
+    despues: [['cheques', 'Ver los cheques'], ['asientos', 'Ver los asientos']],
+  },
+  cheques: {
+    que: 'Tu cartera de cheques, recibidos y emitidos, y todo lo que les va pasando.',
+    pasos: [
+      { t: 'Cargá el cheque: tipo, banco, número, importe y fechas.', a: '#chq-n-tipo' },
+      { t: 'Tocá «Cargar». Aparece en la cartera.', a: '#b-chq-alta' },
+      { t: 'Abrilo y registrá qué le pasó: se depositó, se endosó, lo rechazaron. El estado sale del último movimiento.', a: '#chq-m-tipo' },
+    ],
+    despues: [['bancos', 'Ir a bancos'], ['terceros', 'Ver el cliente']],
+  },
+
+  stock: {
+    que: 'Cuánto hay de cada producto y dónde está. La cantidad se calcula de los movimientos: nunca se «pisa».',
+    pasos: [
+      { t: 'La primera vez, «Dar de alta el depósito».', a: '#stk-d-nombre' },
+      { t: 'Registrá cada entrada, salida o transferencia en «Registrar un movimiento».', a: '#stk-m-tipo' },
+      { t: 'Mirá cuánto hay con «Ver existencias».', a: '#b-stk' },
+      { t: 'Cada tanto, hacé un recuento físico: contás y el sistema ajusta las diferencias.', a: '#rcu-n-dep' },
+    ],
+    despues: [['productos', 'Cargar productos'], ['recepciones', 'Registrar una recepción']],
+  },
+  activos: {
+    que: 'Bienes de uso (rodados, máquinas, equipos): su valor de origen, su vida útil y cuánto se amortiza cada año.',
+    pasos: [
+      { t: 'Dá de alta el bien: valor de origen, vida útil en meses y sus tres cuentas contables.', a: '#act-codigo' },
+      { t: 'Tocá «Dar de alta».', a: '#b-act-alta' },
+      { t: 'Mirá el plan en «Ver el cuadro» del ejercicio.', a: '#b-act-cuadro' },
+      { t: 'Cuando contabilices la amortización, vinculá el asiento. Las mejoras y bajas se registran desde la ficha.' },
+    ],
+    despues: [['asientos', 'Ver los asientos'], ['cierre', 'Ir al cierre']],
+  },
+  proyectos: {
+    que: 'Proyectos o trabajos, con sus horas y tareas, para saber cuál deja plata y cuál no.',
+    pasos: [
+      { t: 'Abrí el proyecto: código, nombre, cliente y centro de costo.', a: '#proy-n-codigo' },
+      { t: 'Tocá «Abrir». Después abrilo desde la lista.', a: '#b-proy-alta' },
+      { t: 'Cargá las horas trabajadas y, si hace falta, declará la tarifa por hora.', a: '#proy-h-horas' },
+      { t: 'En «Cuál deja plata» comparás ingresos y costos de todos.', a: '#b-proy' },
+    ],
+    despues: [['comisiones', 'Ver comisiones'], ['analitica', 'Ver analítica']],
+  },
+  sucursales: {
+    que: 'Tus sucursales y puntos de venta: cómo le va a cada una.',
+    pasos: [
+      { t: 'Abrí la sucursal: nombre, depósito y centro de costo.', a: '#suc-n-nombre' },
+      { t: 'Tocá «Abrir». Después abrila desde la lista.', a: '#b-suc-alta' },
+      { t: 'Declará qué puntos de venta le pertenecen y desde cuándo.', a: '#suc-p-numero' },
+      { t: 'En «Cómo le va a cada boca» ves las ventas atribuidas a cada una.', a: '#b-suc' },
+    ],
+    despues: [['stock', 'Ver los depósitos'], ['analitica', 'Ver analítica']],
+  },
+  integraciones: {
+    que: 'Conectá fuentes de afuera (tiendas online, bancos, plataformas). Lo que llega no entra solo: una persona decide qué es.',
+    pasos: [
+      { t: 'Elegí el proveedor y tocá «Conectar».', a: '#int-prov' },
+      { t: 'Importá un archivo que te dio el proveedor.', a: '#int-i-csv' },
+      { t: 'Revisá los registros que esperan: «Vincular» con algo que ya existe, o «Descartar» con un motivo.', a: '#int-r-status' },
+    ],
+    despues: [['terceros', 'Ver clientes y proveedores'], ['operaciones', 'Ver comprobantes']],
+  },
+
+  asientos: {
+    que: 'Los asientos contables. Entran en borrador, no tocan el Mayor hasta que alguien los aprueba, y se anulan con otro asiento.',
+    pasos: [
+      { t: 'Para cargar uno, completá «Cargar un asiento»: libro, fecha, cuenta al Debe, cuenta al Haber e importe.', a: '#ne-libro' },
+      { t: 'Tocá «Registrar». Queda en borrador.', a: '#b-ne' },
+      { t: 'Buscalo en la lista, abrilo y aprobalo.', a: '#b-as-listar' },
+      { t: 'Si te equivocaste en uno aprobado, se anula por contraasiento: el número se conserva.' },
+    ],
+    despues: [['libros', 'Ver el Diario y el Mayor'], ['cierre', 'Cerrar el período']],
+  },
+  libros: {
+    que: 'Los libros contables: Diario, Mayor y balance de sumas y saldos. También podés bajarlos en CSV.',
+    pasos: [
+      { t: 'Elegí el rango de fechas.', a: '#lib-desde' },
+      { t: 'Tocá el libro que querés ver. Para el Mayor, elegí antes la cuenta.', a: '#b-diario' },
+      { t: 'Para llevártelo a Excel, tocá «Bajar … (CSV)».', a: '#b-exp-diario' },
+      { t: 'Emitir un libro le calcula una huella y deja constancia: es un acto del profesional.' },
+    ],
+    despues: [['estados', 'Armar estados contables'], ['iva', 'Ir al IVA']],
+  },
+  iva: {
+    que: 'El IVA del mes: el Libro IVA Digital para presentar y los subdiarios de compras y ventas.',
+    pasos: [
+      { t: 'Elegí año y mes y tocá «Ver el período».', a: '#iva-anio' },
+      { t: 'Revisá qué lo bloquea: el sistema te dice qué falta antes de poder generarlo.', a: '#b-iva' },
+      { t: 'Para el detalle comprobante por comprobante, mirá el subdiario.', a: '#b-iva-sub' },
+    ],
+    despues: [['operaciones', 'Ver los comprobantes'], ['libros', 'Ver los libros']],
+  },
+  estados: {
+    que: 'Estados contables y notas, armados desde el Mayor cada vez que los pedís. Verlos no los emite.',
+    pasos: [
+      { t: 'Elegí el ejercicio y el tipo de estado.', a: '#est-fy' },
+      { t: 'Tocá «Armar el estado».', a: '#b-est-armar' },
+      { t: 'Tocá cualquier renglón: te lleva a las cuentas que lo forman.' },
+      { t: 'Emitirlo le calcula una huella y deja constancia: es un acto del profesional.' },
+    ],
+    despues: [['libros', 'Ver los libros'], ['cierre', 'Ir al cierre']],
+  },
+  cierre: {
+    que: 'Ejercicios y períodos contables: abrirlos, bloquearlos y cerrarlos, siempre en ese orden.',
+    pasos: [
+      { t: 'Si todavía no hay un ejercicio, completá «Abrir un ejercicio».', a: '#fy-codigo' },
+      { t: 'Tocá «Abrir el ejercicio»: se crean sus períodos.', a: '#b-fy-abrir' },
+      { t: 'Cada período pasa de abierto a bloqueado y a cerrado, sin saltear pasos.', a: '#b-per-listar' },
+      { t: 'Reabrir uno cerrado exige un motivo y la firma de otra persona.' },
+    ],
+    despues: [['asientos', 'Cargar asientos'], ['estados', 'Armar estados']],
+  },
+
+  analitica: {
+    que: 'Las cifras de tu empresa por mes, por producto y por cliente. Se calculan al mirarlas: no hay números guardados.',
+    pasos: [
+      { t: 'Tocá «Actualizar» para recalcular.', a: '#b-ana' },
+      { t: 'Mirá primero la «Cobertura del detalle»: te dice qué tan completos están los datos.' },
+      { t: 'Después recorré las operaciones por mes y los rankings por producto y por cliente.' },
+    ],
+    despues: [['analisis', 'Ver alertas y escenarios'], ['libros', 'Bajar los libros']],
+  },
+  analisis: {
+    que: 'Alertas, flujo de fondos, proyección de cobranzas y simulación de escenarios. Todo con reglas claras, sin adivinar.',
+    pasos: [
+      { t: 'Declará tus umbrales (por ejemplo cuánto es una caída de ventas preocupante) y tocá «Declarar».', a: '#sen-u-caida' },
+      { t: 'Tocá «Ver señales»: te muestra lo que se pasó de esos límites.', a: '#b-sen' },
+      { t: 'Calculá el flujo de fondos y la proyección de cobranzas.', a: '#b-sen-flujo' },
+      { t: 'Para un «¿qué pasa si…?», cargá la variación de precio, volumen o costo y tocá «Simular».', a: '#b-sen-simular' },
+    ],
+    despues: [['analitica', 'Ver analítica'], ['bandeja', 'Ver pendientes']],
+  },
+
+  migraciones: {
+    que: 'Traé los datos de otro sistema. Primero se ve qué entraría y qué no; hasta que importás, no se escribe nada.',
+    pasos: [
+      { t: 'Elegí de qué sistema viene, poné un nombre y tocá «Crear».', a: '#mig-adaptador' },
+      { t: 'Subí el archivo exportado del sistema anterior.', a: '#mig-archivo' },
+      { t: 'Decile al sistema qué es cada columna y «Guardar la correspondencia».', a: '#b-mig-mapeo' },
+      { t: '«Validar»: te muestra qué entraría y qué se rechaza, sin escribir nada.', a: '#b-mig-validar' },
+      { t: 'Si está todo bien, «Importar». Después podés ver el reporte o revertir todo.', a: '#b-mig-importar' },
+    ],
+    despues: [['terceros', 'Ver clientes y proveedores'], ['config', 'Ir a configuración']],
+  },
+  auditoria: {
+    que: 'El registro de quién hizo qué, cuándo y por qué: con lo que había antes y lo que quedó después.',
+    pasos: [
+      { t: 'Filtrá por acción, tipo de objeto, quién lo hizo o fechas.', a: '#au-accion' },
+      { t: 'Tocá «Buscar». Cada fila muestra el antes y el después.', a: '#b-au' },
+      { t: 'Para buscar cosas raras, compará períodos o analizá las anomalías del Diario.', a: '#b-au-anom' },
+    ],
+    despues: [['asientos', 'Ver asientos'], ['config', 'Ir a configuración']],
+  },
+  suscripcion: {
+    que: 'Tu plan de NEXO: cuánto usás contra los topes, qué incluye y cómo pagar.',
+    pasos: [
+      { t: 'En «Uso contra los topes» ves cuánto llevás usado. Pasarte de un tope no frena nada: sólo avisa.', a: '#b-sub' },
+      { t: 'Para contratar, elegí el plan y la periodicidad.', a: '#sub-c-plan' },
+      { t: 'En «Cuenta con NEXO» ves los datos para pagar.', a: '#b-fact' },
+      { t: 'Con la prueba en curso, «Convertir la prueba» la pasa a plan pago.', a: '#b-sub-convertir' },
+    ],
+    despues: [['inicio', 'Volver al inicio'], ['config', 'Ir a configuración']],
+  },
+  config: {
+    que: 'El plan de cuentas, los centros de costo, el mapeo contable y la copia completa de tus datos.',
+    pasos: [
+      { t: 'Plan de cuentas: buscá una cuenta, editala o dá de alta una nueva.', a: '#cta-q' },
+      { t: 'Mapeo contable: indicá a qué cuenta va cada cosa; así el sistema puede proponer asientos.', a: '#b-map' },
+      { t: 'Centros de costo: la dimensión para saber qué área gasta o gana.', a: '#cc-nombre' },
+      { t: 'Para llevarte todos los datos de la empresa, «Exportar la empresa».', a: '#b-exp' },
+    ],
+    despues: [['asientos', 'Cargar asientos'], ['migraciones', 'Traer datos de otro sistema']],
+  },
+};
+
+/**
+ * Después de una acción que salió bien: qué sigue y un botón para ir. Se muestra debajo del aviso verde, y sólo cuando la
+ * acción dijo expresamente que salió bien (no en las lecturas).
+ *   `vista`: lleva a esa pantalla del menú (respeta permisos y plan: si no se ve en el menú, el botón no aparece).
+ *   `a`:     señala un elemento de la misma pantalla.
+ */
+const PROXIMOS = {
+  'ter-alta-msg': { t: 'Ya está en la lista. Ahora podés hacerle un presupuesto o cargar lo que le vendés.',
+    ir: [{ n: 'Crear un presupuesto', vista: 'comercial' }, { n: 'Cargar productos', vista: 'productos' }] },
+  'pro-alta-msg': { t: 'Producto creado. Ponele precio en una lista, o usalo en un presupuesto.',
+    ir: [{ n: 'Ir a precios', vista: 'precios' }, { n: 'Crear un presupuesto', vista: 'comercial' }] },
+  'pre-alta-msg': { t: 'Lista creada. Abrila desde la tabla y agregale productos con su precio.', ir: [{ n: 'Mostrame dónde', a: '#pre-i-prod' }] },
+  'com-alta-msg': { t: 'Quedó en borrador. Abrilo desde la lista y cargá el detalle: los productos y las cantidades.',
+    ir: [{ n: 'Mostrame dónde', a: '#com-r-producto' }] },
+  'com-r-msg': { t: 'Detalle guardado. Cuando el cliente acepte, pasá a «Facturar».', ir: [{ n: 'Ir a «Facturar»', a: '#com-f-tipo' }] },
+  'com-f-msg': { t: 'La operación fiscal quedó registrada. Revisala en «Facturas y comprobantes».',
+    ir: [{ n: 'Ver las facturas', vista: 'operaciones' }] },
+  'doc-msg': { t: 'El archivo quedó guardado. Abrilo desde la lista, revisá lo que se leyó y registralo como comprobante.',
+    ir: [{ n: 'Mostrame la lista', a: '#b-doc-listar' }] },
+  'tt-msg': { t: 'Comprobante registrado. Lo ves en «Facturas y comprobantes».', ir: [{ n: 'Ver los comprobantes', vista: 'operaciones' }] },
+  'ne-msg': { t: 'Quedó sin aprobar. Buscalo en la lista de arriba y aprobalo; después aparece en el Diario.',
+    ir: [{ n: 'Ver los libros', vista: 'libros' }] },
+  'fy-msg': { t: 'Ya podés registrar asientos en los períodos del ejercicio.', ir: [{ n: 'Cargar un asiento', vista: 'asientos' }] },
+  'caja-alta-msg': { t: 'Caja creada. Ahora abrila con su saldo inicial.', ir: [{ n: 'Mostrame dónde', a: '#caja-n-caja' }] },
+  'caja-abrir-msg': { t: 'Caja abierta. Registrá cada ingreso y egreso a medida que ocurren.', ir: [{ n: 'Mostrame dónde', a: '#caja-m-tipo' }] },
+  'ban-alta-msg': { t: 'Cuenta creada. Ahora creá el «mapeo» que explica las columnas de su extracto.', ir: [{ n: 'Mostrame dónde', a: '#ban-m-nombre' }] },
+  'ban-mapeo-msg': { t: 'Mapeo listo. Ahora pegá el contenido de un extracto y tocá «Importar».', ir: [{ n: 'Mostrame dónde', a: '#ban-csv' }] },
+  'ban-imp-msg': { t: 'Extracto importado. Pedí la propuesta de conciliación y confirmá de a una.', ir: [{ n: 'Mostrame dónde', a: '#b-ban-proponer' }] },
+  'chq-alta-msg': { t: 'Cheque cargado. Está en la cartera: ahí registrás lo que le va pasando.', ir: [{ n: 'Ver la cartera', a: '#b-chq' }] },
+  'sol-alta-msg': { t: 'Abrila desde la lista y envíala a aprobar para que la vea quien decide.', ir: [{ n: 'Ver la lista', a: '#b-sol' }] },
+  'odp-alta-msg': { t: 'Abrí el borrador desde la lista para aprobarlo y, cuando pagues, registrar el pago.', ir: [{ n: 'Ver la lista', a: '#b-odp' }] },
+  'rec-alta-msg': { t: 'Ahora cargá lo que llegó: cada producto con su cantidad.', ir: [{ n: 'Mostrame dónde', a: '#rec-r-producto' }] },
+  'act-alta-msg': { t: 'Bien dado de alta. Mirá su plan de amortización en «Ver el cuadro».', ir: [{ n: 'Mostrame dónde', a: '#b-act-cuadro' }] },
+  'proy-alta-msg': { t: 'Proyecto abierto. Abrilo desde la lista para cargar horas y tareas.', ir: [{ n: 'Ver la lista', a: '#b-proy' }] },
+  'cms-alta-msg': { t: 'Abrí al vendedor desde la lista y declarale su esquema de comisión.', ir: [{ n: 'Ver la lista', a: '#b-cms' }] },
+  'suc-alta-msg': { t: 'Abrí la sucursal desde la lista y declarale su punto de venta.', ir: [{ n: 'Ver la lista', a: '#b-suc' }] },
+  'crm-alta-etapa-msg': { t: 'Etapa declarada. Ahora podés cargar una oportunidad en ella.', ir: [{ n: 'Mostrame dónde', a: '#crm-n-etapa' }] },
+  'crm-alta-op-msg': { t: 'Oportunidad cargada. Abrila para registrar el paso o una actividad.', ir: [{ n: 'Ver el embudo', a: '#b-crm' }] },
+  'int-con-msg': { t: 'Fuente conectada. Ahora podés importar un archivo suyo.', ir: [{ n: 'Mostrame dónde', a: '#int-i-csv' }] },
+  'mig-msg': { t: 'Migración creada. El paso 2 es subir el archivo del sistema anterior.', ir: [{ n: 'Mostrame dónde', a: '#mig-archivo' }] },
+  'mig-origen-msg': { t: 'Archivo leído. Ahora decile qué es cada columna.', ir: [{ n: 'Mostrame dónde', a: '#b-mig-mapeo' }] },
+  'mig-mapeo-msg': { t: 'Correspondencia guardada. Ahora «Validar» para ver qué entraría.', ir: [{ n: 'Mostrame dónde', a: '#b-mig-validar' }] },
+};
+
+/**
+ * El motor de las guías: la tarjeta de cada pantalla, el recorrido con foco y el «siguiente paso».
+ *
+ * Todo se dibuja con `textContent` y nodos del DOM: el texto de las guías es nuestro, pero ninguna guía pasa por `innerHTML`.
+ */
+const GUIA = (() => {
+  const CLAVE_GUIAS = 'nexo-guias';
+  const CLAVE_BIENVENIDA = 'nexo-bienvenida';
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  const cerradas = new Set();
+  try { for (const v of JSON.parse(localStorage.getItem(CLAVE_GUIAS) || '[]')) cerradas.add(v); } catch (e) { /* ignorada */ }
+
+  const icono = (id) => {
+    const s = document.createElementNS(SVG, 'svg');
+    s.setAttribute('class', 'ico');
+    const u = document.createElementNS(SVG, 'use');
+    u.setAttribute('href', '#i-' + id);
+    s.appendChild(u);
+    return s;
+  };
+  const nodo = (tag, clase, texto) => {
+    const n = document.createElement(tag);
+    if (clase) n.className = clase;
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  };
+
+  const botonDelMenu = (vista) => document.querySelector('nav button[data-vista="' + vista + '"]');
+  const nombreDe = (vista) => { const b = botonDelMenu(vista); return b ? b.dataset.nombre : vista; };
+  function irAVista(vista) {
+    const b = botonDelMenu(vista);
+    if (b && !b.hidden) b.click();
+  }
+
+  /** Abre los `<details>` que contienen al elemento: no se puede señalar algo que está plegado. */
+  function abrirAncestros(el) {
+    for (let p = el.parentElement; p; p = p.parentElement) if (p.tagName === 'DETAILS' && !p.open) p.open = true;
+  }
+  const visible = (el) => el !== null && !el.hidden && el.getClientRects().length > 0;
+
+  /** Lleva la vista al elemento y lo hace pulsar un instante. Devuelve false si todavía no está a la vista. */
+  function resaltar(selector) {
+    const el = document.querySelector(selector);
+    if (el === null) return false;
+    abrirAncestros(el);
+    if (!visible(el)) return false;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.remove('pulso');
+    void el.offsetWidth;
+    el.classList.add('pulso');
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) el.focus({ preventScroll: true });
+    setTimeout(() => el.classList.remove('pulso'), 3200);
+    return true;
+  }
+
+  // ── La tarjeta de cada pantalla ─────────────────────────────────────────────────────────────────────────────────
+  function construirTarjeta(vista, g) {
+    const sec = E('v-' + vista);
+    const h2 = sec ? sec.querySelector('h2') : null;
+    if (h2 === null) return;
+
+    const t = nodo('div', 'guia');
+    t.dataset.vista = vista;
+    t.dataset.plegada = cerradas.has(vista) ? 'si' : 'no';
+
+    const cab = nodo('div', 'guia-cab');
+    cab.append(icono('ayuda'), nodo('strong', '', 'Cómo se usa esta pantalla'), nodo('span', 'espacio'));
+    const ver = nodo('button', 'guia-ver', 'Recorrido guiado');
+    ver.type = 'button';
+    ver.onclick = () => iniciarRecorrido(vista);
+    const plegar = nodo('button', 'guia-plegar', t.dataset.plegada === 'si' ? 'Mostrar' : 'Ocultar');
+    plegar.type = 'button';
+    plegar.onclick = () => {
+      const cerrar = t.dataset.plegada !== 'si';
+      t.dataset.plegada = cerrar ? 'si' : 'no';
+      plegar.textContent = cerrar ? 'Mostrar' : 'Ocultar';
+      if (cerrar) cerradas.add(vista); else cerradas.delete(vista);
+      try { localStorage.setItem(CLAVE_GUIAS, JSON.stringify([...cerradas])); } catch (e) { /* vale por esta visita */ }
+    };
+    cab.append(ver, plegar);
+    t.appendChild(cab);
+    t.appendChild(nodo('p', 'guia-que', g.que));
+
+    const lista = nodo('ol', 'guia-pasos');
+    for (const p of g.pasos) {
+      const li = nodo('li');
+      li.appendChild(nodo('span', 'paso-t', p.t));
+      if (p.a) {
+        const m = nodo('button', 'mostrame', 'Mostrame');
+        m.type = 'button';
+        m.onclick = () => {
+          if (!resaltar(p.a)) {
+            m.textContent = 'Aparece al elegir algo de la lista';
+            m.disabled = true;
+            setTimeout(() => { m.textContent = 'Mostrame'; m.disabled = false; }, 2600);
+          }
+        };
+        li.appendChild(m);
+      }
+      lista.appendChild(li);
+    }
+    t.appendChild(lista);
+
+    const despues = nodo('div', 'guia-despues');
+    despues.appendChild(nodo('span', '', 'Después podés:'));
+    t.appendChild(despues);
+
+    h2.insertAdjacentElement('afterend', t);
+
+    // El texto técnico de siempre queda debajo, plegado.
+    const ay = sec.querySelector(':scope > p.ayuda');
+    if (ay !== null && ay.previousElementSibling === t) {
+      const d = nodo('details', 'ayuda-tecnica');
+      d.appendChild(nodo('summary', '', 'Cómo funciona por dentro'));
+      ay.replaceWith(d);
+      d.appendChild(ay);
+    }
+  }
+
+  /** Los atajos dependen de lo que el menú le deja ver a esta persona: se recalculan al entrar a cada pantalla. */
+  function refrescar(vista) {
+    const g = GUIAS[vista];
+    E('b-ayuda').hidden = g === undefined;
+    const t = document.querySelector('.guia[data-vista="' + vista + '"]');
+    if (!g || !t) return;
+    const caja = t.querySelector('.guia-despues');
+    while (caja.children.length > 1) caja.lastElementChild.remove();
+    for (const [v, texto] of g.despues) {
+      const b = botonDelMenu(v);
+      if (!b || b.hidden) continue;
+      const bt = nodo('button', '', texto);
+      bt.type = 'button';
+      bt.onclick = () => irAVista(v);
+      caja.appendChild(bt);
+    }
+    caja.hidden = caja.children.length < 2;
+  }
+
+  for (const [vista, g] of Object.entries(GUIAS)) construirTarjeta(vista, g);
+
+  // ── El recorrido ────────────────────────────────────────────────────────────────────────────────────────────────
+  const R = { pasos: [], i: 0, activo: false, previo: null, el: null };
+
+  function ubicar() {
+    const foco = E('tour-foco');
+    const tarj = E('tour-tarjeta');
+    const el = R.el;
+    const chica = window.matchMedia('(max-width:900px)').matches;
+    if (el !== null && visible(el)) {
+      const r = el.getBoundingClientRect();
+      const m = 6;
+      foco.dataset.sin = 'no';
+      foco.style.left = r.left - m + 'px';
+      foco.style.top = r.top - m + 'px';
+      foco.style.width = r.width + 2 * m + 'px';
+      foco.style.height = r.height + 2 * m + 'px';
+      if (chica) return;
+      const w = tarj.offsetWidth;
+      const h = tarj.offsetHeight;
+      let top = r.bottom + 16;
+      if (top + h > innerHeight - 12) top = r.top - h - 16;
+      if (top < 12) top = Math.max(12, Math.min(innerHeight - h - 12, r.top + r.height / 2 - h / 2));
+      let left = r.left;
+      if (r.left + w > innerWidth - 12) left = innerWidth - w - 12;
+      // Si el elemento es muy alto (una tabla, una sección), la tarjeta no puede taparlo del todo: va al costado.
+      if (top < r.bottom && top + h > r.top && r.height > innerHeight * 0.5) {
+        top = Math.max(12, r.top + 12);
+        left = r.right + 16 + w < innerWidth ? r.right + 16 : Math.max(12, r.left + 12);
+      }
+      tarj.style.top = top + 'px';
+      tarj.style.left = Math.max(12, left) + 'px';
+    } else {
+      foco.dataset.sin = 'si';
+      foco.style.width = '0';
+      foco.style.height = '0';
+      if (chica) return;
+      tarj.style.left = Math.max(12, (innerWidth - tarj.offsetWidth) / 2) + 'px';
+      tarj.style.top = Math.max(12, (innerHeight - tarj.offsetHeight) / 3) + 'px';
+    }
+  }
+
+  function mostrarPaso() {
+    const p = R.pasos[R.i];
+    E('tour-paso').textContent = 'Paso ' + (R.i + 1) + ' de ' + R.pasos.length;
+    E('tour-barra').style.width = ((R.i + 1) / R.pasos.length) * 100 + '%';
+    E('tour-titulo').textContent = p.titulo || '';
+    E('tour-titulo').hidden = !p.titulo;
+    E('tour-texto').textContent = p.t;
+    E('tour-nota').hidden = true;
+    R.el = p.a ? document.querySelector(p.a) : null;
+    if (R.el !== null) {
+      abrirAncestros(R.el);
+      if (visible(R.el)) R.el.scrollIntoView({ block: 'center' });
+      else if (p.a) {
+        E('tour-nota').hidden = false;
+        E('tour-nota').textContent = 'Esto todavía no se ve: aparece después de elegir un elemento de la lista.';
+      }
+    }
+    E('b-tour-ant').hidden = R.i === 0;
+    E('b-tour-sig').textContent = R.i === R.pasos.length - 1 ? 'Listo' : 'Siguiente';
+    ubicar();
+    E('b-tour-sig').focus({ preventScroll: true });
+  }
+
+  function cerrarRecorrido() {
+    R.activo = false;
+    E('tour').hidden = true;
+    if (R.previo && R.previo.focus) R.previo.focus({ preventScroll: true });
+  }
+
+  function abrirRecorrido(pasos) {
+    if (pasos.length === 0) return;
+    R.pasos = pasos;
+    R.i = 0;
+    R.activo = true;
+    R.previo = document.activeElement;
+    E('tour').hidden = false;
+    mostrarPaso();
+  }
+
+  function pasosDe(vista) {
+    const g = GUIAS[vista];
+    if (!g) return [];
+    const titulo = nombreDe(vista);
+    return [{ titulo, t: g.que }].concat(g.pasos.map((p) => ({ titulo, t: p.t, a: p.a })));
+  }
+  function iniciarRecorrido(vista) { abrirRecorrido(pasosDe(vista)); }
+
+  const BIENVENIDA = [
+    { titulo: 'Bienvenido a NEXO', t: 'Un recorrido de un minuto para que sepas dónde está todo. Podés salir cuando quieras.' },
+    { titulo: 'El menú', t: 'Acá está todo el sistema, ordenado por lo que hacés más seguido: lo primero que se usa, arriba. Tocá un grupo para plegarlo.', a: '#lateral' },
+    { titulo: 'Buscar una pantalla', t: '¿No sabés dónde está algo? Escribí acá y el menú se filtra.', a: '#buscar-menu' },
+    { titulo: 'Achicar el menú', t: 'Este botón achica el menú a íconos para tener más lugar de trabajo. En el celular lo abre y lo cierra.', a: '#b-menu' },
+    { titulo: 'Ir a cualquier lado', t: 'Con Ctrl+K (o tocando acá) buscás pantallas y acciones de todo el sistema.', a: '#b-paleta' },
+    { titulo: 'Guía de cada pantalla', t: 'En cada pantalla, este botón te lleva paso a paso. Y arriba de cada pantalla tenés una tarjeta que explica qué hacer y adónde ir después.', a: '#b-ayuda' },
+    { titulo: 'Claro u oscuro', t: 'Cambiá los colores como te quede más cómodo.', a: '#b-tema' },
+  ];
+
+  E('b-tour-sig').onclick = () => { if (R.i >= R.pasos.length - 1) cerrarRecorrido(); else { R.i += 1; mostrarPaso(); } };
+  E('b-tour-ant').onclick = () => { if (R.i > 0) { R.i -= 1; mostrarPaso(); } };
+  E('b-tour-salir').onclick = cerrarRecorrido;
+  E('tour-velo').onclick = cerrarRecorrido;
+  E('b-ayuda').onclick = () => iniciarRecorrido(estado.vista);
+  document.addEventListener('keydown', (ev) => {
+    if (!R.activo) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); cerrarRecorrido(); }
+    else if (ev.key === 'ArrowRight') { ev.preventDefault(); E('b-tour-sig').click(); }
+    else if (ev.key === 'ArrowLeft') { ev.preventDefault(); E('b-tour-ant').click(); }
+  });
+  window.addEventListener('resize', () => { if (R.activo) ubicar(); });
+  window.addEventListener('scroll', () => { if (R.activo) ubicar(); }, true);
+
+  // ── La invitación de bienvenida: una sola vez por navegador ────────────────────────────────────────────────────
+  function ofrecerBienvenida() {
+    let vista = false;
+    try { vista = localStorage.getItem(CLAVE_BIENVENIDA) === 'si'; } catch (e) { vista = false; }
+    E('bienvenida').hidden = vista || E('nav').hidden;
+  }
+  const yaVista = () => { try { localStorage.setItem(CLAVE_BIENVENIDA, 'si'); } catch (e) { /* vale por esta visita */ } E('bienvenida').hidden = true; };
+  E('b-bienv-si').onclick = () => { yaVista(); abrirRecorrido(BIENVENIDA); };
+  E('b-bienv-no').onclick = yaVista;
+
+  // ── «Siguiente paso» debajo del aviso verde de una acción que salió bien ───────────────────────────────────────
+  function proximoPaso(destino, caja, exito) {
+    const p = PROXIMOS[destino];
+    if (!p || !exito) return;
+    const cont = nodo('div', 'siguiente');
+    const tx = nodo('div', 'siguiente-t');
+    tx.append(nodo('b', '', 'Siguiente paso: '), document.createTextNode(p.t));
+    cont.appendChild(tx);
+    for (const acc of p.ir) {
+      if (acc.vista) {
+        const b = botonDelMenu(acc.vista);
+        if (!b || b.hidden) continue;
+      }
+      const bt = nodo('button', 'sec', acc.n);
+      bt.type = 'button';
+      bt.onclick = () => { if (acc.vista) irAVista(acc.vista); else resaltar(acc.a); };
+      cont.appendChild(bt);
+    }
+    caja.appendChild(cont);
+  }
+
+  return { refrescar, ofrecerBienvenida, proximoPaso, resaltar, iniciarRecorrido, bienvenida: () => abrirRecorrido(BIENVENIDA) };
 })();
 
 E('b-salir').onclick = async () => {
@@ -8139,7 +8961,7 @@ async function abrirTercero(id, cursor) {
   E('b-ter-cc-mas').hidden = !r.datos.cursor;
 
   await cargarSaldoDelTercero(id);
-  ir('terceros', ['Terceros', t.razonSocial]);
+  ir('terceros', ['Clientes y proveedores', t.razonSocial]);
 }
 
 async function cargarSaldoDelTercero(id) {
@@ -8757,7 +9579,7 @@ E('b-ops-mas').onclick = () => listarOperaciones(estado.cursores.ops);
 async function abrirOperacion(id) {
   estado.tt = id;
   E('op-detalle').hidden = false;
-  ir('operaciones', ['Operaciones', 'comprobante']);
+  ir('operaciones', ['Facturas y comprobantes', 'comprobante']);
 
   const afec = await api('GET', '/tax-transactions/' + id + '/afectacion');
   const dec = await api('GET', '/comprobantes/' + id + '/decision');
