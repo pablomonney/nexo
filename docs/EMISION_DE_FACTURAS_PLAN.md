@@ -37,7 +37,7 @@ La **seguridad** de emitir: máquina de estados de la intención fiscal (BORRADO
 ## 4 · Dónde tenés que intervenir
 
 1. **Esta tarde (E1):** nada, salvo que **el punto de venta 1 de homologación** exista como «RECE para aplicaciones y web services» para el CUIT 20452148324. Si ARCA lo rechaza al emitir, hay que crearlo en ARCA (Administración de puntos de venta y domicilios → homologación) y avisarme.
-2. **Decisión: ¿quién emite y con qué condición de IVA?** (monotributista → Factura C; responsable inscripto → A/B). Define el tipo de comprobante de las facturas de **NEXO a sus clientes** (la suscripción) y de las del primer cliente. **Preguntalo a tu contador.**
+2. **(2026-10-16: el titular indica que lo más probable es monotributista; falta confirmarlo con el contador. Ojo: un monotributista emite SIEMPRE clase C, no B — ver `docs/MONOTRIBUTO_Y_NEXO_PROPIETARIO.md`.)** **Decisión: ¿quién emite y con qué condición de IVA?** (monotributista → Factura C; responsable inscripto → A/B). Define el tipo de comprobante de las facturas de **NEXO a sus clientes** (la suscripción) y de las del primer cliente. **Preguntalo a tu contador.**
 3. **Decisión de producto:** ¿las facturas del cliente se emiten con el **certificado de cada empresa** (más seguro, más trámite) o con el de NEXO delegado (menos trámite, NEXO firma por el cliente)? La tabla `company_arca_credentials` está pensada para lo primero.
 4. **Antes de E9 (producción):** el certificado de producción y las delegaciones en ARCA con tu clave fiscal (yo no puedo ni debo usarla), y que un **contador** valide formatos e IVA (RG 4291, RG 5616).
 5. **E5 (asiento):** un contador tiene que aprobar el tratamiento contable antes de que yo lo implemente.
