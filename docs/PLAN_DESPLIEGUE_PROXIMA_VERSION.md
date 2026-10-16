@@ -48,7 +48,7 @@ bash scripts/desplegar.sh --commit <SHA-DE-40-CARACTERES>
 
 Con la 0136 la migración llega a **136**. Qué hace y qué pasa si falla cada paso: **igual que** `docs/PLAN_DESPLIEGUE_ZONA_HORARIA.md` §1 (el guion es el mismo). La diferencia es lo que migra: 0133, 0134, 0135 y 0136.
 
-> **La 0136 (asistente) NO entró en el ensayo sobre la copia de producción** (§2 se hizo hasta la 135, antes de escribirla). Es aditiva —tablas nuevas, tres acciones de bitácora, un precio y el prompt—, pasó la suite completa y `audit:estructura` (462 objetos) sobre una base migrada de cero, pero **repetir el ensayo 130 → 136 sobre una copia fresca antes de desplegar**.
+> **Ensayo repetido el 2026-10-16 con la 0136 incluida**, sobre la copia automática de las 02:32 (`aai-20261016T023231Z-auto.dump`, sha256 `1846775e…`, verificado contra el `.sha256` del servidor; 132 migraciones): `migrate.mjs up` **132 → 136** sin error (0133, 0134, 0135, 0136); `audit:estructura` **462 de 462**; `recalcular-cadena` 18 revisadas, **0 rotas**; `verify-ledger` sin discrepancias; la versión nueva arranca contra esa base (`/health/db` dice 136) y el prompt del asistente quedó archivado. La copia y la base descartable se **borraron**. **No probado:** nada de esto en el servidor, ni con Docker real.
 
 ## 4 · Verificación posterior
 
