@@ -569,6 +569,108 @@ details.ayuda-tecnica p{margin-top:var(--e2)}
   .guia{padding:var(--e3) var(--e4)}
   .tour-tarjeta{left:12px!important;right:12px;bottom:12px;top:auto!important;width:auto}
 }
+
+/* ── El tablero del Inicio ──────────────────────────────────────────────────────────────────────────────────────────── */
+#tablero{margin:var(--e4) 0 var(--e5)}
+.tablero-t{margin:var(--e6) 0 var(--e3);font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta3);font-weight:700}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--e3);margin-bottom:var(--e4)}
+.kpi{display:flex;flex-direction:column;align-items:flex-start;gap:var(--e1);margin:0;padding:var(--e4);text-align:left;cursor:pointer;
+     background:var(--alto2);border:1px solid var(--linea);border-radius:14px;color:var(--tinta);font:inherit;
+     transition:border-color .15s,transform .15s}
+.kpi:hover{border-color:var(--acento);transform:translateY(-1px)}
+.kpi:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.kpi-ico{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;margin-bottom:var(--e2);
+         background:var(--acento-cl);color:var(--acento)}
+.kpi-ico.ojo{background:var(--ojo-bg);color:var(--ojo)}
+.kpi-ico.mal{background:var(--mal-bg);color:var(--mal)}
+.kpi-ico.bien{background:var(--bien-bg);color:var(--bien)}
+.kpi-t{font-size:.76rem;color:var(--tinta3);font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+.kpi-v{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}
+.kpi-s{font-size:.78rem;color:var(--tinta3)}
+.kpi-s b{color:var(--mal);font-weight:650}
+
+.tablero-grilla{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--e3)}
+.panel{grid-column:span 4;background:var(--alto2);border:1px solid var(--linea);border-radius:14px;padding:var(--e4) var(--e5);min-width:0}
+.panel-ancho{grid-column:span 8}
+.pila{grid-column:span 4;display:grid;gap:var(--e3);align-content:start;min-width:0}
+.pila .panel{grid-column:auto}
+.panel-cab{display:flex;align-items:baseline;justify-content:space-between;gap:var(--e3);flex-wrap:wrap;margin-bottom:var(--e3)}
+.panel-cab h3{margin:0;font-size:.95rem}
+.panel-sub{font-size:.74rem;color:var(--tinta3)}
+.panel[hidden]{display:none}
+
+.grafico{display:block;width:100%;height:auto;overflow:visible}
+.grafico text{font:11px var(--ui);fill:var(--tinta3)}
+.grafico .rejilla{stroke:var(--linea);stroke-width:1}
+.grafico .eje-x text{font-size:11px}
+.grafico .barra{transform-box:fill-box;transform-origin:bottom;animation:crecer .55s cubic-bezier(.2,.8,.2,1) both}
+.grafico .barra:hover{opacity:.82}
+@keyframes crecer{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.grafico .barra{animation:none}}
+.leyenda{display:flex;gap:var(--e4);flex-wrap:wrap;margin-top:var(--e2);font-size:.78rem;color:var(--tinta2)}
+.leyenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+.vacio{display:flex;flex-direction:column;align-items:center;gap:var(--e2);padding:var(--e5) var(--e3);text-align:center;color:var(--tinta3);font-size:.84rem}
+.vacio svg{width:64px;height:64px;color:var(--linea2);stroke-width:1.2}
+.vacio button{margin:var(--e1) 0 0;font-size:.8rem}
+
+.anillo-caja{display:flex;align-items:center;gap:var(--e5);flex-wrap:wrap}
+.anillo{flex:none;width:118px;height:118px;transform:rotate(-90deg)}
+.anillo circle{fill:none;stroke-width:11;stroke-linecap:round}
+.anillo .fondo{stroke:var(--linea)}
+.anillo .valor{stroke:var(--acento);transition:stroke-dasharray .8s cubic-bezier(.2,.8,.2,1)}
+.anillo-centro{position:relative;width:118px;height:118px;flex:none}
+.anillo-centro .n{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;line-height:1}
+.anillo-centro .n small{font-size:.66rem;font-weight:600;color:var(--tinta3);margin-top:3px;letter-spacing:.06em;text-transform:uppercase}
+.anillo-texto{flex:1;min-width:140px;font-size:.84rem;color:var(--tinta2)}
+.anillo-texto b{color:var(--tinta)}
+.anillo-texto button{margin:var(--e2) 0 0;font-size:.78rem;padding:6px 12px}
+
+.ranking{list-style:none;margin:0;padding:0;display:grid;gap:var(--e3)}
+.ranking li{display:grid;gap:5px}
+.ranking .r-fila{display:flex;justify-content:space-between;gap:var(--e3);font-size:.82rem}
+.ranking .r-nombre{color:var(--tinta);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ranking .r-valor{color:var(--tinta2);font-variant-numeric:tabular-nums;flex:none}
+.ranking .r-pista{height:8px;border-radius:var(--rp);background:var(--linea);overflow:hidden}
+.ranking .r-pista i{display:block;height:100%;border-radius:var(--rp);background:linear-gradient(90deg,var(--cian),var(--cian-cl));
+                    transform-origin:left;animation:ancho .6s cubic-bezier(.2,.8,.2,1) both}
+@keyframes ancho{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){.ranking .r-pista i{animation:none}}
+
+.atajos{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--e3)}
+.atajo{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;gap:2px var(--e3);align-items:center;margin:0;padding:var(--e3) var(--e4);
+       text-align:left;background:var(--alto2);border:1px solid var(--linea);border-radius:12px;color:var(--tinta);font:inherit;cursor:pointer;
+       transition:border-color .15s,transform .15s}
+.atajo:hover{border-color:var(--acento);transform:translateY(-1px)}
+.atajo .ico{grid-row:1 / span 2;width:38px;height:38px;padding:8px;border-radius:10px;background:var(--acento-cl);color:var(--acento)}
+.atajo b{font-size:.9rem}
+.atajo span{font-size:.76rem;color:var(--tinta3)}
+.atajo[hidden]{display:none}
+
+.circuito{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--e3);counter-reset:none}
+.circuito li{position:relative}
+.circuito li:not(:last-child)::after{content:"";position:absolute;top:34px;right:calc(-1 * var(--e3));width:var(--e3);height:2px;background:var(--acento);opacity:.55;z-index:1}
+.circuito button{display:flex;flex-direction:column;align-items:flex-start;gap:var(--e1);width:100%;height:100%;margin:0;padding:var(--e4);text-align:left;
+                 background:var(--alto2);border:1px solid var(--linea);border-radius:14px;color:var(--tinta);font:inherit;cursor:pointer;position:relative;
+                 transition:border-color .15s,transform .15s}
+.circuito button:hover{border-color:var(--acento);transform:translateY(-1px)}
+.circuito .ico{width:34px;height:34px;padding:7px;border-radius:10px;background:var(--acento-cl);color:var(--acento);margin-bottom:var(--e2)}
+.circuito .c-n{position:absolute;top:var(--e3);right:var(--e3);width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+               font-size:.72rem;font-weight:700;background:var(--alto);border:1px solid var(--linea2);color:var(--tinta2)}
+.circuito b{font-size:.92rem}
+.circuito button span:not(.c-n){font-size:.76rem;color:var(--tinta3);line-height:1.4}
+.circuito li[hidden]{display:none}
+
+@media (max-width:1100px){
+  .panel,.panel-ancho,.pila{grid-column:span 12}
+  .circuito{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .circuito li:nth-child(3)::after{display:none}
+}
+@media (max-width:640px){
+  .circuito{grid-template-columns:1fr}
+  .circuito li::after{display:none!important}
+}
 </style>
 </head>
 <body>
@@ -1046,6 +1148,61 @@ details.ayuda-tecnica p{margin-top:var(--e2)}
   <div id="inicio-titular"></div>
   <div id="inicio-resumen" class="tarjetas"></div>
   <div id="inicio-periodo"></div>
+
+  <!-- ── El tablero: lo que más importa de la empresa, de un vistazo ─────────────────────────────────────────────────────
+       Cifras, gráficos y un esquema del circuito de trabajo. Todo se calcula al abrir la pantalla con los mismos
+       datos de Analítica: acá no hay números guardados. Cada tarjeta y cada atajo lleva a la pantalla donde se trabaja. -->
+  <div id="tablero">
+    <div id="tab-kpis" class="kpis" hidden></div>
+
+    <div id="tab-graficos" class="tablero-grilla" hidden>
+      <div class="panel panel-ancho" id="pn-ops">
+        <div class="panel-cab"><h3>Ventas y compras por mes</h3><span class="panel-sub">neto, últimos 6 meses</span></div>
+        <div id="g-ops"></div>
+      </div>
+      <div class="panel" id="pn-arranque">
+        <div class="panel-cab"><h3>Puesta en marcha</h3><span class="panel-sub">qué tan lista está tu empresa</span></div>
+        <div id="g-arranque"></div>
+      </div>
+      <div class="panel panel-ancho" id="pn-banco">
+        <div class="panel-cab"><h3>Plata en el banco por mes</h3><span class="panel-sub">ingresos y egresos</span></div>
+        <div id="g-banco"></div>
+      </div>
+      <div class="pila">
+      <div class="panel" id="pn-terceros">
+        <div class="panel-cab"><h3>Quiénes más compran</h3><span class="panel-sub">por neto vendido</span></div>
+        <div id="g-terceros"></div>
+      </div>
+      <div class="panel" id="pn-productos">
+        <div class="panel-cab"><h3>Qué más se vende</h3><span class="panel-sub">por neto vendido</span></div>
+        <div id="g-productos"></div>
+      </div>
+      </div>
+    </div>
+
+    <h3 class="tablero-t">Qué querés hacer</h3>
+    <div class="atajos" id="tab-atajos">
+      <button type="button" class="atajo" data-ir="documentos"><svg class="ico"><use href="#i-documentos"/></svg><b>Subir una factura</b><span>Un PDF o una foto: el sistema la lee</span></button>
+      <button type="button" class="atajo" data-ir="comercial"><svg class="ico"><use href="#i-comercial"/></svg><b>Hacer un presupuesto</b><span>Para un cliente, antes de facturar</span></button>
+      <button type="button" class="atajo" data-ir="terceros"><svg class="ico"><use href="#i-terceros"/></svg><b>Cargar un cliente</b><span>O un proveedor, con su CUIT</span></button>
+      <button type="button" class="atajo" data-ir="caja"><svg class="ico"><use href="#i-caja"/></svg><b>Abrir la caja</b><span>Registrá cobros y pagos en efectivo</span></button>
+      <button type="button" class="atajo" data-ir="bancos"><svg class="ico"><use href="#i-bancos"/></svg><b>Conciliar el banco</b><span>Importá el extracto y comprobalo</span></button>
+      <button type="button" class="atajo" data-ir="asientos"><svg class="ico"><use href="#i-asientos"/></svg><b>Cargar un asiento</b><span>A mano, con su debe y su haber</span></button>
+      <button type="button" class="atajo" data-ir="iva"><svg class="ico"><use href="#i-iva"/></svg><b>Ver el IVA del mes</b><span>El Libro IVA Digital y sus subdiarios</span></button>
+      <button type="button" class="atajo" data-ir="asistente"><svg class="ico"><use href="#i-asistente"/></svg><b>Preguntarle al asistente</b><span>Te contesta con tus datos</span></button>
+    </div>
+
+    <h3 class="tablero-t">Cómo viaja un comprobante por NEXO</h3>
+    <ol class="circuito" id="tab-circuito">
+      <li><button type="button" data-ir="documentos"><span class="c-n">1</span><svg class="ico"><use href="#i-documentos"/></svg><b>Cargar</b><span>Subís la factura o la cargás a mano</span></button></li>
+      <li><button type="button" data-ir="propuestas"><span class="c-n">2</span><svg class="ico"><use href="#i-propuestas"/></svg><b>Revisar</b><span>La IA sugiere; vos decidís</span></button></li>
+      <li><button type="button" data-ir="asientos"><span class="c-n">3</span><svg class="ico"><use href="#i-asientos"/></svg><b>Contabilizar</b><span>El asiento entra en borrador y lo aprobás</span></button></li>
+      <li><button type="button" data-ir="iva"><span class="c-n">4</span><svg class="ico"><use href="#i-iva"/></svg><b>Declarar</b><span>Se arma el Libro IVA Digital</span></button></li>
+      <li><button type="button" data-ir="cierre"><span class="c-n">5</span><svg class="ico"><use href="#i-cierre"/></svg><b>Cerrar</b><span>Se bloquea y cierra el período</span></button></li>
+      <li><button type="button" data-ir="estados"><span class="c-n">6</span><svg class="ico"><use href="#i-estados"/></svg><b>Informar</b><span>Estados contables y libros</span></button></li>
+    </ol>
+  </div>
+
 
   <div id="inicio-arranque" hidden>
     <h3>Puesta en marcha</h3>
@@ -6301,6 +6458,299 @@ const GUIA = (() => {
   return { refrescar, ofrecerBienvenida, proximoPaso, resaltar, iniciarRecorrido, bienvenida: () => abrirRecorrido(BIENVENIDA) };
 })();
 
+/**
+ * El tablero del Inicio: cifras, gráficos y atajos.
+ *
+ * ## Un importe nunca pasa por un número de punto flotante
+ *
+ * Los importes llegan de la API como texto decimal («1234.50»). Acá se convierten a **centavos enteros** (`BigInt`) con
+ * puro manejo de texto, se suman como enteros y se vuelven a escribir como texto. Lo único que usa `Number` es la
+ * **geometría** de un gráfico (qué alto tiene una barra) y los rótulos abreviados de un eje («1,2 M»): ninguna cifra que se
+ * lea como importe sale de ahí. El importe exacto es el de la API, y está en el tooltip de cada barra.
+ *
+ * ## Un dato que no se pudo leer no es un cero
+ *
+ * Si una consulta falla (sin permiso, fuera del plan), su panel **se esconde**. Dibujar un gráfico vacío le diría a la persona
+ * «no vendiste nada» cuando lo que pasó es «no se pudo consultar».
+ */
+const TABLERO = (() => {
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+  // ── Importes: texto → centavos → texto ───────────────────────────────────────────────────────────────────────────
+  function centavos(s) {
+    const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(s === null || s === undefined ? '' : s).trim());
+    if (m === null) return null;
+    const v = BigInt(m[2] + ((m[3] || '') + '00').slice(0, 2));
+    return m[1] ? -v : v;
+  }
+  const conMiles = (ent) => ent.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  function formatoCentavos(c) {
+    const neg = c < 0n;
+    const a = neg ? -c : c;
+    return (neg ? '−' : '') + '$ ' + conMiles((a / 100n).toString()) + ',' + (a % 100n).toString().padStart(2, '0');
+  }
+  const formatoMonto = (s) => { const c = centavos(s); return c === null ? '—' : formatoCentavos(c); };
+  function abreviar(c) {
+    const pesos = Number(c / 100n);
+    const a = Math.abs(pesos);
+    if (a >= 1e9) return (pesos / 1e9).toFixed(1).replace('.', ',') + ' mil M';
+    if (a >= 1e6) return (pesos / 1e6).toFixed(1).replace('.', ',') + ' M';
+    if (a >= 1e3) return Math.round(pesos / 1e3) + ' mil';
+    return String(Math.round(pesos));
+  }
+  function escalaBonita(maxPesos) {
+    if (!(maxPesos > 0)) return { tope: 4, paso: 1 };
+    const bruto = maxPesos / 4;
+    const mag = 10 ** Math.floor(Math.log10(bruto));
+    const f = bruto / mag;
+    const paso = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
+    return { tope: paso * 4, paso };
+  }
+  const etiquetaDeMes = (clave) => MESES[Number(clave.slice(5, 7)) - 1] || clave;
+
+  // ── Piezas ───────────────────────────────────────────────────────────────────────────────────────────────────────
+  function irA(vista) {
+    const b = document.querySelector('nav button[data-vista="' + vista + '"]');
+    if (b && !b.hidden) b.click();
+  }
+  const nodo = (tag, clase, texto) => {
+    const n = document.createElement(tag);
+    if (clase) n.className = clase;
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  };
+
+  function vacio(caja, mensaje, boton, vista) {
+    caja.textContent = '';
+    const v = nodo('div', 'vacio');
+    v.innerHTML = '<svg class="ico" viewBox="0 0 24 24"><use href="#i-analitica"/></svg>';
+    v.appendChild(nodo('span', '', mensaje));
+    if (boton) {
+      const b = nodo('button', 'sec', boton);
+      b.type = 'button';
+      b.onclick = () => irA(vista);
+      v.appendChild(b);
+    }
+    caja.appendChild(v);
+  }
+
+  /** Barras agrupadas por mes. `series`: [{nombre, color, valores: [centavos por mes]}]. */
+  function barras(caja, claves, series, descripcion) {
+    let maxC = 0n;
+    for (const s of series) for (const v of s.valores) if (v > maxC) maxC = v;
+    if (maxC <= 0n) return false;
+    const W = 600, H = 232, izq = 54, der = 8, arr = 12, aba = 28;
+    const util = H - arr - aba;
+    const { tope, paso } = escalaBonita(Number(maxC) / 100);
+    const n = claves.length;
+    const gw = (W - izq - der) / n;
+    const bw = Math.min(24, gw / (series.length + 1));
+    const sep = 3;
+    let svg = '<svg class="grafico" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapar(descripcion) + '">';
+    for (let i = 0; i <= 4; i += 1) {
+      const y = arr + util * (1 - i / 4);
+      svg += '<line class="rejilla" x1="' + izq + '" x2="' + (W - der) + '" y1="' + y + '" y2="' + y + '"/>' +
+        '<text x="' + (izq - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + abreviar(BigInt(Math.round(paso * i * 100))) + '</text>';
+    }
+    claves.forEach((clave, k) => {
+      const ancho = series.length * bw + (series.length - 1) * sep;
+      const x0 = izq + gw * k + gw / 2 - ancho / 2;
+      series.forEach((s, j) => {
+        const v = s.valores[k];
+        const h = v > 0n ? Math.max(2, (Number(v) / 100 / tope) * util) : 0;
+        if (h === 0) return;
+        svg += '<rect class="barra" x="' + (x0 + j * (bw + sep)) + '" y="' + (H - aba - h) + '" width="' + bw + '" height="' + h +
+          '" rx="3" fill="' + s.color + '" style="animation-delay:' + (k * 45 + j * 20) + 'ms"><title>' +
+          escapar(s.nombre + ' · ' + etiquetaDeMes(clave) + ' ' + clave.slice(0, 4) + ': ' + formatoCentavos(v)) + '</title></rect>';
+      });
+      svg += '<text class="eje-x" x="' + (izq + gw * k + gw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + escapar(etiquetaDeMes(clave)) + '</text>';
+    });
+    svg += '</svg>';
+    const ley = '<div class="leyenda">' + series.map((s) => '<span><i style="background:' + s.color + '"></i>' + escapar(s.nombre) + '</span>').join('') + '</div>';
+    caja.innerHTML = svg + ley;
+    return true;
+  }
+
+  /** Los últimos `n` meses (aaaa-mm) hasta el actual, en hora argentina: un mes sin movimiento es una barra vacía, no un hueco. */
+  function ultimosMeses(n) {
+    const actual = hoyEnArgentina();
+    let anio = Number(actual.slice(0, 4));
+    let mes = Number(actual.slice(5, 7));
+    const salida = [];
+    for (let i = 0; i < n; i += 1) {
+      salida.unshift(anio + '-' + String(mes).padStart(2, '0'));
+      mes -= 1;
+      if (mes === 0) { mes = 12; anio -= 1; }
+    }
+    return salida;
+  }
+  /** Alinea las series sobre las mismas claves de mes. */
+  function alinear(series, claves) {
+    return { claves, series: series.map((s) => ({ ...s, valores: claves.map((c) => s.porMes.get(c) || 0n) })) };
+  }
+  function sumarPorMes(filas, campo) {
+    const mapa = new Map();
+    for (const f of filas) {
+      const c = centavos(f[campo]);
+      if (c === null) continue;
+      const clave = String(f.mes || f.desde).slice(0, 7);
+      mapa.set(clave, (mapa.get(clave) || 0n) + c);
+    }
+    return mapa;
+  }
+
+  function ranking(caja, filas, nombreDe, valorDe, vacioTexto, vista) {
+    const items = filas.map((f) => ({ nombre: nombreDe(f), c: centavos(valorDe(f)) })).filter((x) => x.c !== null && x.c > 0n)
+      .sort((a, b) => (a.c === b.c ? 0 : a.c > b.c ? -1 : 1)).slice(0, 5);
+    if (items.length === 0) return vacio(caja, vacioTexto, 'Ver el detalle', vista);
+    const max = items[0].c;
+    const ul = nodo('ul', 'ranking');
+    for (const it of items) {
+      const li = nodo('li');
+      const fila = nodo('div', 'r-fila');
+      fila.append(nodo('span', 'r-nombre', it.nombre), nodo('span', 'r-valor', formatoCentavos(it.c)));
+      const pista = nodo('div', 'r-pista');
+      const barra = document.createElement('i');
+      barra.style.width = Math.max(3, Number((it.c * 1000n) / max) / 10) + '%';
+      pista.appendChild(barra);
+      li.append(fila, pista);
+      ul.appendChild(li);
+    }
+    caja.textContent = '';
+    caja.appendChild(ul);
+  }
+
+  // ── Los paneles ──────────────────────────────────────────────────────────────────────────────────────────────────
+  function kpis(s) {
+    const caja = E('tab-kpis');
+    caja.textContent = '';
+    const vencido = centavos(s.vencidoACobrar);
+    const defs = [
+      { t: 'Ventas del mes', v: formatoMonto(s.ventasMes), s: s.ventasComprobantes + (Number(s.ventasComprobantes) === 1 ? ' comprobante' : ' comprobantes'), ico: 'comercial', color: '', vista: 'operaciones' },
+      { t: 'Compras del mes', v: formatoMonto(s.comprasMes), s: s.comprasComprobantes + (Number(s.comprasComprobantes) === 1 ? ' comprobante' : ' comprobantes'), ico: 'recepciones', color: 'ojo', vista: 'operaciones' },
+      { t: 'A cobrar', v: formatoMonto(s.aCobrar), vencido, ico: 'terceros', vista: 'terceros' },
+      { t: 'A pagar', v: formatoMonto(s.aPagar), s: 'a proveedores', ico: 'pagos', color: '', vista: 'pagos' },
+      { t: 'Stock', v: String(s.productosBajoMinimo), s: Number(s.productosEnNegativo) > 0 ? s.productosEnNegativo + ' en negativo' : 'productos bajo el mínimo', ico: 'stock',
+        color: Number(s.productosBajoMinimo) > 0 ? 'ojo' : 'bien', vista: 'stock' },
+    ];
+    for (const d of defs) {
+      const b = nodo('button', 'kpi');
+      b.type = 'button';
+      const ico = nodo('span', 'kpi-ico ' + (d.vencido !== undefined ? (d.vencido !== null && d.vencido > 0n ? 'mal' : 'bien') : d.color));
+      ico.innerHTML = '<svg class="ico"><use href="#i-' + d.ico + '"/></svg>';
+      b.append(ico, nodo('span', 'kpi-t', d.t), nodo('span', 'kpi-v', d.v));
+      const sub = nodo('span', 'kpi-s');
+      if (d.vencido !== undefined) {
+        if (d.vencido !== null && d.vencido > 0n) { sub.append(nodo('b', '', formatoCentavos(d.vencido)), document.createTextNode(' vencido')); }
+        else sub.textContent = 'nada vencido';
+      } else sub.textContent = d.s;
+      b.appendChild(sub);
+      b.onclick = () => irA(d.vista);
+      caja.appendChild(b);
+    }
+    caja.hidden = false;
+  }
+
+  function anillo(caja, pct, texto, extra) {
+    caja.textContent = '';
+    const r = 47;
+    const circ = 2 * Math.PI * r;
+    const envoltorio = nodo('div', 'anillo-caja');
+    const centro = nodo('div', 'anillo-centro');
+    centro.innerHTML = '<svg class="anillo" viewBox="0 0 118 118"><circle class="fondo" cx="59" cy="59" r="' + r + '"/>' +
+      '<circle class="valor" cx="59" cy="59" r="' + r + '" stroke-dasharray="0 ' + circ + '"/></svg>' +
+      '<div class="n">' + pct + '%<small>listo</small></div>';
+    envoltorio.appendChild(centro);
+    const t = nodo('div', 'anillo-texto');
+    t.appendChild(nodo('div', '', texto));
+    if (extra) t.appendChild(extra);
+    envoltorio.appendChild(t);
+    caja.appendChild(envoltorio);
+    // El arco se dibuja después de insertarlo, para que la transición corra.
+    requestAnimationFrame(() => {
+      const v = centro.querySelector('.valor');
+      if (v) v.setAttribute('stroke-dasharray', (circ * pct) / 100 + ' ' + circ);
+    });
+  }
+
+  /** La puesta en marcha, como un anillo: cuántos pasos están listos. Recibe lo que ya trajo `cargarInicio`. */
+  function arranque(datos) {
+    const caja = E('g-arranque');
+    const pasos = (datos.pasos || []).filter((p) => p.estado !== 'NO_APLICA');
+    if (pasos.length === 0) { E('pn-arranque').hidden = true; return; }
+    E('pn-arranque').hidden = false;
+    const listos = pasos.filter((p) => p.estado === 'COMPLETO').length;
+    const pct = Math.round((listos * 100) / pasos.length);
+    let boton = null;
+    if (listos < pasos.length) {
+      boton = nodo('button', 'sec', 'Ver lo que falta');
+      boton.type = 'button';
+      boton.onclick = () => { const a = E('inicio-arranque'); if (!a.hidden) a.scrollIntoView({ block: 'start' }); };
+    }
+    const faltan = pasos.length - listos;
+    anillo(caja, pct,
+      datos.puedeOperar
+        ? (faltan === 0 ? 'Todo listo: la empresa está lista para operar.' : 'Ya podés operar. Quedan ' + faltan + (faltan === 1 ? ' paso' : ' pasos') + ' para aprovechar todo.')
+        : 'Todavía no se puede registrar nada: falta resolver lo que bloquea.',
+      boton);
+  }
+
+  async function pintar() {
+    for (const b of document.querySelectorAll('#tablero [data-ir]')) {
+      const m = document.querySelector('nav button[data-vista="' + b.dataset.ir + '"]');
+      const li = b.closest('li');
+      (li || b).hidden = !m || m.hidden;
+    }
+
+    const fuera = estado.fueraDelPlan || [];
+    const hayAnalitica = puede('analytics:read') && puede('report:read') && fuera.indexOf('analytics') === -1;
+    E('tab-graficos').hidden = false;
+    for (const id of ['pn-ops', 'pn-banco', 'pn-terceros', 'pn-productos']) E(id).hidden = !hayAnalitica;
+    if (!hayAnalitica) { E('tab-kpis').hidden = true; return; }
+
+    const [res, ven, com, flu, ter, pro] = await Promise.all([
+      api('GET', '/analytics/resumen'),
+      api('GET', '/analytics/operaciones?direccion=VENTAS&meses=6'),
+      api('GET', '/analytics/operaciones?direccion=COMPRAS&meses=6'),
+      api('GET', '/analytics/flujo-bancario'),
+      api('GET', '/analytics/terceros?direccion=VENTAS&limite=5'),
+      api('GET', '/analytics/productos?direccion=VENTAS&limite=5'),
+    ]);
+
+    if (res.ok && res.datos.resumen) kpis(res.datos.resumen); else E('tab-kpis').hidden = true;
+
+    if (ven.ok && com.ok) {
+      const al = alinear([
+        { nombre: 'Ventas', color: 'var(--acento)', porMes: sumarPorMes(ven.datos.meses || [], 'neto') },
+        { nombre: 'Compras', color: 'var(--ojo)', porMes: sumarPorMes(com.datos.meses || [], 'neto') },
+      ], ultimosMeses(6));
+      if (!barras(E('g-ops'), al.claves, al.series, 'Ventas y compras netas por mes')) {
+        vacio(E('g-ops'), 'Todavía no hay ventas ni compras cargadas. Subí tu primera factura y acá aparece el movimiento.', 'Subir una factura', 'documentos');
+      }
+    } else E('pn-ops').hidden = true;
+
+    if (flu.ok) {
+      const filas = flu.datos.flujo || [];
+      const al = alinear([
+        { nombre: 'Ingresos', color: 'var(--bien)', porMes: sumarPorMes(filas, 'ingresos') },
+        { nombre: 'Egresos', color: 'var(--mal)', porMes: sumarPorMes(filas, 'egresos') },
+      ], ultimosMeses(6));
+      if (!barras(E('g-banco'), al.claves, al.series, 'Ingresos y egresos del banco por mes')) {
+        vacio(E('g-banco'), 'Todavía no importaste ningún extracto bancario.', 'Ir a bancos', 'bancos');
+      }
+    } else E('pn-banco').hidden = true;
+
+    if (ter.ok) ranking(E('g-terceros'), ter.datos.terceros || [], (t) => t.razonSocial, (t) => t.neto, 'Todavía no hay ventas a clientes.', 'terceros');
+    else E('pn-terceros').hidden = true;
+    if (pro.ok) ranking(E('g-productos'), pro.datos.productos || [], (p) => p.nombre, (p) => p.neto, 'Todavía no hay ventas con detalle de productos.', 'productos');
+    else E('pn-productos').hidden = true;
+  }
+
+  for (const b of document.querySelectorAll('#tablero [data-ir]')) b.onclick = () => irA(b.dataset.ir);
+
+  return { pintar, arranque, formatoMonto, centavos };
+})();
+
 E('b-salir').onclick = async () => {
   await api('POST', '/auth/logout');
   location.reload();
@@ -6547,6 +6997,7 @@ function mostrarSuspension() {
 
 // ══ 1 · Inicio ════════════════════════════════════════════════════════════
 async function cargarInicio() {
+  TABLERO.pintar();
   const wq = await api('GET', '/work-queue?limite=1');
   // Una consulta que falló no es cero pendientes. Sin esta guarda, `datos`
   // venía indefinido, `resumen` quedaba en `{}`, el total daba 0 y la pantalla
@@ -6609,6 +7060,7 @@ async function cargarInicio() {
   // cada vez que entra.
   const arr = await api('GET', '/onboarding');
   if (arr.ok) {
+    TABLERO.arranque(arr.datos);
     // Se muestra mientras quede algo que hacer. Lo que no aplica no cuenta:
     // una empresa de servicios no tiene la lista abierta para siempre por un
     // depósito que no le corresponde.
