@@ -8,7 +8,11 @@
 
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { claveDeIdempotencia, huellaDeLaOperacion } from '../../apps/api/src/http/idempotencia.js';
+import {
+  claveDeIdempotencia,
+  exigirLaMismaOperacion,
+  huellaDeLaOperacion,
+} from '../../apps/api/src/http/idempotencia.js';
 
 describe('huellaDeLaOperacion', () => {
   it('es un SHA-256 en hexadecimal', () => {
@@ -65,5 +69,34 @@ describe('claveDeIdempotencia', () => {
     } catch (error) {
       expect((error as Error).message).toMatch(/Idempotency-Key/u);
     }
+  });
+});
+
+describe('exigirLaMismaOperacion', () => {
+  const fila = (huella: string, parte = 0) => ({ id: `f${parte}`, parte, huella });
+
+  function codigoDe(f: () => void): { codigo: string; estado: number } | null {
+    try {
+      f();
+      return null;
+    } catch (error) {
+      const e = error as { code: string; statusCode: number };
+      return { codigo: e.code, estado: e.statusCode };
+    }
+  }
+
+  it('si la clave ya no tiene filas, dice que el resultado es incierto y que se puede reintentar (422)', () => {
+    expect(codigoDe(() => exigirLaMismaOperacion([], 'h1'))).toEqual({ codigo: 'IDEMPOTENCIA_RESULTADO_INCIERTO', estado: 422 });
+  });
+
+  it('si alguna fila es de OTRA operación, es un conflicto (422) y no se registra nada', () => {
+    expect(codigoDe(() => exigirLaMismaOperacion([fila('h1'), fila('otra', 1)], 'h1'))).toEqual({
+      codigo: 'IDEMPOTENCIA_CONFLICTO',
+      estado: 422,
+    });
+  });
+
+  it('si todas las filas son de la misma operación, es un reintento y no tira', () => {
+    expect(codigoDe(() => exigirLaMismaOperacion([fila('h1'), fila('h1', 1)], 'h1'))).toBeNull();
   });
 });
