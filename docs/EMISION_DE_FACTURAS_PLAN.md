@@ -28,7 +28,7 @@ La **seguridad** de emitir: máquina de estados de la intención fiscal (BORRADO
 | **E3 ✔ 2026-10-16** | **Del documento comercial al comprobante** (función pura) | Tipo A/B/C/M según la condición del emisor y del receptor; concepto; documento y **condición de IVA del receptor (RG 5616: sin ella, rechazo 10246)**; alícuotas e importes con decimales exactos (nada de punto flotante); moneda y cotización; fechas de servicio | `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` por construcción; pruebas por tipo de emisor/receptor |
 | **E4 ✔ 2026-10-16** | **Caso de uso `emitir`** | Intención → número reservado → EMITIENDO → ARCA → AUTORIZADA / RECHAZADA / DESCONOCIDA; al autorizar, enlaza el CAE con el documento comercial y la operación fiscal. Un **reconciliador periódico** (timer) para las que quedaron en duda | Las pruebas de §5 de B2.5.4.1 corren **con ARCA simulado** y luego en homologación; ninguna ruta reintenta desde DESCONOCIDA |
 | **E5** | **Impacto contable de una emisión autorizada** | Hoy el documento pasa a FACTURADO sin CAE. Definir cuándo se asienta (al autorizar), con qué cuentas y qué pasa con un rechazo | Diseño escrito y aprobado por un contador **antes** de implementar; asiento balanceado y trazable al CAE |
-| **E6** | **Notas de crédito y de débito** | Anular o corregir una factura emitida = comprobante nuevo con `CbtesAsoc` | Una factura autorizada sólo se corrige con una NC asociada |
+| **E6 ✔ 2026-10-16** | **Notas de crédito y de débito** | Anular o corregir una factura emitida = comprobante nuevo con `CbtesAsoc` | Una factura autorizada sólo se corrige con una NC asociada |
 | **E7** | **PDF con QR y pantalla** | El PDF que hoy genera un script pasa a la API; la consola muestra los 8 estados, el CAE, el vencimiento y descarga | Sin QR (si falta la especificación) el PDF lo dice impreso |
 | **E8** | **Levantar la puerta, a sabiendas** | Quitar la regla de arquitectura `la-emision-no-llega-a-la-aplicacion`; `EMISION_HABILITADA` pasa a leerse de la configuración **y las otras 6 condiciones siguen valiendo**; habilitación **por empresa**, con ambiente (homologación / producción) y motivo en la bitácora | Revisión de código y suite completa; una empresa de homologación emite y una sin credencial **no puede** |
 | **E9** | **Producción** | Certificado de producción, delegación de `wsfe` y punto de venta para web services **en producción**, confirmar y archivar con hash el extremo de producción de WSFEv1 | Primera factura real con **tu orden expresa** y un importe mínimo |
@@ -154,3 +154,22 @@ La migración 0117 (septiembre) suponía lo contrario: «si ARCA rechaza, ese n�
 - **El cableado a la aplicación** (endpoint, permisos, temporizador del reconciliador): es **E8**, porque exige levantar la regla `la-emision-no-llega-a-la-aplicacion`. Por eso tres funciones figuran en S-16 como «sin consumidor» con su motivo.
 - **Enlazar el CAE con el documento comercial y la operación fiscal**, y el asiento contable: son **E5** (decisión contable) y **E7**.
 - La clasificación «no salió / sí salió» después de EMITIENDO: **toda** falla posterior se trata como duda (la máquina de estados no tiene `EMITIENDO → LISTA`); lo común (ARCA caída) se descubre antes, sin tocar la intención.
+
+## Resultado de E6 (2026-10-16): una factura autorizada sólo se corrige con una nota asociada
+
+**Qué se construyó.**
+- `armarComprobante` arma ahora **notas de crédito (3 / 8 / 13) y de débito (2 / 7 / 12)** con su `CbtesAsoc` (tipo, punto de venta, número, CUIT del emisor y fecha). La letra sale de las mismas reglas que la factura (RG 1415). Se rechazan con motivo: una nota **sin** comprobante asociado; una factura **con** comprobante asociado; un asociado que no sea una factura o una nota de débito (una nota de crédito no se corrige con otra); un asociado **de otra letra**; una nota **anterior** al comprobante que corrige; y —cuando quien arma informa `acreditable`— una nota de crédito **por más** de lo que todavía se puede acreditar.
+- El sobre WSFEv1 manda `CbtesAsoc` en su lugar del esquema (**antes** de `Iva`, después de `CondicionIVAReceptorId`): el esquema es una secuencia y un orden equivocado es un error de validación que no dice «orden».
+- **Migración 0139** (la regla en la base, donde una consulta suelta no la saltea): `fiscal_emissions.asociada_a`. Una intención de **nota** tiene que declararla; una **factura** no puede. El asociado tiene que ser de **la misma empresa y el mismo ambiente**, estar **AUTORIZADO** (no se corrige lo que todavía no existe ni lo que quedó en duda), ser **factura o nota de débito** y de **la misma letra**; y no se cambia después. `RepositorioSqlDeEmision.cargar` lo expone.
+
+**Contra ARCA real (homologación, CUIT 20452148324, sin efecto fiscal):**
+
+| Comprobante | Resultado de ARCA |
+|---|---|
+| **Nota de Crédito C** nº 1, por la totalidad ($ 2.500,00) de la Factura C nº 53, con su `CbtesAsoc` | **Autorizada**, CAE 86421002224410 |
+| **Nota de Débito C** nº 1, por $ 100,00, asociada a la misma factura | **Autorizada**, CAE 86421002224423 |
+| Nota de Crédito C **sin** comprobante asociado (armada a mano, sólo para observar) | **Rechazada**, observación **10197**: «Si el comprobante es Débito o Crédito, enviar estructura CbteAsoc o PeriodoAsoc.» |
+
+**Pruebas:** 13 nuevas en el armado (tipos contra la tabla archivada de ARCA, cada rechazo, el orden del XML) y 10 contra la base (cada condición de la 0139, y una nota de crédito emitida de punta a punta por el caso de uso con `CbtesAsoc`).
+
+**Lo que queda fuera, dicho:** que la **suma** de las notas de crédito no supere la factura depende de importes que `fiscal_emissions` no guarda (están en el documento comercial): lo verifica quien arma el comprobante con `acreditable` (el cálculo de `acreditable` = total de la factura menos lo ya acreditado es parte de **E5/E7**, cuando exista el documento). ARCA acepta también `PeriodoAsoc` en lugar de `CbtesAsoc` (notas por período de servicios): no se arma todavía.

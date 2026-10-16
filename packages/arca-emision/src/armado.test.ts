@@ -20,6 +20,8 @@ import { endpointsFor } from '@aai/arca';
 import {
   ALICUOTAS_DE_ARCA,
   CBTE_TIPO_FACTURA,
+  CBTE_TIPO_NOTA_DE_CREDITO,
+  CBTE_TIPO_NOTA_DE_DEBITO,
   CONDICIONES_ADMITIDAS_POR_LETRA,
   ClienteWsfev1,
   DOC_TIPO,
@@ -455,6 +457,118 @@ describe('E3 · lo armado viaja al sobre de WSFEv1 con los importes como texto e
     expect(xml).toContain('<ar:CbteTipo>11</ar:CbteTipo>');
     expect(xml).not.toContain('<ar:Iva>');
     expect(xml).toContain('<ar:ImpNeto>1500.00</ar:ImpNeto>');
+  });
+});
+
+describe('E6 · notas de crédito y de débito', () => {
+  const aso = (cbteTipo: number, extra = {}) => ({ cbteTipo, puntoDeVenta: 1, numero: 53, ...extra });
+  const notaC = (cambios: Partial<EntradaDeArmado> = {}): Partial<EntradaDeArmado> => ({
+    emisor: { cuit: CUIT_EMISOR, condicionIva: 'MONOTRIBUTO' },
+    receptor: { condicionIva: 'CONSUMIDOR_FINAL', tipoDocumento: 'SIN_IDENTIFICAR', numeroDocumento: null },
+    clase: 'NOTA_DE_CREDITO',
+    comprobanteAsociado: aso(11),
+    lineas: [linea('2500.00')],
+    ...cambios,
+  });
+
+  it('los tipos de las notas son los de ARCA (FEParamGetTiposCbte)', () => {
+    const desc = (id: number) => TABLAS.tiposDeComprobante.find((t) => t.Id === id)?.Desc;
+    for (const [letra, id] of Object.entries(CBTE_TIPO_NOTA_DE_CREDITO)) expect(desc(id)).toBe(`Nota de Crédito ${letra}`);
+    for (const [letra, id] of Object.entries(CBTE_TIPO_NOTA_DE_DEBITO)) expect(desc(id)).toBe(`Nota de Débito ${letra}`);
+  });
+
+  it('una nota de crédito C lleva su CbtesAsoc con el CUIT del emisor, y se arma como la factura C (sin Iva)', () => {
+    const c = armado(notaC({ comprobanteAsociado: aso(11, { fecha: '2026-10-16' }) }));
+    expect(c.cabecera.CbteTipo).toBe(13);
+    expect(c.detalle.CbtesAsoc).toEqual([{ Tipo: 11, PtoVta: 1, Nro: 53, Cuit: CUIT_EMISOR, CbteFch: '20261016' }]);
+    expect(c.detalle).toMatchObject({ ImpTotal: '2500.00', ImpNeto: '2500.00', ImpIVA: '0.00' });
+    expect('Iva' in c.detalle).toBe(false);
+  });
+
+  it.each([
+    ['NOTA_DE_CREDITO', 13],
+    ['NOTA_DE_DEBITO', 12],
+  ] as const)('%s clase C → tipo %i (emisor monotributista)', (clase, tipo) => {
+    expect(armado(notaC({ clase })).cabecera.CbteTipo).toBe(tipo);
+  });
+
+  it('A y B según el emisor y el receptor, igual que la factura (RG 1415)', () => {
+    const ri = { cuit: CUIT_EMISOR, condicionIva: 'RESPONSABLE_INSCRIPTO' as const };
+    const aRi = { condicionIva: 'RESPONSABLE_INSCRIPTO' as const, tipoDocumento: 'CUIT' as const, numeroDocumento: CUIT_CLIENTE };
+    const aCf = { condicionIva: 'CONSUMIDOR_FINAL' as const, tipoDocumento: 'DNI' as const, numeroDocumento: '30111222' };
+    const lineasIva = [linea('100.00', '21.00')];
+    expect(armado({ emisor: ri, receptor: aRi, clase: 'NOTA_DE_CREDITO', comprobanteAsociado: aso(1), lineas: lineasIva }).cabecera.CbteTipo).toBe(3);
+    expect(armado({ emisor: ri, receptor: aRi, clase: 'NOTA_DE_DEBITO', comprobanteAsociado: aso(1), lineas: lineasIva }).cabecera.CbteTipo).toBe(2);
+    expect(armado({ emisor: ri, receptor: aCf, clase: 'NOTA_DE_CREDITO', comprobanteAsociado: aso(6), lineas: lineasIva }).cabecera.CbteTipo).toBe(8);
+    expect(armado({ emisor: ri, receptor: aCf, clase: 'NOTA_DE_DEBITO', comprobanteAsociado: aso(6), lineas: lineasIva }).cabecera.CbteTipo).toBe(7);
+    const a = armado({ emisor: ri, receptor: aRi, clase: 'NOTA_DE_CREDITO', comprobanteAsociado: aso(1), lineas: lineasIva });
+    expect(a.detalle.Iva).toEqual([{ Id: 5, BaseImp: '100.00', Importe: '21.00' }]);
+  });
+
+  it('una nota sin comprobante asociado no se arma: una factura autorizada se corrige con una nota asociada', () => {
+    expect(problemasDe(notaC({ comprobanteAsociado: undefined }))).toEqual(['NOTA_SIN_COMPROBANTE_ASOCIADO']);
+  });
+
+  it('una factura NO lleva comprobante asociado', () => {
+    expect(problemasDe({ comprobanteAsociado: aso(1) })).toEqual(['FACTURA_CON_COMPROBANTE_ASOCIADO']);
+  });
+
+  it('el asociado tiene que ser una factura o una nota de débito de la misma letra; una nota de crédito no se asocia a otra', () => {
+    expect(problemasDe(notaC({ comprobanteAsociado: aso(13) }))).toEqual(['ASOCIADO_INVALIDO']);
+    expect(problemasDe(notaC({ comprobanteAsociado: aso(3) }))).toEqual(['ASOCIADO_INVALIDO']);
+    expect(problemasDe(notaC({ comprobanteAsociado: aso(99) }))).toEqual(['ASOCIADO_INVALIDO']);
+    expect(problemasDe(notaC({ comprobanteAsociado: aso(6) }))).toEqual(['ASOCIADO_DE_OTRA_LETRA']);
+    expect(armarComprobante(entrada(notaC({ comprobanteAsociado: aso(12) }))).ok).toBe(true);
+  });
+
+  it('punto de venta y número del asociado válidos', () => {
+    expect(problemasDe(notaC({ comprobanteAsociado: aso(11, { numero: 0 }) }))).toEqual(['ASOCIADO_INVALIDO']);
+    expect(problemasDe(notaC({ comprobanteAsociado: aso(11, { puntoDeVenta: 0 }) }))).toEqual(['ASOCIADO_INVALIDO']);
+  });
+
+  it('una nota no puede ser anterior al comprobante que corrige', () => {
+    expect(problemasDe(notaC({ fecha: '2026-10-10', comprobanteAsociado: aso(11, { fecha: '2026-10-16' }) }))).toEqual(['NOTA_ANTERIOR_AL_COMPROBANTE']);
+    expect(armarComprobante(entrada(notaC({ fecha: '2026-10-16', comprobanteAsociado: aso(11, { fecha: '2026-10-16' }) }))).ok).toBe(true);
+  });
+
+  it('una nota de crédito no supera lo acreditable del comprobante asociado (cuando se informa)', () => {
+    expect(problemasDe(notaC({ acreditable: '2000.00' }))).toEqual(['NOTA_EXCEDE_EL_COMPROBANTE']);
+    expect(armarComprobante(entrada(notaC({ acreditable: '2500.00' }))).ok).toBe(true);
+    expect(armarComprobante(entrada(notaC({ acreditable: '9999.99' }))).ok).toBe(true);
+    expect(problemasDe(notaC({ acreditable: 'mucho' }))).toEqual(['NOTA_EXCEDE_EL_COMPROBANTE']);
+  });
+
+  it('una nota de débito no se limita por lo acreditable (aumenta, no corrige hacia abajo)', () => {
+    expect(armarComprobante(entrada(notaC({ clase: 'NOTA_DE_DEBITO', acreditable: '1.00' }))).ok).toBe(true);
+  });
+
+  it('el sobre XML lleva CbtesAsoc ANTES de Iva (el esquema es una secuencia)', async () => {
+    const HOMO = endpointsFor('homologacion');
+    const permiso = verificarDestinoDeEmision({ ambiente: 'homologacion', endpointWsfev1: HOMO.wsfev1, endpointWsaa: HOMO.wsaa });
+    if (!permiso.permitido) throw new Error('permiso');
+    const c = armado({
+      emisor: { cuit: CUIT_EMISOR, condicionIva: 'RESPONSABLE_INSCRIPTO' },
+      receptor: { condicionIva: 'RESPONSABLE_INSCRIPTO', tipoDocumento: 'CUIT', numeroDocumento: CUIT_CLIENTE },
+      clase: 'NOTA_DE_CREDITO',
+      comprobanteAsociado: aso(1, { fecha: '2026-10-16' }),
+      lineas: [linea('100.00', '21.00')],
+    });
+    const cuerpos: string[] = [];
+    const fetchImpl = (async (_u: string, init: RequestInit) => {
+      cuerpos.push(String(init.body));
+      return new Response(
+        '<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><FECAESolicitarResponse><FECAESolicitarResult><FeCabResp><Resultado>A</Resultado></FeCabResp></FECAESolicitarResult></FECAESolicitarResponse></soap:Body></soap:Envelope>',
+        { status: 200, headers: { 'Content-Type': 'text/xml' } },
+      );
+    }) as unknown as typeof fetch;
+    await new ClienteWsfev1({ permiso, fetchImpl }).solicitarCae({ Token: 't', Sign: 's', Cuit: CUIT_EMISOR }, c.cabecera, [c.detalle]);
+    const xml = cuerpos[0]!;
+    expect(xml).toContain('<ar:CbteTipo>3</ar:CbteTipo>');
+    expect(xml).toContain(
+      `<ar:CbtesAsoc><ar:CbteAsoc><ar:Tipo>1</ar:Tipo><ar:PtoVta>1</ar:PtoVta><ar:Nro>53</ar:Nro><ar:Cuit>${CUIT_EMISOR}</ar:Cuit><ar:CbteFch>20261016</ar:CbteFch></ar:CbteAsoc></ar:CbtesAsoc>`,
+    );
+    expect(xml.indexOf('<ar:CbtesAsoc>')).toBeLessThan(xml.indexOf('<ar:Iva>'));
+    expect(xml.indexOf('<ar:CondicionIVAReceptorId>')).toBeLessThan(xml.indexOf('<ar:CbtesAsoc>'));
   });
 });
 

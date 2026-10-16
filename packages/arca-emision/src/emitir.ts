@@ -56,6 +56,8 @@ export interface IntencionGuardada {
   readonly cae: string | null;
   /** `AAAA-MM-DD`. */
   readonly caeVencimiento: string | null;
+  /** En una nota de crédito o de débito: la intención del comprobante que corrige (el caso de uso la usa para armar `CbtesAsoc`). */
+  readonly asociadaA?: string | null;
 }
 
 export type CodigoDeErrorDeEmision =

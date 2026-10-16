@@ -34,6 +34,18 @@ export interface AlicuotaIva {
   readonly Importe: number | string;
 }
 
+/** `CbteAsoc`: el comprobante que una nota de crédito o de débito corrige o complementa. */
+export interface ComprobanteAsociado {
+  /** `CbteTipo` del comprobante asociado. */
+  readonly Tipo: number;
+  readonly PtoVta: number;
+  readonly Nro: number;
+  /** CUIT de quien emitió el asociado. Opcional en el WSDL. */
+  readonly Cuit?: string;
+  /** `AAAAMMDD`. Opcional en el WSDL. */
+  readonly CbteFch?: string;
+}
+
 /**
  * `FEDetRequest` — el comprobante.
  *
@@ -68,6 +80,8 @@ export interface DetalleComprobante {
   readonly MonCotiz: number | string;
   /** RG 5616/2024. `FEParamGetCondicionIvaReceptor`. */
   readonly CondicionIVAReceptorId?: number;
+  /** Obligatorio en una nota de crédito o de débito: el comprobante que corrige. En el WSDL va **antes** de `Iva`. */
+  readonly CbtesAsoc?: readonly ComprobanteAsociado[];
   readonly Iva?: readonly AlicuotaIva[];
 }
 

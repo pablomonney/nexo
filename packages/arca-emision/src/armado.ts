@@ -29,8 +29,11 @@
  * - **No reserva el número ni habla con ARCA**: el número llega ya reservado (E4). Acá sólo se arma.
  * - **No verifica la fecha contra «hoy»**: ARCA admite una ventana distinta para productos y para servicios y «hoy» es una
  *   lectura del reloj; la verifica el caso de uso (E4).
- * - **No arma notas de crédito ni de débito** (llevan `CbtesAsoc`; E6) **ni tributos / percepciones** (importe distinto de
- *   cero en `percepciones` se rechaza) **ni facturas de exportación** (clase E). Rechazar es lo correcto mientras no estén.
+ * - **Notas de crédito y de débito (E6)**: llevan el comprobante que corrigen (`CbtesAsoc`), que tiene que ser una factura o una
+ *   nota de débito **de la misma letra**; sin él no se arman. Una nota de crédito no puede superar lo `acreditable` del
+ *   comprobante asociado cuando quien arma lo informa, ni ser anterior a él.
+ * - **No arma tributos / percepciones** (importe distinto de cero en `percepciones` se rechaza) **ni facturas de exportación**
+ *   (clase E). Rechazar es lo correcto mientras no estén.
  * - **No aplica el umbral de identificación del consumidor final**: depende de un monto que fija ARCA y cambia; hasta que
  *   se decida de dónde sale, una factura a consumidor final sin identificar se arma y lo dice en `avisos`.
  * - **No valida que el redondeo de IVA de ARCA coincida línea por línea**: se agrupa por alícuota y se avisa si el IVA
@@ -50,17 +53,37 @@ import {
   type Currency,
   type Money,
 } from '@aai/shared';
-import type { AlicuotaIva, CabeceraLote, DetalleComprobante } from './contracts.js';
+import type { AlicuotaIva, CabeceraLote, ComprobanteAsociado, DetalleComprobante } from './contracts.js';
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // Las tablas de ARCA (FEParamGet*), tal como las contestó homologación el 2026-10-16.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type LetraDeComprobante = 'A' | 'B' | 'C';
-export type ClaseDeComprobante = 'FACTURA';
+export type ClaseDeComprobante = 'FACTURA' | 'NOTA_DE_CREDITO' | 'NOTA_DE_DEBITO';
 
 /** `FEParamGetTiposCbte`: Factura A = 1, B = 6, C = 11. (Las notas de débito/crédito son 2/3, 7/8 y 12/13: llegan en E6.) */
 export const CBTE_TIPO_FACTURA: Readonly<Record<LetraDeComprobante, number>> = { A: 1, B: 6, C: 11 };
+
+/** `FEParamGetTiposCbte`: Nota de Débito A = 2, B = 7, C = 12. */
+export const CBTE_TIPO_NOTA_DE_DEBITO: Readonly<Record<LetraDeComprobante, number>> = { A: 2, B: 7, C: 12 };
+
+/** `FEParamGetTiposCbte`: Nota de Crédito A = 3, B = 8, C = 13. */
+export const CBTE_TIPO_NOTA_DE_CREDITO: Readonly<Record<LetraDeComprobante, number>> = { A: 3, B: 8, C: 13 };
+
+const CBTE_TIPO_POR_CLASE: Readonly<Record<ClaseDeComprobante, Readonly<Record<LetraDeComprobante, number>>>> = {
+  FACTURA: CBTE_TIPO_FACTURA,
+  NOTA_DE_CREDITO: CBTE_TIPO_NOTA_DE_CREDITO,
+  NOTA_DE_DEBITO: CBTE_TIPO_NOTA_DE_DEBITO,
+};
+
+/**
+ * Qué comprobantes admite ARCA como «asociado» de una nota, y de qué letra es cada uno: una factura o una nota de débito, y de
+ * **la misma letra** que la nota (una nota de crédito B corrige una factura B; no una A). Una nota de crédito no se asocia a otra.
+ */
+const LETRA_DE_ASOCIABLE: ReadonlyMap<number, LetraDeComprobante> = new Map([
+  [1, 'A'], [2, 'A'], [6, 'B'], [7, 'B'], [11, 'C'], [12, 'C'],
+]);
 
 /** `FEParamGetCondicionIvaReceptor` (RG 5616): qué `Id` admite cada letra. */
 export const CONDICIONES_ADMITIDAS_POR_LETRA: Readonly<Record<LetraDeComprobante, readonly number[]>> = {
@@ -129,10 +152,30 @@ export interface LineaParaArmar {
   readonly alicuota?: string;
 }
 
+export interface ComprobanteAsociadoParaArmar {
+  /** `CbteTipo` de ARCA del comprobante que se corrige (factura o nota de débito). */
+  readonly cbteTipo: number;
+  readonly puntoDeVenta: number;
+  readonly numero: number;
+  /** `AAAA-MM-DD`. Opcional; si se da, la nota no puede ser anterior. */
+  readonly fecha?: string;
+}
+
 export interface EntradaDeArmado {
   readonly emisor: EmisorParaArmar;
   readonly receptor: ReceptorParaArmar;
   readonly clase: ClaseDeComprobante;
+  /**
+   * **Obligatorio en una nota de crédito o de débito** (y prohibido en una factura): el comprobante que corrige. Una factura
+   * autorizada no se edita ni se borra: sólo se corrige con una nota asociada (RG 1415).
+   */
+  readonly comprobanteAsociado?: ComprobanteAsociadoParaArmar;
+  /**
+   * Sólo en una **nota de crédito**: el máximo que todavía se puede acreditar del comprobante asociado (su total menos lo ya
+   * acreditado). Quien arma lo sabe —es el documento comercial— y la función se niega a superarlo. Sin este dato **no se
+   * verifica**: una nota por más de lo facturado es un rechazo de ARCA que se puede evitar.
+   */
+  readonly acreditable?: string;
   readonly puntoDeVenta: number;
   /** El número ya reservado. */
   readonly numero: number;
@@ -170,7 +213,13 @@ export type CodigoDeProblema =
   | 'SERVICIO_SIN_PERIODO'
   | 'PERIODO_INVALIDO'
   | 'PERCEPCIONES_NO_SOPORTADAS'
-  | 'IMPORTE_NO_POSITIVO';
+  | 'IMPORTE_NO_POSITIVO'
+  | 'NOTA_SIN_COMPROBANTE_ASOCIADO'
+  | 'FACTURA_CON_COMPROBANTE_ASOCIADO'
+  | 'ASOCIADO_INVALIDO'
+  | 'ASOCIADO_DE_OTRA_LETRA'
+  | 'NOTA_ANTERIOR_AL_COMPROBANTE'
+  | 'NOTA_EXCEDE_EL_COMPROBANTE';
 
 export interface Problema {
   readonly codigo: CodigoDeProblema;
@@ -470,12 +519,55 @@ export function armarComprobante(entrada: EntradaDeArmado): ResultadoDeArmado {
     }
   }
 
+  // El comprobante asociado: una nota lo exige y una factura no lo admite.
+  const esNota = entrada.clase !== 'FACTURA';
+  const asoc = entrada.comprobanteAsociado;
+  if (!esNota && asoc !== undefined) {
+    falla('FACTURA_CON_COMPROBANTE_ASOCIADO', 'Una factura no lleva comprobante asociado: sólo las notas de crédito y de débito corrigen otro comprobante.');
+  }
+  if (esNota) {
+    if (asoc === undefined) {
+      falla(
+        'NOTA_SIN_COMPROBANTE_ASOCIADO',
+        'Una nota de crédito o de débito corrige un comprobante, y hay que decir cuál: una factura autorizada no se edita, se corrige con una nota asociada.',
+      );
+    } else {
+      const letraDelAsociado = LETRA_DE_ASOCIABLE.get(asoc.cbteTipo);
+      if (letraDelAsociado === undefined) {
+        falla('ASOCIADO_INVALIDO', `El tipo ${asoc.cbteTipo} no se puede asociar: una nota corrige una factura o una nota de débito (1, 2, 6, 7, 11, 12).`);
+      } else if (letra.ok && letraDelAsociado !== letra.letra) {
+        falla('ASOCIADO_DE_OTRA_LETRA', `La nota sería clase ${letra.letra} y el comprobante asociado es clase ${letraDelAsociado}: una nota corrige un comprobante de su misma letra.`);
+      }
+      if (!Number.isSafeInteger(asoc.numero) || asoc.numero < 1 || !Number.isInteger(asoc.puntoDeVenta) || asoc.puntoDeVenta < 1 || asoc.puntoDeVenta > 99_999) {
+        falla('ASOCIADO_INVALIDO', 'El punto de venta y el número del comprobante asociado tienen que ser enteros positivos.');
+      }
+      if (asoc.fecha !== undefined) {
+        if (!isCalendarDate(asoc.fecha)) falla('ASOCIADO_INVALIDO', 'La fecha del comprobante asociado no es una fecha válida (AAAA-MM-DD).');
+        else if (isCalendarDate(entrada.fecha) && compareDates(entrada.fecha as CalendarDate, asoc.fecha as CalendarDate) < 0) {
+          falla('NOTA_ANTERIOR_AL_COMPROBANTE', 'Una nota no puede tener fecha anterior a la del comprobante que corrige.');
+        }
+      }
+    }
+  }
+
   // Totales: el total no se recibe, se calcula.
   const impNeto = neto;
   const impIva = iva;
   const total = impNeto + exento + noGravado + impIva;
   if (entrada.lineas.length > 0 && total <= 0n && problemas.length === 0) {
     falla('IMPORTE_NO_POSITIVO', 'El total del comprobante tiene que ser mayor que cero.');
+  }
+
+  if (entrada.clase === 'NOTA_DE_CREDITO' && entrada.acreditable !== undefined && problemas.length === 0) {
+    const tope = dinero(entrada.acreditable, monedaDeCalculo);
+    if (tope === null || tope.amount < 0n) {
+      falla('NOTA_EXCEDE_EL_COMPROBANTE', 'Lo acreditable del comprobante asociado tiene que ser un decimal exacto, no negativo y de hasta 2 decimales.');
+    } else if (total > tope.amount) {
+      falla(
+        'NOTA_EXCEDE_EL_COMPROBANTE',
+        `La nota de crédito es por ${toDecimalString(moneyFromDecimalString(bigATexto(total), monedaDeCalculo))} y del comprobante asociado sólo se puede acreditar ${toDecimalString(tope)}.`,
+      );
+    }
   }
 
   if (problemas.length > 0 || !letra.ok || monId === undefined) {
@@ -502,7 +594,7 @@ export function armarComprobante(entrada: EntradaDeArmado): ResultadoDeArmado {
   }
 
   const monto = (x: bigint): string => toDecimalString(moneyFromDecimalString(bigATexto(x), monedaDeCalculo));
-  const cbteTipo = CBTE_TIPO_FACTURA[letra.letra];
+  const cbteTipo = CBTE_TIPO_POR_CLASE[entrada.clase][letra.letra];
 
   const detalle: DetalleComprobante = {
     Concepto: concepto,
@@ -523,6 +615,19 @@ export function armarComprobante(entrada: EntradaDeArmado): ResultadoDeArmado {
     MonId: monId,
     MonCotiz: cotizacion,
     CondicionIVAReceptorId: condicionReceptorId,
+    ...(asoc === undefined
+      ? {}
+      : {
+          CbtesAsoc: [
+            {
+              Tipo: asoc.cbteTipo,
+              PtoVta: asoc.puntoDeVenta,
+              Nro: asoc.numero,
+              Cuit: normalizeCuit(entrada.emisor.cuit),
+              ...(asoc.fecha === undefined ? {} : { CbteFch: aaaammdd(asoc.fecha) }),
+            } satisfies ComprobanteAsociado,
+          ],
+        }),
     // Una factura C no manda el nodo `Iva` (ni vacío): es el rechazo más común.
     ...(alicuotas.length > 0 ? { Iva: alicuotas } : {}),
   };

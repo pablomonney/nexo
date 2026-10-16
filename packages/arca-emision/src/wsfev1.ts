@@ -401,6 +401,18 @@ function detalleXml(d: DetalleComprobante): string {
     `<ar:MonId>${d.MonId}</ar:MonId>` +
     `<ar:MonCotiz>${d.MonCotiz}</ar:MonCotiz>` +
     opcional('CondicionIVAReceptorId', d.CondicionIVAReceptorId) +
+    // `CbtesAsoc` va antes de `Tributos` y de `Iva`: el esquema es una `s:sequence`.
+    (d.CbtesAsoc === undefined || d.CbtesAsoc.length === 0
+      ? ''
+      : '<ar:CbtesAsoc>' +
+        d.CbtesAsoc.map(
+          (c) =>
+            `<ar:CbteAsoc><ar:Tipo>${c.Tipo}</ar:Tipo><ar:PtoVta>${c.PtoVta}</ar:PtoVta><ar:Nro>${c.Nro}</ar:Nro>` +
+            opcional('Cuit', c.Cuit) +
+            opcional('CbteFch', c.CbteFch) +
+            '</ar:CbteAsoc>',
+        ).join('') +
+        '</ar:CbtesAsoc>') +
     // Para clase C no va: el comprobante no discrimina IVA y un array vacío es
     // motivo de rechazo. Por eso se omite el nodo entero, no se manda vacío.
     (d.Iva === undefined || d.Iva.length === 0

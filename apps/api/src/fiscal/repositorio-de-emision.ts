@@ -46,6 +46,8 @@ export interface IntencionGuardada {
   readonly cae: string | null;
   /** `AAAA-MM-DD`. */
   readonly caeVencimiento: string | null;
+  /** En una nota de crédito o de débito: la intención del comprobante que corrige. En una factura, nulo. */
+  readonly asociadaA: string | null;
 }
 
 export interface EvidenciaGuardada {
@@ -70,10 +72,11 @@ interface Fila {
   cbte_numero: string | null;
   cae: string | null;
   cae_vencimiento: string | null;
+  asociada_a: string | null;
 }
 
 const COLUMNAS = `id, estado, ambiente, punto_venta, cbte_tipo, cbte_numero::text AS cbte_numero, cae,
-                  to_char(cae_vencimiento, 'YYYY-MM-DD') AS cae_vencimiento`;
+                  to_char(cae_vencimiento, 'YYYY-MM-DD') AS cae_vencimiento, asociada_a`;
 
 const aIntencion = (f: Fila): IntencionGuardada => ({
   id: f.id,
@@ -84,6 +87,7 @@ const aIntencion = (f: Fila): IntencionGuardada => ({
   cbteNumero: f.cbte_numero === null ? null : Number(f.cbte_numero),
   cae: f.cae,
   caeVencimiento: f.cae_vencimiento,
+  asociadaA: f.asociada_a,
 });
 
 const actorType = (actorId: string): 'USER' | 'SYSTEM' => (actorId.startsWith('user:') ? 'USER' : 'SYSTEM');
