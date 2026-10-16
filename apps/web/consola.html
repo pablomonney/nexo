@@ -671,6 +671,27 @@ details.ayuda-tecnica p{margin-top:var(--e2)}
   .circuito{grid-template-columns:1fr}
   .circuito li::after{display:none!important}
 }
+
+/* ── El ingreso: la primera pantalla que ve alguien ─────────────────────────────────────────────────────────────────── */
+#login-intro{text-align:center;margin:var(--e5) 0 var(--e5)}
+#login-intro svg{display:block;margin:0 auto var(--e3);color:var(--tinta)}
+#login-intro p{margin:0;color:var(--tinta2);font-size:1rem}
+main:has(#v-login:not([hidden])){max-width:540px;padding-top:var(--e6)}
+main:has(#v-login:not([hidden])) #v-login{padding:var(--e6);border-radius:18px;box-shadow:var(--sombra)}
+main:has(#v-login:not([hidden])) #v-login .fila{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--e3)}
+.app:has(#v-login:not([hidden])) header .marca{display:none}
+.app:has(#v-login:not([hidden]))::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(55% 45% at 50% 0%,color-mix(in srgb,var(--cian) 16%,transparent) 0%,transparent 70%)}
+#login-pie{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--e2) var(--e5);margin:var(--e4) 0 0;padding:0;list-style:none;
+           color:var(--tinta3);font-size:.82rem}
+#login-pie li{display:inline-flex;align-items:center;gap:6px}
+#login-pie .ico{width:16px;height:16px;color:var(--bien)}
+
+/* El título de cada pantalla lleva el mismo ícono que su botón del menú: se reconoce dónde se está de un vistazo. */
+h2 .h2-ico{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;margin-right:var(--e3);vertical-align:middle;
+           border-radius:11px;background:var(--acento-cl);color:var(--acento)}
+h2 .h2-ico .ico{width:20px;height:20px}
+section>h2{font-size:1.4rem;letter-spacing:-.02em}
 </style>
 </head>
 <body>
@@ -886,10 +907,15 @@ details.ayuda-tecnica p{margin-top:var(--e2)}
 <div id="suspension" hidden></div>
 
 <!-- ══ Ingresar ═══════════════════════════════════════════════════════════ -->
+<div id="login-intro">
+  <svg width="150" height="53" role="img" aria-label="NEXO"><use href="#i-marca"/></svg>
+  <p>Gestión y contabilidad para empresas argentinas</p>
+</div>
+
 <section id="v-login">
   <h2>Ingresar</h2>
-  <p class="ayuda">El mismo login que usa la API. La consola no guarda tu contraseña:
-    la sesión vive en la cookie que emite el servidor.</p>
+  <p class="ayuda">Ingresá con tu correo y tu contraseña. La consola no guarda tu contraseña: la sesión vive en una cookie
+    que emite el servidor.</p>
   <!-- Es un <form> para que el navegador reconozca el par correo/contraseña y ofrezca guardarlo en SU gestor de
        contraseñas. El envío se corta en el handler (la consola habla con la API, no navega). -->
   <form id="f-login" autocomplete="on" novalidate>
@@ -1001,6 +1027,12 @@ details.ayuda-tecnica p{margin-top:var(--e2)}
      Es literalmente el defecto que S-25 encontró el 2026-09-03 —«la consola no
      tenía dónde configurarlo»— arreglado en el ingreso y recreado en el alta.
      Una pantalla que hace falta en dos caminos no puede vivir dentro de uno. -->
+<ul id="login-pie">
+  <li><svg class="ico"><use href="#i-check"/></svg>Prueba de 14 días, sin tarjeta</li>
+  <li><svg class="ico"><use href="#i-check"/></svg>Segundo factor para los roles contables</li>
+  <li><svg class="ico"><use href="#i-check"/></svg>Tus datos, siempre exportables</li>
+</ul>
+
 <section id="v-mfa" hidden>
   <h2>Configurar el segundo factor</h2>
   <p class="ayuda">Tu rol lo exige, y hasta que esté configurado la API no deja llegar a los
@@ -5130,6 +5162,8 @@ function ir(vista, migas) {
   caja.innerHTML = partes.map((p, i) =>
     i === partes.length - 1 ? '<b>' + escapar(p) + '</b>' : escapar(p)).join(' › ');
   GUIA.refrescar(vista);
+  E('login-intro').hidden = vista !== 'login';
+  E('login-pie').hidden = vista !== 'login';
   if (vista === 'inicio') GUIA.ofrecerBienvenida(); else E('bienvenida').hidden = true;
 }
 
@@ -6311,6 +6345,17 @@ const GUIA = (() => {
   }
 
   for (const [vista, g] of Object.entries(GUIAS)) construirTarjeta(vista, g);
+
+  // Cada título lleva el ícono de su botón del menú.
+  for (const b of document.querySelectorAll('nav button[data-vista]')) {
+    const h2 = document.querySelector('#v-' + b.dataset.vista + ' > h2');
+    const svg = b.querySelector('svg');
+    if (h2 === null || svg === null || h2.querySelector('.h2-ico') !== null) continue;
+    const marco = document.createElement('span');
+    marco.className = 'h2-ico';
+    marco.appendChild(svg.cloneNode(true));
+    h2.prepend(marco);
+  }
 
   // ── El recorrido ────────────────────────────────────────────────────────────────────────────────────────────────
   const R = { pasos: [], i: 0, activo: false, previo: null, el: null };
