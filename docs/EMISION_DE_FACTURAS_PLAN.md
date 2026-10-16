@@ -23,7 +23,7 @@ La **seguridad** de emitir: máquina de estados de la intención fiscal (BORRADO
 
 | # | Etapa | Qué incluye | Criterio de aceptación |
 |---|---|---|---|
-| **E1** | **Prueba real en homologación** | Con el ticket ya liberado: `npm run comprobantes:generar -- --cantidad 1 …` emite una Factura C de prueba (sin efecto fiscal); luego `consultarComprobante` real para confirmar el código de «no existe» | Un CAE de homologación y la consulta devuelve ese CAE; el código de inexistente queda confirmado y archivado |
+| **E1 ✔ 2026-10-16** | **Prueba real en homologación** | Con el ticket ya liberado: `npm run comprobantes:generar -- --cantidad 1 …` emite una Factura C de prueba (sin efecto fiscal); luego `consultarComprobante` real para confirmar el código de «no existe» | Un CAE de homologación y la consulta devuelve ese CAE; el código de inexistente queda confirmado y archivado |
 | **E2** | **Caché de tickets compartida en la API** | Hoy la API pide un ticket por consulta (`arca_access_tickets` no tiene escritor, S-17): con dos consultas seguidas el WSAA rechaza la segunda. Escritor sobre esa tabla con un candado por CUIT+servicio | Dos procesos simultáneos reciben el **mismo** ticket; un ticket vencido se renueva una sola vez |
 | **E3** | **Del documento comercial al comprobante** (función pura) | Tipo A/B/C/M según la condición del emisor y del receptor; concepto; documento y **condición de IVA del receptor (RG 5616: sin ella, rechazo 10246)**; alícuotas e importes con decimales exactos (nada de punto flotante); moneda y cotización; fechas de servicio | `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` por construcción; pruebas por tipo de emisor/receptor |
 | **E4** | **Caso de uso `emitir`** | Intención → número reservado → EMITIENDO → ARCA → AUTORIZADA / RECHAZADA / DESCONOCIDA; al autorizar, enlaza el CAE con el documento comercial y la operación fiscal. Un **reconciliador periódico** (timer) para las que quedaron en duda | Las pruebas de §5 de B2.5.4.1 corren **con ARCA simulado** y luego en homologación; ninguna ruta reintenta desde DESCONOCIDA |
@@ -49,3 +49,21 @@ Emitir en producción, usar tu clave fiscal, crear o delegar certificados en ARC
 ## 6 · Tamaño honesto
 
 E1 es corto (hoy). E2, E3 y E4 son el grueso del código y se pueden probar enteros con ARCA simulado. E5 depende de una decisión contable. E7 y E8 son medianos. E9 y E10 dependen de trámites tuyos en ARCA. Es un proyecto de varias sesiones de trabajo, no de una; el orden de arriba es el que minimiza el riesgo de emitir algo mal.
+
+## Resultado de E1 (2026-10-16, homologación; sin efecto fiscal)
+
+Corrido con `scripts/generar-comprobantes-homologacion.mjs` (candados de destino en verde, `FEDummy` app/db/auth OK, certificado emitido por «Computadores Test» de AFIP), CUIT 20452148324, punto de venta 1, tipo 11 (Factura C):
+
+| Qué | Resultado |
+|---|---|
+| Ticket de `wsfe` | Se pidió uno **nuevo** (el del 2026-10-15 ya había vencido); queda en la caché de tickets, vence a las 03:09 ART del 2026-10-17 |
+| Último autorizado antes de emitir | 50 (fecha 20260827) |
+| **Emisión** | **Comprobante 1-00001-00000051 autorizado**, Resultado `A`, **CAE 86421002204236**, vencimiento 20261024 (el CAE no es secreto) |
+| `consultarComprobante` del 51 | `ENCONTRADO`, **el mismo CAE**, mismo importe y fecha |
+| `consultarComprobante` del 1051 (no existe) | `NO_EXISTE` con el error **602** «No existen datos en nuestros registros para los parametros ingresados» y ningún otro |
+
+**Conclusiones.**
+- El punto de venta 1 de homologación **sí está habilitado** para web services: no hace falta ninguna gestión del titular para E2–E4.
+- `CODIGOS_DE_COMPROBANTE_INEXISTENTE = [602]` **queda confirmado**; se quitó de `contracts.ts` la nota «a confirmar».
+- La consulta real de un comprobante recién autorizado devuelve el mismo CAE que la emisión: el reconciliador (E4) puede apoyarse en `consultarComprobante` para decidir «ya existe» sin volver a emitir.
+- Nada se emitió en producción ni con otro CUIT.

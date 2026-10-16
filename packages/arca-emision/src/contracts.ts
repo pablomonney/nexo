@@ -145,10 +145,10 @@ export interface ComprobanteConsultado {
 /**
  * Los códigos con los que ARCA dice «no existe ese comprobante» al consultarlo.
  *
- * **A CONFIRMAR CONTRA HOMOLOGACIÓN.** El 602 es el que se espera para «no existen datos para los parámetros ingresados», pero
- * el manual archivado no se pudo leer como texto en esta sesión y la regla de este repositorio es no escribir de memoria el
- * contrato de un servicio ajeno. Mientras tanto se usa **sólo** para distinguir «no existe» de «no se pudo saber»; cualquier
- * otro código se informa como indeterminado, que es el lado seguro: jamás habilita a emitir de nuevo.
+ * **CONFIRMADO CONTRA HOMOLOGACIÓN el 2026-10-16** (E1 de `docs/EMISION_DE_FACTURAS_PLAN.md`): `FECompConsultar` de un comprobante que
+ * no existe (tipo 11, punto de venta 1, número 1051, con el último autorizado en 51) contestó el error **602**, «No existen datos
+ * en nuestros registros para los parametros ingresados», y nada más. Se usa **sólo** para distinguir «no existe» de «no se pudo
+ * saber»; cualquier otro código se informa como indeterminado, que es el lado seguro: jamás habilita a emitir de nuevo.
  */
 export const CODIGOS_DE_COMPROBANTE_INEXISTENTE: readonly number[] = [602];
 
