@@ -24,7 +24,7 @@
 
 | # | Qué | Por qué sólo vos | Cuando esté hecho |
 |---|---|---|---|
-| ~~C1~~ | ~~Correo de contacto que reciba mensajes~~ **CONFIGURADO el 2026-10-16**: Cloudflare Email Routing con la regla `contacto@nexointelligence.com.ar` → `monneypablo@gmail.com` (activa; destino verificado; catch-all apagado). DNS verificado por consulta pública: 3 MX de Cloudflare, SPF `include:_spf.mx.cloudflare.net`, DKIM de Cloudflare; **los registros de Resend, el DMARC y las CNAME `send`/`rsend` quedaron intactos**. | — | **Falta la prueba de entrega** (mandar un correo de prueba desde otra cuenta y ver que llegue); recién ahí se publica la dirección en la consola y la página. |
+| ~~C1~~ | ~~Correo de contacto que reciba mensajes~~ **CONFIGURADO el 2026-10-16**: Cloudflare Email Routing con la regla `contacto@nexointelligence.com.ar` → `monneypablo@gmail.com` (activa; destino verificado; catch-all apagado). DNS verificado por consulta pública: 3 MX de Cloudflare, SPF `include:_spf.mx.cloudflare.net`, DKIM de Cloudflare; **los registros de Resend, el DMARC y las CNAME `send`/`rsend` quedaron intactos**. | — | **Entrega probada por el titular ("sí llegó", 2026-10-16).** Dirección publicada en la consola (recuperación de cuenta), en los borradores legales y en el comando de la landing (`--contacto "mailto:contacto@nexointelligence.com.ar"`). |
 | C2 | **Confirmar en Resend que el dominio figura «Verified»** (en DNS ya están DKIM, SPF y DMARC). | Es tu cuenta de Resend. | Salen los correos de mora y de «olvidé mi contraseña». |
 
 ## D · Facturación electrónica (NEXO emite) — ver `docs/EMISION_DE_FACTURAS_PLAN.md`

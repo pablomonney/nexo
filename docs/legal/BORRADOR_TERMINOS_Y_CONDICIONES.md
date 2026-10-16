@@ -51,7 +51,7 @@ Alcances que el Cliente debe conocer:
 ## 7. Disponibilidad y soporte
 
 - El Servicio se presta **«tal como está»** en cuanto a disponibilidad: **no hay un compromiso de disponibilidad (SLA)** porque no hay hoy monitoreo con destino ni guardia que lo respalde. **[DECIDIR si se declara «mejor esfuerzo» o si se compromete un horario de atención.]**
-- **Soporte:** por **[CORREO DE CONTACTO]**, en horario **[HORARIO — por definir]**. El Prestador puede suspender el Servicio por mantenimiento, avisando cuando sea posible con anticipación.
+- **Soporte:** por **contacto@nexointelligence.com.ar**, en horario **[HORARIO — por definir]**. El Prestador puede suspender el Servicio por mantenimiento, avisando cuando sea posible con anticipación.
 
 ## 8. Uso aceptable
 

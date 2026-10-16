@@ -3,7 +3,7 @@
  * Arma la landing para un hosting estático.
  *
  *   npm run landing:construir
- *   npm run landing:construir -- --contacto "mailto:hola@nexo.com.ar"
+ *   npm run landing:construir -- --contacto "mailto:contacto@nexointelligence.com.ar"
  *
  * ## Qué problema resuelve
  *

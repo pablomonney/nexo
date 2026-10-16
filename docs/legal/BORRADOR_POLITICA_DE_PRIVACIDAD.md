@@ -6,7 +6,7 @@
 
 - **Datos de las cuentas de NEXO** (quién usa el Servicio: nombre, correo, credenciales, uso): el **Prestador** (**[RAZÓN SOCIAL, CUIT, DOMICILIO]**) es **responsable** del tratamiento.
 - **Datos contables y de terceros que el Cliente carga** (clientes, proveedores, comprobantes, asientos): el **Cliente es el responsable** y el Prestador es su **encargado del tratamiento**, que los trata sólo para prestar el Servicio y según sus instrucciones (ver `BORRADOR_ACUERDO_DE_ENCARGADO_DEL_TRATAMIENTO.md`). Un estudio contable que usa NEXO es responsable de los datos de **sus** clientes.
-- Contacto para ejercer derechos y consultas de privacidad: **[CORREO DE CONTACTO — por definir]**.
+- Contacto para ejercer derechos y consultas de privacidad: **contacto@nexointelligence.com.ar** *(configurado y con entrega probada el 2026-10-16; reenvía al titular)*.
 
 ## 2. Qué datos se tratan, para qué, y por cuánto tiempo
 
