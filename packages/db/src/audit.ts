@@ -39,6 +39,8 @@ export const ACTIONS_REQUIRING_REASON = [
   // Encender el asistente hace que los datos de una empresa salgan hacia un proveedor de modelo. Sin motivo, nadie sabe
   // después quién lo decidió ni por qué.
   'CONFIGURAR_ASISTENTE',
+  // Exportar la empresa entera saca la contabilidad de NEXO. Sin motivo, nadie sabe después por qué salió ni quién la tiene.
+  'EXPORTAR_EMPRESA',
   // Una credencial que cambio sin explicacion, seis meses despues, es una
   // pregunta sin respuesta en una auditoria.
   'DECLARAR_REFERENCIA_DE_SECRETO',

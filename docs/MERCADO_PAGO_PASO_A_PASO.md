@@ -9,7 +9,7 @@
 - **Webhook en modo prueba** configurado en el panel: `https://nexointelligence.com.ar/webhooks/pagos`, eventos «Pagos» y «Planes y suscripciones». **Modo productivo: sin configurar.**
 - **Secreto de firma** copiado por el titular a `PAYMENTS_WEBHOOK_SECRET` (local). **No probado** que sea el correcto: eso sólo lo confirma una notificación firmada real por Mercado Pago, y el endpoint `/webhooks/pagos` recién existe en el servidor tras el segundo lanzamiento.
 - **Falta:** política de cobranza vigente (decisión del titular: `scripts/declarar-politica-de-cobranza.mjs`), crear los planes en la pasarela (`npm run pagos:plan`; precio vigente p. ej. COMPLETO ARS 449.900/mes), usuarios de prueba (vendedor y comprador), la prueba de punta a punta (`pagos:ensayo` §5) y, para producción, todo el Paso 3.
-- **Dónde se prueba el webhook:** decisión pendiente (servidor real tras el despliegue con la empresa de prueba, o un túnel).
+- **Dónde se prueba el webhook:** **decidido por el titular (2026-10-16): en el servidor real**, tras el segundo lanzamiento, con credenciales de PRUEBA y la empresa de prueba. Implica poner `PAYMENTS_PROVIDER=mercadopago`, `PAYMENTS_ENV=sandbox`, el token `TEST-` y el secreto en el `.env` del servidor (sin imprimirlos) y **volver a `none` al terminar**.
 
 ## Qué es el «MCP de Mercado Pago» y qué NO es
 

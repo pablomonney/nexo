@@ -4096,6 +4096,21 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <th>Centro</th><th>Nombre</th><th>Ingresos</th><th>Gastos</th><th>Resultado</th>
     <th>Movimientos</th>
   </tr></thead><tbody></tbody></table></div>
+
+  <div id="exp-caja" hidden>
+    <h3>Exportar todos los datos de la empresa</h3>
+    <p class="ayuda">Un archivo ZIP con <strong>todo lo de la empresa</strong>: los asientos, los maestros, lo que
+      entró por una migración y los documentos subidos. Trae un manifiesto con la huella de cada archivo para
+      comprobar —sin NEXO— que está completo. <strong>No incluye</strong> claves privadas, tokens de integraciones ni
+      contraseñas de usuarios (el manifiesto dice qué se dejó afuera y por qué). Queda registrado quién lo pidió y por qué.</p>
+    <div class="fila">
+      <div style="flex:1"><label>Para qué lo pedís</label>
+        <input id="exp-motivo" maxlength="500" placeholder="Ej.: copia propia de nuestra contabilidad"></div>
+      <div><label>&nbsp;</label><label class="as-check"><input type="checkbox" id="exp-archivos" checked> Incluir los documentos subidos</label></div>
+      <div><label>&nbsp;</label><button id="b-exp">Exportar la empresa</button></div>
+    </div>
+    <div id="exp-msg"></div>
+  </div>
 </section>
 
 </main>
@@ -4386,7 +4401,12 @@ async function api(method, url, cuerpo, esForma, claveDeIdempotencia) {
       body: cuerpo === undefined ? undefined : (esForma ? cuerpo : JSON.stringify(cuerpo)),
     });
     let datos = null;
-    try { datos = await r.json(); } catch (e) { /* 204 y similares */ }
+    if (r.ok && (r.headers.get('content-type') || '').indexOf('application/zip') === 0) {
+      // La exportación completa: un archivo, no un JSON.
+      datos = await r.blob();
+    } else {
+      try { datos = await r.json(); } catch (e) { /* 204 y similares */ }
+    }
     return { ok: r.ok, status: r.status, datos };
   } finally {
     // En `finally` y no después del `return`: si la red se cae, la barra
@@ -14430,7 +14450,34 @@ E('b-cc').onclick = async () => {
   if (r.ok) listarCentrosDeCosto();
 };
 
+E('b-exp').onclick = async () => {
+  limpiar('exp-msg');
+  const motivo = E('exp-motivo').value.trim();
+  if (motivo.length < 5) return avisoMal('exp-msg', 'Escribí para qué la pedís (al menos 5 caracteres): queda en la bitácora.');
+  E('b-exp').disabled = true;
+  E('exp-msg').innerHTML = '<div class="aviso">Armando la exportación… puede tardar si la empresa tiene muchos datos. No cierres esta pantalla.</div>';
+  try {
+    const r = await api('POST', '/companies/current/exportacion-completa', {
+      motivo, incluirArchivos: E('exp-archivos').checked,
+    });
+    if (!r.ok) return decir('exp-msg', r);
+    const url = URL.createObjectURL(r.datos);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'nexo-exportacion-' + hoyEnArgentina() + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    E('exp-msg').innerHTML = '<div class="aviso ok">Listo: se descargó el archivo (' +
+      Math.max(1, Math.round(r.datos.size / 1024)) + ' KB). Guardalo en un lugar seguro: tiene toda la contabilidad de la empresa.</div>';
+  } finally {
+    E('b-exp').disabled = false;
+  }
+};
+
 async function cargarConfig() {
+  E('exp-caja').hidden = !puede('company:export');
   await cargarMapeoContable();
   await listarCentrosDeCosto();
   const caja = E('cfg-salida');

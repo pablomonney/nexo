@@ -58,6 +58,7 @@ import { onboardingRoutes } from './routes/onboarding.js';
 import { mapeoContableRoutes } from './routes/mapeo-contable.js';
 import { arranqueRoutes } from './routes/arranque.js';
 import { asistenteRoutes, type OpcionesDelAsistente } from './routes/asistente.js';
+import { exportacionCompletaRoutes } from './routes/exportacion-completa.js';
 import { intelligenceRoutes } from './routes/intelligence.js';
 import { solicitudDeCompraRoutes } from './routes/solicitudes-de-compra.js';
 import { ordenDePagoRoutes } from './routes/ordenes-de-pago.js';
@@ -375,6 +376,7 @@ export async function buildServer(
   await app.register(asistenteRoutes(options.asistente));
   await app.register(valuacionRoutes);
   await app.register(exportacionRoutes);
+  await app.register(exportacionCompletaRoutes);
   await app.register(periodRoutes);
   await app.register(documentRoutes);
   await app.register(predictionRoutes);
