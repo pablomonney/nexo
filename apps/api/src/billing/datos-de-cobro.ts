@@ -101,7 +101,7 @@ export function instruccionesDeTransferencia(datos: DatosBancarios | null): stri
   const lineas = [
     'Para pagar por transferencia bancaria:',
     `  Titular: ${datos.titular}${datos.cuit === null ? '' : ` (CUIT ${datos.cuit})`}`,
-    `  CBU: ${datos.cbu}`,
+    `  CBU/CVU: ${datos.cbu}`,
     ...(datos.alias === null ? [] : [`  Alias: ${datos.alias}`]),
     ...(datos.banco === null ? [] : [`  Banco: ${datos.banco}`]),
     'Al transferir, guardá el número de operación y avisanos: sin él no podemos conciliar el pago.',

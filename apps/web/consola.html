@@ -13736,7 +13736,7 @@ async function cargarSuscripcion() {
   const cobro = r.datos.cobro;
   E('sub-plan').innerHTML += cobro
     ? fila('Cómo pagar', 'Transferencia bancaria') + fila('Titular', cobro.titular + (cobro.cuit ? ' (CUIT ' + cobro.cuit + ')' : '')) +
-      fila('CBU', cobro.cbu) + (cobro.alias ? fila('Alias', cobro.alias) : '') + (cobro.banco ? fila('Banco', cobro.banco) : '') +
+      fila('CBU/CVU', cobro.cbu) + (cobro.alias ? fila('Alias', cobro.alias) : '') + (cobro.banco ? fila('Banco', cobro.banco) : '') +
       fila('Al transferir', 'Guardá el número de operación y avisanos: sin él no podemos conciliar el pago.')
     : fila('Cómo pagar', 'Todavía no hay datos de transferencia cargados en esta instalación.');
 

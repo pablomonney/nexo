@@ -68,7 +68,7 @@ suite('Datos de cobro en la suscripción y en los avisos', () => {
     const r = await encolarAvisoDeCobranza(tx, empresa, 'SUSPENSION_PROXIMA', { empresa: 'Empresa dc', diasParaLaSuspension: 2 });
     expect(r.estado).toBe('ENCOLADO');
     const cuerpos = await db.query<{ cuerpo: string }>(`SELECT cuerpo FROM email_outbox WHERE tipo = 'AVISO_DE_COBRANZA' AND asunto LIKE '%Empresa dc%' ORDER BY creado_el DESC LIMIT 1`);
-    expect(cuerpos.rows[0]!.cuerpo).toContain(`CBU: ${CBU}`);
+    expect(cuerpos.rows[0]!.cuerpo).toContain(`CBU/CVU: ${CBU}`);
     expect(cuerpos.rows[0]!.cuerpo).toContain('NEXO Servicios SRL');
   });
 });

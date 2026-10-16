@@ -64,7 +64,7 @@ describe('instruccionesDeTransferencia y los avisos', () => {
   it('con datos: titular, CBU y alias, y el pedido del número de operación', () => {
     const texto = instruccionesDeTransferencia(datos)!;
     expect(texto).toContain('Titular: NEXO SRL');
-    expect(texto).toContain(`CBU: ${CBU}`);
+    expect(texto).toContain(`CBU/CVU: ${CBU}`);
     expect(texto).toContain('Alias: nexo.cobros');
     expect(texto).toContain('número de operación');
   });
