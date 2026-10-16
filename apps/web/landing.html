@@ -9,8 +9,14 @@
   precio, y el día que difiera de la base el cliente vería un número en la
   página y otro en la factura.
 
-  Si la API no contesta, la tabla dice que no se pudieron cargar en vez de
+  Si la API no contesta, la sección dice que no se pudieron cargar en vez de
   mostrar precios viejos.
+
+  Las pantallas dibujadas más abajo (la consola del hero y las tres vitrinas) son
+  **ilustraciones con datos de ejemplo** y lo dicen en la propia imagen. Sus cifras
+  están escritas en abreviado («4,8 M», «860 mil») a propósito: nunca con la forma
+  de un precio de la lista, para que el control que busca importes escritos en el
+  HTML siga significando algo.
 
   ## Ninguna afirmación que el producto no pueda sostener
 
@@ -21,10 +27,10 @@
 
   ## Sin recursos externos
 
-  Todo el CSS y el JS están acá. La CSP que la sirve no admite nada de afuera:
-  ni una fuente, ni un pixel de analítica. En una página que va a ver gente que
-  todavía no es cliente, un recurso de un tercero es un tercero mirando quién
-  entra.
+  Todo el CSS, el JS y los dibujos están acá. La CSP que la sirve no admite nada
+  de afuera: ni una fuente, ni un pixel de analítica. En una página que va a ver
+  gente que todavía no es cliente, un recurso de un tercero es un tercero mirando
+  quién entra.
 -->
 <html lang="es">
 <head>
@@ -86,18 +92,24 @@
   --tinta2: #A9B8BD;
   --tinta3: #74858B;
 
-  --ojo: #F2C14E; --ojo-bg: #241D0A;
+  --bien: #4ADE9B; --bien-bg: #0C2419;
+  --ojo:  #F2C14E; --ojo-bg:  #241D0A;
+  --mal:  #FF8577; --mal-bg:  #2A1512;
+  --ia:   #B79CF5; --ia-bg:   #1B1630;
 
-  --r1: 4px; --r2: 6px; --r3: 10px; --rp: 999px;
+  --r1: 4px; --r2: 6px; --r3: 10px; --r4: 16px; --rp: 999px;
   --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 24px; --e6: 32px;
-  --e7: 48px; --e8: 64px;
+  --e7: 48px; --e8: 64px; --e9: 96px;
 
   --mono: "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 body {
   margin: 0;
@@ -105,54 +117,49 @@ body {
   color: var(--tinta);
   font: 16px/1.6 var(--ui);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-.marco { max-width: 1040px; margin: 0 auto; padding: 0 var(--e5); }
+.marco { max-width: 1160px; margin: 0 auto; padding: 0 var(--e5); }
 a { color: var(--acento); }
-a:focus-visible, .btn:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; border-radius: var(--r1); }
+a:focus-visible, .btn:focus-visible, button:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; border-radius: var(--r1); }
 
-header {
-  border-bottom: 1px solid var(--linea);
-  padding: var(--e4) 0;
-  display: flex; align-items: center; justify-content: space-between; gap: var(--e4);
+.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ── La barra de arriba: se pega al hacer scroll ─────────────────────────── */
+.barra {
+  position: sticky; top: 0; z-index: 40;
+  background: rgb(7 11 13 / 82%);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: border-color .2s;
 }
-.marca { display: flex; align-items: center; gap: var(--e2); }
+.barra[data-pegada="si"] { border-bottom-color: var(--linea); }
+.barra .marco { display: flex; align-items: center; justify-content: space-between; gap: var(--e4); height: 64px; }
+.marca { display: flex; align-items: center; gap: var(--e2); color: var(--tinta); text-decoration: none; }
 .marca svg { display: block; }
-.marca .tag { color: var(--tinta3); font-size: .8rem; }
+.enlaces { display: flex; gap: var(--e5); align-items: center; }
+.enlaces a { color: var(--tinta2); text-decoration: none; font-size: .92rem; font-weight: 500; }
+.enlaces a:hover { color: var(--tinta); }
+.barra-acciones { display: flex; align-items: center; gap: var(--e3); }
 
 .btn {
-  display: inline-block; padding: 11px 20px; border-radius: var(--r1);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--e2);
+  padding: 12px 22px; border-radius: var(--r3);
   background: var(--acento); color: var(--acento-txt); text-decoration: none;
-  font-weight: 600; font-size: .95rem; border: 1px solid var(--acento);
+  font-weight: 650; font-size: .95rem; border: 1px solid var(--acento);
+  transition: transform .15s, box-shadow .15s;
 }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgb(18 200 230 / 28%); }
 .btn.sec { background: transparent; color: var(--tinta); border-color: var(--linea2); }
-.btn.sec:hover { border-color: var(--acento); color: var(--acento); }
-
-/* ── El primer golpe de vista ─────────────────────────────────────────────
-   El resplandor detrás de la marca es el mismo recurso del letrero, en grande.
-   Es la única vez que aparece en toda la experiencia. */
-.hero { padding: var(--e8) 0 var(--e7); position: relative; }
-.hero::before {
-  /* Sin desbordar a los costados: un `inset` negativo en horizontal ensancha
-     el documento tres píxeles y aparece una barra de desplazamiento lateral en
-     una página que no la necesita. La difusión la da el propio degradado. */
-  content: ""; position: absolute; inset: -20% 0 20% 0; z-index: -1;
-  background: radial-gradient(75% 65% at 28% 35%, rgb(18 200 230 / 11%) 0%, transparent 72%);
-  pointer-events: none;
-}
-h1 {
-  font-size: clamp(2.1rem, 5.5vw, 3.4rem); line-height: 1.06;
-  letter-spacing: -0.03em; margin: 0 0 var(--e4); max-width: 19ch; text-wrap: balance;
-}
-.lead { font-size: 1.15rem; color: var(--tinta2); max-width: 58ch; margin: 0 0 var(--e5); }
-.acciones { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: center; }
-.fina { font-size: .9rem; color: var(--tinta3); }
+.btn.sec:hover { border-color: var(--acento); color: var(--acento); box-shadow: none; }
+.btn.chico { padding: 8px 16px; font-size: .88rem; }
 
 /* El aviso de que esto es una presentación y no el producto abierto.
    Va con el color de «prestá atención», no con el de error: no está roto,
    está cerrado. */
 .presentacion {
-  margin-top: var(--e5);
+  margin: var(--e4) 0 0;
   padding: var(--e3) var(--e4);
   background: var(--ojo-bg);
   border: 1px solid var(--ojo);
@@ -161,76 +168,322 @@ h1 {
   font-size: .92rem;
 }
 
-section { padding: var(--e7) 0; border-top: 1px solid var(--linea); }
-h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); letter-spacing: -0.022em; margin: 0 0 var(--e2); }
-h3 { font-size: 1rem; margin: 0 0 var(--e1); }
+/* ── El primer golpe de vista ─────────────────────────────────────────────
+   El resplandor detrás de la marca es el mismo recurso del letrero, en grande.
+   Es la única vez que aparece en toda la experiencia. */
+.hero { position: relative; padding: var(--e8) 0 var(--e9); }
+.hero::before {
+  content: ""; position: absolute; inset: -10% 0 10% 0; z-index: -1;
+  background:
+    radial-gradient(60% 55% at 22% 30%, rgb(18 200 230 / 14%) 0%, transparent 70%),
+    radial-gradient(45% 45% at 85% 65%, rgb(168 245 226 / 8%) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-grilla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: var(--e6); align-items: center; }
+.etiqueta {
+  display: inline-flex; align-items: center; gap: var(--e2); padding: 6px 14px 6px 10px; border-radius: var(--rp);
+  background: var(--acento-cl); color: var(--acento); font-size: .8rem; font-weight: 650; letter-spacing: .02em;
+  border: 1px solid rgb(62 217 236 / 28%); margin-bottom: var(--e5);
+}
+.etiqueta i { width: 7px; height: 7px; border-radius: 50%; background: var(--acento); }
+h1 {
+  font: 700 clamp(2.2rem, 4.6vw, 3.4rem)/1.05 var(--display);
+  letter-spacing: -0.035em; margin: 0 0 var(--e5); text-wrap: balance;
+}
+h1 em { font-style: normal; background: linear-gradient(90deg, var(--cian), var(--aqua)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lead { font-size: 1.15rem; color: var(--tinta2); max-width: 54ch; margin: 0 0 var(--e6); }
+.acciones { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: center; }
+.fina { font-size: .9rem; color: var(--tinta3); }
+.garantias { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e5); margin: var(--e6) 0 0; padding: 0; list-style: none; color: var(--tinta2); font-size: .9rem; }
+.garantias li { display: inline-flex; align-items: center; gap: var(--e2); }
+.garantias .ico { width: 18px; height: 18px; color: var(--bien); }
+
+/* ── La consola dibujada ─────────────────────────────────────────────────── */
+.ventana {
+  position: relative; border-radius: var(--r4); background: var(--alto); border: 1px solid var(--linea2);
+  box-shadow: 0 40px 100px rgb(0 0 0 / 55%), 0 0 0 1px rgb(255 255 255 / 3%) inset, 0 0 90px rgb(18 200 230 / 10%);
+  overflow: hidden; font-size: 12px; line-height: 1.4;
+}
+.ventana-tit { display: flex; align-items: center; gap: var(--e2); padding: 10px 14px; background: var(--hund); border-bottom: 1px solid var(--linea); }
+.ventana-tit i { width: 10px; height: 10px; border-radius: 50%; background: var(--linea2); }
+.ventana-tit span { margin-left: var(--e3); color: var(--tinta3); font-size: 11px; }
+.ventana-cuerpo { display: grid; grid-template-columns: 56px minmax(0, 1fr); min-height: 330px; }
+.v-lateral { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; background: var(--hund); border-right: 1px solid var(--linea); }
+.v-lateral .ico { width: 30px; height: 30px; padding: 6px; border-radius: 9px; color: var(--tinta3); }
+.v-lateral .ico.on { background: var(--acento-cl); color: var(--acento); }
+.v-principal { padding: 14px 16px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.v-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.v-cab b { font-size: 13px; }
+.v-cab span { color: var(--tinta3); font-size: 11px; }
+.v-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.v-kpi { background: var(--alto2); border: 1px solid var(--linea); border-radius: 10px; padding: 9px 10px; min-width: 0; }
+.v-kpi small { display: block; color: var(--tinta3); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; font-weight: 650; }
+.v-kpi b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.v-kpi.ojo b { color: var(--ojo); }
+.v-medio { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 8px; }
+.v-panel { background: var(--alto2); border: 1px solid var(--linea); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.v-panel h4 { margin: 0 0 8px; font-size: 11px; color: var(--tinta2); font-weight: 650; }
+.v-barras { display: flex; align-items: flex-end; gap: 7px; height: 96px; padding-top: 4px; border-bottom: 1px solid var(--linea2); }
+.v-barras .par { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 3px; height: 100%; }
+.v-barras .par i { display: block; width: 38%; max-width: 14px; border-radius: 3px 3px 0 0; background: var(--acento); transform-origin: bottom; animation: sube .9s cubic-bezier(.2,.8,.2,1) both; }
+.v-barras .par i + i { background: var(--ojo); }
+.v-meses { display: flex; gap: 7px; margin-top: 4px; color: var(--tinta3); font-size: 9.5px; }
+.v-meses span { flex: 1; text-align: center; }
+@keyframes sube { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.v-lista { display: grid; gap: 7px; }
+.v-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--tinta2); }
+.pastilla { display: inline-block; padding: 1px 8px; border-radius: var(--rp); font-size: 9.5px; font-weight: 650; white-space: nowrap; }
+.pastilla.mal { background: var(--mal-bg); color: var(--mal); }
+.pastilla.ojo { background: var(--ojo-bg); color: var(--ojo); }
+.pastilla.bien { background: var(--bien-bg); color: var(--bien); }
+.pastilla.ia { background: var(--ia-bg); color: var(--ia); }
+.nota-ejemplo { position: absolute; right: 12px; bottom: 10px; font-size: 10px; color: var(--tinta3); background: rgb(7 11 13 / 80%); padding: 2px 8px; border-radius: var(--rp); }
+
+/* ── Secciones ───────────────────────────────────────────────────────────── */
+section { padding: var(--e9) 0; border-top: 1px solid var(--linea); }
+.cab-seccion { max-width: 64ch; margin-bottom: var(--e7); }
+.sobre { display: block; margin-bottom: var(--e3); color: var(--acento); font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+h2 { font: 700 clamp(1.7rem, 3.6vw, 2.4rem)/1.12 var(--display); letter-spacing: -0.028em; margin: 0 0 var(--e3); text-wrap: balance; }
+h3 { font-size: 1.05rem; margin: 0 0 var(--e2); letter-spacing: -.01em; }
 p { margin: 0 0 var(--e3); }
-.sub { color: var(--tinta2); max-width: 62ch; }
+.sub { color: var(--tinta2); font-size: 1.05rem; max-width: 62ch; }
 
-.rejilla { display: grid; gap: var(--e4); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: var(--e5); }
-.caja { border: 1px solid var(--linea); border-radius: var(--r3); padding: var(--e4); background: var(--alto); }
+.rejilla { display: grid; gap: var(--e4); grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.caja {
+  border: 1px solid var(--linea); border-radius: var(--r4); padding: var(--e5); background: var(--alto);
+  transition: border-color .2s, transform .2s;
+}
+.caja:hover { border-color: var(--linea2); transform: translateY(-2px); }
 .caja p { color: var(--tinta2); font-size: .93rem; margin: 0; }
+.caja .ico { width: 40px; height: 40px; padding: 9px; border-radius: 12px; background: var(--acento-cl); color: var(--acento); margin-bottom: var(--e4); }
 
-table { width: 100%; border-collapse: collapse; font-size: .93rem; }
-.tabla { overflow-x: auto; border: 1px solid var(--linea); border-radius: var(--r3); margin-top: var(--e5); background: var(--alto); }
-th { text-align: left; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
-     color: var(--tinta3); padding: var(--e3) var(--e4); border-bottom: 1px solid var(--linea2); }
-td { padding: var(--e4); border-bottom: 1px solid var(--linea); vertical-align: top; color: var(--tinta2); }
-tbody tr:last-child td { border-bottom: none; }
-td.plan { color: var(--tinta); font-weight: 600; }
-.precio { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
-          color: var(--tinta); font-weight: 600; }
-.neu { display: inline-block; padding: 2px 9px; border-radius: var(--rp);
-       background: var(--ojo-bg); color: var(--ojo); font-size: .78rem; border: 1px solid currentColor; }
+/* ── Cinco lugares → uno ─────────────────────────────────────────────────── */
+.convergen { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--e6); align-items: center; margin-bottom: var(--e7); }
+.lugares { display: grid; gap: var(--e2); }
+.lugar { display: flex; align-items: center; gap: var(--e3); padding: 11px 16px; border: 1px dashed var(--linea2); border-radius: var(--r3); color: var(--tinta2); font-size: .92rem; background: var(--hund); }
+.lugar .ico { width: 20px; height: 20px; color: var(--tinta3); }
+.lugar:nth-child(odd) { margin-right: var(--e5); }
+.lugar:nth-child(even) { margin-left: var(--e5); }
+.flecha { color: var(--acento); }
+.flecha .ico { width: 56px; height: 36px; display: block; stroke-width: 1.5; }
+.nexo-nodo { padding: var(--e6); border-radius: var(--r4); border: 1px solid rgb(62 217 236 / 45%); background: linear-gradient(160deg, var(--acento-cl), var(--alto)); text-align: center; box-shadow: 0 0 60px rgb(18 200 230 / 12%); }
+.nexo-nodo svg { margin: 0 auto var(--e3); display: block; color: var(--tinta); }
+.nexo-nodo p { color: var(--tinta2); font-size: .95rem; margin: 0; }
 
-details { border: 1px solid var(--linea); border-radius: var(--r3); padding: var(--e3) var(--e4);
-          margin-bottom: var(--e2); background: var(--alto); }
-summary { cursor: pointer; font-weight: 600; }
+/* ── Cómo viaja un comprobante ───────────────────────────────────────────── */
+.pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--e4); counter-reset: paso; position: relative; }
+.pasos::before { content: ""; position: absolute; left: 6%; right: 6%; top: 28px; height: 2px; background: linear-gradient(90deg, var(--cian), var(--aqua)); opacity: .45; }
+.pasos li { position: relative; text-align: center; padding: 0 var(--e1); }
+.pasos .nodo { position: relative; z-index: 1; width: 56px; height: 56px; margin: 0 auto var(--e4); display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--alto); border: 2px solid var(--acento); color: var(--acento); box-shadow: 0 0 0 6px var(--papel); }
+.pasos .nodo .ico { width: 24px; height: 24px; }
+.pasos b { display: block; font-size: .98rem; margin-bottom: 2px; }
+.pasos span.t { display: block; color: var(--tinta2); font-size: .84rem; line-height: 1.45; }
+
+/* ── Las vitrinas: una idea, una imagen ──────────────────────────────────── */
+.vitrina { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: var(--e8); align-items: center; padding: var(--e7) 0; }
+.vitrina + .vitrina { border-top: 1px solid var(--linea); }
+.vitrina.inversa .v-texto { order: 2; }
+.vitrina h3 { font: 700 1.6rem/1.15 var(--display); letter-spacing: -.025em; margin-bottom: var(--e3); }
+.vitrina .v-texto p { color: var(--tinta2); }
+.checks { list-style: none; margin: var(--e4) 0 0; padding: 0; display: grid; gap: var(--e2); }
+.checks li { display: flex; gap: var(--e3); color: var(--tinta2); font-size: .95rem; }
+.checks .ico { width: 20px; height: 20px; color: var(--bien); margin-top: 2px; }
+.lamina { border-radius: var(--r4); border: 1px solid var(--linea2); background: var(--alto); padding: var(--e5) var(--e5) 40px; box-shadow: 0 30px 80px rgb(0 0 0 / 45%); position: relative; font-size: 13px; }
+.lamina .nota-ejemplo { right: 14px; bottom: 12px; }
+
+.doc { background: #F2F7F7; color: #0B1214; border-radius: var(--r3); padding: var(--e4); font-size: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 35%); }
+.doc h5 { margin: 0 0 var(--e2); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: #37474B; display: flex; justify-content: space-between; }
+.doc .lin { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #dfe8e9; color: #37474B; }
+.doc .lin b { color: #0B1214; font-variant-numeric: tabular-nums; }
+.doc mark { background: rgb(18 200 230 / 28%); color: inherit; border-radius: 3px; padding: 0 3px; }
+.salto { display: flex; align-items: center; justify-content: center; gap: var(--e2); margin: var(--e3) 0; color: var(--acento); font-size: 11px; font-weight: 650; }
+.salto .ico { width: 20px; height: 20px; }
+.asiento { background: var(--alto2); border: 1px solid var(--linea2); border-radius: var(--r3); overflow: hidden; }
+.asiento .tit { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--hund); border-bottom: 1px solid var(--linea); font-size: 11px; color: var(--tinta2); }
+.asiento table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.asiento td { padding: 7px 12px; border-bottom: 1px solid var(--linea); color: var(--tinta2); }
+.asiento td:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; color: var(--tinta); }
+.asiento tr:last-child td { border-bottom: 0; }
+.asiento tr.cab td { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--tinta3); background: var(--hund); }
+.botonera { display: flex; gap: var(--e2); padding: 10px 12px; border-top: 1px solid var(--linea); background: var(--hund); }
+.botonera span { padding: 5px 12px; border-radius: var(--r2); font-size: 11px; font-weight: 650; border: 1px solid var(--linea2); color: var(--tinta2); }
+.botonera span.ok { background: var(--acento); color: var(--acento-txt); border-color: var(--acento); }
+
+.conc { display: grid; grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); gap: 0; align-items: stretch; }
+.conc h5 { margin: 0 0 var(--e2); font-size: 11px; color: var(--tinta3); letter-spacing: .08em; text-transform: uppercase; }
+.conc .col { display: grid; gap: var(--e2); align-content: start; }
+.conc .it { padding: 9px 11px; border-radius: var(--r2); background: var(--alto2); border: 1px solid var(--linea); font-size: 12px; color: var(--tinta2); display: flex; justify-content: space-between; gap: 8px; }
+.conc .it b { color: var(--tinta); font-variant-numeric: tabular-nums; font-weight: 600; }
+.conc .it.hecho { border-color: rgb(74 222 155 / 40%); }
+.conc .it.falta { border-style: dashed; border-color: var(--ojo); color: var(--ojo); background: var(--ojo-bg); }
+.conc .union { display: grid; gap: var(--e2); align-content: start; padding-top: 24px; }
+.conc .union span { height: 38px; display: flex; align-items: center; justify-content: center; color: var(--bien); }
+.conc .union span.no { color: var(--ojo); }
+.conc .union .ico { width: 20px; height: 20px; }
+.conc-pie { display: flex; justify-content: space-between; align-items: center; margin-top: var(--e4); padding-top: var(--e3); border-top: 1px solid var(--linea); font-size: 12px; color: var(--tinta2); gap: var(--e3); flex-wrap: wrap; }
+
+.camino { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); margin-top: var(--e4); font-size: 12px; }
+.camino span { padding: 5px 11px; border-radius: var(--rp); background: var(--alto2); border: 1px solid var(--linea2); color: var(--tinta2); }
+.camino span.ult { border-color: var(--acento); color: var(--acento); }
+.camino .ico { width: 16px; height: 16px; color: var(--tinta3); }
+.g-barras { display: flex; align-items: flex-end; gap: var(--e3); height: 150px; border-bottom: 1px solid var(--linea2); padding: 0 var(--e2); position: relative; }
+.g-barras .par { flex: 1; display: flex; align-items: flex-end; gap: 4px; height: 100%; justify-content: center; }
+.g-barras .par i { display: block; flex: 1; max-width: 26px; border-radius: 4px 4px 0 0; background: var(--acento); transform-origin: bottom; }
+.g-barras .par i + i { background: var(--ojo); }
+.g-barras .par.sel i { outline: 2px solid var(--tinta); outline-offset: 2px; }
+.rev.visto .g-barras .par i { animation: sube .9s cubic-bezier(.2,.8,.2,1) both; }
+.g-meses { display: flex; gap: var(--e3); margin-top: var(--e2); padding: 0 var(--e2); color: var(--tinta3); font-size: 11px; }
+.g-meses span { flex: 1; text-align: center; }
+.globo { position: absolute; top: -8px; left: 58%; transform: translateY(-100%); background: var(--tinta); color: var(--papel); padding: 5px 10px; border-radius: var(--r2); font-size: 11px; font-weight: 650; white-space: nowrap; }
+.globo::after { content: ""; position: absolute; left: 20px; bottom: -5px; width: 10px; height: 10px; background: inherit; transform: rotate(45deg); }
+
+/* ── Seguridad ───────────────────────────────────────────────────────────── */
+.seguridad { display: grid; gap: var(--e4); grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ── Planes ──────────────────────────────────────────────────────────────── */
+.planes { display: grid; gap: var(--e4); grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); align-items: stretch; }
+.plan { display: flex; flex-direction: column; gap: var(--e3); border: 1px solid var(--linea); border-radius: var(--r4); padding: var(--e5); background: var(--alto); }
+.plan h3 { font-size: 1.2rem; margin: 0; }
+.plan .desc { color: var(--tinta2); font-size: .9rem; min-height: 2.6em; margin: 0; }
+.plan .precio { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.9rem; letter-spacing: -.02em; color: var(--tinta); }
+.plan .precio small { display: block; font: 400 .8rem var(--ui); color: var(--tinta3); letter-spacing: 0; margin-top: 2px; }
+.plan h4 { margin: var(--e2) 0 var(--e1); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--tinta3); }
+.plan ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: .88rem; color: var(--tinta2); }
+.plan li { display: flex; gap: var(--e2); }
+.plan li::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--acento); }
+.plan .topes li::before { background: var(--tinta3); }
+.neu { display: inline-block; padding: 3px 11px; border-radius: var(--rp); background: var(--ojo-bg); color: var(--ojo); font: 600 .85rem var(--ui); border: 1px solid currentColor; }
+.plan-estado { padding: var(--e5); border: 1px dashed var(--linea2); border-radius: var(--r4); color: var(--tinta2); grid-column: 1 / -1; }
+
+/* ── Cómo empieza ────────────────────────────────────────────────────────── */
+.linea-tiempo { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; max-width: 760px; }
+.linea-tiempo li { position: relative; display: grid; grid-template-columns: 44px 1fr; gap: var(--e4); padding-bottom: var(--e5); }
+.linea-tiempo li::before { content: ""; position: absolute; left: 21px; top: 44px; bottom: 0; width: 2px; background: var(--linea2); }
+.linea-tiempo li:last-child::before { display: none; }
+.linea-tiempo .n { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--acento-cl); border: 1px solid var(--acento); color: var(--acento); font-weight: 700; }
+.linea-tiempo p { margin: 0; color: var(--tinta2); padding-top: 9px; }
+.linea-tiempo strong { color: var(--tinta); }
+
+/* ── Lo que viene, las preguntas y el cierre ─────────────────────────────── */
+.aviso { background: var(--ojo-bg); border: 1px solid var(--linea); border-left: 3px solid var(--ojo); border-radius: 0 var(--r2) var(--r2) 0; padding: var(--e3) var(--e4); color: var(--tinta2); }
+ul.limpia { margin: var(--e4) 0 0; padding-left: var(--e4); color: var(--tinta2); }
+ul.limpia li { margin-bottom: var(--e2); }
+details { border: 1px solid var(--linea); border-radius: var(--r3); padding: var(--e4) var(--e5); margin-bottom: var(--e2); background: var(--alto); }
+summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: var(--e3); align-items: center; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--acento); font-size: 1.3rem; line-height: 1; transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
 summary:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: var(--r1); }
 details p { margin: var(--e3) 0 0; color: var(--tinta2); }
+.faq { max-width: 820px; }
 
-.aviso { background: var(--ojo-bg); border: 1px solid var(--linea); border-left: 3px solid var(--ojo);
-         border-radius: 0 var(--r1) var(--r1) 0; padding: var(--e3) var(--e4); color: var(--tinta2); }
+.cierre { text-align: center; border-top: 1px solid var(--linea); padding: var(--e9) 0; position: relative; }
+.cierre::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(50% 70% at 50% 100%, rgb(18 200 230 / 14%) 0%, transparent 70%); }
+.cierre h2 { margin-left: auto; margin-right: auto; max-width: 20ch; }
+.cierre .acciones { justify-content: center; margin-top: var(--e5); }
 
-footer { border-top: 1px solid var(--linea); padding: var(--e6) 0 var(--e8);
-         color: var(--tinta3); font-size: .89rem; }
-ul.limpia { margin: var(--e3) 0 0; padding-left: var(--e4); color: var(--tinta2); }
-ul.limpia li { margin-bottom: var(--e1); }
+footer { border-top: 1px solid var(--linea); padding: var(--e6) 0 var(--e8); color: var(--tinta3); font-size: .89rem; }
+footer .pie { display: flex; justify-content: space-between; gap: var(--e5); flex-wrap: wrap; align-items: flex-start; }
+footer p { margin: 0 0 var(--e2); }
+footer .marca { color: var(--tinta); margin-bottom: var(--e3); }
 
+/* ── Aparecen al llegar ──────────────────────────────────────────────────── */
+.rev { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+.rev.visto { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .rev { opacity: 1; transform: none; transition: none; } .v-barras .par i, .rev.visto .g-barras .par i { animation: none; } }
+
+/* ── Pantallas chicas ────────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .hero-grilla, .vitrina { grid-template-columns: minmax(0, 1fr); gap: var(--e6); }
+  .vitrina.inversa .v-texto { order: 0; }
+  .pasos { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: var(--e6); }
+  .pasos::before { display: none; }
+  .seguridad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .convergen { grid-template-columns: minmax(0, 1fr); }
+  .flecha { transform: rotate(90deg); justify-self: center; }
+  .lugar:nth-child(odd), .lugar:nth-child(even) { margin: 0; }
+  .enlaces { display: none; }
+}
 @media (max-width: 620px) {
   body { font-size: 15px; }
   .marco { padding: 0 var(--e4); }
-  .hero { padding: var(--e6) 0 var(--e5); }
-  section { padding: var(--e6) 0; }
+  .hero { padding: var(--e6) 0 var(--e7); }
+  section { padding: var(--e7) 0; }
+  .pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .seguridad { grid-template-columns: minmax(0, 1fr); }
+  .v-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .v-medio { grid-template-columns: minmax(0, 1fr); }
+  .ventana-cuerpo { grid-template-columns: 44px minmax(0, 1fr); }
+  .barra .btn.sec { display: none; }
+  .conc { grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); }
 }
 </style>
 </head>
 <body>
 
-<div class="marco">
-  <header>
-    <div class="marca">
-      <svg width="96" height="34" viewBox="0 0 108 38" role="img" aria-label="NEXO">
-        <defs>
-          <linearGradient id="barra" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="var(--cian)"/>
-            <stop offset="55%" stop-color="var(--cian-cl)"/>
-            <stop offset="100%" stop-color="var(--aqua)"/>
-          </linearGradient>
-        </defs>
-        <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="butt" stroke-linejoin="miter">
-          <path d="M1 25 V1 L19 25 V1"/>
-          <path d="M45 1 H29 V25 H45 M29 13 H41"/>
-          <path d="M55 1 L73 25 M73 1 L55 25"/>
-          <circle cx="95" cy="13" r="12"/>
-        </g>
-        <rect x="1" y="31" width="106" height="3.4" rx="1.7" fill="url(#barra)"/>
-      </svg>
-      <span class="tag">gestión y contabilidad</span>
-    </div>
-    <a class="btn sec" href="/consola" data-cta="entrar">Entrar</a>
-  </header>
+<!-- Los íconos, dibujados una vez y usados por referencia. Trazan con `currentColor`. El sprite no mide cero a propósito:
+     un SVG escondido con `display:none` hace que el navegador deje de pintar los degradados que contiene. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="barra-marca" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="var(--cian)"/>
+      <stop offset="55%" stop-color="var(--cian-cl)"/>
+      <stop offset="100%" stop-color="var(--aqua)"/>
+    </linearGradient>
+    <symbol id="i-marca" viewBox="0 0 108 38">
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="butt" stroke-linejoin="miter">
+        <path d="M1 25 V1 L19 25 V1"/>
+        <path d="M45 1 H29 V25 H45 M29 13 H41"/>
+        <path d="M55 1 L73 25 M73 1 L55 25"/>
+        <circle cx="95" cy="13" r="12"/>
+      </g>
+      <rect x="1" y="31" width="106" height="3.4" rx="1.7" fill="url(#barra-marca)"/>
+    </symbol>
+  </defs>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-flecha" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-inicio" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+  <symbol id="i-documentos" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-propuestas" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+  <symbol id="i-asientos" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></symbol>
+  <symbol id="i-iva" viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9.5 9.5h.01M14.5 14.5h.01M15 9l-6 6"/></symbol>
+  <symbol id="i-cierre" viewBox="0 0 24 24"><path d="M5 11h14v10H5zM8 11V8a4 4 0 0 1 8 0v3M12 15v2"/></symbol>
+  <symbol id="i-estados" viewBox="0 0 24 24"><path d="M4 20h16M7 20v-7M12 20V5M17 20v-10"/></symbol>
+  <symbol id="i-comercial" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></symbol>
+  <symbol id="i-terceros" viewBox="0 0 24 24"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 20v-1a4 4 0 0 0-3-3.9M16 4.2a3.5 3.5 0 0 1 0 6.6"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v11H3zM8 20v-6h8v6M8 17h8"/></symbol>
+  <symbol id="i-caja" viewBox="0 0 24 24"><path d="M3 7h18v10H3zM12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 10v.01M18 14v.01"/></symbol>
+  <symbol id="i-bancos" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"/></symbol>
+  <symbol id="i-analitica" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-4 3 3 6-7"/></symbol>
+  <symbol id="i-auditoria" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4"/></symbol>
+  <symbol id="i-aislar" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></symbol>
+  <symbol id="i-llave" viewBox="0 0 24 24"><path d="M14 10a4 4 0 1 0-3.9 4L20 14v3h-3v-3M10 10h.01"/></symbol>
+  <symbol id="i-exportar" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M4 17v3h16v-3"/></symbol>
+  <symbol id="i-hoja" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M4 15h16M10 4v16"/></symbol>
+  <symbol id="i-cuaderno" viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM9 8h6M9 12h6"/></symbol>
+  <symbol id="i-cabeza" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2 4.8.5.8 1 1.6 1 2.7v1.5h6v-1.5c0-1.1.5-1.9 1-2.7.8-1.2 2-2.6 2-4.8a6 6 0 0 0-6-6zM10 21h4"/></symbol>
+</svg>
 
+<header class="barra" id="barra">
+  <div class="marco">
+    <a class="marca" href="#" aria-label="NEXO, inicio">
+      <svg width="96" height="34" role="img" aria-label="NEXO"><use href="#i-marca"/></svg>
+    </a>
+    <nav class="enlaces" aria-label="Secciones de la página">
+      <a href="#que">Qué hace</a>
+      <a href="#como">Cómo funciona</a>
+      <a href="#planes">Planes</a>
+      <a href="#preguntas">Preguntas</a>
+    </nav>
+    <div class="barra-acciones">
+      <a class="btn sec chico" href="/consola" data-cta="entrar">Entrar</a>
+      <a class="btn chico" href="/consola" data-cta="prueba">Probar 14 días</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="marco">
   <!-- Solo en modo `presentacion`. Decirlo arriba y no en letra chica: quien
        llega tiene que saber en el primer segundo que todavía no puede entrar,
        antes de buscar el botón que no está. -->
@@ -240,121 +493,342 @@ ul.limpia li { margin-bottom: var(--e1); }
   </div>
 
   <div class="hero">
-    <h1>Los datos de tu empresa, convertidos en información para decidir.</h1>
-    <p class="lead">
-      NEXO integra la operación —ventas, compras, stock, tesorería— con la contabilidad y el
-      cumplimiento fiscal argentino en un solo sistema. Lo que cargás una vez, sirve en todos
-      lados: no hay que volver a escribirlo en una planilla.
-    </p>
-    <div class="acciones">
-      <a class="btn" href="/consola" data-cta="prueba">Probar 14 días</a>
-      <span class="fina">Sin tarjeta. Al terminar la prueba no se borra nada.</span>
+    <div class="hero-grilla">
+      <div>
+        <span class="etiqueta"><i></i>Gestión y contabilidad para empresas argentinas</span>
+        <h1>Los datos de tu empresa, convertidos en <em>información para decidir.</em></h1>
+        <p class="lead">
+          NEXO integra la operación —ventas, compras, stock, tesorería— con la contabilidad y el
+          cumplimiento fiscal argentino en un solo sistema. Lo que cargás una vez, sirve en todos
+          lados: no hay que volver a escribirlo en una planilla.
+        </p>
+        <div class="acciones">
+          <a class="btn" href="/consola" data-cta="prueba">Probar 14 días</a>
+          <a class="btn sec" href="#como">Ver cómo funciona</a>
+        </div>
+        <ul class="garantias">
+          <li><svg class="ico"><use href="#i-check"/></svg>Sin tarjeta</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Al terminar la prueba no se borra nada</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Tus datos, siempre exportables</li>
+        </ul>
+      </div>
+
+      <!-- La consola, dibujada. Cifras de ejemplo en abreviado: ver el encabezado del archivo. -->
+      <div class="ventana rev" aria-label="Ilustración de la consola de NEXO con datos de ejemplo" role="img">
+        <div class="ventana-tit"><i></i><i></i><i></i><span>nexo · Empresa de ejemplo S. A.</span></div>
+        <div class="ventana-cuerpo">
+          <div class="v-lateral">
+            <svg class="ico on"><use href="#i-inicio"/></svg>
+            <svg class="ico"><use href="#i-documentos"/></svg>
+            <svg class="ico"><use href="#i-comercial"/></svg>
+            <svg class="ico"><use href="#i-terceros"/></svg>
+            <svg class="ico"><use href="#i-stock"/></svg>
+            <svg class="ico"><use href="#i-bancos"/></svg>
+            <svg class="ico"><use href="#i-asientos"/></svg>
+            <svg class="ico"><use href="#i-analitica"/></svg>
+          </div>
+          <div class="v-principal">
+            <div class="v-cab"><b>Inicio</b><span>octubre</span></div>
+            <div class="v-kpis">
+              <div class="v-kpi"><small>Ventas del mes</small><b>$ 4,8 M</b></div>
+              <div class="v-kpi"><small>Compras del mes</small><b>$ 2,1 M</b></div>
+              <div class="v-kpi"><small>A cobrar</small><b>$ 1,2 M</b></div>
+              <div class="v-kpi ojo"><small>Pendientes</small><b>6</b></div>
+            </div>
+            <div class="v-medio">
+              <div class="v-panel">
+                <h4>Ventas y compras por mes</h4>
+                <div class="v-barras">
+                  <div class="par"><i style="height:38%"></i><i style="height:24%"></i></div>
+                  <div class="par"><i style="height:52%"></i><i style="height:30%"></i></div>
+                  <div class="par"><i style="height:46%"></i><i style="height:34%"></i></div>
+                  <div class="par"><i style="height:68%"></i><i style="height:40%"></i></div>
+                  <div class="par"><i style="height:60%"></i><i style="height:36%"></i></div>
+                  <div class="par"><i style="height:86%"></i><i style="height:44%"></i></div>
+                </div>
+                <div class="v-meses"><span>may</span><span>jun</span><span>jul</span><span>ago</span><span>sep</span><span>oct</span></div>
+              </div>
+              <div class="v-panel">
+                <h4>Qué espera por vos</h4>
+                <div class="v-lista">
+                  <div class="v-fila"><span>Sin asiento</span><span class="pastilla mal">2 impiden</span></div>
+                  <div class="v-fila"><span>Facturas leídas</span><span class="pastilla ia">3 para revisar</span></div>
+                  <div class="v-fila"><span>Conciliación</span><span class="pastilla ojo">1 pendiente</span></div>
+                  <div class="v-fila"><span>IVA de septiembre</span><span class="pastilla bien">listo</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="nota-ejemplo">Datos de ejemplo</span>
+      </div>
     </div>
   </div>
+</div>
 
-  <section>
-    <h2>El problema no es que falten datos</h2>
-    <p class="sub">
-      Es que están en cinco lugares. El remito en un talonario, la factura en el sistema del
-      contador, el stock en una planilla, el banco en el homebanking y el margen en la cabeza
-      de alguien. Cada cierre de mes es volver a juntarlos, y cada respuesta llega tarde.
-    </p>
-    <div class="rejilla">
+<section id="que">
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">El problema</span>
+      <h2>El problema no es que falten datos</h2>
+      <p class="sub">
+        Es que están en cinco lugares. El remito en un talonario, la factura en el sistema del
+        contador, el stock en una planilla, el banco en el homebanking y el margen en la cabeza
+        de alguien. Cada cierre de mes es volver a juntarlos, y cada respuesta llega tarde.
+      </p>
+    </div>
+
+    <div class="convergen rev">
+      <div class="lugares">
+        <div class="lugar"><svg class="ico"><use href="#i-cuaderno"/></svg>El remito, en un talonario</div>
+        <div class="lugar"><svg class="ico"><use href="#i-documentos"/></svg>La factura, en el sistema del contador</div>
+        <div class="lugar"><svg class="ico"><use href="#i-hoja"/></svg>El stock, en una planilla</div>
+        <div class="lugar"><svg class="ico"><use href="#i-bancos"/></svg>El banco, en el homebanking</div>
+        <div class="lugar"><svg class="ico"><use href="#i-cabeza"/></svg>El margen, en la cabeza de alguien</div>
+      </div>
+      <div class="flecha" aria-hidden="true"><svg class="ico"><use href="#i-flecha"/></svg></div>
+      <div class="nexo-nodo">
+        <svg width="120" height="42" role="img" aria-label="NEXO"><use href="#i-marca"/></svg>
+        <p>Un solo lugar. Se carga una vez y sirve para todo lo demás.</p>
+      </div>
+    </div>
+
+    <div class="rejilla rev">
       <div class="caja">
+        <svg class="ico"><use href="#i-check"/></svg>
         <h3>Se carga una vez</h3>
         <p>Una venta mueve el stock, la cuenta corriente del cliente, el IVA y el Mayor. No hay
            que asentarla cuatro veces ni conciliar cuatro versiones.</p>
       </div>
       <div class="caja">
+        <svg class="ico"><use href="#i-auditoria"/></svg>
         <h3>Todo tiene rastro</h3>
         <p>De un saldo se llega al asiento, del asiento al comprobante y del comprobante al
            documento que lo respalda. La bitácora está encadenada por hash.</p>
       </div>
       <div class="caja">
+        <svg class="ico"><use href="#i-aislar"/></svg>
         <h3>Cada empresa, aislada</h3>
         <p>El aislamiento entre empresas lo hace la base de datos, no una condición en el
            código. Un estudio contable puede llevar su cartera sin que se mezcle nada.</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section>
-    <h2>Qué hace hoy</h2>
-    <p class="sub">
-      Todo lo de esta lista funciona y está probado. Lo que estamos construyendo está más
-      abajo, separado y dicho como tal.
-    </p>
-    <div class="rejilla">
-      <div class="caja"><h3>Contabilidad</h3><p>Plan de cuentas, asientos, Diario, Mayor, períodos, cierre de ejercicio y estados contables con sus notas.</p></div>
-      <div class="caja"><h3>Fiscal</h3><p>Comprobantes, IVA, subdiarios y libros. Consulta de padrón y constatación de comprobantes contra ARCA.</p></div>
-      <div class="caja"><h3>Ventas y compras</h3><p>Presupuesto, pedido, remito, factura y cobranza. Solicitud, orden, recepción, factura y pago.</p></div>
-      <div class="caja"><h3>Stock</h3><p>Movimientos, depósitos, recuentos y costo promedio ponderado calculado al escribir.</p></div>
-      <div class="caja"><h3>Tesorería</h3><p>Caja, bancos, cheques y conciliación bancaria contra el extracto.</p></div>
-      <div class="caja"><h3>Documentos</h3><p>Ingesta con OCR, extracción de datos, versiones y detección de duplicados.</p></div>
-      <div class="caja"><h3>Análisis</h3><p>Señales con umbrales propios, variación del margen abierta en precio, costo y volumen, y escenarios comparables.</p></div>
-      <div class="caja"><h3>Auditoría</h3><p>Quién hizo qué, cuándo y por qué. Los asientos no se borran: se anulan, y queda el rastro.</p></div>
+<section id="como">
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Cómo funciona</span>
+      <h2>Un comprobante, de la carga al balance</h2>
+      <p class="sub">Cada paso lo hace el sistema o lo decide una persona, y siempre se sabe cuál de las dos. La inteligencia artificial propone; nunca contabiliza sola.</p>
     </div>
-  </section>
+    <ol class="pasos rev">
+      <li><div class="nodo"><svg class="ico"><use href="#i-documentos"/></svg></div><b>Cargar</b><span class="t">Subís la factura o la cargás a mano</span></li>
+      <li><div class="nodo"><svg class="ico"><use href="#i-propuestas"/></svg></div><b>Revisar</b><span class="t">La IA sugiere; vos decidís</span></li>
+      <li><div class="nodo"><svg class="ico"><use href="#i-asientos"/></svg></div><b>Contabilizar</b><span class="t">El asiento entra en borrador y lo aprobás</span></li>
+      <li><div class="nodo"><svg class="ico"><use href="#i-iva"/></svg></div><b>Declarar</b><span class="t">Se arma el Libro IVA Digital</span></li>
+      <li><div class="nodo"><svg class="ico"><use href="#i-cierre"/></svg></div><b>Cerrar</b><span class="t">Se bloquea y cierra el período</span></li>
+      <li><div class="nodo"><svg class="ico"><use href="#i-estados"/></svg></div><b>Informar</b><span class="t">Estados contables y libros</span></li>
+    </ol>
 
-  <section id="planes">
-    <h2>Planes</h2>
-    <!--
-      El tratamiento del IVA **no se escribe acá**: lo completa `impuestos-leyenda`
-      con lo que contesta `GET /planes`, que a su vez lo deriva de
-      `plan_prices.incluye_impuestos`.
-
-      Acá decía «sin IVA» con los precios cargados como FINALES: la página
-      pública le sumaba un 21 % mental a cada precio que mostraba. Es el mismo
-      motivo por el que no hay un solo importe escrito en este archivo — ver el
-      comentario del encabezado— y vale igual para la frase que los describe.
-
-      Sin respuesta de la API queda vacío, no queda una suposición.
-    -->
-    <p class="sub">
-      Precios en pesos, por mes. <span id="impuestos-leyenda"></span> La prueba de 14 días es
-      del plan que elijas, completa y sin tarjeta.
-    </p>
-    <div class="tabla">
-      <table>
-        <thead><tr><th>Plan</th><th>Precio</th><th>Incluye</th><th>Topes</th></tr></thead>
-        <tbody id="planes-cuerpo">
-          <tr><td colspan="4" style="color:var(--tinta-suave)">Cargando los planes…</td></tr>
-        </tbody>
-      </table>
+    <div class="vitrina rev" style="margin-top:var(--e8)">
+      <div class="v-texto">
+        <span class="sobre">Documentos</span>
+        <h3>Subís el comprobante. NEXO lo lee y te arma el asiento.</h3>
+        <p>Ingesta con OCR, extracción de datos, versiones y detección de duplicados. Lo que el sistema no pudo leer con seguridad, lo marca; nunca da por bueno un dato dudoso.</p>
+        <ul class="checks">
+          <li><svg class="ico"><use href="#i-check"/></svg>La IA propone la cuenta y dice qué tan segura está</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Vos aprobás, modificás o rechazás: queda registrado</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>El original queda guardado con su huella digital</li>
+        </ul>
+      </div>
+      <div class="lamina" role="img" aria-label="Ilustración: una factura leída y su asiento propuesto, con datos de ejemplo">
+        <div class="doc">
+          <h5><span>Factura A</span><span>Leída ✓</span></h5>
+          <div class="lin"><span>Proveedor</span><b><mark>Insumos del Sur S. R. L.</mark></b></div>
+          <div class="lin"><span>Neto</span><b><mark>$ 100 mil</mark></b></div>
+          <div class="lin"><span>IVA 21 %</span><b><mark>$ 21 mil</mark></b></div>
+          <div class="lin"><span>Total</span><b>$ 121 mil</b></div>
+        </div>
+        <div class="salto"><svg class="ico"><use href="#i-propuestas"/></svg>La IA propone este asiento</div>
+        <div class="asiento">
+          <div class="tit"><span>Asiento propuesto · borrador</span><span class="pastilla ia">confianza alta</span></div>
+          <table>
+            <tr class="cab"><td>Cuenta</td><td>Debe</td><td>Haber</td></tr>
+            <tr><td>Mercaderías</td><td>100 mil</td><td></td></tr>
+            <tr><td>IVA crédito fiscal</td><td>21 mil</td><td></td></tr>
+            <tr><td>Proveedores</td><td></td><td>121 mil</td></tr>
+          </table>
+          <div class="botonera"><span class="ok">Aprobar</span><span>Modificar</span><span>Rechazar</span></div>
+        </div>
+        <span class="nota-ejemplo">Datos de ejemplo</span>
+      </div>
     </div>
-    <p class="fina" style="margin-top:14px" id="planes-nota"></p>
-  </section>
 
-  <section>
-    <h2>Cómo empieza</h2>
-    <ul class="limpia">
-      <li>Te registrás con tu correo y lo confirmás.</li>
-      <li>Creás tu empresa: razón social, CUIT y cierre de ejercicio.</li>
-      <li>Elegís un plan y arranca la prueba de 14 días. <strong>No se pide tarjeta.</strong></li>
-      <li>Cargás tu plan de cuentas y abrís el ejercicio. Sin un período abierto no se puede
-          asentar nada, y el sistema te lo va a decir hasta que lo hagas.</li>
-      <li>Al terminar la prueba, la suscripción queda suspendida: los datos, la contabilidad y
-          el historial quedan intactos, y el acceso vuelve contratando.</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Seguridad</h2>
-    <div class="rejilla">
-      <div class="caja"><h3>Aislamiento en la base</h3><p>Cada tabla con datos de empresa tiene la política puesta en PostgreSQL. La aplicación conecta con un rol que no la puede saltear.</p></div>
-      <div class="caja"><h3>Segundo factor obligatorio</h3><p>Para los roles que tocan contabilidad. Sin él no se entra, aunque la contraseña sea correcta.</p></div>
-      <div class="caja"><h3>Bitácora que no se reescribe</h3><p>Encadenada por hash, con el borrado y la modificación revocados a nivel de base.</p></div>
-      <div class="caja"><h3>Tus datos son tuyos</h3><p>Exportación completa de la empresa cuando quieras. Irte no debería ser un problema técnico.</p></div>
+    <div class="vitrina inversa rev">
+      <div class="v-texto">
+        <span class="sobre">Tesorería</span>
+        <h3>Conciliás el banco sin pelearte con planillas.</h3>
+        <p>Importás el extracto y NEXO te propone con qué registro coincide cada movimiento. Se confirma de a una: no existe «aceptar todas», porque la conciliación es un control, no un trámite.</p>
+        <ul class="checks">
+          <li><svg class="ico"><use href="#i-check"/></svg>Caja, bancos y cheques en el mismo lugar</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Lo que no coincide queda a la vista, no escondido</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Cada conciliación deja quién la confirmó</li>
+        </ul>
+      </div>
+      <div class="lamina" role="img" aria-label="Ilustración: movimientos del banco emparejados con los registros de la empresa, con datos de ejemplo">
+        <div class="conc">
+          <div class="col"><h5>Extracto del banco</h5>
+            <div class="it hecho"><span>Cobranza cliente Norte</span><b>+ 380 mil</b></div>
+            <div class="it hecho"><span>Pago proveedor</span><b>− 121 mil</b></div>
+            <div class="it hecho"><span>Cobranza cliente Sur</span><b>+ 95 mil</b></div>
+            <div class="it falta"><span>Débito sin registrar</span><b>− 18 mil</b></div>
+          </div>
+          <div class="union" aria-hidden="true">
+            <span><svg class="ico"><use href="#i-check"/></svg></span><span><svg class="ico"><use href="#i-check"/></svg></span><span><svg class="ico"><use href="#i-check"/></svg></span><span class="no"><svg class="ico"><use href="#i-flecha"/></svg></span>
+          </div>
+          <div class="col"><h5>Registros de NEXO</h5>
+            <div class="it hecho"><span>Factura 1 · cliente Norte</span><b>380 mil</b></div>
+            <div class="it hecho"><span>Orden de pago aprobada</span><b>121 mil</b></div>
+            <div class="it hecho"><span>Factura 2 · cliente Sur</span><b>95 mil</b></div>
+            <div class="it falta"><span>Falta el asiento</span><b>—</b></div>
+          </div>
+        </div>
+        <div class="conc-pie"><span>3 de 4 conciliados</span><span class="pastilla ojo">1 pendiente de revisar</span></div>
+        <span class="nota-ejemplo">Datos de ejemplo</span>
+      </div>
     </div>
-  </section>
 
-  <section>
-    <h2>En qué estamos trabajando</h2>
-    <div class="aviso">
+    <div class="vitrina rev">
+      <div class="v-texto">
+        <span class="sobre">Análisis</span>
+        <h3>Cada número se puede abrir hasta el comprobante.</h3>
+        <p>Nada de cifras que aparecen de la nada. Tocás un total y bajás por el mes, el asiento y el comprobante hasta el documento que lo respalda.</p>
+        <ul class="checks">
+          <li><svg class="ico"><use href="#i-check"/></svg>Señales con umbrales que fijás vos</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Variación del margen abierta en precio, costo y volumen</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Escenarios comparables, con sus supuestos a la vista</li>
+        </ul>
+      </div>
+      <div class="lamina" role="img" aria-label="Ilustración: un gráfico de barras con un mes seleccionado y el camino hasta el documento, con datos de ejemplo">
+        <div class="g-barras">
+          <span class="globo">Octubre · $ 4,8 M</span>
+          <div class="par"><i style="height:34%"></i><i style="height:22%"></i></div>
+          <div class="par"><i style="height:48%"></i><i style="height:30%"></i></div>
+          <div class="par"><i style="height:42%"></i><i style="height:32%"></i></div>
+          <div class="par"><i style="height:64%"></i><i style="height:38%"></i></div>
+          <div class="par"><i style="height:58%"></i><i style="height:36%"></i></div>
+          <div class="par sel"><i style="height:88%"></i><i style="height:46%"></i></div>
+        </div>
+        <div class="g-meses"><span>may</span><span>jun</span><span>jul</span><span>ago</span><span>sep</span><span>oct</span></div>
+        <div class="camino">
+          <span>Ventas de octubre</span><svg class="ico"><use href="#i-flecha"/></svg>
+          <span>Asiento</span><svg class="ico"><use href="#i-flecha"/></svg>
+          <span>Comprobante</span><svg class="ico"><use href="#i-flecha"/></svg>
+          <span class="ult">Documento original</span>
+        </div>
+        <span class="nota-ejemplo">Datos de ejemplo</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Qué hace hoy</span>
+      <h2>Todo lo de esta lista funciona y está probado</h2>
+      <p class="sub">
+        Lo que estamos construyendo está más abajo, separado y dicho como tal.
+      </p>
+    </div>
+    <div class="rejilla rev">
+      <div class="caja"><svg class="ico"><use href="#i-asientos"/></svg><h3>Contabilidad</h3><p>Plan de cuentas, asientos, Diario, Mayor, períodos, cierre de ejercicio y estados contables con sus notas.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-iva"/></svg><h3>Fiscal</h3><p>Comprobantes, IVA, subdiarios y libros. Consulta de padrón y constatación de comprobantes contra ARCA.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-comercial"/></svg><h3>Ventas y compras</h3><p>Presupuesto, pedido, remito, factura y cobranza. Solicitud, orden, recepción, factura y pago.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-stock"/></svg><h3>Stock</h3><p>Movimientos, depósitos, recuentos y costo promedio ponderado calculado al escribir.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-caja"/></svg><h3>Tesorería</h3><p>Caja, bancos, cheques y conciliación bancaria contra el extracto.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-documentos"/></svg><h3>Documentos</h3><p>Ingesta con OCR, extracción de datos, versiones y detección de duplicados.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-analitica"/></svg><h3>Análisis</h3><p>Señales con umbrales propios, variación del margen abierta en precio, costo y volumen, y escenarios comparables.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-auditoria"/></svg><h3>Auditoría</h3><p>Quién hizo qué, cuándo y por qué. Los asientos no se borran: se anulan, y queda el rastro.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Seguridad</span>
+      <h2>Tus datos, bajo llave y siempre tuyos</h2>
+    </div>
+    <div class="seguridad rev">
+      <div class="caja"><svg class="ico"><use href="#i-aislar"/></svg><h3>Aislamiento en la base</h3><p>Cada tabla con datos de empresa tiene la política puesta en PostgreSQL. La aplicación conecta con un rol que no la puede saltear.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-llave"/></svg><h3>Segundo factor obligatorio</h3><p>Para los roles que tocan contabilidad. Sin él no se entra, aunque la contraseña sea correcta.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-auditoria"/></svg><h3>Bitácora que no se reescribe</h3><p>Encadenada por hash, con el borrado y la modificación revocados a nivel de base.</p></div>
+      <div class="caja"><svg class="ico"><use href="#i-exportar"/></svg><h3>Tus datos son tuyos</h3><p>Exportación completa de la empresa cuando quieras. Irte no debería ser un problema técnico.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="planes">
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Planes</span>
+      <h2>Elegís el plan, probás 14 días</h2>
+      <!--
+        El tratamiento del IVA **no se escribe acá**: lo completa `impuestos-leyenda`
+        con lo que contesta `GET /planes`, que a su vez lo deriva de
+        `plan_prices.incluye_impuestos`.
+
+        Acá decía «sin IVA» con los precios cargados como FINALES: la página
+        pública le sumaba un 21 % mental a cada precio que mostraba. Es el mismo
+        motivo por el que no hay un solo importe escrito en este archivo — ver el
+        comentario del encabezado— y vale igual para la frase que los describe.
+
+        Sin respuesta de la API queda vacío, no queda una suposición.
+      -->
+      <p class="sub">
+        Precios en pesos, por mes. <span id="impuestos-leyenda"></span> La prueba de 14 días es
+        del plan que elijas, completa y sin tarjeta.
+      </p>
+    </div>
+    <div class="planes rev" id="planes-cuerpo" aria-live="polite">
+      <div class="plan-estado">Cargando los planes…</div>
+    </div>
+    <p class="fina" style="margin-top:var(--e4)" id="planes-nota"></p>
+  </div>
+</section>
+
+<section>
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Cómo empieza</span>
+      <h2>De registrarte a operar, en cinco pasos</h2>
+    </div>
+    <ol class="linea-tiempo rev">
+      <li><span class="n">1</span><p>Te registrás con tu correo y lo confirmás.</p></li>
+      <li><span class="n">2</span><p>Creás tu empresa: razón social, CUIT y cierre de ejercicio.</p></li>
+      <li><span class="n">3</span><p>Elegís un plan y arranca la prueba de 14 días. <strong>No se pide tarjeta.</strong></p></li>
+      <li><span class="n">4</span><p>Cargás tu plan de cuentas y abrís el ejercicio. Sin un período abierto no se puede
+          asentar nada, y el sistema te lo va a decir hasta que lo hagas.</p></li>
+      <li><span class="n">5</span><p>Al terminar la prueba, la suscripción queda suspendida: los datos, la contabilidad y
+          el historial quedan intactos, y el acceso vuelve contratando.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Lo que viene</span>
+      <h2>En qué estamos trabajando</h2>
+    </div>
+    <div class="aviso rev">
       Esto <strong>todavía no está disponible</strong>. Aparece acá porque es más útil saber a
       dónde va el producto que descubrir después que algo no era lo que parecía.
     </div>
-    <ul class="limpia" style="margin-top:16px">
+    <ul class="limpia rev" style="margin-top:var(--e4)">
       <li><strong>Emisión de facturas electrónicas.</strong> Hoy NEXO registra y valida
           comprobantes contra ARCA; emitir con CAE está en desarrollo.</li>
       <li><strong>Pago con tarjeta.</strong> Por ahora la suscripción se abona por
@@ -363,55 +837,80 @@ ul.limpia li { margin-bottom: var(--e1); }
           calcula sobre tus datos y muestra de dónde sale cada número.</li>
       <li><strong>Sueldos y RRHH.</strong> No está.</li>
     </ul>
-  </section>
+  </div>
+</section>
 
-  <section>
-    <h2>Preguntas</h2>
-    <details>
-      <summary>¿Qué pasa con mis datos si dejo de pagar?</summary>
-      <p>Nada se borra. La suscripción queda suspendida y perdés el acceso, no la información.
-         Cuando contratás de nuevo está todo donde estaba. Y podés exportar tu empresa completa
-         en cualquier momento mientras tengas acceso.</p>
-    </details>
-    <details>
-      <summary>¿Me sirve si ya tengo contador?</summary>
-      <p>Sí, y es el caso más común. Tu contador puede trabajar en NEXO con su propio usuario y
-         su propio rol; hay un plan pensado para estudios que llevan varias empresas.</p>
-    </details>
-    <details>
-      <summary>¿Emite facturas?</summary>
-      <p>Todavía no. NEXO registra los comprobantes que emitís, los valida contra ARCA y arma
-         el IVA y los libros. La emisión con CAE está en desarrollo — lo decimos así porque un
-         sistema que promete emitir y no emite te deja sin facturar el primer día del mes.</p>
-    </details>
-    <details>
-      <summary>¿Necesito instalar algo?</summary>
-      <p>No. Se usa desde el navegador.</p>
-    </details>
-    <details>
-      <summary>¿Puedo probarlo con mis datos reales?</summary>
-      <p>Sí, la prueba es del producto completo. También hay un modo de simulación aislado si
-         preferís ver cómo se comporta antes de cargar nada.</p>
-    </details>
-    <details>
-      <summary>¿Qué pasa si supero el tope de mi plan?</summary>
-      <p>El sistema te avisa y <strong>no te bloquea</strong>. Un sistema contable que se niega
-         a registrar un hecho por una cuestión comercial te deja los libros incompletos, y eso
-         no se arregla pagando después: el hecho ya pasó.</p>
-    </details>
-  </section>
+<section id="preguntas">
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Preguntas</span>
+      <h2>Lo que más nos preguntan</h2>
+    </div>
+    <div class="faq rev">
+      <details>
+        <summary>¿Qué pasa con mis datos si dejo de pagar?</summary>
+        <p>Nada se borra. La suscripción queda suspendida y perdés el acceso, no la información.
+           Cuando contratás de nuevo está todo donde estaba. Y podés exportar tu empresa completa
+           en cualquier momento mientras tengas acceso.</p>
+      </details>
+      <details>
+        <summary>¿Me sirve si ya tengo contador?</summary>
+        <p>Sí, y es el caso más común. Tu contador puede trabajar en NEXO con su propio usuario y
+           su propio rol; hay un plan pensado para estudios que llevan varias empresas.</p>
+      </details>
+      <details>
+        <summary>¿Emite facturas?</summary>
+        <p>Todavía no. NEXO registra los comprobantes que emitís, los valida contra ARCA y arma
+           el IVA y los libros. La emisión con CAE está en desarrollo — lo decimos así porque un
+           sistema que promete emitir y no emite te deja sin facturar el primer día del mes.</p>
+      </details>
+      <details>
+        <summary>¿Necesito instalar algo?</summary>
+        <p>No. Se usa desde el navegador.</p>
+      </details>
+      <details>
+        <summary>¿Puedo probarlo con mis datos reales?</summary>
+        <p>Sí, la prueba es del producto completo. También hay un modo de simulación aislado si
+           preferís ver cómo se comporta antes de cargar nada.</p>
+      </details>
+      <details>
+        <summary>¿Qué pasa si supero el tope de mi plan?</summary>
+        <p>El sistema te avisa y <strong>no te bloquea</strong>. Un sistema contable que se niega
+           a registrar un hecho por una cuestión comercial te deja los libros incompletos, y eso
+           no se arregla pagando después: el hecho ya pasó.</p>
+      </details>
+    </div>
+  </div>
+</section>
 
-  <footer>
-    <p>
-      NEXO — sistema de gestión y contabilidad para empresas argentinas.
-      <a href="/consola" data-cta="entrar">Entrar</a>
-    </p>
-    <p class="fina">
-      <span id="impuestos-pie"></span>
-      Las funcionalidades listadas en «en qué estamos trabajando» no están disponibles.
-    </p>
-  </footer>
+<div class="cierre">
+  <div class="marco">
+    <h2 class="rev">Probalo 14 días, con tus datos y sin tarjeta.</h2>
+    <p class="sub rev" style="margin-left:auto;margin-right:auto">Si no te convence, no pasa nada: tus datos quedan y se pueden exportar.</p>
+    <div class="acciones rev">
+      <a class="btn" href="/consola" data-cta="prueba">Probar 14 días</a>
+      <a class="btn sec" href="/consola" data-cta="entrar">Ya tengo cuenta</a>
+    </div>
+  </div>
 </div>
+</main>
+
+<footer>
+  <div class="marco pie">
+    <div>
+      <a class="marca" href="#" aria-label="NEXO, inicio"><svg width="86" height="30" role="img" aria-label="NEXO"><use href="#i-marca"/></svg></a>
+      <p>Sistema de gestión y contabilidad para empresas argentinas.</p>
+      <p class="fina">
+        <span id="impuestos-pie"></span>
+        Las funcionalidades listadas en «en qué estamos trabajando» no están disponibles.
+      </p>
+    </div>
+    <div>
+      <p><a href="/consola" data-cta="entrar">Entrar</a></p>
+      <p><a href="mailto:contacto@nexointelligence.com.ar">contacto@nexointelligence.com.ar</a></p>
+    </div>
+  </div>
+</footer>
 
 <script>
 /** Lo que declara la cabecera sobre cómo se está sirviendo esta página. */
@@ -421,7 +920,7 @@ const ajuste = (nombre) =>
 /**
  * Los botones no prometen lo que hoy no se puede cumplir.
  *
- * En modo `presentacion` no hay consola detrás: los tres enlaces a `/consola`
+ * En modo `presentacion` no hay consola detrás: los enlaces a `/consola`
  * darían 404. Un botón que dice «Probar 14 días» y lleva a una página que no
  * existe es peor que no tener botón — le enseña al que llega que el sistema no
  * funciona, justo en el primer minuto.
@@ -509,32 +1008,33 @@ const ajuste = (nombre) =>
 
     cuerpo.innerHTML = '';
     for (const p of datos.planes || []) {
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td class="plan">' + escapar(p.nombre) +
-          '<div class="fina" style="font-weight:400;margin-top:4px">' +
-          escapar(p.descripcion || '') + '</div></td>' +
+      const tarjeta = document.createElement('article');
+      tarjeta.className = 'plan';
+      const incluye = (p.incluye || []).map((f) => '<li>' + escapar(f.nombre) + '</li>').join('');
+      const topes = (p.topes || [])
+        .map((t) => '<li>' + escapar(nombreDelTope(t.recurso, t.tope, t.ilimitado)) + '</li>')
+        .join('');
+      tarjeta.innerHTML =
+        '<h3>' + escapar(p.nombre) + '</h3>' +
+        '<p class="desc">' + escapar(p.descripcion || '') + '</p>' +
         // Sin precio declarado NO se muestra «gratis»: se dice que hay que
         // consultarlo. Mostrar cero regalaría el producto por una fila vacía.
         // El «+ IVA» estaba escrito fijo y el precio venía con
         // `incluyeImpuestos: true`: la fila decía que había que sumarle un 21 %
         // a un importe que ya lo tenía. Ahora sale del mismo objeto que trae el
         // número, como ya lo hacía la consola.
-        '<td class="precio">' + (p.precio
+        '<div class="precio">' + (p.precio
           ? '$ ' + escapar(Number(p.precio.importe).toLocaleString('es-AR')) +
-            '<div class="fina" style="font-weight:400">por mes' +
-            (p.precio.incluyeImpuestos ? ', IVA incluido' : ' + IVA') + '</div>'
-          : '<span class="neu">a consultar</span>') + '</td>' +
-        '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
-        '<td class="fina">' + escapar((p.topes || [])
-          .map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado))
-          .join(' · ') || 'a convenir') + '</td>';
-      cuerpo.appendChild(tr);
+            '<small>por mes' + (p.precio.incluyeImpuestos ? ', IVA incluido' : ' + IVA') + '</small>'
+          : '<span class="neu">a consultar</span>') + '</div>' +
+        '<h4>Incluye</h4><ul>' + (incluye || '<li>—</li>') + '</ul>' +
+        '<h4>Topes</h4><ul class="topes">' + (topes || '<li>a convenir</li>') + '</ul>';
+      cuerpo.appendChild(tarjeta);
     }
 
     if ((datos.planes || []).length === 0) {
       cuerpo.innerHTML =
-        '<tr><td colspan="4">Todavía no hay planes publicados. Escribinos y lo vemos.</td></tr>';
+        '<div class="plan-estado">Todavía no hay planes publicados. Escribinos y lo vemos.</div>';
     }
     // El tratamiento del IVA sale de la respuesta, que lo deriva de
     // `plan_prices.incluye_impuestos`. Si la API no lo manda —una versión vieja
@@ -559,10 +1059,31 @@ const ajuste = (nombre) =>
     // sin precios en pantalla, una frase sobre cómo se les suma el IVA no
     // describe nada.
     cuerpo.innerHTML =
-      '<tr><td colspan="4">No se pudieron cargar los planes en este momento. ' +
-      'Probá de nuevo en un rato.</td></tr>';
+      '<div class="plan-estado">No se pudieron cargar los planes en este momento. ' +
+      'Probá de nuevo en un rato.</div>';
     nota.textContent = '';
   }
+})();
+
+/** La barra de arriba se marca al bajar, y lo que está más abajo aparece al llegar. */
+(function movimiento() {
+  const barra = document.getElementById('barra');
+  const marcar = () => { barra.dataset.pegada = window.scrollY > 8 ? 'si' : 'no'; };
+  marcar();
+  window.addEventListener('scroll', marcar, { passive: true });
+
+  const elementos = document.querySelectorAll('.rev');
+  // Sin el observador (navegador viejo) o con movimiento reducido, todo se ve de entrada.
+  if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const e of elementos) e.classList.add('visto');
+    return;
+  }
+  const obs = new IntersectionObserver((entradas) => {
+    for (const en of entradas) {
+      if (en.isIntersecting) { en.target.classList.add('visto'); obs.unobserve(en.target); }
+    }
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  for (const e of elementos) obs.observe(e);
 })();
 </script>
 </body>
