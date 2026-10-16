@@ -169,15 +169,16 @@ function buscarTerceros(ctx: ContextoDeHerramientas): HerramientaDeChat | null {
  */
 const AYUDA: Readonly<Record<string, string>> = {
   'donde-esta-cada-cosa':
-    'El menú de la izquierda agrupa las pantallas. Panel (resumen), Pendientes (lo que espera una decisión), Preguntar ' +
-    '(consultas al sistema), Comercial, Terceros (clientes y proveedores), Productos, Precios, CRM y Comisiones; en compras: ' +
-    'Solicitudes, Recepciones y Pagos; Documentos, Propuestas de IA, Operaciones, Existencias, Bienes de uso, Proyectos, ' +
-    'Sucursales e Integraciones; tesorería: Caja, Bancos y Cheques; contabilidad: IVA, Asientos, Libros, Estados y notas y ' +
-    'Períodos y cierre; Analítica y Señales; y al final Migraciones, Auditoría, Plan y Configuración. Lo que se ve depende ' +
-    'del rol de la persona y del plan de la empresa: una pantalla que no aparece puede no estar incluida en su plan o en ' +
-    'sus permisos.',
+    'El menú de la izquierda agrupa las pantallas por tarea, de lo más usado a lo menos usado. Empezar: Inicio (resumen), ' +
+    'Pendientes (lo que espera una decisión), Propuestas de IA, Asistente y Preguntar (consultas al sistema). Vender: ' +
+    'Presupuestos y pedidos, Facturas y comprobantes, Clientes y proveedores, Productos, Precios, CRM y Comisiones. Comprar: ' +
+    'Documentos, Pedidos de compra, Recepciones y Órdenes de pago. Dinero: Caja, Bancos y Cheques. Stock y operación: Stock, ' +
+    'Bienes de uso, Proyectos, Sucursales e Integraciones. Contabilidad: Asientos, Libros, IVA, Estados y notas y Cierre de ' +
+    'períodos. Análisis: Analítica y Señales y escenarios. Y al final, Administración: Migraciones, Auditoría, Plan y ' +
+    'Configuración. Se puede buscar cualquier pantalla con Ctrl+K. Lo que se ve depende del rol de la persona y del plan de ' +
+    'la empresa: una pantalla que no aparece puede no estar incluida en su plan o en sus permisos.',
   'cargar-un-tercero':
-    'Los clientes y proveedores se cargan en la pantalla Terceros. Hacen falta: la razón social (o el nombre), el tipo y ' +
+    'Los clientes y proveedores se cargan en la pantalla Clientes y proveedores. Hacen falta: la razón social (o el nombre), el tipo y ' +
     'el número de documento, y al menos un rol (cliente, proveedor, etc.). Si el documento es un CUIT o CUIL, NEXO verifica ' +
     'que esté bien construido (dígito verificador); eso no prueba que la persona exista ni que esté activa en ARCA. Si no ' +
     'se conoce el documento se puede cargar como "sin identificar", sin número. NEXO no permite dos terceros con el mismo ' +

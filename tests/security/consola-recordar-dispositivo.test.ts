@@ -51,7 +51,7 @@ describe('la contraseña nunca se guarda en la página', () => {
 
   it('la única clave de localStorage del ingreso es la del correo', () => {
     const claves = [...consola.matchAll(/(?:localStorage)\.setItem\(([^,)]*)/gu)].map((m) => m[1]!.trim());
-    expect(new Set(claves)).toEqual(new Set(['CLAVE_CORREO_RECORDADO', "'nexo-tema'"]));
+    expect(new Set(claves)).toEqual(new Set(['CLAVE_CORREO_RECORDADO', "'nexo-tema'", 'CLAVE_MENU', 'CLAVE_GRUPOS']));
     expect(consola).toContain("const CLAVE_CORREO_RECORDADO = 'nexo-correo-recordado';");
   });
 

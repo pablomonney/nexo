@@ -120,50 +120,171 @@
 body{margin:0;background:var(--papel);color:var(--tinta);
      font:15px/1.55 var(--ui)}
 
-/* ── Cabecera ─────────────────────────────────────────────────────────────── */
-header{display:flex;flex-wrap:wrap;align-items:center;gap:var(--e2) var(--e4);
-       padding:10px var(--e5);background:var(--alto);border-bottom:1px solid var(--linea)}
+/* ── Armazón: barra lateral a la izquierda + columna de trabajo ─────────────────────────────────────────────────────────
+   La navegación vivía arriba, en tres renglones de botones que se partían según el ancho. Ahora es una barra lateral fija,
+   agrupada por lo que la persona vino a hacer y ordenada por prioridad: lo primero que se hace, primero. Se puede achicar
+   a íconos (hamburguesa) y en el teléfono se abre encima del contenido. */
+:root{--lateral:276px;--lateral-compacto:78px;--cab:60px;
+      --sombra:0 1px 2px rgba(0,0,0,.18),0 8px 24px rgba(0,0,0,.14)}
+:root[data-tema="claro"]{--sombra:0 1px 2px rgba(16,40,48,.06),0 8px 24px rgba(16,40,48,.07)}
+
+.app{display:grid;grid-template-columns:var(--lateral) minmax(0,1fr);min-height:100vh;
+     transition:grid-template-columns .22s ease}
+.app[data-menu="compacto"]{grid-template-columns:var(--lateral-compacto) minmax(0,1fr)}
+/* Sin sesión (ingreso, alta, segundo factor) no hay nada que navegar: la barra no se muestra. */
+.app[data-sesion="no"]{grid-template-columns:minmax(0,1fr)}
+.app[data-sesion="no"] .lateral{display:none}
+.columna{min-width:0;display:flex;flex-direction:column}
+
+.lateral{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+         background:var(--alto);border-right:1px solid var(--linea);z-index:60}
+.lateral-cab{display:flex;align-items:center;gap:var(--e3);height:var(--cab);flex:none;
+             padding:0 18px;border-bottom:1px solid var(--linea)}
+.lateral-cab .marca{color:var(--tinta)}
+.lateral-cab .sub{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase}
+#b-menu-cerrar{display:none;margin:0 0 0 auto;padding:6px;line-height:0;background:none;border:0;color:var(--tinta2)}
+
+.buscar-menu{flex:none;padding:var(--e3) var(--e3) var(--e2);position:relative}
+.buscar-menu .ico{position:absolute;left:24px;top:50%;transform:translateY(-35%);color:var(--tinta3);pointer-events:none}
+.buscar-menu input{padding:9px 12px 9px 38px;border-radius:10px;background:var(--hund);font-size:.84rem}
+
+.lateral-menu{flex:1;overflow-y:auto;padding:0 var(--e3) var(--e5);scrollbar-width:thin}
+nav{display:block;padding:0;background:none;border:0}
+.gnav{display:block;margin:var(--e3) 0 0}
+.gnav-t{display:flex;align-items:center;gap:6px;width:100%;padding:6px 10px;border-radius:8px;cursor:pointer;
+        font-size:.66rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta3);
+        user-select:none}
+.gnav-t:hover{color:var(--tinta2)}
+.gnav-t:focus-visible{outline:2px solid var(--acento);outline-offset:-2px}
+.gnav-t .ico{width:14px;height:14px;margin-left:auto;transition:transform .18s;stroke-width:2.2}
+.gnav[data-abierto="no"] .gnav-t .ico{transform:rotate(-90deg)}
+.gnav[data-abierto="no"] .gnav-items{display:none}
+.gnav-items{display:block}
+nav button{display:flex;align-items:center;gap:12px;width:100%;margin:1px 0;padding:8px 10px;
+           background:none;border:1px solid transparent;border-radius:10px;
+           color:var(--tinta2);font:inherit;font-size:.87rem;font-weight:500;text-align:left;cursor:pointer;
+           position:relative}
+nav button:hover{background:var(--hund);color:var(--tinta)}
+nav button[aria-current="true"]{background:var(--acento-cl);color:var(--acento);font-weight:650}
+nav button[aria-current="true"]::before{content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:3px;
+           border-radius:0 3px 3px 0;background:var(--acento)}
+nav button.sec{margin-top:var(--e2);border-color:var(--linea2)}
+nav button .ico{flex:none;opacity:.92}
+nav button .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav button.fuera,.gnav.fuera{display:none}
+
+.ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+     flex:none;vertical-align:middle}
+.insignia{margin-left:auto;min-width:20px;padding:1px 7px;border-radius:var(--rp);font-size:.7rem;font-weight:700;
+          line-height:1.5;text-align:center;background:var(--acento);color:var(--acento-txt)}
+.insignia.urge{background:var(--mal);color:#fff}
+.insignia.ojo{background:var(--ojo);color:#1a1200}
+
+/* Barra lateral compacta: sólo íconos. El nombre sale como globito al pasar el mouse. */
+.app[data-menu="compacto"] .lateral-cab{padding:0;justify-content:center}
+.app[data-menu="compacto"] .lateral-cab .marca svg{width:44px;height:auto}
+.app[data-menu="compacto"] .lateral-cab .sub,
+.app[data-menu="compacto"] .buscar-menu,
+.app[data-menu="compacto"] nav button .txt,
+.app[data-menu="compacto"] nav button .insignia{display:none}
+.app[data-menu="compacto"] .gnav-t{font-size:0;height:1px;padding:0;margin:var(--e2) 12px;background:var(--linea);
+                                   border-radius:0;width:auto}
+.app[data-menu="compacto"] .gnav-t .ico{display:none}
+.app[data-menu="compacto"] .gnav[data-abierto="no"] .gnav-items{display:block}
+.app[data-menu="compacto"] nav button{justify-content:center;padding:10px 0}
+.app[data-menu="compacto"] nav button[aria-current="true"]::before{left:-12px}
+.app[data-menu="compacto"] nav button:hover::after{content:attr(data-nombre);position:fixed;left:calc(var(--lateral-compacto) + 6px);
+        padding:6px 10px;border-radius:8px;background:var(--tinta);color:var(--papel);font-size:.78rem;font-weight:600;
+        white-space:nowrap;box-shadow:var(--sombra);z-index:90;pointer-events:none;transform:translateY(-2px)}
+
+/* ── Barra superior ────────────────────────────────────────────────────────────────────────────────────────────────── */
+header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:var(--e3);height:var(--cab);
+       padding:0 var(--e5);background:color-mix(in srgb,var(--alto) 90%,transparent);
+       -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--linea)}
 .marca{display:flex;align-items:center;gap:var(--e2);flex:none}
 .marca svg{display:block}
 .sub{color:var(--tinta3);font-size:.78rem}
-.quien{margin-left:auto;display:flex;align-items:center;gap:var(--e3);
-       font-size:.8rem;color:var(--tinta2)}
-.empresa-activa{font-weight:600;color:var(--tinta)}
-
-/* El interruptor de tema. Un botón chico, sin texto: lo que hace se entiende
-   por el ícono y no vale la pena gastarle ancho a la cabecera. */
-/* El menú solo existe en pantalla angosta: en escritorio la navegación entra
-   entera y un botón para desplegarla sería un clic de más en cada visita. */
-#b-menu{display:none;background:none;border:1px solid var(--linea2);color:var(--tinta2);
-        padding:4px 10px;border-radius:var(--r1);margin:0;font-size:.78rem;cursor:pointer}
-#b-tema{background:none;border:1px solid var(--linea2);color:var(--tinta2);
-        padding:4px 8px;border-radius:var(--r1);margin:0;line-height:1;cursor:pointer}
+/* La marca de la cabecera sólo se ve cuando no hay barra lateral (ingreso, o teléfono). */
+header .marca{display:none}
+.app[data-sesion="no"] header .marca{display:flex}
+.icono-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;margin:0;padding:0;
+           background:none;border:1px solid var(--linea2);border-radius:10px;color:var(--tinta2);cursor:pointer}
+.icono-btn:hover{border-color:var(--acento);color:var(--acento);background:var(--acento-cl)}
+.app[data-sesion="no"] #b-menu,.app[data-sesion="no"] #b-paleta,.app[data-sesion="no"] #b-ayuda{display:none}
+.miga{flex:1;min-width:0;padding:0;font-size:.82rem;color:var(--tinta3);background:none;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.miga b{color:var(--tinta);font-weight:650}
+.pastilla-buscar{display:inline-flex;align-items:center;gap:var(--e2);margin:0;padding:8px 12px;min-width:210px;
+                 background:var(--hund);border:1px solid var(--linea2);border-radius:10px;color:var(--tinta3);
+                 font:inherit;font-size:.82rem;font-weight:500;cursor:pointer}
+.pastilla-buscar:hover{border-color:var(--acento);color:var(--tinta2)}
+.pastilla-buscar kbd{margin-left:auto;font:600 .68rem var(--mono);padding:1px 6px;border:1px solid var(--linea2);
+                     border-radius:5px;color:var(--tinta3)}
+.quien{display:flex;align-items:center;gap:var(--e3);font-size:.8rem;color:var(--tinta2);flex:none;margin-left:auto}
+.gnav.buscando .gnav-items{display:block}
+.empresa-activa{font-weight:650;color:var(--tinta);max-width:20ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#b-tema{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;margin:0;padding:0;
+        background:none;border:1px solid var(--linea2);border-radius:10px;color:var(--tinta2);cursor:pointer}
 #b-tema:hover{border-color:var(--acento);color:var(--acento)}
+#b-salir{margin:0;padding:8px 12px;border-radius:10px}
 
-/* ── Navegación agrupada ──────────────────────────────────────────────────
-   34 botones planos obligan a leerlos todos para encontrar uno. Agrupados por
-   lo que la persona vino a hacer, se busca en un grupo de cuatro. */
-nav{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--e3);
-    padding:var(--e2) var(--e5);background:var(--alto);border-bottom:1px solid var(--linea)}
-/* `nowrap`: un grupo no se parte por dentro. Sin esto el rótulo quedaba
-   al final de una línea y sus botones en la siguiente, que es peor que no
-   agrupar — el rótulo señala el grupo equivocado. El grupo entero se va a la
-   línea de abajo, que es lo que tiene que pasar. */
-.gnav{display:flex;align-items:center;gap:2px;flex-wrap:nowrap}
-.gnav-t{font-size:.63rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
-        color:var(--tinta3);padding-right:var(--e1);white-space:nowrap}
-nav button{background:none;border:1px solid transparent;color:var(--tinta2);
-           padding:5px 10px;border-radius:var(--r1);font:inherit;font-size:.82rem;
-           cursor:pointer;margin:0}
-nav button:hover{background:var(--hund);color:var(--tinta)}
-nav button[aria-current="true"]{background:var(--acento-cl);color:var(--acento);font-weight:600}
+main{width:100%;max-width:1320px;margin:0 auto;padding:var(--e5) var(--e5) 6rem}
+section{background:var(--alto);border:1px solid var(--linea);border-radius:14px;
+        padding:var(--e5) calc(var(--e5) + 4px);margin-bottom:var(--e4);box-shadow:var(--sombra)}
 
-.miga{padding:var(--e2) var(--e5);font-size:.79rem;color:var(--tinta3);background:var(--papel)}
-.miga b{color:var(--tinta2);font-weight:600}
+.velo{position:fixed;inset:0;background:rgba(2,8,10,.55);z-index:55;opacity:0;pointer-events:none;transition:opacity .2s}
+.app[data-abierto="si"] .velo{opacity:1;pointer-events:auto}
 
-main{max-width:1240px;margin:0 auto;padding:var(--e4) var(--e5) 5rem}
-section{background:var(--alto);border:1px solid var(--linea);border-radius:var(--r3);
-        padding:var(--e5);margin-bottom:var(--e4)}
+/* ── Paleta de búsqueda (Ctrl+K) ───────────────────────────────────────────────────────────────────────────────────── */
+#paleta{position:fixed;inset:0;z-index:120;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 0;
+        background:rgba(2,8,10,.6)}
+.paleta-caja{width:min(640px,100%);background:var(--alto);border:1px solid var(--linea2);border-radius:16px;
+             box-shadow:0 24px 80px rgba(0,0,0,.45);overflow:hidden}
+.paleta-caja input{width:100%;border:0;border-bottom:1px solid var(--linea);border-radius:0;background:transparent;
+                   padding:16px 20px;font-size:1rem}
+.paleta-caja input:focus-visible{outline:none}
+.paleta-lista{max-height:min(52vh,420px);overflow-y:auto;padding:var(--e2)}
+.paleta-item{display:flex;align-items:center;gap:var(--e3);width:100%;margin:0;padding:10px 12px;border-radius:10px;
+             background:none;border:0;color:var(--tinta2);font:inherit;text-align:left;cursor:pointer}
+.paleta-item[aria-selected="true"]{background:var(--acento-cl);color:var(--tinta)}
+.paleta-item .ico{width:22px;height:22px;color:var(--acento)}
+.paleta-item b{display:block;font-size:.9rem;color:var(--tinta);font-weight:650}
+.paleta-item small{display:block;font-size:.78rem;color:var(--tinta3)}
+.paleta-item .grupo-nombre{margin-left:auto;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta3)}
+.paleta-pie{display:flex;gap:var(--e4);padding:8px 16px;border-top:1px solid var(--linea);font-size:.72rem;color:var(--tinta3)}
+.paleta-vacia{padding:28px;text-align:center;color:var(--tinta3);font-size:.88rem}
+
+/* ── Angosto: la barra lateral se abre encima del contenido ──────────────────────────────────────────────────────── */
+@media (max-width:900px){
+  .app,.app[data-menu="compacto"]{grid-template-columns:minmax(0,1fr)}
+  .lateral{position:fixed;left:0;top:0;bottom:0;width:min(86vw,330px);transform:translateX(-104%);
+           transition:transform .24s ease;box-shadow:none}
+  .app[data-abierto="si"] .lateral{transform:none;box-shadow:12px 0 40px rgba(0,0,0,.4)}
+  .app[data-sesion="no"] .lateral{display:none}
+  #b-menu-cerrar{display:inline-flex}
+  /* En el teléfono nunca se muestra compacta: o está abierta del todo o no está. */
+  .app[data-menu="compacto"] .lateral-cab{padding:0 18px;justify-content:flex-start}
+  .app[data-menu="compacto"] .lateral-cab .sub,.app[data-menu="compacto"] .buscar-menu{display:block}
+  .app[data-menu="compacto"] nav button .txt{display:block}
+  .app[data-menu="compacto"] nav button .insignia{display:inline-block}
+  .app[data-menu="compacto"] nav button{justify-content:flex-start;padding:8px 10px}
+  .app[data-menu="compacto"] .gnav-t{font-size:.66rem;height:auto;padding:6px 10px;margin:0;background:none}
+  .app[data-menu="compacto"] .gnav-t .ico{display:block}
+  .app[data-menu="compacto"] nav button:hover::after{display:none}
+  header{padding:0 var(--e3)}
+  header .marca{display:flex}
+  header .marca .sub{display:none}
+  .pastilla-buscar{min-width:0;padding:8px}
+  .pastilla-buscar span,.pastilla-buscar kbd{display:none}
+  .quien #quien{display:none}
+  .empresa-activa{max-width:11ch}
+  main{padding:var(--e3) var(--e3) 5rem}
+  section{padding:var(--e4)}
+}
+@media (max-width:520px){
+  .empresa-activa{display:none}
+  .miga{display:none}
+}
 
 h1{font-size:1.05rem;margin:0}
 h2{font-size:1.18rem;font-weight:600;letter-spacing:-.012em;margin:0 0 var(--e1)}
@@ -364,21 +485,6 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
        text-transform:uppercase}
 .kv dd{margin:0;font-family:var(--mono);font-size:.79rem;word-break:break-all;color:var(--tinta)}
 
-/* ── Angosto ──────────────────────────────────────────────────────────────
-   La navegación agrupada se apila por grupo, no en 34 botones seguidos. */
-@media (max-width:760px){
-  header,nav,.miga{padding-left:var(--e3);padding-right:var(--e3)}
-  main{padding:var(--e3) var(--e3) 4rem}
-  section{padding:var(--e4)}
-  nav{gap:var(--e2)}
-  /* En pantalla angosta sí se parte: un grupo de ocho botones no entra en una
-     línea, y forzarlo sacaría la navegación fuera de la pantalla. */
-  .gnav{width:100%;flex-wrap:wrap}
-  #b-menu{display:inline-block}
-  /* Plegada por defecto: quinientos píxeles de navegación antes del contenido
-     hacen que en un teléfono haya que desplazar para ver de qué va la pantalla. */
-  nav[data-plegada="si"]{display:none}
-}
 </style>
 </head>
 <body>
@@ -387,100 +493,198 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
      tiene que verse desde cualquier pantalla sin taparle nada a ninguna. -->
 <div id="cargando" role="status" aria-live="polite" aria-label="Cargando" hidden></div>
 
-<header>
-  <!-- La marca va dibujada en SVG y no tipografiada: no depende de que exista
-       una fuente en la máquina de nadie, pesa dos kilobytes y se recolorea con
-       una línea. El resplandor queda para la página pública y el ingreso — en
-       una tabla de comprobantes sería ruido encima del dato. -->
-  <span class="marca">
-    <svg width="76" height="27" viewBox="0 0 108 38" role="img" aria-label="NEXO">
-      <defs>
-        <linearGradient id="nexo-barra" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="var(--cian)"/>
-          <stop offset="55%" stop-color="var(--cian-cl)"/>
-          <stop offset="100%" stop-color="var(--aqua)"/>
-        </linearGradient>
-      </defs>
-      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="butt"
-         stroke-linejoin="miter">
+<!-- Los íconos del menú, dibujados una sola vez y usados por referencia. Todos trazan con `currentColor`: cambian de color con
+     el tema y con el estado del botón sin una línea de CSS aparte. El tamaño no es cero a propósito: un sprite escondido con
+     `display:none` hace que el navegador deje de pintar los degradados que contiene (la barra de la marca). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="nexo-barra" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="var(--cian)"/>
+      <stop offset="55%" stop-color="var(--cian-cl)"/>
+      <stop offset="100%" stop-color="var(--aqua)"/>
+    </linearGradient>
+    <!-- La marca va dibujada en SVG y no tipografiada: no depende de que exista una fuente en la máquina de nadie, pesa
+         dos kilobytes y se recolorea con una línea. -->
+    <symbol id="i-marca" viewBox="0 0 108 38">
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="butt" stroke-linejoin="miter">
         <path d="M1 25 V1 L19 25 V1"/>
         <path d="M45 1 H29 V25 H45 M29 13 H41"/>
         <path d="M55 1 L73 25 M73 1 L55 25"/>
         <circle cx="95" cy="13" r="12"/>
       </g>
       <rect x="1" y="31" width="106" height="3.4" rx="1.7" fill="url(#nexo-barra)"/>
-    </svg>
+    </symbol>
+  </defs>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-buscar" viewBox="0 0 24 24"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.5-4.5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-ayuda" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.6a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1.1 1-1.1 1.8M12 17h.01"/></symbol>
+  <symbol id="i-salir" viewBox="0 0 24 24"><path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-tema" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
+  <symbol id="i-inicio" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+  <symbol id="i-bandeja" viewBox="0 0 24 24"><path d="M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5"/></symbol>
+  <symbol id="i-propuestas" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+  <symbol id="i-asistente" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM9 11h.01M12 11h.01M15 11h.01"/></symbol>
+  <symbol id="i-inteligencia" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.6a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1.1 1-1.1 1.8M12 17h.01"/></symbol>
+  <symbol id="i-comercial" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></symbol>
+  <symbol id="i-operaciones" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13l2 2 4-4"/></symbol>
+  <symbol id="i-terceros" viewBox="0 0 24 24"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 20v-1a4 4 0 0 0-3-3.9M16 4.2a3.5 3.5 0 0 1 0 6.6"/></symbol>
+  <symbol id="i-productos" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/></symbol>
+  <symbol id="i-precios" viewBox="0 0 24 24"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01"/></symbol>
+  <symbol id="i-crm" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01"/></symbol>
+  <symbol id="i-comisiones" viewBox="0 0 24 24"><path d="M19 5L5 19M7 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></symbol>
+  <symbol id="i-solicitudes" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12h6M9 16h4"/></symbol>
+  <symbol id="i-recepciones" viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z"/></symbol>
+  <symbol id="i-pagos" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 10h18M7 15h3"/></symbol>
+  <symbol id="i-documentos" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-caja" viewBox="0 0 24 24"><path d="M3 7h18v10H3zM12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 10v.01M18 14v.01"/></symbol>
+  <symbol id="i-bancos" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"/></symbol>
+  <symbol id="i-cheques" viewBox="0 0 24 24"><path d="M4 6h16v12H4zM7 10h6M7 14h3M15 13l1.5 1.5L19 12"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v11H3zM8 20v-6h8v6M8 17h8"/></symbol>
+  <symbol id="i-activos" viewBox="0 0 24 24"><path d="M3 21h18M6 21V8l6-4 6 4v13M10 12h4M10 16h4"/></symbol>
+  <symbol id="i-proyectos" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-sucursales" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></symbol>
+  <symbol id="i-integraciones" viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"/></symbol>
+  <symbol id="i-asientos" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></symbol>
+  <symbol id="i-libros" viewBox="0 0 24 24"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3zM4 17a3 3 0 0 1 3-3h12"/></symbol>
+  <symbol id="i-iva" viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9.5 9.5h.01M14.5 14.5h.01M15 9l-6 6"/></symbol>
+  <symbol id="i-estados" viewBox="0 0 24 24"><path d="M4 20h16M7 20v-7M12 20V5M17 20v-10"/></symbol>
+  <symbol id="i-cierre" viewBox="0 0 24 24"><path d="M5 11h14v10H5zM8 11V8a4 4 0 0 1 8 0v3M12 15v2"/></symbol>
+  <symbol id="i-analitica" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-4 3 3 6-7"/></symbol>
+  <symbol id="i-analisis" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 6-3 7-3 8h18c0-1-3-2-3-8a6 6 0 0 0-6-6zM10 21h4"/></symbol>
+  <symbol id="i-migraciones" viewBox="0 0 24 24"><path d="M12 4c4.4 0 8 1.1 8 2.5S16.4 9 12 9 4 7.9 4 6.5 7.6 4 12 4zM4 6.5v11C4 18.9 7.6 20 12 20s8-1.1 8-2.5v-11M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5"/></symbol>
+  <symbol id="i-auditoria" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4"/></symbol>
+  <symbol id="i-suscripcion" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></symbol>
+  <symbol id="i-config" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4"/></symbol>
+  <symbol id="i-empresa" viewBox="0 0 24 24"><path d="M4 21V5l8-2v18M12 9h8v12M7 8v.01M7 12v.01M7 16v.01M16 13v.01M16 17v.01"/></symbol>
+</svg>
+
+<div class="app" id="app" data-sesion="no" data-menu="completo" data-abierto="no">
+
+<!-- ── La barra lateral ───────────────────────────────────────────────────────────────────────────────────────────────
+     La navegación vivía arriba, en renglones de botones que se partían según el ancho de la ventana y empujaban el
+     contenido hacia abajo. Ahora está a la izquierda, fija, con todo lo que se puede hacer agrupado por la tarea que la
+     persona vino a resolver.
+
+     El orden es el de importancia, no el alfabético ni el de cuándo se construyó cada módulo: lo que se hace primero y
+     más seguido va arriba. Primero lo que espera a la persona (Empezar), después ganar plata (Vender), gastarla (Comprar),
+     moverla (Dinero), lo que se tiene (Stock y operación), registrarlo (Contabilidad), entenderlo (Análisis) y, al final,
+     lo que se toca de vez en cuando (Administración). -->
+<aside class="lateral" id="lateral" aria-label="Menú principal">
+  <div class="lateral-cab">
+    <span class="marca">
+      <svg width="76" height="27" role="img" aria-label="NEXO"><use href="#i-marca"/></svg>
+      <span class="sub">consola</span>
+    </span>
+    <button id="b-menu-cerrar" type="button" aria-label="Cerrar el menú"><svg class="ico"><use href="#i-cerrar"/></svg></button>
+  </div>
+  <div class="buscar-menu">
+    <svg class="ico" width="16" height="16"><use href="#i-buscar"/></svg>
+    <input id="buscar-menu" type="search" placeholder="Buscar una pantalla…" autocomplete="off"
+           aria-label="Buscar una pantalla del menú">
+  </div>
+  <div class="lateral-menu">
+    <nav id="nav" hidden aria-label="Pantallas del sistema">
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Empezar<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="inicio" data-nombre="Inicio" data-desc="El resumen de la empresa y la puesta en marcha" data-claves="panel resumen tablero principio"><svg class="ico"><use href="#i-inicio"/></svg><span class="txt">Inicio</span></button>
+          <button data-vista="bandeja" data-nombre="Pendientes" data-desc="Lo que espera una decisión tuya" data-claves="tareas bandeja alertas por hacer"><svg class="ico"><use href="#i-bandeja"/></svg><span class="txt">Pendientes</span><span class="insignia" id="ins-bandeja" hidden></span></button>
+          <button data-vista="propuestas" data-nombre="Propuestas de IA" data-desc="Asientos que sugirió la IA, para que los revises" data-claves="inteligencia artificial sugerencias aprobar"><svg class="ico"><use href="#i-propuestas"/></svg><span class="txt">Propuestas de IA</span></button>
+          <button data-vista="asistente" data-nombre="Asistente" data-desc="Chateá, mandá una foto o un PDF" data-claves="chat ayuda ia claude"><svg class="ico"><use href="#i-asistente"/></svg><span class="txt">Asistente</span></button>
+          <button data-vista="inteligencia" data-nombre="Preguntar" data-desc="Consultá cifras de la empresa en lenguaje común" data-claves="consulta pregunta cuánto vendí cifras"><svg class="ico"><use href="#i-inteligencia"/></svg><span class="txt">Preguntar</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Vender<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="comercial" data-nombre="Presupuestos y pedidos" data-desc="Lo que se ofrece y se acuerda antes de facturar" data-claves="ventas cotización presupuesto pedido"><svg class="ico"><use href="#i-comercial"/></svg><span class="txt">Presupuestos y pedidos</span></button>
+          <button data-vista="operaciones" data-nombre="Facturas y comprobantes" data-desc="El libro de comprobantes de venta y de compra" data-claves="factura nota de crédito cae arca operaciones fiscales"><svg class="ico"><use href="#i-operaciones"/></svg><span class="txt">Facturas y comprobantes</span></button>
+          <button data-vista="terceros" data-nombre="Clientes y proveedores" data-desc="Fichas, cuenta corriente y antigüedad de saldos" data-claves="terceros contactos deudores acreedores cuit"><svg class="ico"><use href="#i-terceros"/></svg><span class="txt">Clientes y proveedores</span></button>
+          <button data-vista="productos" data-nombre="Productos" data-desc="Lo que vendés y lo que comprás" data-claves="artículos servicios catálogo"><svg class="ico"><use href="#i-productos"/></svg><span class="txt">Productos</span></button>
+          <button data-vista="precios" data-nombre="Precios" data-desc="Listas de precios con fecha de vigencia" data-claves="lista de precios tarifas"><svg class="ico"><use href="#i-precios"/></svg><span class="txt">Precios</span></button>
+          <button data-vista="crm" data-nombre="CRM" data-desc="Oportunidades y embudo de ventas" data-claves="oportunidades embudo seguimiento clientes potenciales"><svg class="ico"><use href="#i-crm"/></svg><span class="txt">CRM</span></button>
+          <button data-vista="comisiones" data-nombre="Comisiones" data-desc="Vendedores y lo que ganan por sus ventas" data-claves="vendedores porcentaje"><svg class="ico"><use href="#i-comisiones"/></svg><span class="txt">Comisiones</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Comprar<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="documentos" data-nombre="Documentos" data-desc="Subí facturas y PDFs: el sistema los lee" data-claves="subir ocr comprobante archivo escanear"><svg class="ico"><use href="#i-documentos"/></svg><span class="txt">Documentos</span></button>
+          <button data-vista="solicitudes" data-nombre="Pedidos de compra" data-desc="Pedir mercadería o servicios y aprobarlos" data-claves="solicitudes compras requisición"><svg class="ico"><use href="#i-solicitudes"/></svg><span class="txt">Pedidos de compra</span></button>
+          <button data-vista="recepciones" data-nombre="Recepciones" data-desc="Qué mercadería llegó y cuándo" data-claves="remito recibir mercadería entrada"><svg class="ico"><use href="#i-recepciones"/></svg><span class="txt">Recepciones</span></button>
+          <button data-vista="pagos" data-nombre="Órdenes de pago" data-desc="Armar, aprobar y registrar pagos a proveedores" data-claves="pagos proveedores pagar deuda"><svg class="ico"><use href="#i-pagos"/></svg><span class="txt">Órdenes de pago</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Dinero<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="caja" data-nombre="Caja" data-desc="Abrir, registrar movimientos y arquear" data-claves="efectivo arqueo cierre de caja"><svg class="ico"><use href="#i-caja"/></svg><span class="txt">Caja</span></button>
+          <button data-vista="bancos" data-nombre="Bancos" data-desc="Cuentas, extractos y conciliación" data-claves="conciliación extracto cuenta bancaria"><svg class="ico"><use href="#i-bancos"/></svg><span class="txt">Bancos</span></button>
+          <button data-vista="cheques" data-nombre="Cheques" data-desc="La cartera de cheques y sus movimientos" data-claves="cartera depósito endoso rechazo"><svg class="ico"><use href="#i-cheques"/></svg><span class="txt">Cheques</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Stock y operación<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="stock" data-nombre="Stock" data-desc="Cuánto hay, dónde está, movimientos y recuentos" data-claves="existencias inventario depósito mercadería recuento"><svg class="ico"><use href="#i-stock"/></svg><span class="txt">Stock</span></button>
+          <button data-vista="activos" data-nombre="Bienes de uso" data-desc="Activos fijos y su amortización" data-claves="activos fijos amortización rodados máquinas"><svg class="ico"><use href="#i-activos"/></svg><span class="txt">Bienes de uso</span></button>
+          <button data-vista="proyectos" data-nombre="Proyectos" data-desc="Qué proyecto deja plata y cuál no" data-claves="obras horas tareas rentabilidad"><svg class="ico"><use href="#i-proyectos"/></svg><span class="txt">Proyectos</span></button>
+          <button data-vista="sucursales" data-nombre="Sucursales" data-desc="Cómo le va a cada sucursal o punto de venta" data-claves="puntos de venta locales bocas"><svg class="ico"><use href="#i-sucursales"/></svg><span class="txt">Sucursales</span></button>
+          <button data-vista="integraciones" data-nombre="Integraciones" data-desc="Conectar sistemas de afuera" data-claves="conectores tienda nube mercado libre api"><svg class="ico"><use href="#i-integraciones"/></svg><span class="txt">Integraciones</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Contabilidad<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="asientos" data-nombre="Asientos" data-desc="Registrar, aprobar y anular asientos" data-claves="contabilizar diario registrar mayor"><svg class="ico"><use href="#i-asientos"/></svg><span class="txt">Asientos</span></button>
+          <button data-vista="libros" data-nombre="Libros" data-desc="Diario, Mayor y balance de sumas y saldos" data-claves="diario mayor balance"><svg class="ico"><use href="#i-libros"/></svg><span class="txt">Libros</span></button>
+          <button data-vista="iva" data-nombre="IVA" data-desc="Libro IVA Digital y subdiarios" data-claves="impuesto subdiario compras ventas libro digital"><svg class="ico"><use href="#i-iva"/></svg><span class="txt">IVA</span></button>
+          <button data-vista="estados" data-nombre="Estados y notas" data-desc="Estados contables armados desde el Mayor" data-claves="balance general resultados patrimonio notas"><svg class="ico"><use href="#i-estados"/></svg><span class="txt">Estados y notas</span></button>
+          <button data-vista="cierre" data-nombre="Cierre de períodos" data-desc="Ejercicios y períodos: abrir, bloquear y cerrar" data-claves="ejercicio período cerrar mes año"><svg class="ico"><use href="#i-cierre"/></svg><span class="txt">Cierre de períodos</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Análisis<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="analitica" data-nombre="Analítica" data-desc="Cifras por mes, por producto y por cliente" data-claves="gráficos reportes ventas por mes"><svg class="ico"><use href="#i-analitica"/></svg><span class="txt">Analítica</span></button>
+          <button data-vista="analisis" data-nombre="Señales y escenarios" data-desc="Alertas, flujo de fondos y simulaciones" data-claves="alertas flujo de fondos cobranzas simular proyección"><svg class="ico"><use href="#i-analisis"/></svg><span class="txt">Señales y escenarios</span></button>
+        </div>
+      </div>
+
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Administración<svg class="ico"><use href="#i-chevron"/></svg></div>
+        <div class="gnav-items">
+          <button data-vista="migraciones" data-nombre="Migraciones" data-desc="Traer una empresa de otro sistema" data-claves="importar excel exportar sistema anterior"><svg class="ico"><use href="#i-migraciones"/></svg><span class="txt">Migraciones</span></button>
+          <button data-vista="auditoria" data-nombre="Auditoría" data-desc="Quién hizo qué, cuándo y por qué" data-claves="historial registro cambios seguridad"><svg class="ico"><use href="#i-auditoria"/></svg><span class="txt">Auditoría</span></button>
+          <button data-vista="suscripcion" data-nombre="Plan" data-desc="Tu plan, los topes de uso y la cuenta con NEXO" data-claves="suscripción pagar cobro precio mercado pago"><svg class="ico"><use href="#i-suscripcion"/></svg><span class="txt">Plan</span></button>
+          <button data-vista="config" data-nombre="Configuración" data-desc="Plan de cuentas, secretos, centros de costo y exportar todo" data-claves="ajustes cuentas exportar copia de seguridad"><svg class="ico"><use href="#i-config"/></svg><span class="txt">Configuración</span></button>
+          <button data-vista="empresa" class="sec" data-nombre="Cambiar de empresa" data-desc="Pasar a trabajar en otra empresa" data-claves="empresas cuenta estudio"><svg class="ico"><use href="#i-empresa"/></svg><span class="txt">Cambiar de empresa</span></button>
+        </div>
+      </div>
+
+    </nav>
+  </div>
+</aside>
+<div class="velo" id="velo"></div>
+
+<div class="columna">
+<header>
+  <button id="b-menu" class="icono-btn" type="button" aria-expanded="true" aria-controls="lateral"
+          aria-label="Abrir o cerrar el menú" title="Menú"><svg class="ico"><use href="#i-menu"/></svg></button>
+  <span class="marca">
+    <svg width="76" height="27" role="img" aria-label="NEXO"><use href="#i-marca"/></svg>
     <span class="sub">consola</span>
   </span>
+  <div class="miga" id="miga" hidden></div>
+  <button id="b-paleta" class="pastilla-buscar" type="button" aria-label="Buscar pantallas y acciones (Ctrl+K)">
+    <svg class="ico" width="16" height="16"><use href="#i-buscar"/></svg><span>Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
   <span class="quien"><span id="quien"></span>
     <span class="empresa-activa" id="empresa-activa">sin empresa</span>
-    <button id="b-menu" type="button" aria-expanded="false" aria-controls="nav">Menú</button>
-    <button id="b-tema" type="button" title="Cambiar entre claro y oscuro"
-            aria-label="Cambiar el tema">◐</button>
+    <button id="b-tema" class="icono-btn" type="button" title="Cambiar entre claro y oscuro"
+            aria-label="Cambiar el tema">☀</button>
     <button id="b-salir" class="sec" hidden>Salir</button></span>
 </header>
-
-<!-- La navegación va agrupada por lo que la persona vino a hacer. Treinta y
-     cuatro botones planos obligan a leerlos todos para encontrar uno; en grupos
-     de cuatro se busca en un grupo. El orden es el del día de trabajo: primero
-     lo que hay pendiente, después vender, comprar, operar, la plata, los libros
-     y al final lo que se mira de vez en cuando. -->
-<nav id="nav" hidden>
-  <div class="gnav"><span class="gnav-t">Inicio</span>
-    <button data-vista="inicio">Panel</button>
-    <button data-vista="bandeja">Pendientes</button>
-    <button data-vista="inteligencia">Preguntar</button>
-    <button data-vista="asistente">Asistente</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Ventas</span>
-    <button data-vista="comercial">Comercial</button>
-    <button data-vista="terceros">Terceros</button>
-    <button data-vista="productos">Productos</button>
-    <button data-vista="precios">Precios</button>
-    <button data-vista="crm">CRM</button>
-    <button data-vista="comisiones">Comisiones</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Compras</span>
-    <button data-vista="solicitudes">Solicitudes</button>
-    <button data-vista="recepciones">Recepciones</button>
-    <button data-vista="pagos">Pagos</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Operación</span>
-    <button data-vista="documentos">Documentos</button>
-    <button data-vista="propuestas">Propuestas de IA</button>
-    <button data-vista="operaciones">Operaciones</button>
-    <button data-vista="stock">Existencias</button>
-    <button data-vista="activos">Bienes de uso</button>
-    <button data-vista="proyectos">Proyectos</button>
-    <button data-vista="sucursales">Sucursales</button>
-    <button data-vista="integraciones">Integraciones</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Dinero</span>
-    <button data-vista="caja">Caja</button>
-    <button data-vista="bancos">Bancos</button>
-    <button data-vista="cheques">Cheques</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Libros</span>
-    <button data-vista="iva">IVA</button>
-    <button data-vista="asientos">Asientos</button>
-    <button data-vista="libros">Libros</button>
-    <button data-vista="estados">Estados y notas</button>
-    <button data-vista="cierre">Períodos y cierre</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Análisis</span>
-    <button data-vista="analitica">Analítica</button>
-    <button data-vista="analisis">Señales</button>
-  </div>
-  <div class="gnav"><span class="gnav-t">Administración</span>
-    <button data-vista="migraciones">Migraciones</button>
-    <button data-vista="auditoria">Auditoría</button>
-    <button data-vista="suscripcion">Plan</button>
-    <button data-vista="config">Configuración</button>
-    <button data-vista="empresa" class="sec">Cambiar empresa</button>
-  </div>
-</nav>
-
-<div class="miga" id="miga" hidden></div>
 
 <main>
 
@@ -4115,6 +4319,17 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 </section>
 
 </main>
+</div><!-- /columna -->
+
+<div id="paleta" hidden role="dialog" aria-modal="true" aria-label="Buscar pantallas y acciones">
+  <div class="paleta-caja">
+    <input id="paleta-q" type="search" placeholder="¿Adónde querés ir? Probá con «factura», «caja» o «clientes»…"
+           autocomplete="off" aria-label="Buscar una pantalla o una acción">
+    <div class="paleta-lista" id="paleta-lista" role="listbox"></div>
+    <div class="paleta-pie"><span>↑ ↓ para moverte</span><span>Enter para abrir</span><span>Esc para cerrar</span></div>
+  </div>
+</div>
+</div><!-- /app -->
 
 <script>
 'use strict';
@@ -4627,7 +4842,14 @@ function ir(vista, migas) {
     if (s) s.hidden = v !== vista;
   }
   for (const b of document.querySelectorAll('nav button')) {
-    b.setAttribute('aria-current', String(b.dataset.vista === vista));
+    const activo = b.dataset.vista === vista;
+    b.setAttribute('aria-current', String(activo));
+    if (activo) {
+      // El grupo de la pantalla en la que estás se abre solo: nadie debería perderse su propio menú.
+      const g = b.closest('.gnav');
+      if (g) { g.dataset.abierto = 'si'; g.querySelector('.gnav-t').setAttribute('aria-expanded', 'true'); }
+      if (b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });
+    }
   }
   const caja = E('miga');
   caja.hidden = vista === 'login' || vista === 'alta-empresa' || vista === 'mfa';
@@ -4641,7 +4863,7 @@ for (const b of document.querySelectorAll('nav button')) {
   b.onclick = () => {
     const v = b.dataset.vista;
     plegarMenu();
-    ir(v, [b.textContent]);
+    ir(v, [b.dataset.nombre]);
     if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
     if (v === 'inteligencia') cargarInteligencia();
     if (v === 'asistente') cargarAsistente();
@@ -5022,27 +5244,240 @@ E('b-tema').onclick = () =>
   aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'oscuro' : 'claro');
 
 /**
- * El menú de pantalla angosta.
+ * El menú lateral.
  *
- * `data-plegada` la esconde solo por debajo de 760 píxeles: en escritorio el
- * atributo está igual y no hace nada, porque la regla que lo mira vive dentro
- * de la media query. Así no hay dos estados que mantener sincronizados.
+ * Tiene tres estados que no se pisan entre sí:
+ *   · completo   — íconos y nombres (escritorio, lo normal).
+ *   · compacto   — sólo íconos, para quien quiere todo el ancho para el trabajo («hamburguesa»). Se recuerda por navegador.
+ *   · abierto    — en pantalla angosta la barra no ocupa lugar: se abre encima del contenido y se cierra sola al elegir.
  *
- * Se pliega sola al elegir una vista: dejarla abierta taparía justo lo que la
- * persona acaba de pedir.
+ * Qué estado manda lo decide el ancho de la ventana, no una preferencia: en un teléfono «compacto» no tiene sentido, así que
+ * ahí el botón abre y cierra el cajón y la preferencia de escritorio queda guardada intacta.
  */
-E('b-menu').onclick = () => {
-  const n = E('nav');
-  const plegada = n.dataset.plegada !== 'no';
-  n.dataset.plegada = plegada ? 'no' : 'si';
-  E('b-menu').setAttribute('aria-expanded', String(plegada));
-};
+const MENU = (() => {
+  const app = E('app');
+  const angosto = window.matchMedia('(max-width:900px)');
+  const CLAVE_MENU = 'nexo-menu';
+  const CLAVE_GRUPOS = 'nexo-grupos';
+  const leer = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 
-function plegarMenu() {
-  E('nav').dataset.plegada = 'si';
-  E('b-menu').setAttribute('aria-expanded', 'false');
-}
-plegarMenu();
+  app.dataset.menu = leer(CLAVE_MENU) === 'compacto' ? 'compacto' : 'completo';
+
+  const sincronizarBoton = () => {
+    const abierto = angosto.matches ? app.dataset.abierto === 'si' : app.dataset.menu !== 'compacto';
+    E('b-menu').setAttribute('aria-expanded', String(abierto));
+  };
+
+  function plegar() {
+    app.dataset.abierto = 'no';
+    sincronizarBoton();
+  }
+
+  E('b-menu').onclick = () => {
+    if (angosto.matches) {
+      app.dataset.abierto = app.dataset.abierto === 'si' ? 'no' : 'si';
+    } else {
+      app.dataset.menu = app.dataset.menu === 'compacto' ? 'completo' : 'compacto';
+      try { localStorage.setItem(CLAVE_MENU, app.dataset.menu); } catch (e) { /* vale por esta visita */ }
+    }
+    sincronizarBoton();
+  };
+  E('b-menu-cerrar').onclick = plegar;
+  E('velo').onclick = plegar;
+  angosto.addEventListener('change', plegar);
+
+  // Sin sesión (ingreso, alta de empresa, segundo factor) no hay nada que navegar: el menú no se muestra. La señal ya
+  // existía —`#nav[hidden]`— y cinco lugares la ponen; en vez de tocarlos a todos, se la mira desde acá.
+  const verSesion = () => { app.dataset.sesion = E('nav').hidden ? 'no' : 'si'; };
+  new MutationObserver(verSesion).observe(E('nav'), { attributes: true, attributeFilter: ['hidden'] });
+  verSesion();
+
+  // Los grupos se pliegan, y lo plegado se recuerda: quien nunca usa Cheques los cierra una vez.
+  const cerrados = new Set();
+  try { for (const g of JSON.parse(leer(CLAVE_GRUPOS) || '[]')) cerrados.add(g); } catch (e) { /* lista dañada: se ignora */ }
+  const nombreDelGrupo = (g) => g.querySelector('.gnav-t').firstChild.textContent.trim();
+  const marcarGrupo = (g, abierto) => {
+    g.dataset.abierto = abierto ? 'si' : 'no';
+    g.querySelector('.gnav-t').setAttribute('aria-expanded', String(abierto));
+  };
+  for (const g of document.querySelectorAll('.gnav')) marcarGrupo(g, !cerrados.has(nombreDelGrupo(g)));
+  const alternarGrupo = (g) => {
+    const abrir = g.dataset.abierto === 'no';
+    marcarGrupo(g, abrir);
+    if (abrir) cerrados.delete(nombreDelGrupo(g)); else cerrados.add(nombreDelGrupo(g));
+    try { localStorage.setItem(CLAVE_GRUPOS, JSON.stringify([...cerrados])); } catch (e) { /* vale por esta visita */ }
+  };
+  for (const t of document.querySelectorAll('.gnav-t')) {
+    t.onclick = () => alternarGrupo(t.closest('.gnav'));
+    t.onkeydown = (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alternarGrupo(t.closest('.gnav')); }
+    };
+  }
+
+  // En compacto el texto no se ve: el nombre accesible tiene que venir de otro lado.
+  for (const b of document.querySelectorAll('nav button')) b.setAttribute('aria-label', b.dataset.nombre);
+
+  // Buscar en el menú: filtra por nombre, descripción y sinónimos. Con texto escrito se muestran todos los grupos abiertos
+  // sin tocar lo que la persona había plegado.
+  const normal = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const textoDe = (b) => normal(b.dataset.nombre + ' ' + (b.dataset.desc || '') + ' ' + (b.dataset.claves || ''));
+  E('buscar-menu').oninput = (ev) => {
+    const q = normal(ev.target.value.trim());
+    const palabras = q === '' ? [] : q.split(/\s+/);
+    for (const g of document.querySelectorAll('.gnav')) {
+      let alguno = false;
+      for (const b of g.querySelectorAll('button')) {
+        const coincide = palabras.every((p) => textoDe(b).indexOf(p) !== -1);
+        b.classList.toggle('fuera', !coincide);
+        if (coincide && !b.hidden) alguno = true;
+      }
+      g.classList.toggle('fuera', !alguno);
+      g.classList.toggle('buscando', q !== '');
+    }
+  };
+
+  return { plegar, sincronizarBoton };
+})();
+
+function plegarMenu() { MENU.plegar(); }
+MENU.sincronizarBoton();
+
+/**
+ * La paleta de búsqueda (Ctrl+K).
+ *
+ * Treinta y cinco pantallas son muchas para recorrer con el mouse; escribir dos letras y apretar Enter es más rápido para
+ * quien ya sabe adónde va, y para quien no sabe, buscar por lo que quiere hacer («factura», «cheque», «cuánto debo»)
+ * es más fácil que adivinar en qué grupo está. Sólo ofrece lo que el menú ofrece: respeta permisos y plan porque lee los
+ * botones que `aplicarPermisosANav` dejó visibles.
+ */
+const PALETA = (() => {
+  const caja = E('paleta');
+  const entrada = E('paleta-q');
+  const lista = E('paleta-lista');
+  let items = [];
+  let activo = 0;
+  let previo = null;
+
+  const normal = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  function candidatos() {
+    const salida = [];
+    for (const b of document.querySelectorAll('nav button')) {
+      if (b.hidden) continue;
+      salida.push({
+        nombre: b.dataset.nombre, desc: b.dataset.desc || '', grupo: b.closest('.gnav').querySelector('.gnav-t').firstChild.textContent.trim(),
+        claves: b.dataset.claves || '', icono: b.querySelector('svg'), ejecutar: () => b.click(),
+      });
+    }
+    const claro = document.documentElement.dataset.tema === 'claro';
+    salida.push({
+      nombre: claro ? 'Pasar al tema oscuro' : 'Pasar al tema claro', desc: 'Cambia los colores de toda la consola', grupo: 'Acción',
+      claves: 'modo noche día colores', icono: null, ejecutar: () => E('b-tema').click(),
+    });
+    if (!E('b-salir').hidden) {
+      salida.push({ nombre: 'Salir', desc: 'Cerrar la sesión', grupo: 'Acción', claves: 'cerrar sesión logout', icono: null, ejecutar: () => E('b-salir').click() });
+    }
+    return salida;
+  }
+
+  function puntaje(c, palabras) {
+    if (palabras.length === 0) return 1;
+    const n = normal(c.nombre);
+    const resto = normal(c.desc + ' ' + c.claves + ' ' + c.grupo);
+    let total = 0;
+    for (const p of palabras) {
+      if (n.startsWith(p)) total += 4;
+      else if (n.indexOf(p) !== -1) total += 3;
+      else if (resto.indexOf(p) !== -1) total += 1;
+      else return 0;
+    }
+    return total;
+  }
+
+  function dibujar() {
+    const palabras = normal(entrada.value.trim()).split(/\s+/).filter((p) => p !== '');
+    items = candidatos()
+      .map((c) => ({ c, p: puntaje(c, palabras) }))
+      .filter((x) => x.p > 0)
+      .sort((a, b) => b.p - a.p)
+      .slice(0, 40)
+      .map((x) => x.c);
+    activo = 0;
+    lista.textContent = '';
+    if (items.length === 0) {
+      const v = document.createElement('div');
+      v.className = 'paleta-vacia';
+      v.textContent = 'No encontré nada con eso. Probá con otra palabra, por ejemplo «factura», «caja» o «clientes».';
+      lista.appendChild(v);
+      return;
+    }
+    items.forEach((c, i) => {
+      const fila = document.createElement('button');
+      fila.type = 'button';
+      fila.className = 'paleta-item';
+      fila.setAttribute('role', 'option');
+      fila.setAttribute('aria-selected', String(i === 0));
+      if (c.icono) fila.appendChild(c.icono.cloneNode(true));
+      const textos = document.createElement('span');
+      const t = document.createElement('b'); t.textContent = c.nombre;
+      const d = document.createElement('small'); d.textContent = c.desc;
+      textos.append(t, d);
+      const g = document.createElement('span'); g.className = 'grupo-nombre'; g.textContent = c.grupo;
+      fila.append(textos, g);
+      fila.onclick = () => elegir(i);
+      fila.onmousemove = () => marcar(i);
+      lista.appendChild(fila);
+    });
+  }
+
+  function marcar(i) {
+    activo = i;
+    [...lista.children].forEach((f, j) => f.setAttribute('aria-selected', String(j === i)));
+    const f = lista.children[i];
+    if (f && f.scrollIntoView) f.scrollIntoView({ block: 'nearest' });
+  }
+
+  function elegir(i) {
+    const c = items[i];
+    if (!c) return;
+    cerrar();
+    c.ejecutar();
+  }
+
+  function abrir() {
+    if (E('nav').hidden) return;
+    previo = document.activeElement;
+    caja.hidden = false;
+    entrada.value = '';
+    dibujar();
+    entrada.focus();
+  }
+
+  function cerrar() {
+    caja.hidden = true;
+    if (previo && previo.focus) previo.focus();
+  }
+
+  entrada.oninput = dibujar;
+  entrada.onkeydown = (ev) => {
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); marcar(Math.min(items.length - 1, activo + 1)); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); marcar(Math.max(0, activo - 1)); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); elegir(activo); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); cerrar(); }
+  };
+  caja.onclick = (ev) => { if (ev.target === caja) cerrar(); };
+  E('b-paleta').onclick = abrir;
+  document.addEventListener('keydown', (ev) => {
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') {
+      ev.preventDefault();
+      if (caja.hidden) abrir(); else cerrar();
+    } else if (ev.key === 'Escape' && !caja.hidden) {
+      cerrar();
+    }
+  });
+
+  return { abrir, cerrar };
+})();
 
 E('b-salir').onclick = async () => {
   await api('POST', '/auth/logout');
