@@ -35,8 +35,7 @@ import {
   type ContextoDeRespuesta,
   type ResultadoDelRespondedor,
 } from '@aai/ai-engine';
-import { recordAudit, withCompany, type Tx } from '@aai/db';
-import { monthOf, parseCalendarDate, yearOf, type CalendarDate } from '@aai/shared';
+import { recordAudit, withCompany } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -54,6 +53,9 @@ import {
   CATALOGO,
   coincidencias,
   fueraDeAlcance,
+  formatearRespuesta as formatear,
+  hoyDeLaBase,
+  mesCorrienteDe,
   mesDe,
   preguntasPara,
   type PreguntaDelCatalogo,
@@ -66,20 +68,6 @@ const mesValido = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u, 'Mes en formato A
 function disponiblesPara(tenant: RequestTenant): PreguntaDelCatalogo[] {
   return preguntasPara(tenant.permissions);
 }
-
-/**
- * «Hoy» según la base, no según `new Date()`. Argentina es UTC−3 y después de
- * las nueve de la noche un reloj de proceso ya está en el día siguiente — el
- * defecto que S-37 (`fechas-en-hora-argentina.test.ts`) documenta y que
- * `suscripciones.ts` ya corrige para la fecha de vigencia de precios.
- */
-const hoyDeLaBase = async (tx: Tx): Promise<CalendarDate> => {
-  const { rows } = await tx.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy');
-  return parseCalendarDate(rows[0]!.hoy);
-};
-
-const mesCorrienteDe = (hoy: CalendarDate): string =>
-  `${String(yearOf(hoy))}-${String(monthOf(hoy)).padStart(2, '0')}`;
 
 /**
  * Corta antes de preguntar, no después.
@@ -553,19 +541,5 @@ async function narrar(
     texto,
     advertencia: resultado.advertencia,
     datosUsados: resultado.respuesta.datosUsados,
-  };
-}
-
-/** La forma que ve la pantalla. Separa el número de su evidencia. */
-function formatear(r: RespuestaDeterministica) {
-  return {
-    titulo: r.titulo,
-    valor: r.valor,
-    unidad: r.unidad,
-    periodo: r.periodo,
-    datos: r.datos,
-    origen: r.origen,
-    metodologia: r.metodologia,
-    noIncluye: r.noIncluye,
   };
 }

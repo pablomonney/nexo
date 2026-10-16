@@ -35,7 +35,20 @@
 // empresa en contexto, que es la única forma de que el RLS lo filtre. Recibir
 // un cliente crudo dejaría abierta la puerta a consultar sin contexto.
 import type { Tx } from '@aai/db';
-import { monthOf, yearOf, type CalendarDate } from '@aai/shared';
+import { monthOf, parseCalendarDate, yearOf, type CalendarDate } from '@aai/shared';
+
+/**
+ * «Hoy» según la base, no según `new Date()`. Argentina es UTC−3 y después de las nueve de la noche un reloj de proceso ya
+ * está en el día siguiente — el defecto que S-37 (`fechas-en-hora-argentina.test.ts`) documenta. Lo comparten la ruta de
+ * inteligencia y el asistente: una sola respuesta a «¿qué mes es?».
+ */
+export const hoyDeLaBase = async (tx: Tx): Promise<CalendarDate> => {
+  const { rows } = await tx.query<{ hoy: string }>('SELECT CURRENT_DATE::text AS hoy');
+  return parseCalendarDate(rows[0]!.hoy);
+};
+
+export const mesCorrienteDe = (hoy: CalendarDate): string =>
+  `${String(yearOf(hoy))}-${String(monthOf(hoy)).padStart(2, '0')}`;
 
 export interface DatoDeRespuesta {
   readonly etiqueta: string;
@@ -55,6 +68,20 @@ export interface RespuestaDeterministica {
   readonly metodologia: string;
   /** Qué queda afuera. Vacío no significa «nada»: significa que no hay salvedad. */
   readonly noIncluye: string | null;
+}
+
+/** La forma que ve la pantalla (y el asistente). Separa el número de su evidencia. */
+export function formatearRespuesta(r: RespuestaDeterministica) {
+  return {
+    titulo: r.titulo,
+    valor: r.valor,
+    unidad: r.unidad,
+    periodo: r.periodo,
+    datos: r.datos,
+    origen: r.origen,
+    metodologia: r.metodologia,
+    noIncluye: r.noIncluye,
+  };
 }
 
 export interface PreguntaDelCatalogo {

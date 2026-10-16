@@ -275,6 +275,28 @@ tr.aqui td{background:var(--acento-cl)}
 /* Ni error ni confirmación: algo que pide una decisión humana. */
 .aviso.ojo{background:var(--ojo-bg);border-left-color:var(--ojo);color:var(--ojo)}
 
+/* ── Asistente ────────────────────────────────────────────────────────────── */
+.as-log{display:flex;flex-direction:column;gap:var(--e2);min-height:160px;max-height:55vh;overflow-y:auto;
+        padding:var(--e3);border:1px solid var(--linea);border-radius:var(--r2);margin:var(--e3) 0;background:var(--hund)}
+.as-burbuja{max-width:min(46rem,92%);padding:var(--e2) var(--e3);border-radius:var(--r2);font-size:.92rem;line-height:1.45;
+        border:1px solid var(--linea);background:var(--panel, var(--hund))}
+.as-burbuja.yo{align-self:flex-end;background:var(--acento-cl);color:var(--tinta);border-color:var(--linea2)}
+.as-burbuja.el{align-self:flex-start}
+.as-texto{white-space:pre-wrap;overflow-wrap:anywhere}
+.as-nota{margin-top:var(--e2);font-size:.76rem;color:var(--tinta2)}
+.as-prop{margin-top:var(--e2);border:1px dashed var(--linea2);border-radius:var(--r1);padding:var(--e2) var(--e3)}
+.as-compositor{display:flex;flex-direction:column;gap:var(--e2)}
+.as-compositor textarea{width:100%;resize:vertical}
+.as-botones{display:flex;flex-wrap:wrap;gap:var(--e2)}
+.as-botones button{flex:1 1 6rem}
+.as-adjuntos{display:flex;flex-wrap:wrap;gap:var(--e2);margin:var(--e2) 0}
+.as-chip{display:inline-flex;align-items:center;gap:var(--e2);padding:4px var(--e2);border:1px solid var(--linea2);
+         border-radius:999px;font-size:.8rem}
+.as-chip button{padding:0 6px;min-height:0}
+.as-opciones{display:flex;flex-wrap:wrap;gap:var(--e3);margin-top:var(--e2)}
+.as-check{display:inline-flex;align-items:center;gap:6px;font-size:.85rem}
+.as-mic-on{outline:2px solid var(--mal)}
+
 /* El volcado de la respuesta, plegado.
    No se borra: se corre de lugar. La frase que dice qué corregir va primero y
    esto queda a un clic, para quien lo necesite y para pegarlo en un reporte. */
@@ -408,6 +430,7 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
     <button data-vista="inicio">Panel</button>
     <button data-vista="bandeja">Pendientes</button>
     <button data-vista="inteligencia">Preguntar</button>
+    <button data-vista="asistente">Asistente</button>
   </div>
   <div class="gnav"><span class="gnav-t">Ventas</span>
     <button data-vista="comercial">Comercial</button>
@@ -776,6 +799,56 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 
 <!-- ══ Bandeja ════════════════════════════════════════════════════════════ -->
 <!-- ══ Preguntar ══════════════════════════════════════════════════════════ -->
+<section id="v-asistente" hidden>
+  <h2>Asistente</h2>
+  <p class="ayuda">Escribile, mandale una foto o un PDF, o hablale. Te contesta con los datos de la
+    empresa, te explica cómo se hace algo en NEXO y te arma la carga de un cliente o proveedor.
+    <strong>No guarda nada por sí solo</strong>: lo que arma lo ves y lo confirmás vos. Las cifras
+    salen del mismo motor que las pantallas; si no las tiene, te lo dice.</p>
+
+  <div id="chat-estado"></div>
+  <div id="chat-msg"></div>
+
+  <div id="as-config" class="grupo" hidden style="padding:var(--e3)">
+    <p class="ayuda" id="as-config-texto"></p>
+    <div class="fila">
+      <div style="flex:1"><label>Por qué lo encendés o lo apagás</label>
+        <input id="as-config-motivo" maxlength="500" placeholder="Ej.: probarlo con el equipo contable"></div>
+      <div><label>&nbsp;</label><button id="b-as-config">Encender el asistente</button></div>
+    </div>
+  </div>
+
+  <div id="as-chat-caja" hidden>
+    <div class="fila" style="align-items:center">
+      <button id="b-as-nueva" class="sec">Conversación nueva</button>
+      <select id="as-conversaciones" aria-label="Conversaciones anteriores"></select>
+    </div>
+    <div id="as-log" class="as-log" aria-live="polite"></div>
+
+    <div id="as-adjuntos" class="as-adjuntos"></div>
+    <div class="as-compositor">
+      <textarea id="as-texto" rows="2" maxlength="4000"
+        placeholder="Escribí tu consulta, o tocá el micrófono y hablá…"></textarea>
+      <div class="as-botones">
+        <button id="b-as-foto" class="sec" title="Sacar una foto o elegir una imagen">Foto</button>
+        <button id="b-as-archivo" class="sec" title="Adjuntar una imagen o un PDF">Archivo</button>
+        <button id="b-as-mic" class="sec" title="Dictar con la voz">Hablar</button>
+        <button id="b-as-enviar">Enviar</button>
+      </div>
+    </div>
+    <input id="as-in-foto" type="file" accept="image/*" capture="environment" hidden>
+    <input id="as-in-archivo" type="file" accept="image/*,application/pdf" multiple hidden>
+
+    <div class="as-opciones">
+      <label class="as-check"><input type="checkbox" id="as-voz"> Leer las respuestas en voz alta</label>
+      <label class="as-check"><input type="checkbox" id="as-modo-voz"> Modo conversación por voz</label>
+      <label class="as-check" id="as-guardar-doc-caja" hidden><input type="checkbox" id="as-guardar-doc">
+        También guardar los archivos en Documentos</label>
+    </div>
+    <p class="ayuda" id="as-pie"></p>
+  </div>
+</section>
+
 <section id="v-inteligencia" hidden>
   <h2>Preguntar</h2>
   <p class="ayuda">La cifra la calcula el mismo motor que la pantalla del módulo, así que los
@@ -4521,7 +4594,7 @@ const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
 // ── Navegación ────────────────────────────────────────────────────────────
-const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','bandeja','documentos','propuestas','operaciones',
+const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','asistente','bandeja','documentos','propuestas','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','migraciones','auditoria','suscripcion','config'];
@@ -4550,6 +4623,7 @@ for (const b of document.querySelectorAll('nav button')) {
     ir(v, [b.textContent]);
     if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
     if (v === 'inteligencia') cargarInteligencia();
+    if (v === 'asistente') cargarAsistente();
     if (v === 'bandeja') bandeja();
     if (v === 'documentos') listarDocumentos();
     if (v === 'operaciones') listarOperaciones();
@@ -5069,6 +5143,7 @@ async function usarEmpresa(id) {
  */
 function aplicarPermisosANav() {
   const requiere = {
+    asistente: 'intelligence:ask',
     documentos: 'document:read', propuestas: 'prediction:review',
     operaciones: 'journal_entry:read',
     terceros: 'party:read', productos: 'product:read', precios: 'product:read',
@@ -5397,6 +5472,368 @@ function pastillaOrigen(origen) {
 // distinto a propósito: una respuesta con su evidencia, un «no sé» con la lista
 // de lo que sí sabe, y un empate que pide elegir. Convertir las dos últimas en
 // una respuesta aproximada sería exactamente lo que el catálogo evita.
+/* ═══════════════════════════════════════════════════════════════════════════
+   Asistente: chat con fotos, archivos y voz.
+
+   Lo que esta pantalla NO hace, a propósito:
+     · no guarda nada por su cuenta. Una propuesta de alta se confirma con un botón y va por el alta
+       de siempre (`POST /parties`), con el permiso y la bitácora de quien la aprueba;
+     · no manda nada al navegador de otro lado: el dictado y la lectura en voz alta los hace el
+       navegador (Web Speech). En Chrome y Edge el reconocimiento de voz lo resuelve un servicio del
+       fabricante del navegador, así que el audio sale de NEXO hacia ese servicio. Se dice abajo.
+     · no sube un archivo a Documentos salvo que se tilde «También guardar…».
+   ═══════════════════════════════════════════════════════════════════════════ */
+const asistente = { conversacionId: null, adjuntos: [], reconocimiento: null, escuchando: false, enviando: false, estado: null };
+const MAX_ADJUNTO = 5 * 1024 * 1024;
+const Reconocimiento = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+async function cargarAsistente() {
+  limpiar('chat-msg');
+  const r = await api('GET', '/asistente/estado');
+  if (!r.ok) { E('as-chat-caja').hidden = true; return decir('chat-msg', r); }
+  const d = r.datos;
+  asistente.estado = d;
+
+  const p = d.proveedor;
+  E('chat-estado').innerHTML = !d.disponible
+    ? '<div class="aviso ojo"><strong>' +
+      (p.estado === 'DESHABILITADO'
+        ? 'Este servidor no tiene conectado el asistente.'
+        : p.estado === 'PREPARADO'
+          ? 'El asistente está preparado pero falta la credencial del proveedor.'
+          : 'El asistente está apagado para esta empresa.') +
+      '</strong> El resto de NEXO funciona igual.</div>'
+    : '<div class="aviso">' + conEnfasis(d.alcance) + '</div>';
+
+  // Encender o apagar: quien configura el análisis. Sin proveedor no tiene sentido encender.
+  const puedeConf = d.puedeConfigurar && p.estado === 'CONFIGURADO';
+  E('as-config').hidden = !puedeConf;
+  E('as-config-texto').innerHTML = d.habilitado
+    ? 'El asistente está <strong>encendido</strong> para esta empresa. Cada mensaje y cada archivo que se manden salen de NEXO hacia el proveedor del modelo.'
+    : 'El asistente está <strong>apagado</strong>. Al encenderlo, los mensajes y archivos que se le manden saldrán de NEXO hacia el proveedor del modelo (' +
+      escapar(p.id || 'proveedor') + '). Queda registrado quién lo decidió y por qué.';
+  E('b-as-config').textContent = d.habilitado ? 'Apagar el asistente' : 'Encender el asistente';
+
+  E('as-chat-caja').hidden = !d.disponible;
+  E('as-guardar-doc-caja').hidden = !puede('document:upload');
+  E('b-as-mic').hidden = !Reconocimiento;
+  E('as-modo-voz').parentElement.hidden = !Reconocimiento;
+  E('as-pie').innerHTML = escapar(d.advertencia) +
+    (Reconocimiento ? ' El dictado lo resuelve el servicio de voz de tu navegador: el audio sale de NEXO hacia ese servicio.' : '');
+  if (d.disponible) { cargarConversaciones(); }
+}
+
+E('b-as-config').onclick = async () => {
+  const d = asistente.estado;
+  const r = await api('POST', '/asistente/configuracion', { habilitado: !(d && d.habilitado), motivo: E('as-config-motivo').value });
+  if (!r.ok) return decir('chat-msg', r);
+  E('as-config-motivo').value = '';
+  cargarAsistente();
+};
+
+async function cargarConversaciones() {
+  const r = await api('GET', '/asistente/conversaciones');
+  const sel = E('as-conversaciones');
+  sel.innerHTML = '<option value="">Conversaciones anteriores…</option>';
+  if (!r.ok) return;
+  for (const c of r.datos.conversaciones) {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.titulo;
+    sel.appendChild(o);
+  }
+  sel.value = asistente.conversacionId || '';
+}
+
+E('as-conversaciones').onchange = async (ev) => {
+  const id = ev.target.value;
+  if (!id) return;
+  const r = await api('GET', '/asistente/conversaciones/' + id);
+  if (!r.ok) return decir('chat-msg', r);
+  asistente.conversacionId = id;
+  E('as-log').innerHTML = '';
+  for (const m of r.datos.mensajes) {
+    pintarMensaje(m.rol === 'usuario' ? 'yo' : 'el', m.texto, m.rol === 'asistente' ? { propuestas: [], conAdvertencia: false } : {});
+  }
+};
+
+E('b-as-nueva').onclick = () => {
+  asistente.conversacionId = null;
+  asistente.adjuntos = [];
+  E('as-log').innerHTML = '';
+  E('as-conversaciones').value = '';
+  pintarAdjuntos();
+  limpiar('chat-msg');
+};
+
+/** Un mensaje en el registro. El texto va escapado: es de un modelo, y lo que lee de la base también. */
+function pintarMensaje(quien, texto, extra) {
+  const caja = document.createElement('div');
+  caja.className = 'as-burbuja ' + quien;
+  const t = document.createElement('div');
+  t.className = 'as-texto';
+  t.textContent = texto;
+  caja.appendChild(t);
+
+  const e = extra || {};
+  if (e.sinVerificar) {
+    const n = document.createElement('div');
+    n.className = 'as-nota';
+    n.textContent = 'Lo que leí en el archivo es una lectura mía y no está verificada contra el sistema: confirmalo contra el original antes de cargarlo.';
+    caja.appendChild(n);
+  }
+  if (e.consultas && e.consultas.length > 0) {
+    const n = document.createElement('div');
+    n.className = 'as-nota';
+    n.textContent = 'Consultó: ' + e.consultas.map((c) => c.nombre + (c.error ? ' (con error)' : '')).join(', ');
+    caja.appendChild(n);
+  }
+  for (const p of e.propuestas || []) caja.appendChild(tarjetaDePropuesta(p));
+  if (e.advertencia) {
+    const n = document.createElement('div');
+    n.className = 'as-nota';
+    n.textContent = e.advertencia;
+    caja.appendChild(n);
+  }
+  E('as-log').appendChild(caja);
+  E('as-log').scrollTop = E('as-log').scrollHeight;
+  return caja;
+}
+
+const ROTULOS_PROPUESTA = {
+  razonSocial: 'Nombre o razón social', tipoDocumento: 'Tipo de documento', numeroDocumento: 'Documento',
+  roles: 'Es', condicionIva: 'Condición de IVA', email: 'Correo', telefono: 'Teléfono', domicilio: 'Domicilio',
+  localidad: 'Localidad', provincia: 'Provincia', nombreFantasia: 'Nombre de fantasía', diasDePago: 'Días de pago',
+};
+
+/** La propuesta de alta: se ve completa y se confirma con un botón. Hasta entonces no se guardó nada. */
+function tarjetaDePropuesta(p) {
+  const caja = document.createElement('div');
+  caja.className = 'as-prop';
+  const titulo = document.createElement('strong');
+  titulo.textContent = 'Propuesta de alta de tercero — todavía no se guardó';
+  caja.appendChild(titulo);
+  const lista = document.createElement('dl');
+  lista.className = 'kv';
+  for (const k of Object.keys(ROTULOS_PROPUESTA)) {
+    if (p.datos[k] === undefined) continue;
+    const dt = document.createElement('dt');
+    dt.textContent = ROTULOS_PROPUESTA[k];
+    const dd = document.createElement('dd');
+    dd.textContent = Array.isArray(p.datos[k]) ? p.datos[k].join(', ') : String(p.datos[k]);
+    lista.appendChild(dt);
+    lista.appendChild(dd);
+  }
+  caja.appendChild(lista);
+
+  const salida = document.createElement('div');
+  const ok = document.createElement('button');
+  ok.textContent = 'Confirmar y crear el tercero';
+  const no = document.createElement('button');
+  no.className = 'sec';
+  no.textContent = 'Descartar';
+  ok.onclick = async () => {
+    ok.disabled = true;
+    no.disabled = true;
+    // El alta de siempre, con el permiso y la bitácora de quien confirma.
+    const r = await api(p.metodo, p.ruta, p.datos);
+    if (r.ok) {
+      caja.innerHTML = '<strong>Listo: el tercero quedó creado.</strong>';
+    } else {
+      ok.disabled = false;
+      no.disabled = false;
+      salida.innerHTML = '<div class="aviso error">' + escapar((r.datos && r.datos.message) || 'No se pudo crear.') + '</div>';
+    }
+  };
+  no.onclick = () => { caja.innerHTML = '<span class="ayuda">Propuesta descartada. No se guardó nada.</span>'; };
+  caja.appendChild(ok);
+  caja.appendChild(no);
+  caja.appendChild(salida);
+  return caja;
+}
+
+// ── Archivos: una foto de celular pesa 5–12 MB, así que se reduce acá antes de mandarla ─────────────────────────
+async function prepararArchivo(archivo) {
+  if (archivo.type === 'application/pdf') {
+    if (archivo.size > MAX_ADJUNTO) throw new Error('"' + archivo.name + '" pesa más de 5 MB.');
+    return archivo;
+  }
+  if (!archivo.type.startsWith('image/')) throw new Error('"' + archivo.name + '" no es una imagen ni un PDF.');
+  if (archivo.type === 'image/gif') {
+    if (archivo.size > MAX_ADJUNTO) throw new Error('"' + archivo.name + '" pesa más de 5 MB.');
+    return archivo;
+  }
+  const mapa = await createImageBitmap(archivo);
+  const lado = 1600;
+  const escala = Math.min(1, lado / Math.max(mapa.width, mapa.height));
+  const lienzo = document.createElement('canvas');
+  lienzo.width = Math.round(mapa.width * escala);
+  lienzo.height = Math.round(mapa.height * escala);
+  lienzo.getContext('2d').drawImage(mapa, 0, 0, lienzo.width, lienzo.height);
+  const blob = await new Promise((ok) => lienzo.toBlob(ok, 'image/jpeg', 0.85));
+  if (!blob || blob.size > MAX_ADJUNTO) throw new Error('No pude reducir "' + archivo.name + '" por debajo de 5 MB.');
+  return new File([blob], archivo.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+}
+
+async function agregarArchivos(lista) {
+  limpiar('chat-msg');
+  for (const a of Array.from(lista)) {
+    if (asistente.adjuntos.length >= 3) { avisoMal('chat-msg', 'Se pueden adjuntar hasta 3 archivos por mensaje.'); break; }
+    try { asistente.adjuntos.push(await prepararArchivo(a)); } catch (e) { avisoMal('chat-msg', e.message); }
+  }
+  pintarAdjuntos();
+}
+
+function pintarAdjuntos() {
+  const caja = E('as-adjuntos');
+  caja.innerHTML = '';
+  asistente.adjuntos.forEach((a, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'as-chip';
+    chip.textContent = a.name + ' · ' + Math.max(1, Math.round(a.size / 1024)) + ' KB ';
+    const x = document.createElement('button');
+    x.className = 'sec';
+    x.textContent = '×';
+    x.setAttribute('aria-label', 'Quitar ' + a.name);
+    x.onclick = () => { asistente.adjuntos.splice(i, 1); pintarAdjuntos(); };
+    chip.appendChild(x);
+    caja.appendChild(chip);
+  });
+}
+
+E('b-as-foto').onclick = () => E('as-in-foto').click();
+E('b-as-archivo').onclick = () => E('as-in-archivo').click();
+E('as-in-foto').onchange = (ev) => { agregarArchivos(ev.target.files); ev.target.value = ''; };
+E('as-in-archivo').onchange = (ev) => { agregarArchivos(ev.target.files); ev.target.value = ''; };
+
+// ── Voz ────────────────────────────────────────────────────────────────────────────────────────────────────────
+function detenerDictado() {
+  asistente.escuchando = false;
+  E('b-as-mic').classList.remove('as-mic-on');
+  E('b-as-mic').textContent = 'Hablar';
+  if (asistente.reconocimiento) { try { asistente.reconocimiento.stop(); } catch (e) { /* ya estaba parado */ } }
+}
+
+function iniciarDictado() {
+  if (!Reconocimiento || asistente.enviando) return;
+  const rec = new Reconocimiento();
+  rec.lang = 'es-AR';
+  rec.interimResults = true;
+  rec.continuous = false;
+  const base = E('as-texto').value ? E('as-texto').value + ' ' : '';
+  let final = '';
+  rec.onresult = (ev) => {
+    let parcial = '';
+    for (const r of Array.from(ev.results)) {
+      if (r.isFinal) final += r[0].transcript; else parcial += r[0].transcript;
+    }
+    E('as-texto').value = base + final + parcial;
+  };
+  rec.onerror = (ev) => {
+    detenerDictado();
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+      avisoMal('chat-msg', 'El navegador no me dejó usar el micrófono. Habilitalo para este sitio y probá de nuevo.');
+    } else if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
+      avisoMal('chat-msg', 'No pude escuchar (' + ev.error + '). Podés escribir en su lugar.');
+    }
+  };
+  rec.onend = () => {
+    const quedabaEscuchando = asistente.escuchando;
+    detenerDictado();
+    // En el modo conversación, lo dictado se envía solo.
+    if (quedabaEscuchando && E('as-modo-voz').checked && final.trim() !== '') enviarMensaje();
+  };
+  asistente.reconocimiento = rec;
+  asistente.escuchando = true;
+  E('b-as-mic').classList.add('as-mic-on');
+  E('b-as-mic').textContent = 'Escuchando… (tocá para parar)';
+  try { rec.start(); } catch (e) { detenerDictado(); }
+}
+
+E('b-as-mic').onclick = () => { if (asistente.escuchando) detenerDictado(); else iniciarDictado(); };
+
+function leerEnVozAlta(texto) {
+  if (!('speechSynthesis' in window) || !(E('as-voz').checked || E('as-modo-voz').checked)) return false;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'es-AR';
+  // En el modo conversación, cuando termina de hablar vuelve a escuchar.
+  u.onend = () => { if (E('as-modo-voz').checked && Reconocimiento) iniciarDictado(); };
+  window.speechSynthesis.speak(u);
+  return true;
+}
+
+E('as-voz').onchange = () => { if (!E('as-voz').checked && 'speechSynthesis' in window) window.speechSynthesis.cancel(); };
+E('as-modo-voz').onchange = () => {
+  if (E('as-modo-voz').checked) E('as-voz').checked = true;
+  else { detenerDictado(); if ('speechSynthesis' in window) window.speechSynthesis.cancel(); }
+};
+
+// ── Enviar ────────────────────────────────────────────────────────────────────────────────────────────────────
+async function enviarMensaje() {
+  if (asistente.enviando) return;
+  const texto = E('as-texto').value.trim();
+  const archivos = asistente.adjuntos.slice();
+  if (texto === '' && archivos.length === 0) return;
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  detenerDictado();
+
+  asistente.enviando = true;
+  E('b-as-enviar').disabled = true;
+  limpiar('chat-msg');
+  pintarMensaje('yo', (texto || '(archivo adjunto)') + (archivos.length ? '\n📎 ' + archivos.map((a) => a.name).join(', ') : ''));
+  const espera = pintarMensaje('el', 'Pensando…');
+  E('as-texto').value = '';
+
+  let r;
+  if (archivos.length === 0) {
+    r = await api('POST', '/asistente/mensajes', { mensaje: texto, conversacionId: asistente.conversacionId || undefined });
+  } else {
+    const fd = new FormData();
+    fd.append('mensaje', texto);
+    if (asistente.conversacionId) fd.append('conversacionId', asistente.conversacionId);
+    for (const a of archivos) fd.append('adjunto', a, a.name);
+    r = await api('POST', '/asistente/mensajes', fd, true);
+  }
+  espera.remove();
+  asistente.enviando = false;
+  E('b-as-enviar').disabled = false;
+
+  if (!r.ok) {
+    E('as-texto').value = texto;
+    return decir('chat-msg', r);
+  }
+  const d = r.datos;
+  const hablo = d.estado === 'RESPONDIDA';
+  asistente.conversacionId = d.conversacionId;
+  asistente.adjuntos = [];
+  pintarAdjuntos();
+  pintarMensaje('el', d.respuesta.texto, {
+    propuestas: d.respuesta.propuestas,
+    consultas: d.respuesta.consultas,
+    advertencia: d.respuesta.advertencia,
+    sinVerificar: d.respuesta.lecturaDeArchivoSinVerificar,
+  });
+  cargarConversaciones();
+
+  // «También guardar en Documentos»: lo elige la persona, archivo por archivo va al circuito de siempre (OCR y revisión).
+  if (archivos.length > 0 && E('as-guardar-doc').checked && puede('document:upload')) {
+    for (const a of archivos) {
+      const fd = new FormData();
+      fd.append('origen', 'UPLOAD');
+      fd.append('file', a, a.name);
+      const g = await api('POST', '/documents', fd, true);
+      pintarMensaje('el', g.ok ? '«' + a.name + '» quedó guardado en Documentos.' : 'No pude guardar «' + a.name + '» en Documentos: ' + ((g.datos && g.datos.message) || g.status));
+    }
+  }
+  if (hablo) leerEnVozAlta(d.respuesta.texto);
+}
+
+E('b-as-enviar').onclick = enviarMensaje;
+E('as-texto').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); enviarMensaje(); }
+});
+
 async function cargarInteligencia() {
   const r = await api('GET', '/intelligence/preguntas');
   if (!r.ok) return decir('intel-msg', r);

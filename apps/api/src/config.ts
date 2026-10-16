@@ -203,6 +203,43 @@ export const config = {
     preguntasPorMinuto: Number(process.env.AI_PREGUNTAS_POR_MINUTO ?? 20),
   },
 
+  /**
+   * El asistente conversacional (chat). Tiene su propia configuración y no usa `AI_PROVIDER`: ese proveedor es el de los
+   * agentes de salida estructurada (clasificación, redacción de una respuesta), y mezclarlos haría que conectar el chat
+   * encienda —o apague— otra cosa sin que nadie lo haya pedido.
+   *
+   * Dos valores, y ninguno más:
+   *
+   *   `none`       sin asistente. Es el valor por defecto y **es un modo de operación**: la pantalla lo dice.
+   *   `anthropic`  Claude, por la API de mensajes. El modelo es Haiku 5.5 salvo que `ASSISTANT_MODEL_ID` diga otro.
+   *
+   * Un valor desconocido no cae a `none`: el servidor no arranca (`verificarProveedorDelAsistente`).
+   *
+   * Aun con el proveedor conectado, **cada empresa lo habilita por su cuenta** (`assistant_settings`): los datos de una
+   * empresa salen hacia un tercero recién cuando alguien con permiso lo decide y queda escrito por qué.
+   */
+  asistente: {
+    provider: process.env.ASSISTANT_PROVIDER ?? 'none',
+    /** La referencia al secreto, no el secreto. `ASSISTANT_API_KEY` se traduce a `env:ASSISTANT_API_KEY`. */
+    // Una referencia vacía (`ASSISTANT_API_KEY_REF=` en el .env) cuenta como no declarada: `??` la dejaría pasar como `''`
+    // y el asistente quedaría «sin credencial» aunque `ASSISTANT_API_KEY` esté puesta.
+    apiKeyRef:
+      process.env.ASSISTANT_API_KEY_REF !== undefined && process.env.ASSISTANT_API_KEY_REF !== ''
+        ? process.env.ASSISTANT_API_KEY_REF
+        : process.env.ASSISTANT_API_KEY !== undefined && process.env.ASSISTANT_API_KEY !== ''
+          ? 'env:ASSISTANT_API_KEY'
+          : null,
+    modelId: process.env.ASSISTANT_MODEL_ID ?? 'claude-haiku-5-5',
+    timeoutMs: Number(process.env.ASSISTANT_TIMEOUT_MS ?? 30_000),
+    maxRetries: Number(process.env.ASSISTANT_MAX_RETRIES ?? 2),
+    /** `low` | `medium` | `high`. Un chat con herramientas rinde con `low`; más es más costo y más demora. */
+    esfuerzo: process.env.ASSISTANT_EFFORT ?? 'low',
+    /** Tope de lo que el modelo puede escribir por respuesta. */
+    maxTokens: Number(process.env.ASSISTANT_MAX_TOKENS ?? 1024),
+    /** Mensajes por minuto y por usuario: ataja el bucle, no el gasto (el gasto lo gobierna el cupo diario de la empresa). */
+    mensajesPorMinuto: Number(process.env.ASSISTANT_MENSAJES_POR_MINUTO ?? 12),
+  },
+
   correo: {
     /**
      * Quién manda el correo. Dos valores, y ninguno más:

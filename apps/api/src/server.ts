@@ -57,6 +57,7 @@ import { alertaRoutes } from './routes/alertas.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { mapeoContableRoutes } from './routes/mapeo-contable.js';
 import { arranqueRoutes } from './routes/arranque.js';
+import { asistenteRoutes, type OpcionesDelAsistente } from './routes/asistente.js';
 import { intelligenceRoutes } from './routes/intelligence.js';
 import { solicitudDeCompraRoutes } from './routes/solicitudes-de-compra.js';
 import { ordenDePagoRoutes } from './routes/ordenes-de-pago.js';
@@ -129,6 +130,11 @@ export async function buildServer(
      * En producción no se pasa y sale de `config`.
      */
     pagos?: OpcionesDeWebhook;
+    /**
+     * El proveedor del asistente conversacional. Se inyecta **sólo en los tests**: en producción sale de `config.asistente`
+     * (`ASSISTANT_PROVIDER`). Ver `docs/ASISTENTE.md`.
+     */
+    asistente?: OpcionesDelAsistente;
   } = {},
 ): Promise<FastifyInstance> {
   // Antes de registrar una sola ruta: los esquemas se evalúan cuando llega el
@@ -366,6 +372,7 @@ export async function buildServer(
   await app.register(ordenDePagoRoutes);
   await app.register(solicitudDeCompraRoutes);
   await app.register(intelligenceRoutes);
+  await app.register(asistenteRoutes(options.asistente));
   await app.register(valuacionRoutes);
   await app.register(exportacionRoutes);
   await app.register(periodRoutes);

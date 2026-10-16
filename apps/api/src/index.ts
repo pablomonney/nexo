@@ -17,6 +17,7 @@
 import { origenEnv } from './cargar-env.js';
 import { closePool, initPool } from '@aai/db';
 import { modosDeOperacion, problemasDelRol, rolesDeLaBase, verificarEsquema } from './arranque.js';
+import { verificarProveedorDelAsistente } from './ai/asistente-proveedor.js';
 import { verificarProveedor } from './ai/proveedor.js';
 import { verificarProveedorDeCorreo } from './correo/fabrica.js';
 import { verificarAmbienteDePagos, verificarProveedorDePagos } from './pagos/fabrica.js';
@@ -31,6 +32,17 @@ initPool(config.databaseUrl);
 const proveedorInvalido = verificarProveedor(config.ai);
 if (proveedorInvalido !== null) {
   console.error(`NEXO no arranca:\n\n  ✘ ${proveedorInvalido}\n`);
+  await closePool();
+  process.exit(1);
+}
+
+// Y el del asistente conversacional: un `ASSISTANT_PROVIDER` mal escrito dejaría el chat sin proveedor sin que nada lo diga.
+const asistenteInvalido = verificarProveedorDelAsistente(config.asistente);
+if (asistenteInvalido !== null) {
+  console.error(`NEXO no arranca:
+
+  ✘ ${asistenteInvalido}
+`);
   await closePool();
   process.exit(1);
 }

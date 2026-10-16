@@ -52,10 +52,10 @@ describe('S-47 — el servidor de pruebas está aislado', () => {
   it('fuerza pagos, correo e IA a «ninguno» y vacía sus credenciales', () => {
     // Se lee el objeto que se le pasa al hijo, no el comportamiento: arrancar el servidor de verdad es lo que se evita.
     const bloque = /const SIN_EXTERIOR = \{([\s\S]*?)\};/u.exec(fuente)?.[1] ?? '';
-    for (const clave of ['PAYMENTS_PROVIDER', 'EMAIL_PROVIDER', 'AI_PROVIDER']) {
+    for (const clave of ['PAYMENTS_PROVIDER', 'EMAIL_PROVIDER', 'AI_PROVIDER', 'ASSISTANT_PROVIDER']) {
       expect(bloque, clave).toMatch(new RegExp(`${clave}: 'none'`, 'u'));
     }
-    for (const clave of ['PAYMENTS_ACCESS_TOKEN', 'PAYMENTS_WEBHOOK_SECRET', 'EMAIL_API_KEY', 'AI_API_KEY']) {
+    for (const clave of ['PAYMENTS_ACCESS_TOKEN', 'PAYMENTS_WEBHOOK_SECRET', 'EMAIL_API_KEY', 'AI_API_KEY', 'ASSISTANT_API_KEY', 'ASSISTANT_API_KEY_REF']) {
       expect(bloque, clave).toMatch(new RegExp(`${clave}: ''`, 'u'));
     }
   });

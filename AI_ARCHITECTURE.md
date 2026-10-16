@@ -163,6 +163,15 @@ Pregunta → planner → consultas SQL parametrizadas sobre la empresa activa (R
 - No responde preguntas de asesoramiento normativo con criterio propio: deriva a la cita del
   `normative-engine` o declara el gap.
 
+### 7.1 El asistente conversacional (chat con Claude)
+
+Distinto del planner de arriba: acá el modelo **conversa y pide herramientas**. Detalle, controles, pruebas y límites en [`docs/ASISTENTE.md`](docs/ASISTENTE.md). Lo que importa a esta arquitectura:
+
+- El puerto (`ProveedorDeChat`), el bucle y el control de cifras viven en `@aai/ai-engine` **sin** importar base ni motores; las herramientas están en `apps/api` y sólo leen o arman una propuesta. El modelo no tiene camino a una escritura (ADR-001).
+- Toda cifra del texto tiene que salir de una herramienta o de lo que escribió la persona (ADR-017); si no, una corrección y descarte entero.
+- Apagado por defecto y por empresa; cada turno se cuenta (`ai_answers`) y se audita sin su contenido.
+- El único archivo que conoce al proveedor es `apps/api/src/ai/chat-claude.ts`.
+
 ---
 
 ## 8. Privacidad y datos

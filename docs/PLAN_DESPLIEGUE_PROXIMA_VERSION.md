@@ -9,6 +9,7 @@
 | **Idempotencia de caja y stock** + transiciones atómicas (órdenes de pago, recepciones, imputaciones), con las 11 correcciones visuales de la consola | **0133** (aditiva: columnas anulables, índices parciales, triggers de transición) | Medio: la API **exige** `Idempotency-Key` en caja y stock; la consola nueva ya la manda. Un cliente de la API que no la mande recibe `400` |
 | **«Olvidé mi contraseña»** (`/auth/recuperar`, `/auth/restablecer`) | **0134** (sólo registra una acción de bitácora) | Bajo. Depende de que el correo salga (B6: sin verificar) |
 | **Recuperar una cuenta a mano** (`scripts/recuperar-cuenta.sh`) | **0135** (dos acciones de bitácora) | Bajo (no corre solo) |
+| **Asistente conversacional** (chat con Claude Haiku 5.5, fotos/archivos, voz) | **0136** (tablas nuevas + acciones de bitácora + precio + el prompt archivado) | Bajo: **apagado por defecto** y sin `ASSISTANT_PROVIDER` ni clave no llama a nadie. Detalle y pendientes en `docs/ASISTENTE.md` |
 | El pool no cae por una conexión ociosa cortada | — | Bajo |
 | Datos bancarios del cobro manual en avisos y en Suscripción | — | Bajo; **sin datos declarados no muestra nada** |
 | El ingreso admite códigos de recuperación del segundo factor; «Recordar en este dispositivo» (ya estaba) | — | Bajo |
@@ -45,11 +46,13 @@ find /opt/nexo -name '*.tsbuildinfo' -not -path '*/node_modules/*' | wc -l
 bash scripts/desplegar.sh --commit <SHA-DE-40-CARACTERES>
 ```
 
-Qué hace y qué pasa si falla cada paso: **igual que** `docs/PLAN_DESPLIEGUE_ZONA_HORARIA.md` §1 (el guion es el mismo). La diferencia es lo que migra: 0133, 0134 y 0135.
+Con la 0136 la migración llega a **136**. Qué hace y qué pasa si falla cada paso: **igual que** `docs/PLAN_DESPLIEGUE_ZONA_HORARIA.md` §1 (el guion es el mismo). La diferencia es lo que migra: 0133, 0134, 0135 y 0136.
+
+> **La 0136 (asistente) NO entró en el ensayo sobre la copia de producción** (§2 se hizo hasta la 135, antes de escribirla). Es aditiva —tablas nuevas, tres acciones de bitácora, un precio y el prompt—, pasó la suite completa y `audit:estructura` (462 objetos) sobre una base migrada de cero, pero **repetir el ensayo 130 → 136 sobre una copia fresca antes de desplegar**.
 
 ## 4 · Verificación posterior
 
-1. `/health/db`: `migrations: 135`, `version: <sha corto>`.
+1. `/health/db`: `migrations: 136`, `version: <sha corto>`.
 2. `audit:estructura` y `verify-audit-chain` / `recalcular-cadena` / `verify-ledger` (los mismos comandos de V3, V5, V6 del runbook).
 3. Idempotencia (**necesita una sesión iniciada**, o sea, la hacés vos desde la consola o me pasás un token de prueba): abrir una sesión de caja y registrar un movimiento (tiene que andar: la consola manda la clave); repetir el pedido sin cambiar nada desde la red del navegador devuelve `200` con `Idempotent-Replayed: true` y **no** duplica el movimiento (`docs/DISENO_IDEMPOTENCIA.md` §11, V-I2…V-I5).
 4. «Olvidé mi contraseña»: **no se prueba con una cuenta real en producción** sin tu aviso (manda un correo y, si el código se usa, cambia una contraseña). Se prueba **una vez**, con tu cuenta y tu permiso expreso, cuando el dominio de envío de Resend esté verificado.

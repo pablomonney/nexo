@@ -228,6 +228,10 @@ const TRIGGERS = [
   ['cash_movements', 'cmv_no_update', 'El libro de caja no se edita'],
   ['cash_movements', 'cmv_no_delete', 'El libro de caja no se borra'],
   ['cash_movements', 'cmv_sesion_abierta', '0068: no se le agrega un movimiento a una caja ya arqueada'],
+  // 0136 · El asistente: un mensaje y una conversación son hechos, no se editan ni se borran.
+  ['assistant_messages', 'assistant_messages_no_delete', '0136: lo que dijo el asistente no se borra'],
+  ['assistant_messages', 'assistant_messages_immutable', '0136: lo que dijo el asistente no se edita'],
+  ['assistant_conversations', 'assistant_conversations_no_delete', '0136: una conversación no se borra'],
   // 0133 · Una sesión arqueada no vuelve a cambiar; un recuento cerrado, tampoco.
   ['cash_sessions', 'cs_transicion', '0133: una sesión arqueada no se vuelve a modificar (se arquea una sola vez)'],
   ['stock_counts', 'sc_transicion', '0133: un recuento cerrado no se vuelve a cerrar (sus ajustes se aplican una vez)'],
@@ -444,6 +448,8 @@ const RLS_FORZADO = [
   // El maestro de terceros (0047). Es el dato comercial más sensible que tiene
   // una empresa: a quién le compra, a quién le vende y cuánto le debe.
   'parties', 'party_roles',
+  // 0136 · lo que la gente le escribe al asistente es de su empresa y de nadie más.
+  'assistant_settings', 'assistant_conversations', 'assistant_messages',
   // El maestro de productos (0048): precios, márgenes y costos de la empresa.
   'products', 'tax_transaction_lines',
   // El ciclo comercial (0050): precios ofrecidos y pedidos de cada empresa.

@@ -19,3 +19,5 @@ export * from './answering.js';
 export * from './answering-agent.js';
 export * from './providers-http.js';
 export * from './costo.js';
+export * from './chat.js';
+export * from './asistente.js';

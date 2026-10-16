@@ -36,6 +36,9 @@ export const ACTIONS_REQUIRING_REASON = [
   // Un cupo es una traba: sin motivo, seis meses despues nadie sabe por que
   // esta puesta ni si sigue teniendo sentido.
   'DECLARAR_CUPO_DE_IA',
+  // Encender el asistente hace que los datos de una empresa salgan hacia un proveedor de modelo. Sin motivo, nadie sabe
+  // después quién lo decidió ni por qué.
+  'CONFIGURAR_ASISTENTE',
   // Una credencial que cambio sin explicacion, seis meses despues, es una
   // pregunta sin respuesta en una auditoria.
   'DECLARAR_REFERENCIA_DE_SECRETO',

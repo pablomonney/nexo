@@ -70,6 +70,10 @@ const SIN_EXTERIOR = {
   PAYMENTS_PROVIDER: 'none',
   EMAIL_PROVIDER: 'none',
   AI_PROVIDER: 'none',
+  // El asistente conversacional manda mensajes y archivos de la empresa a un tercero: nunca desde acá.
+  ASSISTANT_PROVIDER: 'none',
+  ASSISTANT_API_KEY: '',
+  ASSISTANT_API_KEY_REF: '',
   // Las credenciales también: aunque el proveedor fuera `none`, un token cargado no debe
   // poder llegar a un adaptador por otro camino.
   PAYMENTS_ACCESS_TOKEN: '',
