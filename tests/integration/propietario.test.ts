@@ -21,6 +21,14 @@ import { sufijoUnico } from './helpers/identificadores.js';
 
 const suite = hasDatabase ? describe : describe.skip;
 
+/**
+ * Los cobros de esta suite van en una moneda que ninguna otra suite usa: las suites corren en paralelo contra la misma base, y
+ * cualquier total en ARS puede moverlo otra mientras ésta mide. Con una moneda propia la suma es exacta, y la propietaria
+ * —que también cobra en ella— demuestra que no se cuenta. Los conteos globales (empresas, suscripciones) se miden como cota
+ * inferior por la misma razón; lo exacto es lo que se afirma sobre las filas de ESTA suite.
+ */
+const MONEDA_PROPIA = 'ZZZ';
+
 interface Resumen {
   usuarios: { registrados: number; conCorreoVerificado: number; pendientesDeVerificar: number; nuevos7Dias: number; nuevos30Dias: number };
   empresas: { total: number; nuevas7Dias: number; nuevas30Dias: number; sinSuscripcion: number; porMes: Array<{ mes: string; nuevas: number }> };
@@ -77,12 +85,12 @@ suite('«Mis clientes» · sólo la propietaria', () => {
   const cobrar = async (companyId: string, subId: string, importe: string): Promise<void> => {
     const periodo = await db.query<{ id: string }>(
       `INSERT INTO billing_periods (company_id, subscription_id, desde, hasta, estado, moneda, importe, created_by)
-       VALUES ($1, $2, '2026-10-01'::date, '2026-10-31'::date, 'FACTURADO', 'ARS', $3, 'test') RETURNING id`,
+       VALUES ($1, $2, '2026-10-01'::date, '2026-10-31'::date, 'FACTURADO', '${MONEDA_PROPIA}', $3, 'test') RETURNING id`,
       [companyId, subId, importe],
     );
     await db.query(
       `INSERT INTO billing_documents (company_id, subscription_id, period_id, tipo, estado, moneda, importe_total, emitido_el, vence_el, pagado_el, created_by)
-       VALUES ($1, $2, $3, 'CARGO', 'PAGADO', 'ARS', $4, '2026-10-01'::date, '2026-10-11'::date, (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 'test')`,
+       VALUES ($1, $2, $3, 'CARGO', 'PAGADO', '${MONEDA_PROPIA}', $4, '2026-10-01'::date, '2026-10-11'::date, (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date, 'test')`,
       [companyId, subId, periodo.rows[0]!.id, importe],
     );
   };
@@ -185,17 +193,21 @@ suite('«Mis clientes» · sólo la propietaria', () => {
     const d = despues.datos;
     const a = antes.datos;
 
-    expect(d.empresas.total - a.empresas.total, 'empresas').toBe(4);
-    expect(d.empresas.nuevas7Dias - a.empresas.nuevas7Dias).toBe(4);
-    expect(d.suscripciones['activa']! - a.suscripciones['activa']!, 'activas (sin contar la propietaria)').toBe(2);
-    expect(d.suscripciones['prueba']! - a.suscripciones['prueba']!, 'en prueba').toBe(2);
-    expect(d.suscripciones['pruebasVencidasSinConvertir']! - a.suscripciones['pruebasVencidasSinConvertir']!).toBe(1);
-    expect(d.pagan.suscripcionesQuePagan - a.pagan.suscripcionesQuePagan, 'pagan').toBe(1);
-    expect(d.pagan.activasSinCobro - a.pagan.activasSinCobro, 'activas SIN cobro: no cuentan como que pagan').toBe(1);
-    expect(d.pagan.conPagoEnLosUltimos35Dias - a.pagan.conPagoEnLosUltimos35Dias).toBe(1);
+    // Cotas inferiores: otras suites crean empresas y suscripciones en paralelo sobre la misma base.
+    expect(d.empresas.total - a.empresas.total, 'empresas').toBeGreaterThanOrEqual(4);
+    expect(d.empresas.nuevas7Dias - a.empresas.nuevas7Dias).toBeGreaterThanOrEqual(4);
+    expect(d.suscripciones['activa']! - a.suscripciones['activa']!, 'activas').toBeGreaterThanOrEqual(2);
+    expect(d.suscripciones['prueba']! - a.suscripciones['prueba']!, 'en prueba').toBeGreaterThanOrEqual(2);
+    expect(d.suscripciones['pruebasVencidasSinConvertir']! - a.suscripciones['pruebasVencidasSinConvertir']!).toBeGreaterThanOrEqual(1);
+    expect(d.pagan.suscripcionesQuePagan - a.pagan.suscripcionesQuePagan, 'pagan').toBeGreaterThanOrEqual(1);
+    expect(d.pagan.activasSinCobro - a.pagan.activasSinCobro, 'activas sin cobro').toBeGreaterThanOrEqual(1);
+    expect(d.pagan.conPagoEnLosUltimos35Dias - a.pagan.conPagoEnLosUltimos35Dias).toBeGreaterThanOrEqual(1);
+    // Dentro de UNA misma respuesta las dos mitades de «activa» tienen que sumar el total: no hay carrera que lo explique.
+    expect(d.pagan.suscripcionesQuePagan + d.pagan.activasSinCobro).toBe(d.suscripciones['activa']);
 
-    const ars = (r: Resumen): bigint => BigInt((r.pagan.cobradoPorMoneda.find((m) => m.moneda === 'ARS')?.importe ?? '0').replace('.', ''));
-    expect(ars(d) - ars(a), 'lo cobrado, exacto y sin la propietaria').toBe(300000n);
+    // Exacto (por diferencia: la base se arrastra entre corridas): nadie más cobra en esta moneda, y la propietaria (que cobró 999.00 en ella) no se cuenta.
+    const propia = (r: Resumen): bigint => BigInt((r.pagan.cobradoPorMoneda.find((m) => m.moneda === MONEDA_PROPIA)?.importe ?? '0').replace('.', ''));
+    expect(propia(d) - propia(a), 'lo cobrado en la moneda de la suite, sin la propietaria').toBe(300000n);
 
     const porNombre = (nombre: string) => d.clientes.find((c) => c.empresa.startsWith(nombre));
     expect(porNombre('Cliente que paga')).toMatchObject({ paga: true, estado: 'ACTIVA', plan: 'PYME' });
