@@ -864,7 +864,8 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div class="gnav-items">
           <button data-vista="migraciones" data-nombre="Migraciones" data-desc="Traer una empresa de otro sistema" data-claves="importar excel exportar sistema anterior"><svg class="ico"><use href="#i-migraciones"/></svg><span class="txt">Migraciones</span></button>
           <button data-vista="auditoria" data-nombre="Auditoría" data-desc="Quién hizo qué, cuándo y por qué" data-claves="historial registro cambios seguridad"><svg class="ico"><use href="#i-auditoria"/></svg><span class="txt">Auditoría</span></button>
-          <button data-vista="suscripcion" data-nombre="Plan" data-desc="Tu plan, los topes de uso y la cuenta con NEXO" data-claves="suscripción pagar cobro precio mercado pago"><svg class="ico"><use href="#i-suscripcion"/></svg><span class="txt">Plan</span></button>
+          <button data-vista="propietario" hidden data-nombre="Mis clientes" data-desc="Cuántas cuentas entran y cuántas suscripciones pagan" data-claves="clientes cuentas suscripciones pagan cobrado altas propietario"><svg class="ico"><use href="#i-terceros"/></svg><span class="txt">Mis clientes</span></button>
+          <button data-vista="suscripcion" data-nombre="Plan"data-desc="Tu plan, los topes de uso y la cuenta con NEXO" data-claves="suscripción pagar cobro precio mercado pago"><svg class="ico"><use href="#i-suscripcion"/></svg><span class="txt">Plan</span></button>
           <button data-vista="config" data-nombre="Configuración" data-desc="Plan de cuentas, secretos, centros de costo y exportar todo" data-claves="ajustes cuentas exportar copia de seguridad"><svg class="ico"><use href="#i-config"/></svg><span class="txt">Configuración</span></button>
           <button data-vista="empresa" class="sec" data-nombre="Cambiar de empresa" data-desc="Pasar a trabajar en otra empresa" data-claves="empresas cuenta estudio"><svg class="ico"><use href="#i-empresa"/></svg><span class="txt">Cambiar de empresa</span></button>
         </div>
@@ -4327,6 +4328,52 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 </section>
 
 <!-- ══ Plan ═══════════════════════════════════════════════════════════════ -->
+<section id="v-propietario" hidden>
+  <h2>Mis clientes</h2>
+  <p class="ayuda">Cuántas cuentas entran a NEXO y <strong>cuántas suscripciones pagan</strong>. Esta pantalla la ve
+    <strong>sólo la empresa propietaria</strong>: son conteos y la lista mínima para cobrarle a cada cliente, nunca el
+    contenido contable de nadie. «Paga» quiere decir activa y con al menos un cargo cobrado; una cuenta activa sin
+    ningún cobro se cuenta aparte, para que el número de las que pagan sea el exacto.</p>
+
+  <button id="b-mc" class="sec">Actualizar</button>
+  <div id="mc-msg"></div>
+
+  <div id="mc-kpis" class="kpis" hidden></div>
+
+  <div id="mc-graficos" class="tablero-grilla" hidden>
+    <div class="panel panel-ancho">
+      <div class="panel-cab"><h3>Empresas nuevas por mes</h3><span class="panel-sub">últimos 12 meses</span></div>
+      <div id="g-mc-mes"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-cab"><h3>Suscripciones</h3><span class="panel-sub">por estado</span></div>
+      <div id="g-mc-estados"></div>
+    </div>
+  </div>
+
+  <h3>Cobrado</h3>
+  <div id="mc-cobrado" class="aviso"></div>
+
+  <h3>Clientes</h3>
+  <div class="fila">
+    <label>Mostrar
+      <select id="mc-filtro">
+        <option value="">todas las empresas</option>
+        <option value="pagan">las que pagan</option>
+        <option value="sin-cobro">activas sin cobro</option>
+        <option value="prueba">en prueba</option>
+        <option value="vencida">prueba vencida</option>
+        <option value="otras">morosas, suspendidas o canceladas</option>
+      </select>
+    </label>
+    <label>Buscar <input id="mc-q" placeholder="nombre o CUIT" autocomplete="off"></label>
+  </div>
+  <div class="tabla"><table id="t-mc"><thead><tr>
+    <th>Empresa</th><th>CUIT</th><th>Alta</th><th>Plan</th><th>Estado</th><th>Último pago</th>
+  </tr></thead><tbody></tbody></table></div>
+  <p class="ayuda" id="mc-pie"></p>
+</section>
+
 <section id="v-suscripcion" hidden>
   <h2>Plan</h2>
   <p class="ayuda">Exceder un tope <strong>no bloquea nada</strong>. Un sistema contable que se
@@ -5137,7 +5184,7 @@ const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','asistente','bandeja','documentos','propuestas','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
-                'asientos','libros','estados','cierre','migraciones','auditoria','suscripcion','config'];
+                'asientos','libros','estados','cierre','migraciones','auditoria','propietario','suscripcion','config'];
 
 function ir(vista, migas) {
   estado.vista = vista;
@@ -5209,6 +5256,7 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'migraciones') { cargarFuentesDeMigracion(); listarMigraciones(); }
     if (v === 'auditoria') { listarAuditoria(); cargarPeriodosParaVariacion(); }
     if (v === 'suscripcion') { cargarSuscripcion(); if (puede('billing:read')) cargarFacturacion(); }
+    if (v === 'propietario') cargarPropietario();
     if (v === 'config') cargarConfig();
   };
 }
@@ -6139,6 +6187,16 @@ const GUIAS = {
     ],
     despues: [['asientos', 'Ver asientos'], ['config', 'Ir a configuración']],
   },
+  propietario: {
+    que: 'Cuántas cuentas entran a NEXO y cuántas suscripciones pagan. Sólo la ve la empresa propietaria.',
+    pasos: [
+      { t: 'Arriba están las cifras que importan: empresas, suscripciones que pagan, pruebas en curso y lo cobrado.', a: '#mc-kpis' },
+      { t: 'Una cuenta «activa sin cobro» no cuenta como que paga: se informa aparte para que el número sea exacto.', a: '#mc-kpis' },
+      { t: 'En «Clientes» filtrá por estado o buscá por nombre o CUIT para ver a quién hay que cobrarle.', a: '#mc-filtro' },
+      { t: '«Actualizar» vuelve a contar: las cifras se calculan al abrir, no se guardan.', a: '#b-mc' },
+    ],
+    despues: [['suscripcion', 'Ir al plan'], ['inicio', 'Volver al inicio']],
+  },
   suscripcion: {
     que: 'Tu plan de NEXO: cuánto usás contra los topes, qué incluye y cómo pagar.',
     pasos: [
@@ -6845,6 +6903,8 @@ async function usarEmpresa(id) {
   estado.empresaDatos = c.datos.company || null;
   estado.fueraDelPlan = c.datos.fueraDelPlan || [];
   estado.suscripcion = c.datos.suscripcion || null;
+  // «Mis clientes» se ofrece sólo si el servidor dice que ésta es la empresa propietaria; el control real es de la base.
+  estado.esPropietaria = c.datos.esPropietaria === true;
   mostrarSuspension();
 
   const elegida = estado.empresas.find((x) => x.id === id);
@@ -6964,6 +7024,8 @@ function aplicarPermisosANav() {
     const p = requiere[b.dataset.vista];
     const d = dominioDe[b.dataset.vista];
     b.hidden = (p !== undefined && !puede(p)) || (d !== undefined && fuera.indexOf(d) !== -1);
+    // No tiene permiso propio: la ve la empresa propietaria y ninguna otra.
+    if (b.dataset.vista === 'propietario') b.hidden = !(estado.esPropietaria && puede('subscription:read'));
   }
 
   // Un grupo cuyos botones se escondieron todos queda como un rótulo suelto
@@ -15418,6 +15480,154 @@ E('b-au-mas').onclick = () => listarAuditoria(estado.cursores.au);
 
 // ══ 10 · Configuración ════════════════════════════════════════════════════
 // ══ 8b · Plan del propio NEXO ═════════════════════════════════════════════
+/**
+ * «Mis clientes»: cuántas cuentas entran y cuántas suscripciones pagan. Sólo la empresa propietaria.
+ *
+ * Todo viene de `GET /propietario/resumen`, que la base contesta únicamente a la empresa designada. Acá no se calcula nada:
+ * se dibujan los números tal como llegan. Los conteos son enteros; los importes llegan como texto y no pasan por `Number`.
+ */
+async function cargarPropietario() {
+  const r = await api('GET', '/propietario/resumen');
+  if (!r.ok) {
+    E('mc-kpis').hidden = true;
+    E('mc-graficos').hidden = true;
+    return decir('mc-msg', r);
+  }
+  limpiar('mc-msg');
+  estado.propietario = r.datos;
+  pintarPropietario(r.datos);
+}
+
+function pintarPropietario(d) {
+  const nodo = (tag, clase, texto) => {
+    const n = document.createElement(tag);
+    if (clase) n.className = clase;
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  };
+  const plural = (n, uno, varios) => n + ' ' + (Number(n) === 1 ? uno : varios);
+  const importe = (m) => (m.moneda === 'ARS' ? TABLERO.formatoMonto(m.importe) : m.moneda + ' ' + m.importe);
+
+  // Las cifras.
+  const cobrado = (d.pagan.cobradoPorMoneda || []).map(importe);
+  const defs = [
+    { t: 'Empresas clientes', v: String(d.empresas.total), s: plural(d.empresas.nuevas30Dias, 'nueva en 30 días', 'nuevas en 30 días'), ico: 'terceros', color: '' },
+    { t: 'Suscripciones que pagan', v: String(d.pagan.suscripcionesQuePagan),
+      s: plural(d.pagan.conPagoEnLosUltimos35Dias, 'con pago en los últimos 35 días', 'con pago en los últimos 35 días'), ico: 'suscripcion', color: 'bien' },
+    { t: 'En prueba', v: String(d.suscripciones.prueba),
+      s: d.suscripciones.pruebasQueVencenEn7Dias + ' vencen en 7 días · ' + d.suscripciones.pruebasVencidasSinConvertir + ' vencidas', ico: 'caja', color: 'ojo' },
+    { t: 'Activas sin cobro', v: String(d.pagan.activasSinCobro), s: 'no cuentan como que pagan', ico: 'auditoria', color: Number(d.pagan.activasSinCobro) > 0 ? 'ojo' : 'bien' },
+    { t: 'Usuarios', v: String(d.usuarios.registrados), s: d.usuarios.pendientesDeVerificar + ' sin verificar el correo', ico: 'terceros', color: '' },
+    { t: 'Cobrado', v: cobrado.length === 0 ? '—' : cobrado[0], s: cobrado.length > 1 ? cobrado.slice(1).join(' · ') : 'cargos pagados', ico: 'pagos', color: '' },
+  ];
+  const kpis = E('mc-kpis');
+  kpis.textContent = '';
+  for (const k of defs) {
+    const b = nodo('div', 'kpi');
+    const ico = nodo('span', 'kpi-ico ' + k.color);
+    ico.innerHTML = '<svg class="ico"><use href="#i-' + k.ico + '"/></svg>';
+    b.append(ico, nodo('span', 'kpi-t', k.t), nodo('span', 'kpi-v', k.v), nodo('span', 'kpi-s', k.s));
+    kpis.appendChild(b);
+  }
+  kpis.hidden = false;
+
+  // Empresas nuevas por mes: conteos enteros, así que la altura de la barra es geometría y nada más.
+  const meses = d.empresas.porMes || [];
+  const nombresDeMes = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const tope = Math.max(1, ...meses.map((m) => m.nuevas));
+  const W = 600, H = 200, izq = 28, aba = 26, arr = 14;
+  const gw = (W - izq - 8) / Math.max(1, meses.length);
+  let svg = '<svg class="grafico" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Empresas nuevas por mes">';
+  for (let i = 0; i <= 2; i += 1) {
+    const y = arr + (H - arr - aba) * (1 - i / 2);
+    svg += '<line class="rejilla" x1="' + izq + '" x2="' + (W - 8) + '" y1="' + y + '" y2="' + y + '"/>' +
+      '<text x="' + (izq - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + Math.round((tope * i) / 2) + '</text>';
+  }
+  meses.forEach((m, k) => {
+    const alto = m.nuevas > 0 ? Math.max(2, ((H - arr - aba) * m.nuevas) / tope) : 0;
+    const x = izq + gw * k + gw / 2;
+    if (alto > 0) {
+      svg += '<rect class="barra" x="' + (x - 11) + '" y="' + (H - aba - alto) + '" width="22" height="' + alto + '" rx="3" fill="var(--acento)">' +
+        '<title>' + escapar(nombresDeMes[Number(m.mes.slice(5, 7)) - 1] + ' ' + m.mes.slice(0, 4) + ': ' + plural(m.nuevas, 'empresa nueva', 'empresas nuevas')) + '</title></rect>';
+    }
+    svg += '<text class="eje-x" x="' + x + '" y="' + (H - 8) + '" text-anchor="middle">' + escapar(nombresDeMes[Number(m.mes.slice(5, 7)) - 1]) + '</text>';
+  });
+  E('g-mc-mes').innerHTML = svg + '</svg>';
+
+  // Suscripciones por estado.
+  const estados = [
+    ['Pagan', d.pagan.suscripcionesQuePagan], ['Activas sin cobro', d.pagan.activasSinCobro], ['En prueba', d.suscripciones.prueba],
+    ['Morosas', d.suscripciones.morosa], ['Suspendidas', d.suscripciones.suspendida], ['Canceladas', d.suscripciones.cancelada],
+    ['Sin suscripción', d.empresas.sinSuscripcion],
+  ];
+  const maxE = Math.max(1, ...estados.map((e) => e[1]));
+  const ul = nodo('ul', 'ranking');
+  for (const [nombre, n] of estados) {
+    const li = nodo('li');
+    const fila = nodo('div', 'r-fila');
+    fila.append(nodo('span', 'r-nombre', nombre), nodo('span', 'r-valor', String(n)));
+    const pista = nodo('div', 'r-pista');
+    const barra = document.createElement('i');
+    barra.style.width = (n > 0 ? Math.max(3, (n * 100) / maxE) : 0) + '%';
+    pista.appendChild(barra);
+    li.append(fila, pista);
+    ul.appendChild(li);
+  }
+  E('g-mc-estados').textContent = '';
+  E('g-mc-estados').appendChild(ul);
+  E('mc-graficos').hidden = false;
+
+  E('mc-cobrado').textContent = cobrado.length === 0
+    ? 'Todavía no hay ningún cargo cobrado.'
+    : 'Cargos cobrados hasta hoy, por moneda: ' + cobrado.join(' · ') + '.';
+
+  filtrarPropietario();
+}
+
+function filtrarPropietario() {
+  const d = estado.propietario;
+  if (!d) return;
+  const actual = hoyEnArgentina();
+  const filtro = E('mc-filtro').value;
+  const q = E('mc-q').value.trim().toLowerCase();
+  const clase = (c) => {
+    if (c.estado === 'ACTIVA' && c.paga) return 'pagan';
+    if (c.estado === 'ACTIVA') return 'sin-cobro';
+    if (c.estado === 'PRUEBA') return c.pruebaHasta && c.pruebaHasta < actual ? 'vencida' : 'prueba';
+    return 'otras';
+  };
+  const etiqueta = {
+    'pagan': ['paga', 'p-bien'], 'sin-cobro': ['activa, sin cobro', 'p-ojo'], 'prueba': ['en prueba', 'p-neu'],
+    'vencida': ['prueba vencida', 'p-mal'], 'otras': null,
+  };
+  const filas = (d.clientes || []).filter((c) =>
+    (filtro === '' || clase(c) === filtro) &&
+    (q === '' || c.empresa.toLowerCase().indexOf(q) !== -1 || String(c.cuit).indexOf(q.replace(/\D/gu, '') || '\u0000') !== -1));
+  const cuerpo = E('t-mc').querySelector('tbody');
+  cuerpo.innerHTML = '';
+  for (const c of filas) {
+    const tr = document.createElement('tr');
+    const e = etiqueta[clase(c)];
+    const pastilla = e
+      ? '<span class="p ' + e[1] + '">' + e[0] + '</span>'
+      : '<span class="p p-neu">' + escapar(String(c.estado).toLowerCase()) + '</span>';
+    tr.innerHTML =
+      '<td>' + escapar(c.empresa) + '</td><td class="mono">' + escapar(c.cuit) + '</td><td class="mono">' + escapar(c.alta) + '</td>' +
+      '<td class="mono">' + escapar(c.plan) + '</td><td>' + pastilla +
+      (c.estado === 'PRUEBA' && c.pruebaHasta ? ' <span class="mono">hasta ' + escapar(c.pruebaHasta) + '</span>' : '') + '</td>' +
+      '<td class="mono">' + escapar(c.ultimoPago || '—') + '</td>';
+    cuerpo.appendChild(tr);
+  }
+  const total = d.empresas.total;
+  E('mc-pie').textContent = filas.length === 0
+    ? 'Ninguna empresa coincide con el filtro.'
+    : 'Se muestran ' + filas.length + ' de ' + total + (total > (d.clientes || []).length ? ' (la lista trae las 500 más recientes; los totales de arriba cuentan a todas)' : '') + '.';
+}
+
+E('b-mc').onclick = () => cargarPropietario();
+E('mc-filtro').onchange = filtrarPropietario;
+E('mc-q').oninput = filtrarPropietario;
+
 async function cargarSuscripcion() {
   E('sub-declarar').hidden = !puede('subscription:write');
   E('sub-contratar').hidden = !puede('subscription:write');

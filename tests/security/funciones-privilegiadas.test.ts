@@ -71,6 +71,13 @@ const PERMITIDAS: Readonly<Record<string, string>> = {
     'Recibe una organización y comprueba que la empresa en contexto le pertenezca; sobre ' +
     'cualquier otra devuelve NULL. Devuelve un número, nunca filas: es el tope EMPRESAS, que ' +
     'no se puede medir desde una vista porque companies tiene RLS forzado',
+  'es_empresa_propietaria()':
+    'No recibe parámetros: contesta un booleano sobre la empresa en contexto (app_company_id()), ' +
+    'así que no hay identificador ajeno que pasarle',
+  'resumen_de_cuentas_del_propietario()':
+    'Sin parámetros: comprueba que la empresa en contexto sea la designada en platform_owner ANTES ' +
+    'de contar y, para cualquier otra, levanta 42501. Devuelve conteos y una lista mínima de clientes, ' +
+    'nunca contenido contable',
 };
 
 /**

@@ -66,6 +66,16 @@ Lo que sí cambia según el receptor, aun con una factura C, es **la condición 
 
 **Seguridad del esquema (no negociable):** la propietaria **administra a las demás**, pero **ninguna empresa cliente ve la propietaria ni a las otras** (el aislamiento sigue siendo de la base de datos). El certificado de ARCA de la propietaria es **suyo**: se carga por el camino normal de credenciales, no se guarda en el repositorio.
 
+### «Mis clientes»: el conteo exacto de lo que entra (migración 0140)
+
+Construido como **primer paso** del orden de arriba: la propietaria ya tiene **una forma de marcarse** y **una pantalla que cuenta**.
+
+- **Cómo se designa.** `node scripts/designar-propietaria.mjs --cuit <CUIT> --motivo "<por qué>"` (y `--ver` para consultar). Escribe la única fila de `platform_owner`; `aai_app` **no puede leerla ni escribirla**, así que una empresa no se designa sola. Se corre en el servidor, con las credenciales de base del operador, **después de crear la empresa** (con tu orden).
+- **Quién la ve.** Sólo la empresa designada. `GET /propietario/resumen` contesta **404** a cualquier otra (no 403: no se confirma que exista); el control real es de la función de base `resumen_de_cuentas_del_propietario()` (`SECURITY DEFINER`, comprueba `app_company_id()` antes de contar). La consola muestra el botón «Mis clientes» (Administración) sólo si `/companies/current` dice `esPropietaria`.
+- **Qué cuenta.** Usuarios (verificados y pendientes), empresas clientes (nuevas en 7 y 30 días, por mes), suscripciones por estado, **cuáles pagan**, cuáles están activas **sin cobro**, lo cobrado por moneda y una lista mínima (empresa, CUIT, alta, plan, estado, último pago) para poder cobrarle a cada una. Nunca contenido contable. La propietaria **no se cuenta a sí misma**.
+- **Qué significa «paga».** Suscripción `ACTIVA` con **al menos un cargo `PAGADO`**. La cuenta de prueba de producción está `ACTIVA` hasta 2099 **sin cobro**: contarla inflaría justo el número que necesitás exacto, por eso se informa aparte como «activas sin cobro».
+- **Lo que todavía no hace.** Mide cobros registrados en `billing_documents`; no sabe de pagos que nadie cargó. Hasta que el webhook de Mercado Pago esté en el servidor real (§5, pendiente), los pagos por transferencia entran cuando alguien los registra.
+
 ## 5 · Lo que necesito de vos
 
 1. **Confirmar la condición frente al IVA de quien emite** (D1) —idealmente con el contador, con las cinco preguntas del §3.5—. Con eso: facturas **C**, leyenda de precios y pantalla de IVA quedan alineadas.

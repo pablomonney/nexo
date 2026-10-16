@@ -332,6 +332,9 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         );
         const mapa = await mapaDeDominios(tx);
         const estado = await estadoComercialDe(tx, tenant.companyId);
+        // Sólo dice si la empresa en contexto es la propietaria (la función no recibe identificadores ajenos): es lo que decide si la
+        // consola dibuja «Mis clientes».
+        const propietaria = await tx.query<{ es: boolean }>('SELECT es_empresa_propietaria() AS es');
         const suspendida = estado === 'SUSPENDIDA' || estado === 'CANCELADA';
 
         // La mora apaga **algunos** dominios, así que se resuelve como una
@@ -383,6 +386,7 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
           reportingFramework: framework.rows[0] ?? null,
           roles: [...tenant.roles],
           permissions: [...tenant.permissions].sort(),
+          esPropietaria: propietaria.rows[0]?.es === true,
           fueraDelPlan,
           // El motivo, aparte de la lista: sin él la consola diría «no está en
           // tu plan» sobre módulos que la empresa sí contrató y solo tiene
