@@ -14,7 +14,8 @@
 
 | # | Qué | Por qué sólo vos | Cuando esté hecho |
 |---|---|---|---|
-| B1 | **Credenciales de PRODUCCIÓN:** entrar a la aplicación «Nexo intelligence» → **Credenciales de producción**. Mercado Pago pide un **código por SMS** (celular terminado en 4728): lo escribís vos. Si ve «Activar credenciales», completar rubro y sitio (`https://nexointelligence.com.ar`) y aceptar. Avisarme **si quedaron activadas** (no me pases las claves). | El código llega a tu teléfono; las claves de producción mueven plata. | Sé en qué estado está la cuenta y qué falta para cobrar. |
+| ~~B1~~ **HECHO 2026-10-16:** credenciales de producción activadas (verificado sin leer las claves). Pendiente sólo: copiar el Access Token de producción al `.env` del servidor cuando decidamos encender el cobro real. | — | — |
+| B1 (original) | **Credenciales de PRODUCCIÓN:** entrar a la aplicación «Nexo intelligence» → **Credenciales de producción**. Mercado Pago pide un **código por SMS** (celular terminado en 4728): lo escribís vos. Si ve «Activar credenciales», completar rubro y sitio (`https://nexointelligence.com.ar`) y aceptar. Avisarme **si quedaron activadas** (no me pases las claves). | El código llega a tu teléfono; las claves de producción mueven plata. | Sé en qué estado está la cuenta y qué falta para cobrar. |
 | B2 | **Activar la cuenta para cobrar** si Mercado Pago lo pide (identidad, datos fiscales, cuenta bancaria de retiro). | Es tu identidad ante Mercado Pago. | Sin esto no se puede cobrar con credenciales reales. |
 | B3 | **Autorizar la tarjeta del comprador de prueba** en la pantalla de Mercado Pago (cuando lleguemos a la prueba de punta a punta). | Es un paso del navegador con un usuario de prueba. | Se prueba el webhook real en el servidor. |
 | B4 | **Revisión legal** (política de privacidad y términos dicen hoy «pasarela: ninguna»; hay que actualizarlos **antes** de encender). | Un abogado. | Se puede encender el cobro automático. |
