@@ -29,7 +29,7 @@ import type {
   ResultadoConstatacion,
   ResultadoPadron,
 } from '../types.js';
-import { WsaaAuthenticator } from './wsaa.js';
+import { WsaaAuthenticator, loginConCache } from './wsaa.js';
 
 const NS = 'http://servicios1.afip.gob.ar/wscdc/';
 
@@ -83,14 +83,9 @@ export class SoapArcaClient implements ArcaClient {
       return { ok: false, motivo: 'SERVICIO_NO_HABILITADO' };
     }
 
-    const cached = await this.#tickets.get(certificate.cuit, service);
-    if (cached !== null) {
-      return { ok: true, token: cached.token, sign: cached.sign, cuit: certificate.cuit };
-    }
-
     try {
-      const ticket = await this.#wsaa.login(certificate, service);
-      await this.#tickets.put(ticket);
+      // Con una caché compartida (`obtenerOCrear`) la decisión de pedir el ticket la toma ella, con su candado.
+      const { ticket } = await loginConCache(this.#wsaa, this.#tickets, certificate, service);
       return { ok: true, token: ticket.token, sign: ticket.sign, cuit: certificate.cuit };
     } catch {
       // Incluye el caso de certificado vencido: para el dominio es indistinguible

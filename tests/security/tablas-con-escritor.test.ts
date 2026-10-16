@@ -69,12 +69,6 @@ const SIN_ESCRITOR = new Map<string, string>([
       'entonces la reconciliación sabe si el comprobante existe y no puede recuperar su CAE.',
   ],
   [
-    'arca_access_tickets',
-    'El ticket del WSAA se cachea en disco (`TicketCacheFs`, que usa el CLI) y la API no cachea: ' +
-      'pide uno por consulta. Esta tabla es la caché **compartida** que haría falta con más de ' +
-      'una instancia corriendo. Lo destraba decidir el despliegue, no escribir código.',
-  ],
-  [
     'bank_reconciliation_differences',
     'Las partidas conciliatorias se derivan del acta cada vez que se pide, desde los movimientos ' +
       'y las líneas del Mayor. Guardarlas sería un derivado que puede envejecer sin que nadie se ' +

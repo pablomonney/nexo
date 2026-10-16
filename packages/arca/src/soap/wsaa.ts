@@ -223,6 +223,11 @@ export async function loginConCache(
   certificate: CompanyCertificate,
   service: ServiceName,
 ): Promise<{ ticket: AccessTicket; deLaCache: boolean }> {
+  // Una caché compartida decide por sí misma, con su candado, si hay que pedir el ticket.
+  if (cache.obtenerOCrear !== undefined) {
+    return cache.obtenerOCrear(certificate.cuit, service, () => authenticator.login(certificate, service));
+  }
+
   const guardado = await cache.get(certificate.cuit, service);
   if (guardado !== null) return { ticket: guardado, deLaCache: true };
 

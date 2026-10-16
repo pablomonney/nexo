@@ -54,6 +54,19 @@ export interface AccessTicket {
 export interface TicketCache {
   get(cuit: string, service: ServiceName): Promise<AccessTicket | null>;
   put(ticket: AccessTicket): Promise<void>;
+  /**
+   * Opcional: obtener el ticket **o crearlo, de forma atómica entre procesos**.
+   *
+   * `get` + `login` + `put` no alcanza cuando hay más de un proceso: el WSAA da UN ticket por CUIT y servicio y niega el
+   * segundo mientras el primero viva, así que dos procesos que preguntan a la vez ven la caché vacía, pelean por el
+   * ticket y uno de los dos se queda sin él. Una caché compartida implementa esto con un candado por (CUIT, servicio) y
+   * `loginConCache` lo prefiere cuando existe. Las cachés de un solo proceso (memoria, archivo) no lo necesitan.
+   */
+  obtenerOCrear?(
+    cuit: string,
+    service: ServiceName,
+    crear: () => Promise<AccessTicket>,
+  ): Promise<{ ticket: AccessTicket; deLaCache: boolean }>;
 }
 
 /** Store vacío: el modo por defecto durante el desarrollo. */

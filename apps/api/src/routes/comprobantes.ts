@@ -34,6 +34,7 @@ import {
   parseEnvironment,
 } from '@aai/arca';
 import { DbCapabilityStore, DbCredentialStore } from '../arca/credential-store.js';
+import { TicketCacheDb } from '../arca/ticket-cache-db.js';
 import { recordAudit, withCompany, type Tx } from '@aai/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -587,7 +588,13 @@ export async function comprobanteRoutes(app: FastifyInstance): Promise<void> {
         timeoutMs: config.arca.timeoutMs,
         ...(credenciales === undefined
           ? {}
-          : { credentials: credenciales, capabilities: new DbCapabilityStore(actorId) }),
+          : {
+              credentials: credenciales,
+              capabilities: new DbCapabilityStore(actorId),
+              // La caché compartida: el WSAA da un ticket por CUIT y servicio, y con dos consultas seguidas (o dos
+              // instancias) la segunda se quedaba sin ticket.
+              ticketCache: new TicketCacheDb(ambiente),
+            }),
       });
 
       const comenzo = Date.now();

@@ -24,7 +24,7 @@ La **seguridad** de emitir: máquina de estados de la intención fiscal (BORRADO
 | # | Etapa | Qué incluye | Criterio de aceptación |
 |---|---|---|---|
 | **E1 ✔ 2026-10-16** | **Prueba real en homologación** | Con el ticket ya liberado: `npm run comprobantes:generar -- --cantidad 1 …` emite una Factura C de prueba (sin efecto fiscal); luego `consultarComprobante` real para confirmar el código de «no existe» | Un CAE de homologación y la consulta devuelve ese CAE; el código de inexistente queda confirmado y archivado |
-| **E2** | **Caché de tickets compartida en la API** | Hoy la API pide un ticket por consulta (`arca_access_tickets` no tiene escritor, S-17): con dos consultas seguidas el WSAA rechaza la segunda. Escritor sobre esa tabla con un candado por CUIT+servicio | Dos procesos simultáneos reciben el **mismo** ticket; un ticket vencido se renueva una sola vez |
+| **E2 ✔ 2026-10-16** | **Caché de tickets compartida en la API** | Hoy la API pide un ticket por consulta (`arca_access_tickets` no tiene escritor, S-17): con dos consultas seguidas el WSAA rechaza la segunda. Escritor sobre esa tabla con un candado por CUIT+servicio | Dos procesos simultáneos reciben el **mismo** ticket; un ticket vencido se renueva una sola vez |
 | **E3** | **Del documento comercial al comprobante** (función pura) | Tipo A/B/C/M según la condición del emisor y del receptor; concepto; documento y **condición de IVA del receptor (RG 5616: sin ella, rechazo 10246)**; alícuotas e importes con decimales exactos (nada de punto flotante); moneda y cotización; fechas de servicio | `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` por construcción; pruebas por tipo de emisor/receptor |
 | **E4** | **Caso de uso `emitir`** | Intención → número reservado → EMITIENDO → ARCA → AUTORIZADA / RECHAZADA / DESCONOCIDA; al autorizar, enlaza el CAE con el documento comercial y la operación fiscal. Un **reconciliador periódico** (timer) para las que quedaron en duda | Las pruebas de §5 de B2.5.4.1 corren **con ARCA simulado** y luego en homologación; ninguna ruta reintenta desde DESCONOCIDA |
 | **E5** | **Impacto contable de una emisión autorizada** | Hoy el documento pasa a FACTURADO sin CAE. Definir cuándo se asienta (al autorizar), con qué cuentas y qué pasa con un rechazo | Diseño escrito y aprobado por un contador **antes** de implementar; asiento balanceado y trazable al CAE |
@@ -67,3 +67,24 @@ Corrido con `scripts/generar-comprobantes-homologacion.mjs` (candados de destino
 - `CODIGOS_DE_COMPROBANTE_INEXISTENTE = [602]` **queda confirmado**; se quitó de `contracts.ts` la nota «a confirmar».
 - La consulta real de un comprobante recién autorizado devuelve el mismo CAE que la emisión: el reconciliador (E4) puede apoyarse en `consultarComprobante` para decidir «ya existe» sin volver a emitir.
 - Nada se emitió en producción ni con otro CUIT.
+
+## Resultado de E2 (2026-10-16): la API ya no pelea por el ticket del WSAA
+
+**Qué se construyó.** `TicketCacheDb` (`apps/api/src/arca/ticket-cache-db.ts`) implementa el puerto `TicketCache` sobre la tabla `arca_access_tickets` (ya existía, sin escritor). El paquete `@aai/arca` ganó un método **opcional** `obtenerOCrear` en `TicketCache`, que `loginConCache` y el cliente SOAP prefieren cuando existe; las cachés de un solo proceso (memoria, archivo) no cambian. La ruta de constatación de comprobantes ya usa la caché compartida.
+
+| Garantía | Cómo | Prueba |
+|---|---|---|
+| Dos procesos simultáneos reciben el **mismo** ticket | candado de base por (ambiente, CUIT, servicio) tomado **antes** de leer; el segundo entra y encuentra lo que escribió el primero | 8 pedidos a la vez → **1** login, 1 token; dos instancias de la caché → 1 login |
+| Un ticket vencido se renueva **una sola vez** | ídem | 6 pedidos a la vez sobre uno vencido → 1 login |
+| El ambiente es parte de la identidad | la instancia fija el ambiente; la tabla lo guarda | un ticket de homologación no sirve en producción; `mock` no tiene tickets |
+| Por vencer **no** deja sin servicio | el WSAA no da otro hasta que el anterior vence de verdad (`alreadyAuthenticated`): si el guardado todavía vale, se usa ese; con cualquier otro error, el error sale | probado, incluido el caso «ya vencido del todo» |
+| Un login que falla no escribe ni deja el candado tomado | transacción | el pedido siguiente funciona |
+| Un proceso lento no pisa un ticket más nuevo | `put` sólo reemplaza por uno que vence después | probado |
+
+Se comprobó con una **mutación**: sin el candado, fallan exactamente las tres pruebas de concurrencia.
+
+**Dos defectos del diseño anterior que esto corrige de paso.** (1) `get` + `login` + `put` no es atómico entre procesos. (2) Un margen de renovación sin salida de emergencia deja una ventana de minutos sin ticket: el `TicketCacheFs` del CLI renueva diez minutos antes y el WSAA lo rechaza hasta que vence de verdad. **No se tocó el CLI** (pedido aparte si molesta).
+
+**El token es una credencial.** `tests/security/tickets-arca-confinados.test.ts`: sólo la caché nombra la tabla, no loguea ni devuelve `token`/`sign`, y la tabla no tiene `company_id` (la exportación de una empresa no la alcanza). Queda dicho: la copia de seguridad conserva los tickets de las últimas horas; vencen solos.
+
+**No verificado:** contra el WSAA real desde la API (el CLI ya lo probó en E1, pero la ruta de la API con `TicketCacheDb` sólo está probada contra un WSAA simulado). Se prueba junto con E4 en homologación.
