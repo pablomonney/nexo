@@ -25,7 +25,7 @@ La **seguridad** de emitir: máquina de estados de la intención fiscal (BORRADO
 |---|---|---|---|
 | **E1 ✔ 2026-10-16** | **Prueba real en homologación** | Con el ticket ya liberado: `npm run comprobantes:generar -- --cantidad 1 …` emite una Factura C de prueba (sin efecto fiscal); luego `consultarComprobante` real para confirmar el código de «no existe» | Un CAE de homologación y la consulta devuelve ese CAE; el código de inexistente queda confirmado y archivado |
 | **E2 ✔ 2026-10-16** | **Caché de tickets compartida en la API** | Hoy la API pide un ticket por consulta (`arca_access_tickets` no tiene escritor, S-17): con dos consultas seguidas el WSAA rechaza la segunda. Escritor sobre esa tabla con un candado por CUIT+servicio | Dos procesos simultáneos reciben el **mismo** ticket; un ticket vencido se renueva una sola vez |
-| **E3** | **Del documento comercial al comprobante** (función pura) | Tipo A/B/C/M según la condición del emisor y del receptor; concepto; documento y **condición de IVA del receptor (RG 5616: sin ella, rechazo 10246)**; alícuotas e importes con decimales exactos (nada de punto flotante); moneda y cotización; fechas de servicio | `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` por construcción; pruebas por tipo de emisor/receptor |
+| **E3 ✔ 2026-10-16** | **Del documento comercial al comprobante** (función pura) | Tipo A/B/C/M según la condición del emisor y del receptor; concepto; documento y **condición de IVA del receptor (RG 5616: sin ella, rechazo 10246)**; alícuotas e importes con decimales exactos (nada de punto flotante); moneda y cotización; fechas de servicio | `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` por construcción; pruebas por tipo de emisor/receptor |
 | **E4** | **Caso de uso `emitir`** | Intención → número reservado → EMITIENDO → ARCA → AUTORIZADA / RECHAZADA / DESCONOCIDA; al autorizar, enlaza el CAE con el documento comercial y la operación fiscal. Un **reconciliador periódico** (timer) para las que quedaron en duda | Las pruebas de §5 de B2.5.4.1 corren **con ARCA simulado** y luego en homologación; ninguna ruta reintenta desde DESCONOCIDA |
 | **E5** | **Impacto contable de una emisión autorizada** | Hoy el documento pasa a FACTURADO sin CAE. Definir cuándo se asienta (al autorizar), con qué cuentas y qué pasa con un rechazo | Diseño escrito y aprobado por un contador **antes** de implementar; asiento balanceado y trazable al CAE |
 | **E6** | **Notas de crédito y de débito** | Anular o corregir una factura emitida = comprobante nuevo con `CbtesAsoc` | Una factura autorizada sólo se corrige con una NC asociada |
@@ -88,3 +88,31 @@ Se comprobó con una **mutación**: sin el candado, fallan exactamente las tres 
 **El token es una credencial.** `tests/security/tickets-arca-confinados.test.ts`: sólo la caché nombra la tabla, no loguea ni devuelve `token`/`sign`, y la tabla no tiene `company_id` (la exportación de una empresa no la alcanza). Queda dicho: la copia de seguridad conserva los tickets de las últimas horas; vencen solos.
 
 **No verificado:** contra el WSAA real desde la API (el CLI ya lo probó en E1, pero la ruta de la API con `TicketCacheDb` sólo está probada contra un WSAA simulado). Se prueba junto con E4 en homologación.
+
+## Resultado de E3 (2026-10-16): el comprobante se arma solo y ARCA lo acepta
+
+**Qué se construyó.** `armarComprobante` (`packages/arca-emision/src/armado.ts`), una **función pura** (sin red ni base): recibe emisor, receptor, líneas, fecha y número ya reservado, y devuelve el pedido `FECAESolicitar` (cabecera y detalle) **o la lista completa de lo que impide armarlo**. `letraDeFactura` también está exportada (la pantalla va a necesitar decir «esta factura va a ser una B» antes de armar nada). El cliente WSFEv1 ganó `tiposDeIva` y `tiposDeDocumento`, y los importes del detalle aceptan **texto decimal** (ya no se pasan por `number`).
+
+| Regla | De dónde sale |
+|---|---|
+| **La letra**: emisor RI → A si el receptor es RI o monotributista, B si es exento / consumidor final / no categorizado; emisor monotributista o exento → C | **RG 1415/2003, arts. 15 y 16** (texto archivado), probada combinación por combinación |
+| **Los códigos**: `CbteTipo` 1/6/11, condición del receptor, `Id` de alícuota (3, 4, 5, 6, 8, 9), `DocTipo` | Tablas que **contestó ARCA en homologación** (`docs/normative-sources/extracted/arca-wsfev1-tablas-homologacion-2026-10-16.json`); una prueba compara cada constante contra ese JSON |
+| **Condición del receptor obligatoria y admitida por la letra** (A: 4 · B: 7 · C: 11) | RG 5616/2024 + `FEParamGetCondicionIvaReceptor` |
+| `ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA` | **Por construcción**: el total no se recibe, se calcula, con centavos enteros (`Money`); 300 combinaciones aleatorias lo comprueban |
+| **Factura C sin nodo `Iva`** (ni vacío); A y B lo mandan agrupado por alícuota | Comprobado hasta el XML del sobre |
+| Concepto 1/2/3 según las líneas; el servicio exige período y vencimiento de pago | WSDL |
+| La alícuota se **deduce de forma exacta** de IVA/neto o se pide; si no cierra, se rechaza | No se supone |
+
+**Lo que NO se arma todavía, y se rechaza con motivo:** notas de crédito/débito (`CbtesAsoc`, E6), tributos y percepciones (importe ≠ 0), otra moneda que pesos o dólares, documentos extranjeros. **No decide:** la fecha contra «hoy» (la ventana depende del concepto; la verifica E4) ni el umbral de identificación del consumidor final (lo fija ARCA y cambia: hoy se arma y **avisa**).
+
+**Prueba real contra ARCA (homologación, CUIT 20452148324, sin efecto fiscal).** Armadas por `armarComprobante` y enviadas, **una vez cada una**:
+
+| Comprobante | Resultado de ARCA |
+|---|---|
+| **Factura C** nº 52, a consumidor final sin identificar, $ 1.500,00 | **Autorizada**, CAE 86421002211511 |
+| **Factura B** nº 1, a consumidor final, neto $ 1.000,00 + IVA $ 210,00 | **Autorizada**, CAE 86421002211524 |
+| **Factura A** nº 1, a responsable inscripto (CUIT de prueba con dígito válido), neto $ 1.500,00 en dos alícuotas (21 % y 10,5 %), IVA $ 262,50 | **Autorizada**, CAE 86421002211537, con la **observación 10217** («el crédito fiscal discriminado … sólo podrá ser computado a efectos del Procedimiento permanente de transición al Régimen General»: es informativa, no un rechazo) |
+
+Es decir: **el mismo certificado de homologación puede emitir A, B y C** —ARCA no distingue la condición del emisor en homologación—, y el armado de importes, alícuotas agrupadas, condición del receptor y concepto es aceptado por el servicio real. **Esto NO prueba** cuál es la condición del emisor real ni qué letra le corresponde en producción: eso sigue siendo la decisión **D1** (preguntarle al contador).
+
+**Pruebas:** 55 casos nuevos en `armado.test.ts`; se comprobó con dos mutaciones (letra del monotributista mal asignada, y el nodo `Iva` en una C) que fallan.

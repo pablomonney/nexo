@@ -1,0 +1,651 @@
+{
+  "consultadoEn": "homologacion",
+  "fecha": "2026-10-16",
+  "tiposDeComprobante": [
+    {
+      "Id": 1,
+      "Desc": "Factura A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 2,
+      "Desc": "Nota de Débito A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 3,
+      "Desc": "Nota de Crédito A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 6,
+      "Desc": "Factura B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 7,
+      "Desc": "Nota de Débito B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 8,
+      "Desc": "Nota de Crédito B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 4,
+      "Desc": "Recibos A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 5,
+      "Desc": "Notas de Venta al contado A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 9,
+      "Desc": "Recibos B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 10,
+      "Desc": "Notas de Venta al contado B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 63,
+      "Desc": "Liquidacion A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 64,
+      "Desc": "Liquidacion B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 34,
+      "Desc": "Cbtes. A del Anexo I, Apartado A,inc.f),R.G.Nro. 1415",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 35,
+      "Desc": "Cbtes. B del Anexo I,Apartado A,inc. f),R.G. Nro. 1415",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 39,
+      "Desc": "Otros comprobantes A que cumplan con R.G.Nro. 1415",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 40,
+      "Desc": "Otros comprobantes B que cumplan con R.G.Nro. 1415",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 60,
+      "Desc": "Cta de Vta y Liquido prod. A",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 61,
+      "Desc": "Cta de Vta y Liquido prod. B",
+      "FchDesde": "20100917",
+      "FchHasta": null
+    },
+    {
+      "Id": 11,
+      "Desc": "Factura C",
+      "FchDesde": "20110330",
+      "FchHasta": null
+    },
+    {
+      "Id": 12,
+      "Desc": "Nota de Débito C",
+      "FchDesde": "20110330",
+      "FchHasta": null
+    },
+    {
+      "Id": 13,
+      "Desc": "Nota de Crédito C",
+      "FchDesde": "20110330",
+      "FchHasta": null
+    },
+    {
+      "Id": 15,
+      "Desc": "Recibo C",
+      "FchDesde": "20110330",
+      "FchHasta": null
+    },
+    {
+      "Id": 49,
+      "Desc": "Comprobante de Compra de Bienes Usados a Consumidor Final",
+      "FchDesde": "20130401",
+      "FchHasta": null
+    },
+    {
+      "Id": 51,
+      "Desc": "Factura A con Leyenda \"Operación Sujeta a Retención\"",
+      "FchDesde": "20150522",
+      "FchHasta": null
+    },
+    {
+      "Id": 52,
+      "Desc": "Nota de Débito A con Leyenda \"Operación Sujeta a Retención\"",
+      "FchDesde": "20150522",
+      "FchHasta": null
+    },
+    {
+      "Id": 53,
+      "Desc": "Nota de Crédito A con Leyenda \"Operación Sujeta a Retención\"",
+      "FchDesde": "20150522",
+      "FchHasta": null
+    },
+    {
+      "Id": 54,
+      "Desc": "Recibo A con Leyenda \"Operación Sujeta a Retención\"",
+      "FchDesde": "20150522",
+      "FchHasta": null
+    },
+    {
+      "Id": 201,
+      "Desc": "Factura de Crédito electrónica MiPyMEs (FCE) A",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 202,
+      "Desc": "Nota de Débito electrónica MiPyMEs (FCE) A",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 203,
+      "Desc": "Nota de Crédito electrónica MiPyMEs (FCE) A",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 206,
+      "Desc": "Factura de Crédito electrónica MiPyMEs (FCE) B",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 207,
+      "Desc": "Nota de Débito electrónica MiPyMEs (FCE) B",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 208,
+      "Desc": "Nota de Crédito electrónica MiPyMEs (FCE) B",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 211,
+      "Desc": "Factura de Crédito electrónica MiPyMEs (FCE) C",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 212,
+      "Desc": "Nota de Débito electrónica MiPyMEs (FCE) C",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    },
+    {
+      "Id": 213,
+      "Desc": "Nota de Crédito electrónica MiPyMEs (FCE) C",
+      "FchDesde": "20181226",
+      "FchHasta": null
+    }
+  ],
+  "condicionesIvaReceptorTodas": [
+    {
+      "Id": 1,
+      "Desc": "IVA Responsable Inscripto",
+      "Cmp_Clase": "A/ALEY/C"
+    },
+    {
+      "Id": 6,
+      "Desc": "Responsable Monotributo",
+      "Cmp_Clase": "A/ALEY/C"
+    },
+    {
+      "Id": 13,
+      "Desc": "Monotributista Social",
+      "Cmp_Clase": "A/ALEY/C"
+    },
+    {
+      "Id": 16,
+      "Desc": "Monotributo Trabajador Independiente Promovido",
+      "Cmp_Clase": "A/ALEY/C"
+    },
+    {
+      "Id": 4,
+      "Desc": "IVA Sujeto Exento",
+      "Cmp_Clase": "B/C"
+    },
+    {
+      "Id": 7,
+      "Desc": "Sujeto No Categorizado",
+      "Cmp_Clase": "B/C"
+    },
+    {
+      "Id": 8,
+      "Desc": "Proveedor del Exterior",
+      "Cmp_Clase": "B/C"
+    },
+    {
+      "Id": 9,
+      "Desc": "Cliente del Exterior",
+      "Cmp_Clase": "B/C"
+    },
+    {
+      "Id": 10,
+      "Desc": "IVA Liberado – Ley N° 19.640",
+      "Cmp_Clase": "B/C"
+    },
+    {
+      "Id": 15,
+      "Desc": "IVA No Alcanzado",
+      "Cmp_Clase": "B/C"
+    },
+    {
+      "Id": 5,
+      "Desc": "Consumidor Final",
+      "Cmp_Clase": "C/49"
+    }
+  ],
+  "condicionesIvaReceptorA": [
+    {
+      "Id": 1,
+      "Desc": "IVA Responsable Inscripto",
+      "Cmp_Clase": "A"
+    },
+    {
+      "Id": 6,
+      "Desc": "Responsable Monotributo",
+      "Cmp_Clase": "A"
+    },
+    {
+      "Id": 13,
+      "Desc": "Monotributista Social",
+      "Cmp_Clase": "A"
+    },
+    {
+      "Id": 16,
+      "Desc": "Monotributo Trabajador Independiente Promovido",
+      "Cmp_Clase": "A"
+    }
+  ],
+  "condicionesIvaReceptorB": [
+    {
+      "Id": 4,
+      "Desc": "IVA Sujeto Exento",
+      "Cmp_Clase": "B"
+    },
+    {
+      "Id": 5,
+      "Desc": "Consumidor Final",
+      "Cmp_Clase": "B"
+    },
+    {
+      "Id": 7,
+      "Desc": "Sujeto No Categorizado",
+      "Cmp_Clase": "B"
+    },
+    {
+      "Id": 8,
+      "Desc": "Proveedor del Exterior",
+      "Cmp_Clase": "B"
+    },
+    {
+      "Id": 9,
+      "Desc": "Cliente del Exterior",
+      "Cmp_Clase": "B"
+    },
+    {
+      "Id": 10,
+      "Desc": "IVA Liberado – Ley N° 19.640",
+      "Cmp_Clase": "B"
+    },
+    {
+      "Id": 15,
+      "Desc": "IVA No Alcanzado",
+      "Cmp_Clase": "B"
+    }
+  ],
+  "condicionesIvaReceptorC": [
+    {
+      "Id": 1,
+      "Desc": "IVA Responsable Inscripto",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 6,
+      "Desc": "Responsable Monotributo",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 13,
+      "Desc": "Monotributista Social",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 16,
+      "Desc": "Monotributo Trabajador Independiente Promovido",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 4,
+      "Desc": "IVA Sujeto Exento",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 7,
+      "Desc": "Sujeto No Categorizado",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 8,
+      "Desc": "Proveedor del Exterior",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 9,
+      "Desc": "Cliente del Exterior",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 10,
+      "Desc": "IVA Liberado – Ley N° 19.640",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 15,
+      "Desc": "IVA No Alcanzado",
+      "Cmp_Clase": "C"
+    },
+    {
+      "Id": 5,
+      "Desc": "Consumidor Final",
+      "Cmp_Clase": "C"
+    }
+  ],
+  "tiposDeIva": [
+    {
+      "Id": "3",
+      "Desc": "0%",
+      "FchDesde": "20090220",
+      "FchHasta": null
+    },
+    {
+      "Id": "4",
+      "Desc": "10.5%",
+      "FchDesde": "20090220",
+      "FchHasta": null
+    },
+    {
+      "Id": "5",
+      "Desc": "21%",
+      "FchDesde": "20090220",
+      "FchHasta": null
+    },
+    {
+      "Id": "6",
+      "Desc": "27%",
+      "FchDesde": "20090220",
+      "FchHasta": null
+    },
+    {
+      "Id": "8",
+      "Desc": "5%",
+      "FchDesde": "20141020",
+      "FchHasta": null
+    },
+    {
+      "Id": "9",
+      "Desc": "2.5%",
+      "FchDesde": "20141020",
+      "FchHasta": null
+    }
+  ],
+  "tiposDeDocumento": [
+    {
+      "Id": 80,
+      "Desc": "CUIT",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 86,
+      "Desc": "CUIL",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 87,
+      "Desc": "CDI",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 89,
+      "Desc": "LE",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 90,
+      "Desc": "LC",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 91,
+      "Desc": "CI Extranjera",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 92,
+      "Desc": "en trámite",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 93,
+      "Desc": "Acta Nacimiento",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 95,
+      "Desc": "CI Bs. As. RNP",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 96,
+      "Desc": "DNI",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 94,
+      "Desc": "Pasaporte",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 0,
+      "Desc": "CI Policía Federal",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 1,
+      "Desc": "CI Buenos Aires",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 2,
+      "Desc": "CI Catamarca",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 3,
+      "Desc": "CI Córdoba",
+      "FchDesde": "20080725",
+      "FchHasta": null
+    },
+    {
+      "Id": 4,
+      "Desc": "CI Corrientes",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 5,
+      "Desc": "CI Entre Ríos",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 6,
+      "Desc": "CI Jujuy",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 7,
+      "Desc": "CI Mendoza",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 8,
+      "Desc": "CI La Rioja",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 9,
+      "Desc": "CI Salta",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 10,
+      "Desc": "CI San Juan",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 11,
+      "Desc": "CI San Luis",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 12,
+      "Desc": "CI Santa Fe",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 13,
+      "Desc": "CI Santiago del Estero",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 14,
+      "Desc": "CI Tucumán",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 16,
+      "Desc": "CI Chaco",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 17,
+      "Desc": "CI Chubut",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 18,
+      "Desc": "CI Formosa",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 19,
+      "Desc": "CI Misiones",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 20,
+      "Desc": "CI Neuquén",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 21,
+      "Desc": "CI La Pampa",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 22,
+      "Desc": "CI Río Negro",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 23,
+      "Desc": "CI Santa Cruz",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 24,
+      "Desc": "CI Tierra del Fuego",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    },
+    {
+      "Id": 99,
+      "Desc": "Doc. (Otro)",
+      "FchDesde": "20080728",
+      "FchHasta": null
+    }
+  ]
+}

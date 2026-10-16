@@ -29,8 +29,9 @@ export interface Autenticacion {
 /** `AlicIva`. `Id` sale de `FEParamGetTiposIva`, no de una constante nuestra. */
 export interface AlicuotaIva {
   readonly Id: number;
-  readonly BaseImp: number;
-  readonly Importe: number;
+  /** Decimal exacto. Texto (`"1234.50"`) para no pasar un importe por punto flotante; un `number` sigue aceptándose. */
+  readonly BaseImp: number | string;
+  readonly Importe: number | string;
 }
 
 /**
@@ -51,20 +52,20 @@ export interface DetalleComprobante {
   readonly CbteHasta: number;
   /** `AAAAMMDD`. Sin guiones: el WSDL lo declara `string` y ARCA lo quiere así. */
   readonly CbteFch: string;
-  readonly ImpTotal: number;
+  readonly ImpTotal: number | string;
   /** No gravado. */
-  readonly ImpTotConc: number;
-  readonly ImpNeto: number;
+  readonly ImpTotConc: number | string;
+  readonly ImpNeto: number | string;
   /** Exento. */
-  readonly ImpOpEx: number;
-  readonly ImpTrib: number;
-  readonly ImpIVA: number;
+  readonly ImpOpEx: number | string;
+  readonly ImpTrib: number | string;
+  readonly ImpIVA: number | string;
   /** Obligatorios cuando `Concepto` es 2 o 3. `AAAAMMDD`. */
   readonly FchServDesde?: string;
   readonly FchServHasta?: string;
   readonly FchVtoPago?: string;
   readonly MonId: string;
-  readonly MonCotiz: number;
+  readonly MonCotiz: number | string;
   /** RG 5616/2024. `FEParamGetCondicionIvaReceptor`. */
   readonly CondicionIVAReceptorId?: number;
   readonly Iva?: readonly AlicuotaIva[];
@@ -105,6 +106,22 @@ export interface CondicionIvaReceptor {
   readonly Id: number;
   readonly Desc: string;
   readonly Cmp_Clase: string;
+}
+
+/** `IvaTipo` de `FEParamGetTiposIva`. El `Id` es un string en el WSDL y es un código del organismo, no el porcentaje. */
+export interface TipoDeIvaArca {
+  readonly Id: string;
+  readonly Desc: string;
+  readonly FchDesde: string | null;
+  readonly FchHasta: string | null;
+}
+
+/** `DocTipo` de `FEParamGetTiposDoc`. */
+export interface TipoDeDocumentoArca {
+  readonly Id: number;
+  readonly Desc: string;
+  readonly FchDesde: string | null;
+  readonly FchHasta: string | null;
 }
 
 export interface TipoDeComprobanteArca {

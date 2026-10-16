@@ -15,6 +15,7 @@
  * dice explícitamente lo que NO prueba: con qué certificado se emite.
  */
 
+export * from './armado.js';
 export * from './contracts.js';
 export * from './homologacion.js';
 export * from './qr.js';

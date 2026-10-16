@@ -24,6 +24,8 @@ import type {
   RespuestaLote,
   TipoDeComprobanteArca,
   CondicionIvaReceptor,
+  TipoDeIvaArca,
+  TipoDeDocumentoArca,
 } from './contracts.js';
 import type { PermisoDeEmision } from './homologacion.js';
 
@@ -186,6 +188,40 @@ export class ClienteWsfev1 {
       Id: Number(n['Id']),
       Desc: n['Desc'] === undefined || n['Desc'] === null ? '' : String(n['Desc']),
       Cmp_Clase: n['Cmp_Clase'] === undefined || n['Cmp_Clase'] === null ? '' : String(n['Cmp_Clase']),
+    }));
+  }
+
+  /**
+   * `FEParamGetTiposIva` — las alícuotas de IVA que ARCA conoce, con su `Id` (el que va en `AlicIva.Id`) y desde cuándo rigen.
+   *
+   * El `Id` NO es el porcentaje: es un código del organismo. Por eso se pregunta y no se cablea.
+   */
+  async tiposDeIva(auth: Autenticacion): Promise<readonly TipoDeIvaArca[]> {
+    const r = await this.#llamar('FEParamGetTiposIva', autenticacionXml(auth));
+    const errores = listaDe(r['Errors'], 'Err').map(comoError);
+    if (errores.length > 0) {
+      throw new Error(`FEParamGetTiposIva: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join(' · ')}`);
+    }
+    return listaDe(r['ResultGet'], 'IvaTipo').map((n) => ({
+      Id: String(n['Id']),
+      Desc: n['Desc'] === undefined || n['Desc'] === null ? '' : String(n['Desc']),
+      FchDesde: textoODesconocido(n['FchDesde']),
+      FchHasta: textoODesconocido(n['FchHasta']),
+    }));
+  }
+
+  /** `FEParamGetTiposDoc` — los tipos de documento del receptor (`DocTipo`): CUIT, CUIL, DNI, «consumidor final», etc. */
+  async tiposDeDocumento(auth: Autenticacion): Promise<readonly TipoDeDocumentoArca[]> {
+    const r = await this.#llamar('FEParamGetTiposDoc', autenticacionXml(auth));
+    const errores = listaDe(r['Errors'], 'Err').map(comoError);
+    if (errores.length > 0) {
+      throw new Error(`FEParamGetTiposDoc: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join(' · ')}`);
+    }
+    return listaDe(r['ResultGet'], 'DocTipo').map((n) => ({
+      Id: Number(n['Id']),
+      Desc: n['Desc'] === undefined || n['Desc'] === null ? '' : String(n['Desc']),
+      FchDesde: textoODesconocido(n['FchDesde']),
+      FchHasta: textoODesconocido(n['FchHasta']),
     }));
   }
 
