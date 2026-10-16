@@ -355,6 +355,12 @@ p { margin: 0 0 var(--e3); }
 .neu { display: inline-block; padding: 3px 11px; border-radius: var(--rp); background: var(--ojo-bg); color: var(--ojo); font: 600 .85rem var(--ui); border: 1px solid currentColor; }
 .plan-estado { padding: var(--e5); border: 1px dashed var(--linea2); border-radius: var(--r4); color: var(--tinta2); grid-column: 1 / -1; }
 
+/* ── Elegir plan y cómo se paga ───────────────────────────────────────────── */
+.plan .btn { margin-top: auto; align-self: flex-start; }
+.pagos { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--e4); }
+.pagos .caja h3 { margin: 0 0 var(--e2); font-size: 1.05rem; }
+.pagos-pie { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e3); margin-top: var(--e5); }
+
 /* ── Cómo empieza ────────────────────────────────────────────────────────── */
 .linea-tiempo { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; max-width: 760px; }
 .linea-tiempo li { position: relative; display: grid; grid-template-columns: 44px 1fr; gap: var(--e4); padding-bottom: var(--e5); }
@@ -473,6 +479,7 @@ footer .marca { color: var(--tinta); margin-bottom: var(--e3); }
       <a href="#que">Qué hace</a>
       <a href="#como">Cómo funciona</a>
       <a href="#planes">Planes</a>
+      <a href="#pagar">Cómo pagás</a>
       <a href="#preguntas">Preguntas</a>
     </nav>
     <div class="barra-acciones">
@@ -800,6 +807,49 @@ footer .marca { color: var(--tinta); margin-bottom: var(--e3); }
   </div>
 </section>
 
+<section id="pagar">
+  <div class="marco">
+    <div class="cab-seccion rev">
+      <span class="sobre">Contratar</span>
+      <h2>Cómo pagás y cómo entrás a NEXO</h2>
+      <p class="sub">
+        Empezás probando, y contratás desde adentro cuando decidís seguir. No hay que decidir nada antes de ver el sistema
+        con tus propios datos.
+      </p>
+    </div>
+    <div class="pagos rev">
+      <div class="caja">
+        <svg class="ico"><use href="#i-llave"/></svg>
+        <h3>1 · Creás tu cuenta y tu empresa</h3>
+        <p>Con tu correo, que confirmás. Cargás la razón social y el CUIT, elegís el plan y arranca la prueba de 14 días.
+          <strong>No se pide tarjeta.</strong></p>
+      </div>
+      <div class="caja">
+        <svg class="ico"><use href="#i-check"/></svg>
+        <h3>2 · Contratás desde «Plan»</h3>
+        <p>Cuando quieras seguir, en la consola vas a <strong>Plan</strong>, elegís el plan y si pagás por mes o por año, y
+          «Convertir la prueba». El importe sale de la lista de precios vigente y lo ves antes de pagar.</p>
+      </div>
+      <div class="caja">
+        <svg class="ico"><use href="#i-bancos"/></svg>
+        <h3>3 · Pagás por transferencia</h3>
+        <p>Hoy la suscripción se abona <strong>por transferencia</strong>: en «Cuenta con NEXO» ves el cargo y su estado, y
+          cuando el pago se registra la cuenta sigue activa. El pago con tarjeta todavía no está disponible.</p>
+      </div>
+      <div class="caja">
+        <svg class="ico"><use href="#i-exportar"/></svg>
+        <h3>Si un pago no llega</h3>
+        <p>La consola te lo avisa en pantalla. Tus datos, la contabilidad y el historial <strong>no se borran</strong>, y el
+          acceso vuelve cuando la cuenta se regulariza.</p>
+      </div>
+    </div>
+    <div class="pagos-pie rev">
+      <a class="btn" href="/consola" data-cta="prueba">Crear mi cuenta y probar</a>
+      <a class="btn sec" href="/consola" data-cta="entrar">Ya tengo cuenta: entrar a NEXO</a>
+    </div>
+  </div>
+</section>
+
 <section>
   <div class="marco">
     <div class="cab-seccion rev">
@@ -928,17 +978,21 @@ const ajuste = (nombre) =>
  * Con dirección de contacto declarada, el botón invita a escribir. Sin ella se
  * convierte en texto: **no se inventa una casilla**.
  */
-(function ajustarBotones() {
+function ajustarBotones(raiz) {
   if (ajuste('nexo-modo') !== 'presentacion') return;
 
   const contacto = ajuste('nexo-contacto');
-  for (const a of document.querySelectorAll('[data-cta]')) {
-    const esPrueba = a.dataset.cta === 'prueba';
+  for (const a of raiz.querySelectorAll('[data-cta]')) {
+    // `prueba` es el botón principal; `plan` es el de cada tarjeta de precios (se crean después, cuando llega /planes, y por
+    // eso esta función se vuelve a llamar sobre ellas). Con contacto, los dos invitan a escribir; sin contacto, la tarjeta
+    // no repite la explicación seis veces: el botón simplemente no está.
+    const esPlan = a.dataset.cta === 'plan';
+    const esPrueba = a.dataset.cta === 'prueba' || esPlan;
     if (contacto === '') {
       // El botón principal se convierte en la explicación; los demás se van.
       // Dejarlos como texto vacío pondría un hueco en la cabecera donde antes
       // había algo, que se lee como que falta cargar.
-      if (!esPrueba) { a.remove(); continue; }
+      if (!esPrueba || esPlan) { a.remove(); continue; }
       const texto = document.createElement('span');
       texto.className = 'fina';
       texto.textContent = 'Todavía no abrimos el alta al público.';
@@ -951,7 +1005,8 @@ const ajuste = (nombre) =>
 
   const aviso = document.getElementById('aviso-presentacion');
   if (aviso !== null) aviso.hidden = false;
-})();
+}
+ajustarBotones(document);
 
 /**
  * Los planes salen de la API, no del HTML.
@@ -1028,9 +1083,14 @@ const ajuste = (nombre) =>
             '<small>por mes' + (p.precio.incluyeImpuestos ? ', IVA incluido' : ' + IVA') + '</small>'
           : '<span class="neu">a consultar</span>') + '</div>' +
         '<h4>Incluye</h4><ul>' + (incluye || '<li>—</li>') + '</ul>' +
-        '<h4>Topes</h4><ul class="topes">' + (topes || '<li>a convenir</li>') + '</ul>';
+        '<h4>Topes</h4><ul class="topes">' + (topes || '<li>a convenir</li>') + '</ul>' +
+        // Lleva a la consola con el plan elegido: la consola lo deja preseleccionado en «Crear mi empresa» si el catálogo
+        // lo conoce. `data-cta="plan"` es lo que permite que el modo presentación lo reescriba (ver `ajustarBotones`).
+        // El código sale del catálogo y se escapa; aun así la consola no confía en él.
+        '<a class="btn chico" href="/consola?plan=' + encodeURIComponent(p.code || '') + '" data-cta="plan">Elegir este plan</a>';
       cuerpo.appendChild(tarjeta);
     }
+    ajustarBotones(cuerpo);
 
     if ((datos.planes || []).length === 0) {
       cuerpo.innerHTML =

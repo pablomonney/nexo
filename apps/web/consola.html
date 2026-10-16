@@ -911,6 +911,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 <div id="login-intro">
   <svg width="150" height="53" role="img" aria-label="NEXO"><use href="#i-marca"/></svg>
   <p>Gestión y contabilidad para empresas argentinas</p>
+  <div id="plan-elegido" class="aviso" hidden></div>
 </div>
 
 <section id="v-login">
@@ -5308,6 +5309,32 @@ E('b-rec-cambiar').onclick = async () => {
 };
 
 /**
+ * El plan que eligió la landing: `/consola?plan=CODIGO`.
+ *
+ * Es sólo una preferencia que viaja en la dirección: no se confía en ella. Se usa únicamente si coincide con un plan del
+ * catálogo (`GET /planes`), y lo único que hace es dejar ese plan preseleccionado en «Crear mi empresa» y decirlo en el ingreso.
+ */
+const PLAN_DE_LA_LANDING = (() => {
+  try {
+    const p = new URLSearchParams(window.location.search).get('plan');
+    return p !== null && /^[A-Za-z0-9_-]{1,40}$/u.test(p) ? p : null;
+  } catch {
+    return null;
+  }
+})();
+
+async function anunciarPlanDeLaLanding() {
+  if (PLAN_DE_LA_LANDING === null) return;
+  const r = await api('GET', '/planes');
+  if (!r.ok) return;
+  const plan = (r.datos.planes || []).find((p) => p.code === PLAN_DE_LA_LANDING);
+  if (plan === undefined) return;
+  const caja = E('plan-elegido');
+  caja.textContent = 'Elegiste el plan ' + plan.nombre + '. Entrá o creá tu cuenta: la prueba de 14 días arranca con ese plan, sin tarjeta.';
+  caja.hidden = false;
+}
+
+/**
  * El catálogo comercial. Se pide **sin sesión**: es la página de precios, y
  * pedir login para ver cuánto sale el producto es pedirle a alguien que se
  * registre para averiguar si le interesa.
@@ -5341,6 +5368,9 @@ async function cargarPlanes() {
     o.value = p.code; o.textContent = p.nombre;
     sel.appendChild(o);
   }
+  // Si llegó desde la landing con un plan elegido, queda preseleccionado. Sólo si el catálogo lo conoce: un valor de la
+  // dirección que no es un plan no se usa para nada.
+  if (PLAN_DE_LA_LANDING !== null && [...sel.options].some((o) => o.value === PLAN_DE_LA_LANDING)) sel.value = PLAN_DE_LA_LANDING;
 
   E('on-msg').innerHTML = '<div class="aviso">' + conEnfasis(r.datos.alcance) + '</div>';
 }
@@ -16845,6 +16875,8 @@ E('b-sec-listar').onclick = async () => {
     cuerpo.appendChild(tr);
   }
 };
+
+anunciarPlanDeLaLanding();
 
 E('b-sec-guardar').onclick = async () => {
   const r = await api('POST', '/companies/current/secrets', {

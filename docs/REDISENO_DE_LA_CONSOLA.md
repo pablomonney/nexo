@@ -31,6 +31,12 @@ Todo vive en `apps/web/consola.html` y `apps/web/landing.html` (archivos únicos
 2. Si una acción termina con `decir('mi-msg', r, 'Texto de éxito')`, podés ofrecer el siguiente paso en `const PROXIMOS`.
 3. Corré `npx vitest run tests/security/consola-guias.test.ts`: falla si una guía señala un `id` que no existe, si apunta a un elemento de **otra** pantalla, si un atajo lleva a una pantalla que no está en el menú, o si una pantalla del menú se queda sin guía.
 
+## De la landing a contratar
+
+- Cada tarjeta de plan de la landing tiene **«Elegir este plan»**, que lleva a `/consola?plan=<CODIGO>`. La consola lo valida con una forma fija y lo usa sólo si el catálogo (`GET /planes`) lo conoce: deja ese plan preseleccionado en «Crear mi empresa» y lo dice en la pantalla de ingreso. El botón se crea cuando llega `/planes`, por eso el modo presentación lo reescribe con `data-cta="plan"` (`ajustarBotones` se vuelve a llamar sobre las tarjetas).
+- La sección **«Cómo pagás y cómo entrás a NEXO»** (`#pagar`) cuenta el camino real: prueba de 14 días sin tarjeta → «Plan» → «Convertir la prueba» → **pago por transferencia** (el pago con tarjeta sigue figurando en «lo que viene») → qué pasa si un pago no llega. Termina en «Crear mi cuenta y probar» y «Ya tengo cuenta: entrar a NEXO». Cuando haya pasarela habilitada, ese texto hay que actualizarlo: `tests/security/landing-elegir-plan.test.ts` lo vigila para que no prometa de más.
+- **«Mis clientes»** (sólo la empresa propietaria): ver `docs/MONOTRIBUTO_Y_NEXO_PROPIETARIO.md`.
+
 ## Pendiente (decisión del titular)
 
 - Mirar las capturas y decir qué ajustar (copy de las guías, colores, orden del menú).
