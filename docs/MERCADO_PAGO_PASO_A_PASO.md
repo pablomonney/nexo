@@ -2,6 +2,15 @@
 
 **Estado (2026-10-16): el adaptador está construido y probado con dobles (`apps/api/src/pagos/mercadopago.ts`); NO hay cuenta de aplicación, NO hay credenciales y NO se probó contra Mercado Pago de verdad.** `PAYMENTS_PROVIDER=none` en producción: hoy se cobra por transferencia manual (`docs/COBRO_MANUAL_POR_TRANSFERENCIA.md`).
 
+## Avance real (2026-10-16)
+
+- **Aplicación «Nexo intelligence»** (N.° 2701982030240212, tipo «Otra plataforma») ya existe en la cuenta del titular.
+- **Credencial de PRUEBA** cargada en el `.env` local por el titular y **comprobada**: `npm run pagos:ensayo` → «la credencial sirve: la pasarela contestó», prefijo `TEST-` coincide con `PAYMENTS_ENV=sandbox`. Ningún valor pasó por el chat. (El sistema de permisos bloqueó leer la pantalla de credenciales; no se rodeó.)
+- **Webhook en modo prueba** configurado en el panel: `https://nexointelligence.com.ar/webhooks/pagos`, eventos «Pagos» y «Planes y suscripciones». **Modo productivo: sin configurar.**
+- **Secreto de firma** copiado por el titular a `PAYMENTS_WEBHOOK_SECRET` (local). **No probado** que sea el correcto: eso sólo lo confirma una notificación firmada real por Mercado Pago, y el endpoint `/webhooks/pagos` recién existe en el servidor tras el segundo lanzamiento.
+- **Falta:** política de cobranza vigente (decisión del titular: `scripts/declarar-politica-de-cobranza.mjs`), crear los planes en la pasarela (`npm run pagos:plan`; precio vigente p. ej. COMPLETO ARS 449.900/mes), usuarios de prueba (vendedor y comprador), la prueba de punta a punta (`pagos:ensayo` §5) y, para producción, todo el Paso 3.
+- **Dónde se prueba el webhook:** decisión pendiente (servidor real tras el despliegue con la empresa de prueba, o un túnel).
+
 ## Qué es el «MCP de Mercado Pago» y qué NO es
 
 Mercado Pago publica un servidor MCP oficial (`https://mcp.mercadopago.com/mcp`, remoto, con OAuth). Según [su documentación](https://www.mercadopago.com.ar/developers/en/docs/mcp-server/overview) sirve para **armar la integración**: buscar en su documentación, **crear aplicaciones y obtener sus credenciales** (sólo por OAuth), configurar y monitorear webhooks, crear usuarios de prueba con saldo y correr la medición de calidad antes de salir a producción.
