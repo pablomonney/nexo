@@ -1,6 +1,6 @@
 # Registro del despliegue del 2026-10-15 — corrección de zona horaria (`bfbc3bb`)
 
-**Estado: DESPLEGADO EN PRODUCCIÓN. V1–V6 pasaron. V7 PENDIENTE** (necesita la franja 21:00–24:00 ART).
+**Estado: DESPLEGADO EN PRODUCCIÓN. V1–V7 pasaron** (V7 el 2026-10-16 a las 21:17 ART).
 Autorizado por el titular el 2026-10-15 («autorizo el despliegue de `bfbc3bb`»). Ejecutado desde esta sesión por SSH.
 Lo comprobado **en producción** está marcado como tal; lo demás es local.
 
@@ -67,3 +67,15 @@ Evidencia completa: `var/aud/verificacion-despliegue-bfbc3bb.txt` (local, fuera 
 bash scripts/desplegar.sh --revertir      # vuelve a nexo:previo-20261015203329 (b412b9e); NO toca la base
 ```
 La base queda en 132 migraciones y la versión anterior la soporta (0131/0132 sólo fijan la zona y el formato de fecha de tres funciones; comprobado localmente con el código de `b412b9e`, `docs/PLAN_DESPLIEGUE_ZONA_HORARIA.md` §3). Para volver también los **datos**: restaurar la copia `predeploy-bfbc3bb` (con su `.sha256`) según `docs/DESPLIEGUE.md` §7.5; se perdería lo escrito desde las 20:34 UTC. Sólo con decisión expresa del titular.
+
+## V7 — PASÓ (2026-10-16, 21:17 ART)
+
+Corrida de sólo lectura en producción dentro de la franja (`verificar-zona-de-negocio.mjs` desde la imagen `nexo:production`). Cabecera: `UTC=2026-10-17 ART=2026-10-16 hora_ART=21:17:08` (la fecha UTC ya era un día posterior a la argentina, así que la prueba distingue el defecto).
+
+- Desde la aplicación: `zona = America/Argentina/Buenos_Aires`, `currentDate = 2026-10-16` (= fecha ART de hoy).
+- Conexión cruda: `zona = UTC`, `currentDate = 2026-10-17` (el día que habría usado el código sin la corrección).
+- `hoyEnArgentinaCalculadoFueraDeLaBase = 2026-10-16`, `hoyEnUtc = 2026-10-17`.
+- Funciones de hash (`audit_chain_link`, `normative_audit_chain_link`, `verify_audit_chain`) fijadas con `TimeZone=UTC | DateStyle=ISO, MDY`.
+- `zonaOk`, `matrizOk`, `fechaOk` y `distingue`: **true**. Código de salida 0.
+
+Conclusión: la corrección de zona horaria queda **confirmada en producción**. Estado oficial: *corrección implementada, desplegada y verificada con la fecha UTC un día adelante*.
