@@ -1362,8 +1362,10 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <button id="b-intel-cupo" class="sec">Ver el consumo</button>
     <dl class="kv" id="intel-cupo"></dl>
     <div class="fila" id="intel-cupo-declarar" hidden>
-      <div><label>Preguntas por día</label>
+      <div><label>Preguntas por día <span class="opcional">— opcional</span></label>
         <input id="intel-cupo-n" inputmode="numeric"></div>
+      <div><label>Tokens por día <span class="opcional">— opcional</span></label>
+        <input id="intel-cupo-tokens" inputmode="numeric"></div>
       <div style="flex:1"><label>Por qué ese número</label>
         <input id="intel-cupo-motivo" maxlength="500"></div>
       <div><label>&nbsp;</label><button id="b-intel-cupo-guardar">Declarar el cupo</button></div>
@@ -7853,6 +7855,10 @@ E('b-intel-cupo').onclick = async () => {
     '<dt>Cupo diario</dt><dd>' + (d.sinTopeDeclarado
       ? '<span class="p p-neu">sin tope declarado</span>'
       : '<span class="mono">' + escapar(d.topeDiario) + '</span>') + '</dd>' +
+    fila('Tokens del asistente hoy', d.tokensUsadosHoy) +
+    '<dt>Cupo diario de tokens</dt><dd>' + (d.sinTopeDeTokensDeclarado
+      ? '<span class="p p-neu">sin tope declarado</span>'
+      : '<span class="mono">' + escapar(d.topeTokensPorDia) + '</span>') + '</dd>' +
     fila('De este usuario, en el último minuto', d.delUsuarioEnElMinuto) +
     fila('Tope técnico por minuto', d.topePorMinuto);
 
@@ -7861,10 +7867,11 @@ E('b-intel-cupo').onclick = async () => {
 };
 
 E('b-intel-cupo-guardar').onclick = async () => {
-  const r = await api('POST', '/intelligence/quota', {
-    llamadasPorDia: Number(E('intel-cupo-n').value),
-    motivo: E('intel-cupo-motivo').value,
-  });
+  // Cada declaración dice la política entera: un campo vacío es «sin tope» para esa medida, y hace falta al menos uno.
+  const cuerpo = { motivo: E('intel-cupo-motivo').value };
+  if (E('intel-cupo-n').value.trim() !== '') cuerpo.llamadasPorDia = Number(E('intel-cupo-n').value);
+  if (E('intel-cupo-tokens').value.trim() !== '') cuerpo.tokensPorDia = Number(E('intel-cupo-tokens').value);
+  const r = await api('POST', '/intelligence/quota', cuerpo);
   decir('intel-cupo-msg', r, 'Cupo declarado. Se cuenta por empresa, no por usuario.');
   if (r.ok) E('b-intel-cupo').click();
 };

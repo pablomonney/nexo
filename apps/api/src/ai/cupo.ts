@@ -29,8 +29,12 @@ import type { PrecioDelModelo } from '@aai/ai-engine';
 export interface EstadoDelCupo {
   /** Llamadas de la empresa en el día corriente. */
   readonly usadasHoy: number;
-  /** `null` = la empresa no declaró tope. */
+  /** `null` = la empresa no declaró tope de preguntas. */
   readonly topeDiario: number | null;
+  /** Tokens (entrada + salida) que el asistente de la empresa consumió en el día corriente. */
+  readonly tokensUsadosHoy: number;
+  /** `null` = la empresa no declaró tope de tokens. */
+  readonly topeTokensPorDia: number | null;
   /** Llamadas de este usuario en el último minuto. */
   readonly delUsuarioEnElMinuto: number;
   readonly topePorMinuto: number;
@@ -51,6 +55,8 @@ export async function leerCupo(
   const r = await tx.query<{
     usadas_hoy: string;
     tope_diario: number | null;
+    tokens_hoy: string;
+    tope_tokens: string | null;
     del_usuario: string;
   }>(
     `SELECT
@@ -58,6 +64,12 @@ export async function leerCupo(
          WHERE a.company_id = $1
            AND a.created_at >= date_trunc('day', now()))                       AS usadas_hoy,
        (SELECT q.llamadas_por_dia FROM ai_quotas q WHERE q.company_id = $1)     AS tope_diario,
+       -- Los tokens del día salen de los turnos del asistente (el hecho que ya los guarda), por empresa.
+       (SELECT COALESCE(sum(COALESCE(m.tokens_entrada, 0) + COALESCE(m.tokens_salida, 0)), 0)
+          FROM assistant_messages m
+         WHERE m.company_id = $1 AND m.rol = 'asistente'
+           AND m.created_at >= date_trunc('day', now()))                       AS tokens_hoy,
+       (SELECT q.tokens_por_dia::text FROM ai_quotas q WHERE q.company_id = $1) AS tope_tokens,
        (SELECT count(*) FROM ai_answers a
          WHERE a.company_id = $1 AND a.created_by = $2
            AND a.created_at >= now() - interval '1 minute')                     AS del_usuario`,
@@ -68,6 +80,8 @@ export async function leerCupo(
   return {
     usadasHoy: Number(f.usadas_hoy),
     topeDiario: f.tope_diario,
+    tokensUsadosHoy: Number(f.tokens_hoy),
+    topeTokensPorDia: f.tope_tokens === null ? null : Number(f.tope_tokens),
     delUsuarioEnElMinuto: Number(f.del_usuario),
     topePorMinuto,
   };
@@ -75,7 +89,8 @@ export async function leerCupo(
 
 export type MotivoDeCorte =
   | { readonly codigo: 'LIMITE_POR_MINUTO'; readonly detalle: string }
-  | { readonly codigo: 'CUPO_DIARIO_AGOTADO'; readonly detalle: string };
+  | { readonly codigo: 'CUPO_DIARIO_AGOTADO'; readonly detalle: string }
+  | { readonly codigo: 'CUPO_DE_TOKENS_AGOTADO'; readonly detalle: string };
 
 /**
  * ¿Se puede preguntar? `null` es que sí.
@@ -101,6 +116,17 @@ export function motivoDeCorte(estado: EstadoDelCupo): MotivoDeCorte | null {
         `La empresa declaró un cupo de ${estado.topeDiario} preguntas por día y hoy lleva ` +
         `${estado.usadasHoy}. El cupo se cuenta por empresa, no por usuario: entrar con otro ` +
         'nombre no lo cambia.',
+    };
+  }
+
+  // Los tokens de un turno se conocen después de la llamada: se mira lo ya consumido, así que el turno que cruza el tope se completa
+  // y el siguiente se corta (se puede pasar por un turno, no más).
+  if (estado.topeTokensPorDia !== null && estado.tokensUsadosHoy >= estado.topeTokensPorDia) {
+    return {
+      codigo: 'CUPO_DE_TOKENS_AGOTADO',
+      detalle:
+        `La empresa declaró un cupo de ${estado.topeTokensPorDia} tokens por día y hoy lleva ${estado.tokensUsadosHoy}. ` +
+        'El cupo se cuenta por empresa, no por usuario, y se renueva al empezar el día.',
     };
   }
 

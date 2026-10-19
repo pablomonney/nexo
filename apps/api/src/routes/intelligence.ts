@@ -167,6 +167,7 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
       // declaró un tope. Decirlo con esas palabras evita que una pantalla
       // dibuje una barra de progreso sobre un denominador que no existe.
       sinTopeDeclarado: estado.topeDiario === null,
+      sinTopeDeTokensDeclarado: estado.topeTokensPorDia === null,
       alcance:
         'El cupo diario lo declara la empresa: cuántas preguntas entran en un día depende de ' +
         'su plan y de lo que esté dispuesta a gastar, y NEXO no lo inventa. El consumo se ' +
@@ -188,23 +189,30 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
     requirePermission(tenant, 'analysis:configure');
     const auth = requireAuth(request);
     const actorId = `user:${auth.user.userId}`;
+    // Cada declaración dice la política ENTERA: lo que no se manda queda sin tope (no se hereda de la anterior, para que lo que
+    // figura sea siempre lo que alguien declaró). Hace falta al menos un tope.
     const body = z
       .object({
-        llamadasPorDia: z.number().int().min(0).max(1_000_000),
+        llamadasPorDia: z.number().int().min(0).max(1_000_000).optional(),
+        tokensPorDia: z.number().int().min(0).max(10_000_000_000).optional(),
         motivo: z.string().min(5).max(500),
+      })
+      .refine((b) => b.llamadasPorDia !== undefined || b.tokensPorDia !== undefined, {
+        message: 'Declará al menos un tope: llamadasPorDia o tokensPorDia.',
       })
       .parse(request.body);
 
     await withCompany({ companyId: tenant.companyId, actorId }, async (tx) => {
       await tx.query(
-        `INSERT INTO ai_quotas (company_id, llamadas_por_dia, motivo, declarado_por)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO ai_quotas (company_id, llamadas_por_dia, tokens_por_dia, motivo, declarado_por)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (company_id) DO UPDATE
            SET llamadas_por_dia = EXCLUDED.llamadas_por_dia,
+               tokens_por_dia = EXCLUDED.tokens_por_dia,
                motivo = EXCLUDED.motivo,
                declarado_por = EXCLUDED.declarado_por,
                declarado_at = now()`,
-        [tenant.companyId, body.llamadasPorDia, body.motivo, actorId],
+        [tenant.companyId, body.llamadasPorDia ?? null, body.tokensPorDia ?? null, body.motivo, actorId],
       );
 
       await recordAudit(tx, tenant.companyId, {
@@ -213,7 +221,7 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
         action: 'DECLARAR_CUPO_DE_IA',
         objectType: 'ai_quotas',
         objectId: tenant.companyId,
-        newValue: { llamadasPorDia: body.llamadasPorDia },
+        newValue: { llamadasPorDia: body.llamadasPorDia ?? null, tokensPorDia: body.tokensPorDia ?? null },
         motivo: body.motivo,
         ip: clientIp(request),
         userAgent: request.headers['user-agent'] ?? null,
@@ -221,7 +229,7 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
     });
 
     reply.code(201);
-    return { llamadasPorDia: body.llamadasPorDia, motivo: body.motivo };
+    return { llamadasPorDia: body.llamadasPorDia ?? null, tokensPorDia: body.tokensPorDia ?? null, motivo: body.motivo };
   });
 
   /**

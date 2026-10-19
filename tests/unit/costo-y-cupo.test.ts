@@ -65,6 +65,8 @@ describe('Los dos topes', () => {
   const base: EstadoDelCupo = {
     usadasHoy: 5,
     topeDiario: null,
+    tokensUsadosHoy: 0,
+    topeTokensPorDia: null,
     delUsuarioEnElMinuto: 1,
     topePorMinuto: 20,
   };
@@ -109,9 +111,43 @@ describe('Los dos topes', () => {
     const corte = motivoDeCorte({
       usadasHoy: 100,
       topeDiario: 10,
+      tokensUsadosHoy: 0,
+      topeTokensPorDia: null,
       delUsuarioEnElMinuto: 50,
       topePorMinuto: 20,
     });
     expect(corte?.codigo).toBe('LIMITE_POR_MINUTO');
   });
+
+  describe('el cupo de tokens por día', () => {
+    it('sin tope de tokens declarado no se corta por más que se consuma', () => {
+      expect(motivoDeCorte({ ...base, tokensUsadosHoy: 50_000_000 })).toBeNull();
+    });
+
+    it('al llegar al tope de tokens, corta y dice que es por empresa', () => {
+      const corte = motivoDeCorte({ ...base, topeTokensPorDia: 10_000, tokensUsadosHoy: 10_000 });
+      expect(corte?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+      expect(corte?.detalle).toContain('por empresa, no por usuario');
+    });
+
+    it('justo debajo del tope todavía se puede: el turno que cruza se completa y el siguiente se corta', () => {
+      expect(motivoDeCorte({ ...base, topeTokensPorDia: 10_000, tokensUsadosHoy: 9_999 })).toBeNull();
+      expect(motivoDeCorte({ ...base, topeTokensPorDia: 10_000, tokensUsadosHoy: 12_345 })?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+    });
+
+    it('un tope de cero tokens apaga el asistente para la empresa', () => {
+      expect(motivoDeCorte({ ...base, topeTokensPorDia: 0 })?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+    });
+
+    it('el tope de preguntas y el de tokens son independientes: cualquiera de los dos corta', () => {
+      expect(motivoDeCorte({ ...base, topeDiario: 5, usadasHoy: 5, topeTokensPorDia: 1_000_000 })?.codigo).toBe('CUPO_DIARIO_AGOTADO');
+      expect(motivoDeCorte({ ...base, topeDiario: 500, usadasHoy: 5, topeTokensPorDia: 100, tokensUsadosHoy: 100 })?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+    });
+
+    it('el bucle por minuto se informa antes que cualquier cupo del día', () => {
+      const corte = motivoDeCorte({ ...base, delUsuarioEnElMinuto: 99, topeTokensPorDia: 1, tokensUsadosHoy: 5 });
+      expect(corte?.codigo).toBe('LIMITE_POR_MINUTO');
+    });
+  });
 });
+

@@ -61,6 +61,7 @@ export const COLUMNAS_SEGURAS: Readonly<Record<string, string>> = {
   '*.token_expires_at': 'Fecha de vencimiento de un token; no es el token.',
   '*.tokens_entrada': 'Cantidad de tokens de entrada de un modelo de lenguaje (consumo), no una credencial.',
   '*.tokens_salida': 'Cantidad de tokens de salida de un modelo de lenguaje (consumo), no una credencial.',
+  '*.tokens_por_dia': 'Tope diario de tokens de un modelo de lenguaje que la empresa declaró (cupo de uso), no una credencial.',
   'audit_logs.hash': 'Eslabón de la cadena de auditoría: es lo que permite verificar la bitácora afuera.',
   'audit_logs.prev_hash': 'Eslabón anterior de la cadena de auditoría.',
   'migration_batches.hash': 'Huella de un lote migrado.',

@@ -52,7 +52,7 @@ Rutas: `GET /asistente/estado`, `POST /asistente/configuracion`, `GET /asistente
 | No duplica ni acepta CUIT mal formado | Mismo módulo 11 y misma unicidad que el alta | «ya existe», «dígito verificador incorrecto» |
 | Una conversación es de quien la abrió | Filtro `created_by`; ajena = 404 | «cada una es de quien la abrió» |
 | Contado y auditado | `ai_answers` (cupo diario, métrica de alucinación) + `CONSULTAR_ASISTENTE` en bitácora **sin el contenido** | «contesta, guarda la conversación…» |
-| Cupo | Mismo `evaluarCupo` que Preguntar: diario por empresa (declarado) + mensajes por minuto por usuario | «el cupo» |
+| Cupo | Mismo `evaluarCupo` que Preguntar: por empresa, **por día**, en preguntas y/o en **tokens** (declarados) + mensajes por minuto por usuario | «el cupo» |
 | Los archivos no se guardan; se mira el contenido, no lo que dice el navegador | firma del archivo (JPG/PNG/GIF/WEBP/PDF), ≤ 5 MB, ≤ 3 por mensaje; en la base sólo nombre, tipo, tamaño y sha256 | «archivos adjuntos» |
 
 **Mutaciones:** 9 mutantes sobre estos guardas (apagado, dueño de la conversación, cupo, control de cifras, relajo con adjunto, texto rechazado, firma de archivo, duplicado, permiso de la herramienta) — **9 detectados**. Uno sobrevivió al principio (el permiso `party:write` de la herramienta) y se cerró con una prueba.
@@ -85,7 +85,18 @@ Rutas: `GET /asistente/estado`, `POST /asistente/configuracion`, `GET /asistente
 3. El prompt `ASISTENTE_V1` ya queda archivado por la migración 0136 (el despliegue no corre `prompts:register`; sin esa fila `ai_answers` rechazaría el turno y el cupo no contaría). `asistente.test.ts` comprueba que el texto archivado es idéntico al del código.
 4. `npm run asistente:probar` (llamada real: texto, herramienta, imagen) y, **una vez que pase**, una prueba de punta a punta por la pantalla con una empresa de prueba: encender el asistente, preguntar algo del catálogo, mandar una foto de una factura; comparar el costo calculado con el de la consola de Anthropic.
 5. Recién ahí se enciende para un cliente real (con su aviso en la política de privacidad y en los términos, que hoy son borradores).
-6. Declarar un **cupo diario** por empresa (`POST /intelligence/quota`): sin él no hay tope de gasto.
+6. Declarar el **cupo diario** por empresa (`POST /intelligence/quota`): sin él no hay tope de gasto. Conviene el de **tokens** (`tokensPorDia`), que es el que sigue la plata; ver §8b.
+
+## 8b · Cupo de tokens por día (migración 0141)
+
+Como el de Claude, pero **por día y por empresa**: cuántos tokens (entrada + salida) puede consumir el asistente en un día.
+
+- **Se declara** con `POST /intelligence/quota` (`{ tokensPorDia, llamadasPorDia?, motivo }`, permiso `analysis:configure`) o desde la consola, en «Declarar el cupo». Cada declaración dice la política **entera**: lo que no se manda queda sin tope; hace falta al menos uno.
+- **Se cuenta** de `assistant_messages` (los tokens que ya guarda cada turno), no de un contador aparte (ADR-022): por empresa, desde el comienzo del día en la zona de la base.
+- **Corte:** antes de cada turno se compara lo ya consumido con el tope; si lo alcanzó, **429 `CUPO_DE_TOKENS_AGOTADO`** sin llamar al modelo. Los tokens de un turno se conocen después de la llamada, así que **el turno que cruza el tope se completa y el siguiente se corta** (se puede pasar por un turno, no más).
+- **Sin tope declarado no se corta** (no es cero ni «ilimitado por diseño»). Un tope de 0 apaga el asistente para esa empresa.
+- **Lo ve** el estado del asistente (`cupo.tokensUsadosHoy`, `topeTokensPorDia`) y «Ver el consumo» en la consola.
+- **No cubre** una ventana por hora (se decidió «por día»): el tope por minuto por usuario sigue protegiendo del bucle. Si hiciera falta por hora, es el mismo conteo con otra ventana.
 
 ## 9 · Qué falta
 

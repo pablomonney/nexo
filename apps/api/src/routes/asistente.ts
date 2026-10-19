@@ -204,7 +204,14 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
         disponible: proveedor !== null && habilitado,
         puedeConfigurar: tenant.permissions.has('analysis:configure'),
         herramientas: armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions }).map((h) => h.nombre),
-        cupo: { usadasHoy: cupo.usadasHoy, topeDiario: cupo.topeDiario, sinTopeDeclarado: cupo.topeDiario === null },
+        cupo: {
+          usadasHoy: cupo.usadasHoy,
+          topeDiario: cupo.topeDiario,
+          sinTopeDeclarado: cupo.topeDiario === null,
+          tokensUsadosHoy: cupo.tokensUsadosHoy,
+          topeTokensPorDia: cupo.topeTokensPorDia,
+          sinTopeDeTokensDeclarado: cupo.topeTokensPorDia === null,
+        },
         adjuntos: ADJUNTOS,
         advertencia: ADVERTENCIA_DEL_ASISTENTE,
         alcance:

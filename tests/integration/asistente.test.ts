@@ -495,5 +495,48 @@ suite('Asistente conversacional', () => {
       expect(r.json<{ message: string }>().message).toContain('CUPO_DIARIO_AGOTADO');
       expect(g.pedidos).toHaveLength(0);
     });
+
+    it('el cupo de TOKENS por día: el turno que cruza se completa, el siguiente se corta ANTES de llamar al modelo', async () => {
+      type Estado = { cupo: { tokensUsadosHoy: number; topeTokensPorDia: number | null; sinTopeDeTokensDeclarado: boolean } };
+      const antes = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>();
+      const base = antes.cupo.tokensUsadosHoy;
+
+      // Cada declaración dice la política entera: sólo tokens, así que el tope de preguntas de la prueba anterior desaparece.
+      const decl = await pedir('POST', '/intelligence/quota', tokenContadora, {
+        tokensPorDia: base + 1000,
+        motivo: 'Tope de tokens de la prueba del asistente',
+      });
+      expect(decl.statusCode, decl.body).toBe(201);
+      expect(decl.json<{ llamadasPorDia: number | null; tokensPorDia: number }>()).toMatchObject({ llamadasPorDia: null, tokensPorDia: base + 1000 });
+
+      // Primer turno: consume 1000 + 200 = 1200 y cruza el tope, pero se completa (los tokens se conocen después de llamar).
+      const g1 = con(haiku('Primer turno', { entrada: 1000, salida: 200 }));
+      const uno = await escribir(tokenContadora, 'Primera pregunta');
+      expect(uno.r.statusCode, uno.r.body).toBe(200);
+      expect(g1.pedidos).toHaveLength(1);
+
+      const despues = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>();
+      expect(despues.cupo).toMatchObject({ tokensUsadosHoy: base + 1200, topeTokensPorDia: base + 1000, sinTopeDeTokensDeclarado: false });
+
+      // Segundo turno: el tope ya está superado, corta sin gastar.
+      const g2 = con(dicho('no debería llegar'));
+      const dos = await escribir(tokenContadora, 'Segunda pregunta');
+      expect(dos.r.statusCode, dos.r.body).toBe(429);
+      expect(dos.r.json<{ message: string }>().message).toContain('CUPO_DE_TOKENS_AGOTADO');
+      expect(g2.pedidos).toHaveLength(0);
+
+      // Subir el tope libera el asistente.
+      const sube = await pedir('POST', '/intelligence/quota', tokenContadora, { tokensPorDia: base + 1_000_000, motivo: 'Se amplía el tope de la prueba' });
+      expect(sube.statusCode, sube.body).toBe(201);
+      const g3 = con(haiku('Tercer turno', { entrada: 10, salida: 5 }));
+      const tres = await escribir(tokenContadora, 'Tercera pregunta');
+      expect(tres.r.statusCode, tres.r.body).toBe(200);
+      expect(g3.pedidos).toHaveLength(1);
+    });
+
+    it('declarar un cupo sin ningún tope es un 400', async () => {
+      const r = await pedir('POST', '/intelligence/quota', tokenContadora, { motivo: 'Sin tope alguno, esto no vale' });
+      expect(r.statusCode, r.body).toBe(400);
+    });
   });
 });
