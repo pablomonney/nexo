@@ -581,7 +581,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
   // ══ El acceso degradado ═══════════════════════════════════════════════════
 
   describe('acceso degradado', () => {
-    /** Las diecinueve funcionalidades, con su dominio y si sobrevive la mora. */
+    /** Las veinte funcionalidades, con su dominio y si sobrevive la mora. */
     const catalogo = async () =>
       (
         await db.query<{ code: string; dominio: string; sobrevive: boolean }>(
@@ -597,26 +597,27 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       return empresa;
     };
 
-    it('el catálogo tiene diecinueve funcionalidades y ninguna queda sin decidir', async () => {
+    it('el catálogo tiene veinte funcionalidades y ninguna queda sin decidir', async () => {
       // `sobrevive_la_mora` es NOT NULL con default, así que «sin decidir» no
       // existe como estado: o sobrevive o no. Lo que este caso cuida es que la
-      // partición sea **exhaustiva** — que 12 + 7 sean las 19— porque los dos
+      // partición sea **exhaustiva** — que 12 + 8 sean las 20— porque los dos
       // casos de abajo recorren una mitad cada uno y una funcionalidad que se
       // cayera de las dos listas no la miraría nadie.
       const todas = await catalogo();
-      expect(todas).toHaveLength(19);
+      expect(todas).toHaveLength(20);
 
       const sobreviven = todas.filter((f) => f.sobrevive);
       const apagadas = todas.filter((f) => !f.sobrevive);
-      expect(sobreviven.length + apagadas.length).toBe(19);
+      expect(sobreviven.length + apagadas.length).toBe(20);
       expect(sobreviven).toHaveLength(12);
-      expect(apagadas).toHaveLength(7);
+      expect(apagadas).toHaveLength(8);
 
-      // Las siete, por nombre. Escritas acá y no derivadas de la base: si fueran
+      // Las ocho, por nombre. Escritas acá y no derivadas de la base: si fueran
       // derivadas, este caso pasaría igual el día que alguien apague una octava.
       expect(apagadas.map((f) => f.code).sort()).toEqual([
         'analisis',
         'analitica',
+        'asistente',
         'comisiones',
         'crm',
         'integraciones',
@@ -642,10 +643,10 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
       ]);
     });
 
-    it('las diecinueve, una por una, contestan lo que corresponde en mora', async () => {
+    it('las veinte, una por una, contestan lo que corresponde en mora', async () => {
       // El recorrido completo en un solo caso, con el veredicto exacto por
       // funcionalidad. Los dos casos siguientes miran una mitad cada uno; este
-      // mira las diecinueve juntas y deja el mapa entero escrito en la salida
+      // mira las veinte juntas y deja el mapa entero escrito en la salida
       // cuando falla.
       olvidarTodosLosPlanes();
       const empresa = await conPlanCompleto('MOROSA');
@@ -676,6 +677,7 @@ suite('Mora — el estado, el calendario y el acceso degradado', () => {
         analitica: 'DEGRADADA_POR_MORA',
         analisis: 'DEGRADADA_POR_MORA',
         inteligencia: 'DEGRADADA_POR_MORA',
+        asistente: 'DEGRADADA_POR_MORA',
         integraciones: 'DEGRADADA_POR_MORA',
       });
     });
