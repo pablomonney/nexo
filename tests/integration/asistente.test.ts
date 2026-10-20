@@ -14,6 +14,7 @@
 
 import {
   ASISTENTE_V1,
+  ASISTENTE_V2,
   ErrorDeProveedor,
   type PedidoDeChat,
 } from '@aai/ai-engine';
@@ -124,6 +125,10 @@ suite('Asistente conversacional', () => {
     const archivado = await db.query<{ texto: string }>('SELECT texto FROM prompt_versions WHERE hash = $1', [ASISTENTE_V1.hash]);
     expect(archivado.rows, 'La 0136 tiene que archivar EXACTAMENTE el texto de ASISTENTE_V1').toHaveLength(1);
     expect(archivado.rows[0]!.texto).toBe(ASISTENTE_V1.texto);
+    // La v2 es la que usa el servidor: la archiva la 0146, y sin esa fila ninguna respuesta contaría en el cupo.
+    const v2 = await db.query<{ texto: string }>('SELECT texto FROM prompt_versions WHERE hash = $1', [ASISTENTE_V2.hash]);
+    expect(v2.rows, 'La 0146 tiene que archivar EXACTAMENTE el texto de ASISTENTE_V2').toHaveLength(1);
+    expect(v2.rows[0]!.texto).toBe(ASISTENTE_V2.texto);
 
     const { hash: argonHash } = await import('@node-rs/argon2');
     const clave = await argonHash(PASSWORD, { algorithm: 2, memoryCost: 19_456, timeCost: 2, parallelism: 1 });

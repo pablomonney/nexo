@@ -5303,6 +5303,22 @@ const nombreDeCategoria = (codigo) =>
 const limpiar = (id) => { const c = E(id); if (c) c.innerHTML = ''; };
 const puede = (permiso) => estado.permisos.indexOf(permiso) !== -1;
 
+/**
+ * Dónde estaba la persona, para volver ahí si recarga la pantalla: la empresa elegida y la pantalla abierta, sólo en esta pestaña
+ * (`sessionStorage`, que se borra al cerrarla). Son identificadores, nunca credenciales: la sesión vive en la cookie del servidor.
+ */
+const CLAVE_EMPRESA_DE_LA_PESTANA = 'nexo-empresa';
+const CLAVE_VISTA_DE_LA_PESTANA = 'nexo-vista';
+function recordarEnLaPestana(clave, valor) {
+  try { sessionStorage.setItem(clave, valor); } catch (e) { /* sin almacenamiento: se vuelve a elegir, nada más */ }
+}
+function leerDeLaPestana(clave) {
+  try { return sessionStorage.getItem(clave); } catch (e) { return null; }
+}
+function olvidarLaPestana() {
+  try { sessionStorage.removeItem(CLAVE_EMPRESA_DE_LA_PESTANA); sessionStorage.removeItem(CLAVE_VISTA_DE_LA_PESTANA); } catch (e) { /* nada que borrar */ }
+}
+
 // ── Navegación ────────────────────────────────────────────────────────────
 const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','asistente','bandeja','documentos','propuestas','operaciones',
                 'terceros','productos','crm','proyectos','comisiones','sucursales','precios','comercial','recepciones','stock','activos',
@@ -5323,6 +5339,7 @@ function ir(vista, migas) {
   if (vista === 'asistente') { ASISTENTE_LADO.abrir(true); return; }
   if (PANTALLAS_SIN_EMPRESA.indexOf(vista) !== -1) ASISTENTE_LADO.abrir(false);
   estado.vista = vista;
+  if (PANTALLAS_SIN_EMPRESA.indexOf(vista) === -1) recordarEnLaPestana(CLAVE_VISTA_DE_LA_PESTANA, vista);
   for (const v of VISTAS) {
     const s = E('v-' + v);
     if (s && v !== 'asistente') s.hidden = v !== vista;
@@ -7091,6 +7108,7 @@ const TABLERO = (() => {
 
 E('b-salir').onclick = async () => {
   await api('POST', '/auth/logout');
+  olvidarLaPestana();
   location.reload();
 };
 
@@ -7135,6 +7153,7 @@ async function usarEmpresa(id) {
   const c = await api('GET', '/companies/current');
   if (!c.ok) { estado.empresa = null; return decir('empresa-msg', c); }
   // Ya hay empresa elegida: se enciende el menú.
+  recordarEnLaPestana(CLAVE_EMPRESA_DE_LA_PESTANA, id);
   E('nav').dataset.sinEmpresa = 'no';
   E('empresa-elegir').hidden = true;
   limpiar('empresa-msg');
@@ -17406,6 +17425,28 @@ E('b-sec-listar').onclick = async () => {
 };
 
 anunciarPlanDeLaLanding();
+
+/**
+ * Recargar la pantalla no cierra la sesión.
+ *
+ * La sesión vive en una cookie del servidor (30 minutos de inactividad, 12 horas como máximo) y sobrevive a la recarga; lo que se perdía era
+ * la consola, que arrancaba siempre en el ingreso sin preguntar si ya había sesión. Ahora pregunta (`GET /auth/me`): si la sesión vale, vuelve a
+ * la empresa y a la pantalla en las que estaba la persona; si no, queda el ingreso de siempre.
+ */
+(async function restaurarLaSesion() {
+  const yo = await api('GET', '/auth/me');
+  if (!yo.ok) return;
+  E('quien').textContent = (yo.datos.user && yo.datos.user.email) || '';
+  E('b-salir').hidden = false;
+  const empresaGuardada = leerDeLaPestana(CLAVE_EMPRESA_DE_LA_PESTANA);
+  const vistaGuardada = leerDeLaPestana(CLAVE_VISTA_DE_LA_PESTANA);
+  await continuarSegunCartera('login-msg');
+  if (!estado.empresa && empresaGuardada && estado.empresas.some((c) => c.id === empresaGuardada)) await usarEmpresa(empresaGuardada);
+  if (estado.empresa && vistaGuardada && vistaGuardada !== estado.vista) {
+    const boton = document.querySelector('nav button[data-vista="' + vistaGuardada + '"]');
+    if (boton && !boton.hidden) boton.click();
+  }
+})();
 
 E('b-sec-guardar').onclick = async () => {
   const r = await api('POST', '/companies/current/secrets', {

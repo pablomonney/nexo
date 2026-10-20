@@ -137,6 +137,13 @@ BEGIN
 END
 $$;
 
+-- Lo suyo, cada persona lo puede leer sin empresa en contexto (sale de `app.actor_id`, que fija la aplicación con la sesión): es lo que permite
+-- que `user_companies()` le muestre su empresa a quien sólo tiene un puesto propio. Sólo lectura, sólo sus propias asignaciones.
+CREATE POLICY asignaciones_propias ON asignaciones_de_puesto_propio FOR SELECT
+  USING (user_id = app_actor_user_id());
+CREATE POLICY puestos_de_mis_asignaciones ON puestos_propios FOR SELECT
+  USING (EXISTS (SELECT 1 FROM asignaciones_de_puesto_propio a WHERE a.puesto_id = puestos_propios.id AND a.user_id = app_actor_user_id()));
+
 INSERT INTO audit_actions (id, dominio, requiere_motivo) VALUES
   ('CREAR_PUESTO_PROPIO',        'puestos', true),
   ('MODIFICAR_PUESTO_PROPIO',    'puestos', true),
@@ -441,3 +448,60 @@ REVOKE EXECUTE ON FUNCTION exigir_motivo(text) FROM PUBLIC;
 
 COMMENT ON TABLE puestos_propios IS 'Puestos que el dueño del estudio arma para una empresa: un nombre, una explicación y las funciones que incluye. Sólo se escriben con las funciones crear_/cambiar_/archivar_puesto_propio.';
 COMMENT ON TABLE ajustes_de_permisos IS 'Lo que el dueño del estudio le agrega o le quita a UNA persona, por encima de su puesto, con motivo. Sólo se escribe con ajustar_permisos_de_persona.';
+
+-- ---------------------------------------------------------------------------
+-- Quien sólo tiene un puesto propio también ve su empresa en la lista de empresas
+-- ---------------------------------------------------------------------------
+-- `user_companies()` salía únicamente de `user_company_roles`: una persona con sólo un puesto propio (sin ningún rol) entraba a la empresa con
+-- `X-Company-Id` pero no la veía en la lista, y la consola no tenía cómo ofrecérsela. Misma función, misma firma, mismo privilegio (el usuario
+-- sale de `app.actor_id`, no de un parámetro): sólo se suman las empresas donde tiene un puesto propio vigente.
+CREATE OR REPLACE FUNCTION user_companies()
+RETURNS TABLE (
+  id                uuid,
+  legal_name        text,
+  cuit              text,
+  entity_type       text,
+  jurisdiction      text,
+  regulator         text,
+  fiscal_year_end   text,
+  status            text,
+  organization_id   uuid,
+  organization_name text,
+  roles             text[]
+)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH accesos AS (
+    SELECT ucr.company_id, r.code AS rol
+      FROM user_company_roles ucr
+      JOIN roles r ON r.id = ucr.role_id
+     WHERE app_actor_user_id() IS NOT NULL
+       AND ucr.user_id = app_actor_user_id()
+       AND ucr.valid_from <= CURRENT_DATE
+       AND (ucr.valid_to IS NULL OR ucr.valid_to >= CURRENT_DATE)
+    UNION ALL
+    SELECT a.company_id, NULL::text
+      FROM asignaciones_de_puesto_propio a
+      JOIN puestos_propios pp ON pp.id = a.puesto_id AND pp.archivado_el IS NULL
+     WHERE app_actor_user_id() IS NOT NULL
+       AND a.user_id = app_actor_user_id()
+       AND (a.valid_to IS NULL OR a.valid_to >= CURRENT_DATE)
+  )
+  SELECT c.id,
+         c.legal_name,
+         c.cuit,
+         c.entity_type,
+         c.jurisdiction,
+         c.regulator,
+         c.fiscal_year_end,
+         c.status,
+         o.id,
+         o.name,
+         coalesce(array_agg(DISTINCT x.rol ORDER BY x.rol) FILTER (WHERE x.rol IS NOT NULL), ARRAY[]::text[])
+    FROM accesos x
+    JOIN companies     c ON c.id = x.company_id
+    JOIN organizations o ON o.id = c.organization_id
+   GROUP BY c.id, c.legal_name, c.cuit, c.entity_type, c.jurisdiction,
+            c.regulator, c.fiscal_year_end, c.status, o.id, o.name;
+$$;

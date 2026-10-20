@@ -354,8 +354,15 @@ suite('Suscripciones', () => {
     // superado por las dos ventas de antes.
     // El plan ya trae su tope sembrado, así que se lo baja a uno en vez de
     // insertarlo. Se repone al final: la base de pruebas es compartida.
+    // Los comprobantes son ilimitados en todos los planes desde el 2026-10-20: para medir un exceso hay que declarar un tope.
+    const original = (
+      await db.query<{ tope: number | null; ilimitado: boolean }>(
+        `SELECT tope, ilimitado FROM plan_limits WHERE plan_id = $1 AND recurso = 'COMPROBANTES_MES'`,
+        [planPyme],
+      )
+    ).rows[0]!;
     await db.query(
-      `UPDATE plan_limits SET tope = 1, declarado_por = 'test'
+      `UPDATE plan_limits SET tope = 1, ilimitado = false, declarado_por = 'test'
         WHERE plan_id = $1 AND recurso = 'COMPROBANTES_MES'`,
       [planPyme],
     );
@@ -380,9 +387,9 @@ suite('Suscripciones', () => {
     expect((await ver()).recursos.find((x) => x.recurso === 'COMPROBANTES_MES')!.uso).toBe(3);
 
     await db.query(
-      `UPDATE plan_limits SET tope = 1500, declarado_por = 'hipotesis-b1'
+      `UPDATE plan_limits SET tope = $2, ilimitado = $3, declarado_por = 'hipotesis-b1'
         WHERE plan_id = $1 AND recurso = 'COMPROBANTES_MES'`,
-      [planPyme],
+      [planPyme, original.tope, original.ilimitado],
     );
   });
 

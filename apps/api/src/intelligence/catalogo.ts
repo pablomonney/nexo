@@ -129,6 +129,41 @@ export function normalizar(texto: string): string {
     .trim();
 }
 
+/** Los diez clientes (o proveedores) de mayor volumen, por neto facturado. Sólo cuenta comprobantes ya vinculados a un tercero del maestro. */
+async function tercerosPorVolumen(tx: Tx, companyId: string, direccion: 'VENTAS' | 'COMPRAS'): Promise<RespuestaDeterministica> {
+  const r = await tx.query<{ razon_social: string; comprobantes: number; neto: string; ultima: string | null }>(
+    `SELECT razon_social, comprobantes, neto::text, ultima::text
+       FROM analytics_por_tercero
+      WHERE company_id = $1 AND direccion = $2
+      ORDER BY neto DESC
+      LIMIT 10`,
+    [companyId, direccion],
+  );
+  const total = await tx.query<{ total: string; terceros: number }>(
+    `SELECT coalesce(sum(neto), 0)::text AS total, count(*)::int AS terceros
+       FROM analytics_por_tercero WHERE company_id = $1 AND direccion = $2`,
+    [companyId, direccion],
+  );
+  const ventas = direccion === 'VENTAS';
+  return {
+    titulo: ventas ? 'Los diez clientes que más compran' : 'Los diez proveedores a los que más se les compra',
+    valor: total.rows[0]!.total,
+    unidad: '$ neto de todos',
+    periodo: null,
+    datos: r.rows.map((p) => ({
+      etiqueta: p.razon_social,
+      valor: `${pesos(p.neto)} · ${p.comprobantes} comprobante(s)${p.ultima === null ? '' : ` · último ${p.ultima}`}`,
+      origen: 'analytics_por_tercero',
+    })),
+    origen: ['analytics_por_tercero'],
+    metodologia:
+      `Comprobantes de ${direccion} vinculados a un ${ventas ? 'cliente' : 'proveedor'} del maestro, por neto. ` +
+      'El ranking empieza por el que más volumen tuvo desde que hay comprobantes cargados.',
+    noIncluye:
+      `De ${total.rows[0]!.terceros} tercero(s) se muestran los diez primeros. Un comprobante que todavía no está vinculado a un tercero del maestro no suma a ninguno.`,
+  };
+}
+
 export const CATALOGO: readonly PreguntaDelCatalogo[] = [
   {
     id: 'VENTAS_DEL_MES',
@@ -706,6 +741,62 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
         noIncluye:
           `De ${total.rows[0]!.productos} producto(s) facturados se muestran los diez ` +
           'primeros. Lo facturado sin renglones no está en ninguno.',
+      };
+    },
+  },
+
+  {
+    id: 'QUE_CLIENTE_COMPRA_MAS',
+    pregunta: '¿Qué clientes me compran más?',
+    nucleo: ['clientes', 'cliente', 'mejores clientes', 'compra mas', 'compran mas'],
+    apoyo: ['que', 'cuales', 'quien', 'mas', 'compra', 'compran', 'facturo'],
+    permisos: ['analytics:read', 'party:read'],
+    admiteMes: false,
+    responder: (tx, companyId) => tercerosPorVolumen(tx, companyId, 'VENTAS'),
+  },
+
+  {
+    id: 'QUE_PROVEEDOR_VENDE_MAS',
+    pregunta: '¿A qué proveedores les compro más?',
+    nucleo: ['proveedores', 'proveedor', 'le compro', 'les compro', 'compro mas'],
+    apoyo: ['que', 'cuales', 'quien', 'mas', 'compro', 'compras'],
+    permisos: ['analytics:read', 'party:read'],
+    admiteMes: false,
+    responder: (tx, companyId) => tercerosPorVolumen(tx, companyId, 'COMPRAS'),
+  },
+
+  {
+    id: 'ALICUOTAS_DEL_IVA',
+    pregunta: '¿Cuáles son las alícuotas del IVA?',
+    nucleo: ['alicuota', 'alicuotas', 'iva general', 'porcentaje de iva'],
+    apoyo: ['cuales', 'cual', 'es', 'son', 'iva', 'vigente', 'vigentes'],
+    permisos: [],
+    admiteMes: false,
+    responder: async (tx) => {
+      // Las alícuotas son del registro normativo (no de la empresa): cada una cita su norma y su artículo, y sólo se muestran las vigentes hoy.
+      const r = await tx.query<{ label: string; numerator: string; denominator: string; articulo: string; titulo: string; valid_from: string }>(
+        `SELECT r.label, r.numerator::text, r.denominator::text, r.articulo, n.titulo, r.valid_from::text
+           FROM tax_rates r
+           JOIN taxes t ON t.id = r.tax_id AND t.code = 'IVA'
+           JOIN norm_versions nv ON nv.id = r.norm_version_id
+           JOIN norms n ON n.id = nv.norm_id
+          WHERE r.valid_from <= CURRENT_DATE AND (r.valid_to IS NULL OR r.valid_to >= CURRENT_DATE)
+          ORDER BY r.numerator::numeric / r.denominator::numeric`,
+      );
+      return {
+        titulo: 'Alícuotas del IVA vigentes',
+        valor: null,
+        unidad: '%',
+        periodo: null,
+        datos: r.rows.map((a) => ({
+          etiqueta: a.label,
+          valor: `${((Number(a.numerator) * 100) / Number(a.denominator)).toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`,
+          origen: `${a.titulo} — ${a.articulo}`,
+        })),
+        origen: ['tax_rates', 'norm_versions'],
+        metodologia: 'Alícuotas archivadas en el registro normativo de NEXO, cada una con la norma y el artículo de donde sale. Sólo las vigentes a la fecha de hoy.',
+        noIncluye:
+          'Regímenes especiales, exenciones y tratamientos por actividad o por bien que no figuren en el registro. Si hay duda sobre cuál corresponde a una operación, eso lo define el contador.',
       };
     },
   },

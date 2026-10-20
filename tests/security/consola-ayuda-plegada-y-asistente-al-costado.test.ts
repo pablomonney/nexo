@@ -58,4 +58,15 @@ describe('la consola: ayuda plegada, asistente al costado, menú profesional', (
     expect(botones.length).toBeGreaterThan(30);
     expect(botones.filter((n) => /^(Preguntar|Vender|Comprar|Cobrar|Pagar)\b/u.test(n))).toEqual([]);
   });
+
+  it('recargar la pantalla no cierra la sesión: se pregunta al servidor y se vuelve a la empresa y a la pantalla de la pestaña', () => {
+    const f = html.slice(html.indexOf('(async function restaurarLaSesion() {'));
+    expect(f).toContain("api('GET', '/auth/me')");
+    expect(f).toContain('continuarSegunCartera');
+    expect(f).toContain('usarEmpresa(empresaGuardada)');
+    // Sólo identificadores, por pestaña: nunca una credencial ni localStorage.
+    expect(html).toContain("sessionStorage.setItem(clave, valor)");
+    expect(html).toContain('recordarEnLaPestana(CLAVE_EMPRESA_DE_LA_PESTANA, id);');
+    expect(html).toContain('olvidarLaPestana();\n  location.reload();');
+  });
 });

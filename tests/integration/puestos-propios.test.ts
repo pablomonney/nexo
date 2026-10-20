@@ -162,6 +162,8 @@ suite('puestos propios y ajustes por persona', () => {
 
       expect((await como(encargado.token, 'GET', '/cash-boxes')).statusCode).toBe(200);
       expect((await como(encargado.token, 'GET', '/companies/current')).statusCode, 'el puesto siempre trae ver la empresa').toBe(200);
+      const lista = await env.app.inject({ method: 'GET', url: '/companies', headers: { authorization: `Bearer ${encargado.token}` } });
+      expect(lista.json<{ companies: Array<{ id: string }> }>().companies.map((c) => c.id), 'la empresa aparece en su lista, sin ningún rol').toContain(env.empresa);
       expect((await como(encargado.token, 'GET', '/documents')).statusCode, 'lo que el puesto no dice, no lo puede').toBe(403);
     });
 

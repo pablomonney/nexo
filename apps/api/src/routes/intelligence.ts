@@ -171,8 +171,8 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
       sinTopeDelPlan: estado.topeDelPlanTokens === null,
       alcance:
         'El tope de tokens del plan es total: lo comparten todas las empresas del estudio, y lo que se usa en una se gasta para todas. ' +
-        'Cada empresa puede además declarar un cupo propio, más chico. El consumo se cuenta de las llamadas registradas, no de un contador ' +
-        'aparte, y entrar con otro usuario no lo cambia.',
+        'Cada empresa puede además declarar un cupo propio, más chico: el cupo diario de preguntas lo declara la empresa, y NEXO no lo inventa. ' +
+        'El consumo se cuenta de las llamadas registradas, no de un contador aparte, y entrar con otro usuario no lo cambia.',
     };
   });
 

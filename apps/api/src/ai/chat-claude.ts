@@ -135,7 +135,9 @@ export class ProveedorDeChatClaude implements ProveedorDeChat {
       respuesta = await cliente.messages.create({
         model: modelo,
         max_tokens: pedido.maxTokens,
-        system: pedido.system,
+        // El prefijo (herramientas + instrucciones) es el mismo en cada llamada de un turno y entre turnos del mismo día: se marca para que el
+        // proveedor lo guarde y lo cobre al precio de lo ya leído (una décima parte). No cambia lo que el modelo ve ni lo que contesta.
+        system: [{ type: 'text' as const, text: pedido.system, cache_control: { type: 'ephemeral' as const } }],
         messages: aMensajesDelSdk(pedido.mensajes),
         ...(pedido.herramientas.length === 0
           ? {}

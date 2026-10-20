@@ -69,7 +69,7 @@ describe('lo que se manda', () => {
     const { f, pedidos } = fetchDeMentira(() => OK([{ type: 'text', text: 'Hola' }], 'end_turn'));
     await proveedor(f).conversar(PEDIDO);
     const c = pedidos[0]!.cuerpo;
-    expect(c['system']).toBe('Sos el asistente.');
+    expect(c['system']).toEqual([{ type: 'text', text: 'Sos el asistente.', cache_control: { type: 'ephemeral' } }]);
     expect(c['max_tokens']).toBe(700);
     expect(c['output_config']).toEqual({ effort: 'low' });
     expect(c['messages']).toEqual([{ role: 'user', content: [{ type: 'text', text: '¿Cuánto vendí este mes?' }] }]);

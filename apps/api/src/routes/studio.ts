@@ -127,12 +127,13 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
             AND ($2 = false OR uc.status = 'ACTIVE')
             -- Autorización por fila: al menos un rol del usuario en esa empresa
             -- tiene que conceder company:read.
-            AND EXISTS (
+            -- Sin ningún rol (roles vacío) la persona llega por un puesto propio, y todo puesto propio incluye ver la empresa (0145).
+            AND (cardinality(uc.roles) = 0 OR EXISTS (
                   SELECT 1
                     FROM roles r
                     JOIN role_permissions rp ON rp.role_id = r.id
                     JOIN permissions p ON p.id = rp.permission_id
-                   WHERE r.code = ANY (uc.roles) AND p.code = 'company:read')
+                   WHERE r.code = ANY (uc.roles) AND p.code = 'company:read'))
           ORDER BY uc.organization_name, uc.legal_name`,
         [query.organizationId ?? null, query.incluirArchivadas === 'no'],
       );

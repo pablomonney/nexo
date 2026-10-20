@@ -12,6 +12,7 @@ Es un chat dentro de NEXO (pantalla **Asistente**): la persona escribe, manda un
 |---|---|
 | Contesta cifras de la empresa **consultando el catálogo cerrado** de preguntas (`preguntar_al_sistema`) | No calcula, no suma, no proyecta: toda cifra sale de una herramienta |
 | Busca clientes/proveedores ya cargados (`buscar_terceros`) | No da consejo fiscal ni dice qué conviene |
+| **Llega a las otras empresas del estudio** (`empresas_del_estudio`, parámetro `empresa`, `preguntar_a_todas_las_empresas` con el **total consolidado calculado por el sistema**) — §8c | No cruza estudios, ni empresas donde la persona no tiene acceso, ni donde el asistente está apagado |
 | Explica dónde está cada cosa y qué datos hacen falta (`ayuda_de_nexo`, texto fijo) | No cita normas de memoria |
 | **Arma la propuesta** de alta de un tercero (`proponer_alta_de_tercero`) | **No guarda nada**: la persona confirma con un botón, que llama a `POST /parties` con su permiso y su bitácora |
 | Lee una foto o un PDF que la persona adjunta | No guarda el archivo; no verifica lo que lee contra el sistema |
@@ -71,9 +72,10 @@ Rutas: `GET /asistente/estado`, `POST /asistente/configuracion`, `GET /asistente
 - **Voz:** botón **Hablar** (dictado) y «Leer las respuestas en voz alta» / «Modo conversación por voz» (escucha → envía → contesta en voz alta → vuelve a escuchar). Lo hace **el navegador** (Web Speech): NEXO no recibe audio. En Chrome y Edge el reconocimiento lo resuelve un servicio del fabricante del navegador, así que el audio sale hacia ese servicio; la pantalla lo dice. En un navegador sin soporte, el botón no aparece.
 - **No hecho:** subir un **audio grabado** (nota de voz) para que el asistente lo transcriba. Claude no recibe audio; haría falta un servicio de transcripción (otro tercero que recibe datos). Es una decisión del titular (contratar), no un faltante técnico.
 
-## 7 · Qué NO está verificado
+## 7 · Qué está verificado y qué no
 
-- **Ninguna llamada real a Claude.** Las pruebas ejecutan el adaptador real (SDK oficial) contra un `fetch` y un servidor HTTP que hablan la forma documentada de la API (`tests/unit/chat-claude.test.ts`) y la ruta contra un proveedor guionado (`tests/integration/asistente.test.ts`). Se miró la pantalla de punta a punta en el navegador integrado contra un Claude falso local (encender, preguntar, propuesta de alta con confirmación, foto reducida y enviada). Lo que sólo se sabe con la cuenta real: que la clave sea válida, que Haiku 5.5 acepte exactamente estos parámetros, que lea bien una factura fotografiada y el costo real por turno.
+- **Llamada real a Claude: verificada el 2026-10-20** con datos sintéticos sobre la base de pruebas (`scripts/evaluacion-del-asistente/`): ~35 preguntas de uso real (cifras de una empresa, varias empresas, ayuda de procedimientos, altas, y los casos que tiene que rechazar: consejo fiscal, cálculos sueltos, normas de memoria, inyección de instrucciones, datos de otro estudio). Contestó bien lo que tiene y se negó a lo que no debe; los defectos que apareció (no tenía una consulta para «qué cliente me compra más», ni para las alícuotas, ni procedimientos, y citaba un CUIT armado con partes del nombre) están corregidos en el prompt v2, el catálogo y `ayuda_de_nexo`.
+- **Costo medido:** cada llamada lleva ~6.700 tokens de instrucciones y herramientas (el prefijo); con una consulta (dos llamadas) un turno usa **~13.000 tokens**, no 1.200 como se había supuesto. Con **caché de prompt** (`cache_control` en el adaptador) el prefijo se lee al 10 % del precio desde la segunda llamada: el costo real de un turno es una fracción de lo que dicen los tokens. El cupo cuenta tokens procesados (conservador).
 - **El dictado y la lectura en voz alta** dependen del navegador: se verificó que los controles aparecen y no rompen; no se probó con un micrófono.
 - **Captura de pantalla:** la ventana del navegador integrado estaba oculta y las capturas expiraron; la verificación fue por el DOM, la red y medidas de layout (sin desborde horizontal a 375 px).
 
@@ -100,9 +102,17 @@ Como el de Claude, pero **por día**: cuántos tokens (entrada + salida) puede c
 - **Tope por plan** (`plan_ai_quotas`, 0142; lo declara `scripts/declarar-cupos-de-ia-por-plan.mjs`): es **total del contrato** y lo mide `consumo_de_ia_del_estudio()` (0144), que suma lo que gastaron todas las empresas del estudio hoy. Valores (decisión del titular, 2026-10-19/20: el presupuesto de IA es el **15 % del precio neto mensual**, al precio del peor caso —todo en salida, US$ 0,50 por millón— con US$ 1 = $ 1.500): Esencial 330.000, Gestión 660.000, Estudio 830.000, Empresa 1.360.000, Empresa Plus 2.460.000 tokens por día **en total**. La suscripción que rige es la más reciente vigente de cualquier empresa del estudio; sin ninguna, rige el más bajo de los topes de plan, no «sin tope». El tope propio de la empresa (`ai_quotas`) es un límite **extra**: no levanta el del plan.
 - **No cubre** una ventana por hora (se decidió «por día»): el tope por minuto por usuario sigue protegiendo del bucle. Si hiciera falta por hora, es el mismo conteo con otra ventana.
 
+## 8c · Varias empresas del estudio y el prompt v2 (migraciones 0144–0146)
+
+- **Qué empresas alcanza** (`apps/api/src/asistente/estudio.ts`): sólo las del **mismo estudio** que la empresa en la que se conversa, activas, donde la persona tiene acceso (rol vigente o puesto propio), el asistente está **encendido** (esa decisión es por empresa: los datos salen hacia el proveedor), el plan lo incluye y la persona puede usarlo; y si lo que puede hacer ahí exige segundo factor, lo tiene. En cada empresa valen los permisos **de esa empresa**. Hasta 25 por consulta (si hay más se avisa y el total lo aclara). `tests/integration/asistente-estudio.test.ts` prueba el límite, incluida una empresa de otro estudio a la que la persona también accede.
+- **Total consolidado:** lo calcula el sistema (`consolidar.ts`, enteros en centavos), nunca el modelo; sólo cuando todas las respuestas están en la misma unidad y todas afirmaron su valor; un porcentaje no se suma.
+- **El tope de tokens del plan es total del estudio** (§8b): lo que se usa en una empresa se gasta para todas.
+- **Prompt v2:** conoce las herramientas de varias empresas, registro profesional (sin coloquialismos), cita las empresas por razón social y no arma CUIT con partes de un nombre. Lo archiva la 0146 (el despliegue no corre `prompts:register`); la v1 queda por las respuestas ya dadas. Cambiar el prompt = una versión nueva + una migración.
+- **Más cobertura:** el catálogo suma «qué clientes me compran más», «a qué proveedores les compro más» y «alícuotas del IVA» (con su norma y artículo); `ayuda_de_nexo` explica 16 procedimientos, y un test comprueba que cada «Grupo › Pantalla» y cada botón que nombra existe en la consola.
+
 ## 9 · Qué falta
 
-- Llamada real (§7) y, con ella, ajustar el prompt a lo que Haiku haga mal en la práctica.
+- Seguir evaluando con preguntas reales de los primeros clientes y ajustar el prompt (cada cambio es una versión nueva archivada por migración, §8c).
 - Subir una nota de voz grabada (decisión de contratar transcripción).
 - Más herramientas de «ayudar a ingresar información»: hoy sólo terceros. Productos, comprobantes y la importación de planillas (`migraciones`) son los siguientes; cada una se agrega como herramienta que **propone**, con su validación y su botón, nunca como escritura directa.
 - Streaming de la respuesta (hoy llega completa).

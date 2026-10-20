@@ -23,7 +23,7 @@
 import { createHash } from 'node:crypto';
 import {
   ADVERTENCIA_DEL_ASISTENTE,
-  ASISTENTE_V1,
+  ASISTENTE_V2,
   ErrorDeProveedor,
   calcularCostoEnMicros,
   conducirTurno,
@@ -203,7 +203,7 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
         habilitado,
         disponible: proveedor !== null && habilitado,
         puedeConfigurar: tenant.permissions.has('analysis:configure'),
-        herramientas: armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions }).map((h) => h.nombre),
+        herramientas: armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions, usuarioId: auth.user.userId, mfaActivado: auth.user.mfaEnabled }).map((h) => h.nombre),
         cupo: {
           usadasHoy: cupo.usadasHoy,
           topeDiario: cupo.topeDiario,
@@ -220,7 +220,8 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
         alcance:
           'El asistente consulta con los permisos de quien le escribe, no guarda nada por sí solo y no calcula: las cifras ' +
           'salen del motor contable del sistema. Cada respuesta la redacta un modelo de lenguaje de un proveedor externo ' +
-          '(Anthropic): los mensajes y los archivos que le mandes salen de NEXO hacia ese proveedor.',
+          '(Anthropic): los mensajes y los archivos que le mandes salen de NEXO hacia ese proveedor. Si llevás varias empresas, también puede ' +
+          'consultar las del estudio donde el asistente esté encendido, siempre con tus permisos en cada una.',
       };
     });
 
@@ -355,10 +356,10 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
         return { hoy, historial: m.rows };
       });
 
-      const herramientas = armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions });
+      const herramientas = armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions, usuarioId: auth.user.userId, mfaActivado: auth.user.mfaEnabled });
       const historial = normalizarHistorial(previo.historial);
       const system =
-        `${ASISTENTE_V1.texto}\n\nCONTEXTO DE ESTA CONVERSACIÓN\n- Hoy es ${String(previo.hoy)}.\n` +
+        `${ASISTENTE_V2.texto}\n\nCONTEXTO DE ESTA CONVERSACIÓN\n- Hoy es ${String(previo.hoy)}.\n` +
         `- Herramientas que tenés en esta conversación: ${herramientas.map((h) => h.nombre).join(', ')}.`;
 
       let huboCifraInventada = false;
@@ -513,7 +514,7 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
               !aceptada && huboCifraInventada ? 1 : 0,
               proveedor.id,
               modeloUsado,
-              ASISTENTE_V1.hash,
+              ASISTENTE_V2.hash,
               actorId,
             ],
           );
