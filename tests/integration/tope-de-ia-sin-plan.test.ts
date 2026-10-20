@@ -1,12 +1,13 @@
 /**
- * Una empresa sin suscripción propia ni tope propio NO se queda sin límite de gasto de IA (migración 0142).
+ * Una empresa sin suscripción propia ni tope propio NO se queda sin límite de gasto de IA (migraciones 0142 y 0144).
  *
  * El caso real: una empresa que un estudio da de alta dentro de su organización no pasa por el alta autoservicio, así que no tiene
  * suscripción, y la puerta comercial —que falla abierta— no le pone plan. Sin esta regla, el tope de tokens por plan no la alcanzaba y
- * su asistente quedaba **sin ningún tope**. Ahora hereda el **más bajo** de los topes de plan.
+ * su asistente quedaba **sin ningún tope**. Ahora hereda el **más bajo** de los topes de plan, y ese tope es TOTAL del estudio.
  *
  * `plan_ai_quotas` es una tabla global y las suites corren en paralelo: el caso corre dentro de una transacción que se deshace, de modo
- * que la fila de prueba no la ve ninguna otra suite.
+ * que la fila de prueba no la ve ninguna otra suite. La empresa en contexto se fija con `set_config` dentro de esa transacción, como lo hace
+ * `withCompany` en la API.
  */
 
 import { leerCupo } from '@aai/api/ai/cupo';
@@ -27,10 +28,12 @@ suite('el tope de IA de una empresa sin plan propio', () => {
     await env.cerrar();
   });
 
-  const cupo = () =>
-    leerCupo({ query: (texto: string, valores?: readonly unknown[]) => env.db.query(texto, valores as unknown[]) } as never, env.empresa, 'user:x', 12);
+  const cupo = async () => {
+    await env.db.query(`SELECT set_config('app.company_id', $1, true)`, [env.empresa]);
+    return leerCupo({ query: (texto: string, valores?: readonly unknown[]) => env.db.query(texto, valores as unknown[]) } as never, env.empresa, 'user:x', 12);
+  };
 
-  it('hereda el más bajo de los topes de plan, y lo dice', async () => {
+  it('hereda el más bajo de los topes de plan, y es el total del estudio', async () => {
     await env.db.query('BEGIN');
     try {
       await env.db.query('DELETE FROM ai_quotas WHERE company_id = $1', [env.empresa]);
@@ -46,17 +49,17 @@ suite('el tope de IA de una empresa sin plan propio', () => {
       );
 
       const sin = await cupo();
-      expect(sin.topeTokensPorDia, 'sin suscripción ni tope propio rige el más bajo de los topes de plan').toBe(7);
-      expect(sin.origenDelTopeDeTokens).toBe('PLAN');
+      expect(sin.topeDelPlanTokens, 'sin suscripción rige el más bajo de los topes de plan').toBe(7);
+      expect(sin.topeTokensPorDia, 'la empresa no declaró un tope propio').toBeNull();
 
-      // Un tope propio gana, aunque sea más alto.
+      // Un tope propio es un límite EXTRA: no reemplaza al del plan.
       await env.db.query(
         `INSERT INTO ai_quotas (company_id, llamadas_por_dia, tokens_por_dia, motivo, declarado_por) VALUES ($1, NULL, 5000, 'Tope propio de la prueba', 'test')`,
         [env.empresa],
       );
       const propio = await cupo();
       expect(propio.topeTokensPorDia).toBe(5000);
-      expect(propio.origenDelTopeDeTokens).toBe('EMPRESA');
+      expect(propio.topeDelPlanTokens, 'el del plan sigue rigiendo').toBe(7);
     } finally {
       await env.db.query('ROLLBACK');
     }
@@ -69,7 +72,7 @@ suite('el tope de IA de una empresa sin plan propio', () => {
       await env.db.query('DELETE FROM plan_ai_quotas');
       const e = await cupo();
       expect(e.topeTokensPorDia).toBeNull();
-      expect(e.origenDelTopeDeTokens).toBeNull();
+      expect(e.topeDelPlanTokens).toBeNull();
     } finally {
       await env.db.query('ROLLBACK');
     }

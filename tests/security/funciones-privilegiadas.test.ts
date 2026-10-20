@@ -78,6 +78,9 @@ const PERMITIDAS: Readonly<Record<string, string>> = {
     'Sin parámetros: comprueba que la empresa en contexto sea la designada en platform_owner ANTES ' +
     'de contar y, para cualquier otra, levanta 42501. Devuelve conteos y una lista mínima de clientes, ' +
     'nunca contenido contable',
+  'consumo_de_ia_del_estudio()':
+    'Sin parámetros: contesta sobre el estudio de la empresa en contexto (app_company_id()), así que no hay ' +
+    'identificador ajeno que pasarle. Devuelve dos números (tokens de hoy y tope del plan), nunca filas ni contenido',
 };
 
 /**

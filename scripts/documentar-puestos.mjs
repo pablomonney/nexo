@@ -27,7 +27,7 @@ const tabla = Function(`"use strict"; return (${consola.slice(consola.indexOf('{
 const menu = [...consola.matchAll(/<button data-vista="([^"]+)"[^>]*?data-nombre="([^"]*)"/g)]
   .map((m) => ({ vista: m[1], nombre: m[2] }))
   .filter((m) => m.vista !== 'propietario' && m.vista !== 'empresa');
-const SIEMPRE = ['Inicio', 'Pendientes', 'Asistente', 'Preguntar', 'Configuración'];
+const SIEMPRE = ['Inicio', 'Pendientes', 'Asistente', 'Consultas', 'Configuración'];
 
 export function modulosDe(permisos) {
   const tiene = new Set(permisos);

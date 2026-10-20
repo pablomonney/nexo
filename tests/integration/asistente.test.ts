@@ -534,9 +534,9 @@ suite('Asistente conversacional', () => {
       expect(g3.pedidos).toHaveLength(1);
     });
 
-    it('sin tope propio rige el del PLAN, y el tope que declara la empresa gana', async () => {
-      type Estado = { cupo: { tokensUsadosHoy: number; topeTokensPorDia: number | null; origenDelTopeDeTokens: string | null } };
-      const base = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo.tokensUsadosHoy;
+    it('el tope del PLAN es total del estudio: al llegar corta, y el tope propio de la empresa no lo levanta', async () => {
+      type Estado = { cupo: { tokensDelEstudioHoy: number; topeDelPlanTokens: number | null; topeTokensPorDia: number | null } };
+      const base = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo.tokensDelEstudioHoy;
 
       // Un plan propio de la prueba: la tabla de planes es global y las suites corren en paralelo.
       const plan = (
@@ -562,7 +562,7 @@ suite('Asistente conversacional', () => {
       );
 
       const e1 = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo;
-      expect(e1).toMatchObject({ topeTokensPorDia: base + 1000, origenDelTopeDeTokens: 'PLAN' });
+      expect(e1).toMatchObject({ topeDelPlanTokens: base + 1000, topeTokensPorDia: null });
 
       // Primer turno: cruza el tope del plan y se completa. El segundo se corta antes de llamar al modelo.
       const g1 = con(haiku('Primero', { entrada: 1000, salida: 200 }));
@@ -574,17 +574,25 @@ suite('Asistente conversacional', () => {
       const dos = await escribir(tokenContadora, 'Segunda pregunta');
       expect(dos.r.statusCode, dos.r.body).toBe(429);
       expect(dos.r.json<{ message: string }>().message).toContain('CUPO_DE_TOKENS_AGOTADO');
+      expect(dos.r.json<{ message: string }>().message).toContain('se gasta para todas');
       expect(g2.pedidos).toHaveLength(0);
 
-      // La empresa declara uno propio más alto: gana sobre el del plan.
+      // El tope propio de la empresa es un límite EXTRA: declararlo más alto NO levanta el del plan, que es del contrato.
       const decl = await pedir('POST', '/intelligence/quota', tokenContadora, { tokensPorDia: base + 1_000_000, motivo: 'La empresa amplía su tope' });
       expect(decl.statusCode, decl.body).toBe(201);
       const e2 = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo;
-      expect(e2).toMatchObject({ topeTokensPorDia: base + 1_000_000, origenDelTopeDeTokens: 'EMPRESA' });
-      const g3 = con(haiku('Tercero', { entrada: 10, salida: 5 }));
+      expect(e2).toMatchObject({ topeTokensPorDia: base + 1_000_000, topeDelPlanTokens: base + 1000 });
+      const g3 = con(dicho('tampoco debería llegar'));
       const tres = await escribir(tokenContadora, 'Tercera pregunta');
-      expect(tres.r.statusCode, tres.r.body).toBe(200);
-      expect(g3.pedidos).toHaveLength(1);
+      expect(tres.r.statusCode, tres.r.body).toBe(429);
+      expect(g3.pedidos).toHaveLength(0);
+
+      // Subir el tope del PLAN (un cambio comercial, no de la aplicación) libera el asistente.
+      await db.query('UPDATE plan_ai_quotas SET tokens_por_dia = $2 WHERE plan_id = $1', [plan, base + 1_000_000]);
+      const g4 = con(haiku('Cuarto', { entrada: 10, salida: 5 }));
+      const cuatro = await escribir(tokenContadora, 'Cuarta pregunta');
+      expect(cuatro.r.statusCode, cuatro.r.body).toBe(200);
+      expect(g4.pedidos).toHaveLength(1);
       } finally {
         // Un plan de prueba no puede quedar a la venta (S-31).
         await db.query(`UPDATE subscription_plans SET status = 'DISCONTINUADO' WHERE id = $1`, [plan]);

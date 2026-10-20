@@ -210,8 +210,10 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
           sinTopeDeclarado: cupo.topeDiario === null,
           tokensUsadosHoy: cupo.tokensUsadosHoy,
           topeTokensPorDia: cupo.topeTokensPorDia,
-          origenDelTopeDeTokens: cupo.origenDelTopeDeTokens ?? null,
           sinTopeDeTokensDeclarado: cupo.topeTokensPorDia === null,
+          // El tope del plan es TOTAL: lo comparten todas las empresas del estudio.
+          tokensDelEstudioHoy: cupo.tokensDelEstudioHoy,
+          topeDelPlanTokens: cupo.topeDelPlanTokens,
         },
         adjuntos: ADJUNTOS,
         advertencia: ADVERTENCIA_DEL_ASISTENTE,

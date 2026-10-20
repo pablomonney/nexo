@@ -148,7 +148,9 @@ async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada):
                       WHERE pr.plan_id = p.id
                         AND pr.vigente_desde <= CURRENT_DATE
                         AND (pr.vigente_hasta IS NULL OR pr.vigente_hasta > CURRENT_DATE)),
-                    '[]'::json)                     AS precios
+                    '[]'::json)                     AS precios,
+                  -- Tokens de IA por día: TOTAL del contrato, compartidos por todas las empresas del estudio (0144).
+                  (SELECT pq.tokens_por_dia::text FROM plan_ai_quotas pq WHERE pq.plan_id = p.id) AS "tokensDeIaPorDia"
              FROM subscription_plans p
             ORDER BY p.orden`,
         );

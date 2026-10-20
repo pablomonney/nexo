@@ -169,10 +169,10 @@ function buscarTerceros(ctx: ContextoDeHerramientas): HerramientaDeChat | null {
  */
 const AYUDA: Readonly<Record<string, string>> = {
   'donde-esta-cada-cosa':
-    'El menú de la izquierda agrupa las pantallas por tarea, de lo más usado a lo menos usado. Empezar: Inicio (resumen), ' +
-    'Pendientes (lo que espera una decisión), Propuestas de IA, Asistente y Preguntar (consultas al sistema). Vender: ' +
-    'Presupuestos y pedidos, Facturas y comprobantes, Clientes y proveedores, Productos, Precios, CRM y Comisiones. Comprar: ' +
-    'Documentos, Pedidos de compra, Recepciones y Órdenes de pago. Dinero: Caja, Bancos y Cheques. Stock y operación: Stock, ' +
+    'El menú de la izquierda agrupa las pantallas por tarea, de lo más usado a lo menos usado. General: Inicio (resumen), ' +
+    'Pendientes (lo que espera una decisión), Propuestas de IA, Asistente y Consultas (preguntas al sistema). Ventas: ' +
+    'Presupuestos y pedidos, Facturas y comprobantes, Clientes y proveedores, Productos, Precios, CRM y Comisiones. Compras: ' +
+    'Documentos, Pedidos de compra, Recepciones y Órdenes de pago. Tesorería: Caja, Bancos y Cheques. Inventario y operaciones: Stock, ' +
     'Bienes de uso, Proyectos, Sucursales e Integraciones. Contabilidad: Asientos, Libros, IVA, Estados y notas y Cierre de ' +
     'períodos. Análisis: Analítica y Señales y escenarios. Y al final, Administración: Migraciones, Auditoría, Plan y ' +
     'Configuración. Se puede buscar cualquier pantalla con Ctrl+K. Lo que se ve depende del rol de la persona y del plan de ' +

@@ -168,11 +168,11 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
       // dibuje una barra de progreso sobre un denominador que no existe.
       sinTopeDeclarado: estado.topeDiario === null,
       sinTopeDeTokensDeclarado: estado.topeTokensPorDia === null,
+      sinTopeDelPlan: estado.topeDelPlanTokens === null,
       alcance:
-        'El cupo diario lo declara la empresa: cuántas preguntas entran en un día depende de ' +
-        'su plan y de lo que esté dispuesta a gastar, y NEXO no lo inventa. El consumo se ' +
-        'cuenta de las llamadas registradas, no de un contador aparte, y es por empresa: ' +
-        'entrar con otro usuario no lo cambia.',
+        'El tope de tokens del plan es total: lo comparten todas las empresas del estudio, y lo que se usa en una se gasta para todas. ' +
+        'Cada empresa puede además declarar un cupo propio, más chico. El consumo se cuenta de las llamadas registradas, no de un contador ' +
+        'aparte, y entrar con otro usuario no lo cambia.',
     };
   });
 

@@ -485,7 +485,7 @@ suite('La puerta comercial de los planes', () => {
     const r = await app.inject({ method: 'GET', url: '/planes' });
     expect(r.statusCode, r.body).toBe(200);
     const cuerpo = r.json<{
-      planes: { code: string; precio: { importe: string; incluyeImpuestos: boolean } | null }[];
+      planes: { code: string; precio: { importe: string; incluyeImpuestos: boolean } | null; tokensDeIaPorDia: string | null }[];
       prueba: { dias: number; pideTarjeta: boolean };
       impuestos: { trato: string; leyenda: string };
       alcance: string;
@@ -526,6 +526,19 @@ suite('La puerta comercial de los planes', () => {
     }
     // Sin esto, un catálogo vacío pasaría el bucle sin comparar nada.
     expect(comparados, 'no se comparó ni un plan').toBeGreaterThan(0);
+
+    // Los tokens de IA por día son TOTALES del plan (los comparten todas las empresas del estudio) y se publican tal como están declarados;
+    // un plan sin cupo declarado sale con null, no con cero ni con «ilimitado».
+    const cupos = await db.query<{ code: string; tokens: string | null }>(
+      `SELECT p.code, pq.tokens_por_dia::text AS tokens
+         FROM subscription_plans p LEFT JOIN plan_ai_quotas pq ON pq.plan_id = p.id
+        WHERE p.status = 'DISPONIBLE'`,
+    );
+    for (const c of cupos.rows) {
+      const publicado = cuerpo.planes.find((p) => p.code === c.code);
+      if (publicado === undefined) continue;
+      expect(publicado.tokensDeIaPorDia, `${c.code}: tokens de IA por día`).toBe(c.tokens);
+    }
 
     // ## El tratamiento del IVA tiene que coincidir con el dato, no con un texto
     //

@@ -67,6 +67,8 @@ describe('Los dos topes', () => {
     topeDiario: null,
     tokensUsadosHoy: 0,
     topeTokensPorDia: null,
+    tokensDelEstudioHoy: 0,
+    topeDelPlanTokens: null,
     delUsuarioEnElMinuto: 1,
     topePorMinuto: 20,
   };
@@ -113,6 +115,8 @@ describe('Los dos topes', () => {
       topeDiario: 10,
       tokensUsadosHoy: 0,
       topeTokensPorDia: null,
+      tokensDelEstudioHoy: 0,
+      topeDelPlanTokens: null,
       delUsuarioEnElMinuto: 50,
       topePorMinuto: 20,
     });
@@ -133,6 +137,25 @@ describe('Los dos topes', () => {
     it('justo debajo del tope todavía se puede: el turno que cruza se completa y el siguiente se corta', () => {
       expect(motivoDeCorte({ ...base, topeTokensPorDia: 10_000, tokensUsadosHoy: 9_999 })).toBeNull();
       expect(motivoDeCorte({ ...base, topeTokensPorDia: 10_000, tokensUsadosHoy: 12_345 })?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+    });
+
+    it('el tope del plan es TOTAL: lo que gasta otra empresa del estudio corta a esta, y el mensaje lo dice', () => {
+      // Esta empresa casi no usó nada, pero entre todas las del estudio se llegó al tope del plan.
+      const corte = motivoDeCorte({ ...base, tokensUsadosHoy: 10, tokensDelEstudioHoy: 830_000, topeDelPlanTokens: 830_000 });
+      expect(corte?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+      expect(corte?.detalle).toContain('se reparten entre todas las empresas de tu estudio');
+      expect(corte?.detalle).toContain('se gasta para todas');
+    });
+
+    it('debajo del tope total se puede; el tope propio de la empresa es un límite extra y también corta', () => {
+      expect(motivoDeCorte({ ...base, tokensDelEstudioHoy: 829_999, topeDelPlanTokens: 830_000 })).toBeNull();
+      const propio = motivoDeCorte({ ...base, tokensUsadosHoy: 100, topeTokensPorDia: 100, tokensDelEstudioHoy: 100, topeDelPlanTokens: 830_000 });
+      expect(propio?.codigo).toBe('CUPO_DE_TOKENS_AGOTADO');
+      expect(propio?.detalle).toContain('cupo propio');
+    });
+
+    it('sin tope de plan declarado no se corta por el consumo del estudio', () => {
+      expect(motivoDeCorte({ ...base, tokensDelEstudioHoy: 99_000_000, topeDelPlanTokens: null })).toBeNull();
     });
 
     it('un tope de cero tokens apaga el asistente para la empresa', () => {

@@ -8,7 +8,7 @@ Todo vive en `apps/web/consola.html` y `apps/web/landing.html` (archivos únicos
 
 | Qué | Dónde | Cómo se mantiene |
 |---|---|---|
-| **Barra lateral izquierda**, agrupada por tarea y ordenada por prioridad: Empezar · Vender · Comprar · Dinero · Stock y operación · Contabilidad · Análisis · Administración | `<aside class="lateral">` y `const MENU` | Para agregar una pantalla: botón en el grupo correcto con `data-vista`, `data-nombre`, `data-desc` y `data-claves` (sinónimos de búsqueda), y su `<section id="v-…">` en `VISTAS`. |
+| **Barra lateral izquierda**, agrupada por tarea y ordenada por prioridad: General · Ventas · Compras · Tesorería · Inventario y operaciones · Contabilidad · Análisis · Administración | `<aside class="lateral">` y `const MENU` | Para agregar una pantalla: botón en el grupo correcto con `data-vista`, `data-nombre`, `data-desc` y `data-claves` (sinónimos de búsqueda), y su `<section id="v-…">` en `VISTAS`. |
 | Hamburguesa (botón arriba a la izquierda): achica el menú a íconos en escritorio; en celular abre y cierra un cajón | `#b-menu` | La preferencia se recuerda por navegador (`nexo-menu`, `nexo-grupos`). |
 | **Búsqueda**: filtro en el propio menú y paleta **Ctrl+K** con pantallas y acciones | `#buscar-menu`, `const PALETA` | Lee los botones del menú que `aplicarPermisosANav` dejó visibles: respeta rol y plan. |
 | **Tarjeta «Cómo se usa esta pantalla»** en cada pantalla: para qué sirve, pasos con «Mostrame» y adónde ir después | `const GUIAS` | Ver «Cómo agregar o cambiar una guía». |

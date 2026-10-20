@@ -400,6 +400,23 @@ tr.aqui td{background:var(--acento-cl)}
 .aviso.ojo{background:var(--ojo-bg);border-left-color:var(--ojo);color:var(--ojo)}
 
 /* ── Asistente ────────────────────────────────────────────────────────────── */
+/* El asistente vive al costado: un panel fijo a la derecha que se abre desde cualquier pantalla sin sacarte de lo que estás haciendo. */
+#v-asistente{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);z-index:70;margin:0;border-radius:0;border-width:0 0 0 1px;
+             overflow-y:auto;padding:var(--e4);box-shadow:-12px 0 40px rgba(2,8,10,.25)}
+#v-asistente[hidden]{display:none}
+#v-asistente>h2{font-size:1.15rem}
+#v-asistente .h2-ayuda{margin-left:auto}
+.as-cerrar{margin:0 0 0 var(--e2);flex:none;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+           background:none;border:1px solid var(--linea2);border-radius:9px;color:var(--tinta2);font:inherit;font-size:1.2rem;cursor:pointer}
+.as-cerrar:hover{border-color:var(--acento);color:var(--acento)}
+.as-lado{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:60;margin:0;padding:14px 8px;border-radius:12px 0 0 12px;
+         border:1px solid var(--acento);border-right:0;background:var(--acento);color:var(--acento-txt);font:inherit;font-size:.82rem;
+         font-weight:650;cursor:pointer;writing-mode:vertical-rl;letter-spacing:.04em}
+.as-lado:hover{filter:brightness(1.08)}
+.app[data-sesion="no"] .as-lado,.as-lado[hidden],.app[data-asistente="si"] .as-lado{display:none}
+@media (min-width:1280px){
+  .app[data-asistente="si"]{padding-right:420px}
+}
 .as-log{display:flex;flex-direction:column;gap:var(--e2);min-height:160px;max-height:55vh;overflow-y:auto;
         padding:var(--e3);border:1px solid var(--linea);border-radius:var(--r2);margin:var(--e3) 0;background:var(--hund)}
 .as-burbuja{max-width:min(46rem,92%);padding:var(--e2) var(--e3);border-radius:var(--r2);font-size:.92rem;line-height:1.45;
@@ -518,15 +535,23 @@ pre{margin:var(--e1) 0 0;font-family:var(--mono);font-size:.75rem;white-space:pr
 .guia-despues button{background:var(--alto);border:1px solid var(--linea2);color:var(--tinta2);padding:5px 11px;border-radius:var(--rp);
           cursor:pointer;font-weight:600}
 .guia-despues button:hover{border-color:var(--acento);color:var(--acento)}
-.guia[data-plegada="si"] .guia-que,.guia[data-plegada="si"] .guia-pasos,.guia[data-plegada="si"] .guia-despues{display:none}
-.guia[data-plegada="si"]{padding:var(--e2) var(--e4);margin-bottom:var(--e4)}
-.guia[data-plegada="si"] .guia-ver{background:none;color:var(--acento);border:1px solid var(--linea2)}
+.guia[hidden]{display:none}
+.guia .guia-cerrar{background:none;border:1px solid var(--linea2);color:var(--tinta2);padding:6px 10px;border-radius:9px;cursor:pointer}
+.guia .guia-cerrar:hover{border-color:var(--acento);color:var(--acento)}
+
+/* Cada pantalla abre directo en lo que se hace. La explicación vive detrás de un cuadradito «?» arriba a la derecha del título. */
+section>h2{display:flex;align-items:center}
+.h2-ayuda{margin:0 0 0 auto;flex:none;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+          background:none;border:1px solid var(--linea2);border-radius:9px;color:var(--tinta2);font:inherit;font-size:1rem;font-weight:700;cursor:pointer}
+.h2-ayuda:hover{border-color:var(--acento);color:var(--acento)}
+.h2-ayuda[aria-expanded="true"]{background:var(--acento-cl);border-color:var(--acento);color:var(--acento)}
 
 /* El texto técnico original de cada pantalla se conserva, plegado: lo lee quien quiere saber por qué funciona así. */
 details.ayuda-tecnica{margin:var(--e2) 0 var(--e3);font-size:.82rem;color:var(--tinta3)}
 details.ayuda-tecnica summary{cursor:pointer;color:var(--tinta3);font-weight:600;font-size:.76rem;letter-spacing:.04em;text-transform:uppercase}
 details.ayuda-tecnica summary:hover{color:var(--tinta2)}
 details.ayuda-tecnica p{margin-top:var(--e2)}
+details.ayuda-tecnica h4.ayuda-tema{margin:var(--e3) 0 0;font-size:.8rem;color:var(--tinta2);font-weight:650}
 
 /* Después de una acción que salió bien: qué sigue y un botón para ir. */
 .siguiente{display:flex;flex-wrap:wrap;align-items:center;gap:var(--e2) var(--e3);margin-top:var(--e2);padding:var(--e3) var(--e4);
@@ -778,8 +803,8 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
      persona vino a resolver.
 
      El orden es el de importancia, no el alfabético ni el de cuándo se construyó cada módulo: lo que se hace primero y
-     más seguido va arriba. Primero lo que espera a la persona (Empezar), después ganar plata (Vender), gastarla (Comprar),
-     moverla (Dinero), lo que se tiene (Stock y operación), registrarlo (Contabilidad), entenderlo (Análisis) y, al final,
+     más seguido va arriba. Primero lo que espera a la persona (General), después ganar plata (Ventas), gastarla (Compras),
+     moverla (Tesorería), lo que se tiene (Inventario y operaciones), registrarlo (Contabilidad), entenderlo (Análisis) y, al final,
      lo que se toca de vez en cuando (Administración). -->
 <aside class="lateral" id="lateral" aria-label="Menú principal">
   <div class="lateral-cab">
@@ -797,17 +822,17 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <div class="lateral-menu">
     <nav id="nav" hidden aria-label="Pantallas del sistema">
 
-      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Empezar<svg class="ico"><use href="#i-chevron"/></svg></div>
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">General<svg class="ico"><use href="#i-chevron"/></svg></div>
         <div class="gnav-items">
           <button data-vista="inicio" data-nombre="Inicio" data-desc="El resumen de la empresa y la puesta en marcha" data-claves="panel resumen tablero principio"><svg class="ico"><use href="#i-inicio"/></svg><span class="txt">Inicio</span></button>
           <button data-vista="bandeja" data-nombre="Pendientes" data-desc="Lo que espera una decisión tuya" data-claves="tareas bandeja alertas por hacer"><svg class="ico"><use href="#i-bandeja"/></svg><span class="txt">Pendientes</span><span class="insignia" id="ins-bandeja" hidden></span></button>
           <button data-vista="propuestas" data-nombre="Propuestas de IA" data-desc="Asientos que sugirió la IA, para que los revises" data-claves="inteligencia artificial sugerencias aprobar"><svg class="ico"><use href="#i-propuestas"/></svg><span class="txt">Propuestas de IA</span></button>
-          <button data-vista="asistente" data-nombre="Asistente" data-desc="Chateá, mandá una foto o un PDF" data-claves="chat ayuda ia claude"><svg class="ico"><use href="#i-asistente"/></svg><span class="txt">Asistente</span></button>
-          <button data-vista="inteligencia" data-nombre="Preguntar" data-desc="Consultá cifras de la empresa en lenguaje común" data-claves="consulta pregunta cuánto vendí cifras"><svg class="ico"><use href="#i-inteligencia"/></svg><span class="txt">Preguntar</span></button>
+          <button data-vista="asistente" data-nombre="Asistente" data-desc="Consultas, imágenes y archivos PDF" data-claves="chat ayuda ia claude"><svg class="ico"><use href="#i-asistente"/></svg><span class="txt">Asistente</span></button>
+          <button data-vista="inteligencia" data-nombre="Consultas" data-desc="Consultá cifras de la empresa en lenguaje común" data-claves="consulta pregunta cuánto vendí cifras"><svg class="ico"><use href="#i-inteligencia"/></svg><span class="txt">Consultas</span></button>
         </div>
       </div>
 
-      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Vender<svg class="ico"><use href="#i-chevron"/></svg></div>
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Ventas<svg class="ico"><use href="#i-chevron"/></svg></div>
         <div class="gnav-items">
           <button data-vista="comercial" data-nombre="Presupuestos y pedidos" data-desc="Lo que se ofrece y se acuerda antes de facturar" data-claves="ventas cotización presupuesto pedido"><svg class="ico"><use href="#i-comercial"/></svg><span class="txt">Presupuestos y pedidos</span></button>
           <button data-vista="operaciones" data-nombre="Facturas y comprobantes" data-desc="El libro de comprobantes de venta y de compra" data-claves="factura nota de crédito cae arca operaciones fiscales"><svg class="ico"><use href="#i-operaciones"/></svg><span class="txt">Facturas y comprobantes</span></button>
@@ -819,7 +844,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         </div>
       </div>
 
-      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Comprar<svg class="ico"><use href="#i-chevron"/></svg></div>
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Compras<svg class="ico"><use href="#i-chevron"/></svg></div>
         <div class="gnav-items">
           <button data-vista="documentos" data-nombre="Documentos" data-desc="Subí facturas: los XML de ARCA se leen solos; PDF y fotos se archivan" data-claves="subir ocr comprobante archivo escanear"><svg class="ico"><use href="#i-documentos"/></svg><span class="txt">Documentos</span></button>
           <button data-vista="solicitudes" data-nombre="Pedidos de compra" data-desc="Pedir mercadería o servicios y aprobarlos" data-claves="solicitudes compras requisición"><svg class="ico"><use href="#i-solicitudes"/></svg><span class="txt">Pedidos de compra</span></button>
@@ -828,7 +853,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         </div>
       </div>
 
-      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Dinero<svg class="ico"><use href="#i-chevron"/></svg></div>
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Tesorería<svg class="ico"><use href="#i-chevron"/></svg></div>
         <div class="gnav-items">
           <button data-vista="caja" data-nombre="Caja" data-desc="Abrir, registrar movimientos y arquear" data-claves="efectivo arqueo cierre de caja"><svg class="ico"><use href="#i-caja"/></svg><span class="txt">Caja</span></button>
           <button data-vista="bancos" data-nombre="Bancos" data-desc="Cuentas, extractos y conciliación" data-claves="conciliación extracto cuenta bancaria"><svg class="ico"><use href="#i-bancos"/></svg><span class="txt">Bancos</span></button>
@@ -836,11 +861,11 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         </div>
       </div>
 
-      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Stock y operación<svg class="ico"><use href="#i-chevron"/></svg></div>
+      <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Inventario y operaciones<svg class="ico"><use href="#i-chevron"/></svg></div>
         <div class="gnav-items">
           <button data-vista="stock" data-nombre="Stock" data-desc="Cuánto hay, dónde está, movimientos y recuentos" data-claves="existencias inventario depósito mercadería recuento"><svg class="ico"><use href="#i-stock"/></svg><span class="txt">Stock</span></button>
           <button data-vista="activos" data-nombre="Bienes de uso" data-desc="Activos fijos y su amortización" data-claves="activos fijos amortización rodados máquinas"><svg class="ico"><use href="#i-activos"/></svg><span class="txt">Bienes de uso</span></button>
-          <button data-vista="proyectos" data-nombre="Proyectos" data-desc="Qué proyecto deja plata y cuál no" data-claves="obras horas tareas rentabilidad"><svg class="ico"><use href="#i-proyectos"/></svg><span class="txt">Proyectos</span></button>
+          <button data-vista="proyectos" data-nombre="Proyectos" data-desc="Qué proyecto es rentable y cuál no" data-claves="obras horas tareas rentabilidad"><svg class="ico"><use href="#i-proyectos"/></svg><span class="txt">Proyectos</span></button>
           <button data-vista="sucursales" data-nombre="Sucursales" data-desc="Cómo le va a cada sucursal o punto de venta" data-claves="puntos de venta locales bocas"><svg class="ico"><use href="#i-sucursales"/></svg><span class="txt">Sucursales</span></button>
           <button data-vista="integraciones" data-nombre="Integraciones" data-desc="Conectar sistemas de afuera" data-claves="conectores tienda nube mercado libre api"><svg class="ico"><use href="#i-integraciones"/></svg><span class="txt">Integraciones</span></button>
         </div>
@@ -878,6 +903,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   </div>
 </aside>
 <div class="velo" id="velo"></div>
+<button id="b-as-lado" class="as-lado" type="button" aria-controls="v-asistente" aria-expanded="false" title="Abrir el asistente de IA">Asistente de IA</button>
 
 <div class="columna">
 <header>
@@ -1207,7 +1233,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div id="g-arranque"></div>
       </div>
       <div class="panel panel-ancho" id="pn-banco">
-        <div class="panel-cab"><h3>Plata en el banco por mes</h3><span class="panel-sub">ingresos y egresos</span></div>
+        <div class="panel-cab"><h3>Movimientos bancarios por mes</h3><span class="panel-sub">ingresos y egresos</span></div>
         <div id="g-banco"></div>
       </div>
       <div class="pila">
@@ -1250,7 +1276,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <h3>Puesta en marcha</h3>
     <div id="arranque-veredicto"></div>
     <p class="ayuda">Ningún paso se tilda: se cuenta lo que hay, así que la lista no puede
-      decir «listo» sobre algo que no está. <strong>Cinco estados y no dos</strong>:
+      declarar «completo» algo que no lo está. <strong>Cinco estados y no dos</strong>:
       <em>pendiente</em> es «todavía no lo cargaste», <em>no declarado</em> es «esto no se
       carga, se declara, y nadie lo declaró», y <em>no aplica</em> es «no te hace falta, y acá
       está por qué». Solo tres pasos <strong>bloquean</strong>: cuentas, ejercicio y período
@@ -1289,8 +1315,8 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 
 <!-- ══ Bandeja ════════════════════════════════════════════════════════════ -->
 <!-- ══ Preguntar ══════════════════════════════════════════════════════════ -->
-<section id="v-asistente" hidden>
-  <h2>Asistente</h2>
+<section id="v-asistente" hidden aria-label="Asistente de IA">
+  <h2>Asistente<button id="b-as-cerrar" class="as-cerrar" type="button" aria-label="Cerrar el asistente" title="Cerrar">×</button></h2>
   <p class="ayuda">Escribile, mandale una foto o un PDF, o hablale. Te contesta con los datos de la
     empresa, te explica cómo se hace algo en NEXO y te arma la carga de un cliente o proveedor.
     <strong>No guarda nada por sí solo</strong>: lo que arma lo ves y lo confirmás vos. Las cifras
@@ -1340,7 +1366,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 </section>
 
 <section id="v-inteligencia" hidden>
-  <h2>Preguntar</h2>
+  <h2>Consultas</h2>
   <p class="ayuda">La cifra la calcula el mismo motor que la pantalla del módulo, así que los
     números coinciden. Cada respuesta trae <strong>de dónde salió</strong> y <strong>qué no
     incluye</strong>: un total sin forma de abrirlo es una afirmación sin origen.</p>
@@ -1372,7 +1398,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <div class="fila" id="intel-cupo-declarar" hidden>
       <div><label>Preguntas por día <span class="opcional">— opcional</span></label>
         <input id="intel-cupo-n" inputmode="numeric"></div>
-      <div><label>Tokens por día <span class="opcional">— opcional</span></label>
+      <div><label>Tokens por día de esta empresa <span class="opcional">— opcional, dentro del tope del plan</span></label>
         <input id="intel-cupo-tokens" inputmode="numeric"></div>
       <div style="flex:1"><label>Por qué ese número</label>
         <input id="intel-cupo-motivo" maxlength="500"></div>
@@ -1963,8 +1989,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <h3>Antigüedad de saldos</h3>
   <p class="ayuda">Cuánto debe cada tercero y desde cuándo. Los tramos se cuentan desde el
     <strong>vencimiento</strong> del comprobante, y un comprobante sin condición de pago
-    declarada no tiene vencimiento: cae en el primer tramo sin estar vencido. Hasta hoy esto
-    solo se podía <em>bajar</em> en CSV.</p>
+    declarada no tiene vencimiento: cae en el primer tramo sin estar vencido. Hasta ahora solo se podía <em>descargar</em> en CSV.</p>
   <div class="fila">
     <div><label>Dirección</label><select id="ter-ag-dir">
       <option>VENTAS</option><option>COMPRAS</option>
@@ -2060,7 +2085,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
             <div><label>Cuotas</label><input id="ter-p-n" inputmode="numeric" value="3"></div>
             <div><label>Primer vencimiento</label><input id="ter-p-desde" type="date"></div>
             <div><label>Cada (días)</label><input id="ter-p-cada" inputmode="numeric" value="30"></div>
-            <div><label>&nbsp;</label><button id="b-ter-plan-tipear" class="sec">Tipear filas</button></div>
+            <div><label>&nbsp;</label><button id="b-ter-plan-tipear" class="sec">Cargar filas manualmente</button></div>
           </div>
           <div id="ter-p-filas"></div>
           <button id="b-ter-plan-guardar">Declarar el plan</button>
@@ -2388,7 +2413,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div><label>Contado</label><input id="rcu-l-cant" inputmode="decimal"></div>
         <div><label>&nbsp;</label><button id="b-rcu-agregar" class="sec">Agregar al borrador</button></div>
       </div>
-      <p class="ayuda">Contar <strong>cero</strong> dice «fui, miré, no hay ninguno» y ajusta por
+      <p class="ayuda">Contar <strong>cero</strong> dice «se revisó y no hay ninguno» y ajusta por
         todo lo que el libro decía. Un producto que no aparece en el recuento no se toca: nadie
         lo miró, y eso no es lo mismo que no haber encontrado nada.</p>
       <div class="tabla"><table id="t-rcu-lin"><thead><tr>
@@ -2635,7 +2660,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <h2>Sucursales</h2>
   <p class="ayuda">La sucursal <strong>no se guarda en la factura</strong>: se declara qué puntos
     de venta son suyos y la atribución se deriva del número que ya viaja en cada comprobante.
-    Con <strong>vigencia</strong>, porque las bocas se mudan: sin fecha, reasignar un punto de
+    Con <strong>vigencia</strong>, porque los puntos de venta cambian de sucursal: sin fecha, reasignar un punto de
     venta reescribiría a qué sucursal pertenecen las ventas del año pasado.</p>
 
   <button id="b-suc" class="sec">Actualizar</button>
@@ -2646,11 +2671,10 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <th>Comprobantes</th><th>Ventas (neto)</th><th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
 
-  <h3>Cómo le va a cada boca</h3>
+  <h3>Desempeño por punto de venta</h3>
   <p class="ayuda">Cada sucursal informa <strong>dos atribuciones</strong>: las ventas por punto
     de venta y lo imputado al centro de costo en el Mayor. Pueden no coincidir, y la diferencia
-    se muestra en vez de promediarse — elegir una y callar la otra daría un número más lindo y
-    menos cierto.</p>
+    se muestra en vez de promediarse — elegir una y callar la otra daría una cifra más presentable y menos exacta.</p>
   <div class="tabla"><table id="t-suc-rend"><thead><tr>
     <th>Sucursal</th><th>Ventas por PV</th><th>Ingresos imputados</th><th>Costos</th>
     <th>Resultado</th><th>Brecha</th><th>Por qué</th>
@@ -2679,7 +2703,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
       </div>
       <p class="ayuda">Un punto de venta pertenece a <strong>una sola</strong> sucursal por vez:
         con dos, el mismo comprobante se contaría en las dos y el total de la empresa dejaría de
-        cerrar contra la suma de sus bocas.</p>
+        cerrar contra la suma de sus puntos de venta.</p>
       <div id="suc-p-msg"></div>
 
       <h4>Cerrar la sucursal</h4>
@@ -2688,7 +2712,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div style="flex:1"><label>Motivo</label><input id="suc-c-motivo" maxlength="500"></div>
         <div><label>&nbsp;</label><button id="b-suc-cerrar">Cerrar</button></div>
       </div>
-      <p class="ayuda">Cerrar una boca <strong>no cambia de dónde salieron</strong> las facturas
+      <p class="ayuda">Cerrar un punto de venta <strong>no cambia de dónde salieron</strong> las facturas
         del año pasado: sus ventas siguen atribuidas. Si su punto de venta pasa a otra sucursal,
         declaralo con vigencia desde la fecha del traspaso.</p>
       <div id="suc-c-msg"></div>
@@ -2770,8 +2794,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div><label>&nbsp;</label><button id="b-cms-esquema" class="sec">Declarar</button></div>
       </div>
       <p class="ayuda"><strong>Sobre el total</strong> paga comisión sobre el IVA, que la
-        empresa cobra para ARCA y no es suyo. <strong>Sobre lo cobrado</strong> devenga a
-        medida que entra la plata. Cuál corresponde lo dice el acuerdo, no el sistema.</p>
+        empresa cobra para ARCA y no es suyo. <strong>Sobre lo cobrado</strong> devenga a medida que se cobra. Cuál corresponde lo dice el acuerdo, no el sistema.</p>
       <div id="cms-e-msg"></div>
     </div>
   </div>
@@ -2786,7 +2809,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
       <div><label>&nbsp;</label><button id="b-cms-alta" class="sec">Crear</button></div>
     </div>
     <p class="ayuda">El tercero se elige solo cuando el vendedor es externo y factura: crear uno
-      para un empleado ensuciaría el maestro con alguien a quien no se le compra ni se le
+      para un empleado degradaría el maestro con alguien a quien no se le compra ni se le
       vende.</p>
     <div id="cms-alta-msg"></div>
   </div></details>
@@ -2808,7 +2831,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <h2>Proyectos</h2>
   <p class="ayuda">Los ingresos y los costos <strong>no se cargan acá</strong>: salen del Mayor,
     por el centro de costo que el proyecto cita. Un módulo con sus propios totales sería una
-    segunda contabilidad, y cuando dos no coinciden gana la que alguien tipeó.
+    segunda contabilidad, y cuando dos no coinciden prevalece la que alguien digitó.
     Las horas se valúan a la tarifa que la empresa <strong>declaró</strong> y que regía el día
     en que se trabajaron: el costo real de una hora sale de la liquidación de sueldos, que no
     existe, e inventarlo sería inventar el sueldo de alguien.</p>
@@ -2821,7 +2844,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <th>Estado</th><th></th>
   </tr></thead><tbody></tbody></table></div>
 
-  <h3>Cuál deja plata</h3>
+  <h3>Rentabilidad por proyecto</h3>
   <p class="ayuda">Es la pregunta que ningún estado contable contesta. Los proyectos con margen
     <strong>«no se puede afirmar»</strong> no están al final por castigo: les falta el centro de
     costo o les faltan tarifas, y cada uno dice cuál de las dos.</p>
@@ -2930,8 +2953,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <h3>El embudo</h3>
   <p class="ayuda">NEXO <strong>no trae etapas por defecto</strong>: un embudo es cómo vende esta
     empresa. Y la probabilidad de cada etapa se declara: sin declararla, se informa el importe
-    estimado y <strong>no se pondera</strong>, porque inventar un 60&nbsp;% da un número que
-    parece plata y no lo es. El embudo <strong>no entra al flujo de fondos</strong>: una
+    estimado y <strong>no se pondera</strong>, porque inventar un 60&nbsp;% da una cifra que parece un ingreso y no lo es. El embudo <strong>no entra al flujo de fondos</strong>: una
     oportunidad no es un crédito.</p>
   <button id="b-crm" class="sec">Actualizar</button>
   <dl class="kv" id="crm-embudo-resumen"></dl>
@@ -2992,8 +3014,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div><label>&nbsp;</label><button id="b-crm-presupuesto" class="sec">Vincular</button></div>
       </div>
       <p class="ayuda">CRM <strong>no crea documentos comerciales</strong>: el presupuesto nace
-        del circuito de siempre, con su numeración y su máquina de estados. Acá solo se ata el
-        cabo, y mientras no esté atado la bandeja lo dice.</p>
+        del circuito de siempre, con su numeración y su máquina de estados. Aquí solo se vincula, y mientras no esté vinculada la bandeja lo indica.</p>
       <div id="crm-p-msg"></div>
     </div>
   </div>
@@ -3013,7 +3034,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
       <div><label>Cierre estimado</label><input id="crm-n-cierre" type="date"></div>
     </div>
     <p class="ayuda">Un prospecto <strong>todavía no es un tercero</strong>: el maestro exige
-      documento, y llenarlo de gente que nunca compró lo vuelve inservible para lo que existe,
+      documento, y cargarlo con personas que nunca compraron lo vuelve inservible para lo que existe,
       que es facturar. Basta el nombre hasta que la venta lo justifique.</p>
     <button id="b-crm-alta-op" class="sec">Cargar</button>
     <div id="crm-alta-op-msg"></div>
@@ -3049,8 +3070,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <p class="ayuda">Una lista <strong>rige entre dos fechas</strong>, y por eso el precio de una
     operación se busca siempre por <em>la fecha de la operación</em> y nunca por la de hoy:
     reimprimir un presupuesto de marzo con la lista de septiembre produce un documento que dice
-    algo que nunca se ofreció. La lista <strong>sugiere</strong>, no impone — imponerla haría
-    imposible la excepción, que en una venta es la mitad del trabajo.</p>
+    algo que nunca se ofreció. La lista <strong>sugiere</strong>, no impone — imponerla impediría la excepción, que en una venta es frecuente.</p>
 
   <button id="b-pre" class="sec">Actualizar</button>
   <div id="pre-msg"></div>
@@ -3135,8 +3155,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 
   <h3>Subdiarios</h3>
   <p class="ayuda">Los comprobantes <strong>excluidos</strong> se muestran arriba y no al
-    final de la lista: uno que quedó fuera de los totales y solo aparece si alguien scrollea
-    es un comprobante que nadie va a ir a buscar.</p>
+    final de la lista: uno que quedó fuera de los totales y solo aparece al final de la lista es un comprobante que nadie va a revisar.</p>
   <div class="fila">
     <div><label>Dirección</label><select id="iva-dir">
       <option>VENTAS</option><option>COMPRAS</option></select></div>
@@ -3154,9 +3173,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 <!-- ══ Bancos ═════════════════════════════════════════════════════════════ -->
 <section id="v-bancos" hidden>
   <h2>Bancos y conciliación</h2>
-  <p class="ayuda">La conciliación se <strong>propone</strong> y se confirma de a una. No hay
-    «aceptar todas»: la norma pide intervención humana, y un botón que acepta todo junto es
-    exactamente cómo esa intervención se vuelve un trámite.</p>
+  <p class="ayuda">La conciliación se <strong>propone</strong> y se confirma una por una. No existe la opción «aceptar todas»: la norma exige intervención humana, y una confirmación masiva la reduce a un mero trámite.</p>
 
   <div class="fila">
     <div><label>Cuenta</label><select id="ban-cuenta"></select></div>
@@ -3294,7 +3311,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <p class="ayuda">Cheques de terceros recibidos y no depositados, por su <em>fecha de pago</em>
     declarada — no por la del comprobante que los originó. <strong>No se suma a la proyección
     de cobranzas</strong>: una factura cancelada con un cheque ya no figura como pendiente, y
-    sumar las dos cosas contaría la misma plata dos veces.</p>
+    sumar las dos cosas contaría el mismo dinero dos veces.</p>
   <button id="b-chq" class="sec">Actualizar</button>
   <dl class="kv" id="chq-cartera"></dl>
   <div id="chq-msg"></div>
@@ -3451,8 +3468,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 <section id="v-pagos" hidden>
   <h2>Órdenes de pago</h2>
   <p class="ayuda">Es el documento que va entre la factura del proveedor y el pago: qué se
-    paga, por cuánto y quién lo aprobó. <strong>No mueve el Mayor.</strong> La plata sale con
-    un asiento imputado, por el camino de siempre, y la orden lo cita. Tampoco se suma a la
+    paga, por cuánto y quién lo aprobó. <strong>No mueve el Mayor.</strong> El dinero sale con un asiento imputado, por el camino de siempre, y la orden lo cita. Tampoco se suma a la
     proyección de fondos: los comprobantes que nombra ya están ahí por su pendiente, y
     contarlos otra vez sería contarlos dos veces.</p>
   <p class="ayuda">Marcar una orden como pagada exige el asiento <strong>y</strong> que ese
@@ -3560,8 +3576,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
         <div><label>Fecha</label><input id="caja-m-fecha" type="date"></div>
         <div style="flex:1"><label>Concepto</label><input id="caja-m-concepto" maxlength="300"></div>
       </div>
-      <p class="ayuda">El concepto es obligatorio: un movimiento de caja sin concepto es plata
-        que se movió porque sí, y al arquear nadie puede reconstruir qué pasó.</p>
+      <p class="ayuda">El concepto es obligatorio: un movimiento de caja sin concepto es un movimiento de fondos sin justificación, y al arquear nadie puede reconstruir qué pasó.</p>
       <button id="b-caja-mov" class="sec">Registrar</button>
       <div id="caja-m-msg"></div>
 
@@ -3605,7 +3620,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 <!-- ══ Integraciones ══════════════════════════════════════════════════════ -->
 <section id="v-integraciones" hidden>
   <h2>Integraciones</h2>
-  <p class="ayuda">Lo que llega de afuera <strong>aterriza, no entra</strong>. Un conector
+  <p class="ayuda">Lo que llega de afuera <strong>se recibe, no se incorpora</strong>. Un conector
     deposita lo que informó el proveedor y una persona decide qué es: nada escribe en el
     motor contable por su cuenta. El registro externo conserva su contenido original
     intacto aunque se lo descarte, porque sigue siendo prueba de lo que el proveedor dijo.</p>
@@ -3640,7 +3655,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <p class="ayuda">Lo que se baja del panel de la tienda o de la pasarela de pagos. Es el
       único camino disponible hoy: los conectores por API necesitan la credencial de cada
       plataforma. <strong>Qué columna es cada cosa se declara</strong>, no se adivina por el
-      nombre del encabezado — adivinar anda con el archivo de prueba y falla el día que el
+      nombre del encabezado — adivinar funciona con el archivo de prueba y falla el día que el
       proveedor traduzca la exportación.</p>
     <div class="fila">
       <div style="flex:1"><label>Integración</label><select id="int-i-integracion"></select></div>
@@ -3793,7 +3808,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   </div></details>
 
   <h3>Flujo de fondos</h3>
-  <p class="ayuda">Cuánta plata entra y cuándo, de todas las fuentes que hoy la tienen:
+  <p class="ayuda">Cuánto dinero ingresa y cuándo, de todas las fuentes que hoy la tienen:
     comprobantes pendientes y cheques en cartera. <strong>Se pueden sumar</strong> porque el
     doble conteo tiene una condición precisa —que el cobro no haya llegado al Mayor— y lo que
     la cumple queda afuera del total, con su motivo a la vista.</p>
@@ -4070,12 +4085,12 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <button id="b-mayor" class="sec">Mayor</button>
   <button id="b-balance" class="sec">Balance</button>
   <button id="b-emisiones" class="sec">Emisiones</button>
-  <button id="b-exp-diario" class="sec">Bajar el Diario (CSV)</button>
-  <button id="b-exp-mayor" class="sec">Bajar el Mayor (CSV)</button>
-  <button id="b-exp-balance" class="sec">Bajar el balance (CSV)</button>
-  <button id="b-exp-aging" class="sec">Bajar la antigüedad de saldos (CSV)</button>
-  <button id="b-exp-analytics" class="sec">Bajar operaciones por mes (CSV)</button>
-  <button id="b-exp-stock" class="sec">Bajar existencias valuadas (CSV)</button>
+  <button id="b-exp-diario" class="sec">Descargar el Diario (CSV)</button>
+  <button id="b-exp-mayor" class="sec">Descargar el Mayor (CSV)</button>
+  <button id="b-exp-balance" class="sec">Descargar el balance (CSV)</button>
+  <button id="b-exp-aging" class="sec">Descargar la antigüedad de saldos (CSV)</button>
+  <button id="b-exp-analytics" class="sec">Descargar operaciones por mes (CSV)</button>
+  <button id="b-exp-stock" class="sec">Descargar existencias valuadas (CSV)</button>
   <div id="lib-acciones"></div>
   <div id="lib-msg"></div>
   <div class="tabla" id="lib-salida"></div>
@@ -4086,7 +4101,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <h2>Estados contables y notas</h2>
   <p class="ayuda">El estado se <strong>arma</strong> desde el Mayor cada vez que se pide:
     verlo no lo emite. Emitirlo es un acto del profesional, y le calcula el hash.
-    Cada renglón es clickeable: lleva a las cuentas que lo componen.</p>
+    Cada renglón es seleccionable: lleva a las cuentas que lo componen.</p>
   <div class="fila">
     <div><label>Ejercicio</label><select id="est-fy"></select></div>
     <div><label>Tipo</label><select id="est-tipo"><option>ESP</option><option>ER</option></select></div>
@@ -4323,8 +4338,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
     <p class="ayuda">Cuatro detectores determinísticos sobre los asientos <strong>aprobados</strong>.
       <strong>Ninguna anomalía es una acusación</strong>: cada una dice qué se observó y qué
       habría que mirar, nunca qué significa. Un asiento cargado un domingo a las tres de la
-      mañana es un hecho; que sea un fraude, un ajuste de cierre o un contador con insomnio no
-      lo decide el software. Y no vienen ordenadas por riesgo: ordenarlas exigiría ponerle un
+      mañana es un hecho; que responda a un fraude, a un ajuste de cierre o a otra causa no lo determina el software. Y no vienen ordenadas por riesgo: ordenarlas exigiría ponerle un
       número a cada hallazgo, y ese número el sistema no lo puede fundar.</p>
     <button id="b-au-anom" class="sec">Analizar el período de arriba</button>
     <div id="au-anom-msg"></div>
@@ -4606,8 +4620,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
   <h3>Centros de costo</h3>
   <p class="ayuda">La dimensión con la que se etiqueta una línea de asiento y una solicitud de
     compra. Existían en la API desde el principio y <strong>no había pantalla</strong>: se
-    podían elegir en un asiento y no se podían crear, así que la lista arrancaba vacía y no
-    había forma de llenarla. Una cuenta puede exigirlo — ahí el asiento sin centro no entra.</p>
+    podían elegir en un asiento y no se podían crear, así que la lista comenzaba vacía y no había forma de completarla. Una cuenta puede exigirlo — ahí el asiento sin centro no entra.</p>
   <div class="fila" id="cc-alta" hidden>
     <div><label>Código</label><input id="cc-codigo" maxlength="40"></div>
     <div style="flex:1"><label>Nombre</label><input id="cc-nombre" maxlength="200"></div>
@@ -5083,7 +5096,7 @@ function explicarError(r) {
   }
   if (st === 404) {
     return { paso: 'Eso que buscás no existe, o ya no existe, o pertenece a otra empresa (por seguridad NEXO no dice cuál de las tres).',
-      hacer: 'Actualizá la lista y fijate de estar en la empresa correcta. Si lo acabás de crear, probá de nuevo en unos segundos.' };
+      hacer: 'Actualizá la lista y verificá que estés en la empresa correcta. Si lo acabás de crear, probá de nuevo en unos segundos.' };
   }
   if (st === 409) {
     return { paso: 'La operación choca con el estado actual: ya está hecha, o está en un estado desde el que no se puede hacer eso, o alguien la cambió antes que vos.',
@@ -5103,9 +5116,9 @@ function explicarError(r) {
   }
   if (st >= 500) {
     return { paso: 'Falló algo de nuestro lado, no por lo que hiciste. Lo registramos.',
-      hacer: 'Probá de nuevo en un momento. Si se repite, copiá el «detalle técnico» de abajo y mandáselo al soporte.' };
+      hacer: 'Probá de nuevo en un momento. Si se repite, copiá el «detalle técnico» de abajo y enviáselo a soporte.' };
   }
-  return { paso: 'La operación no se pudo completar.', hacer: 'Probá de nuevo; si se repite, copiá el «detalle técnico» y mandáselo al soporte.' };
+  return { paso: 'La operación no se pudo completar.', hacer: 'Probá de nuevo; si se repite, copiá el «detalle técnico» y enviáselo a soporte.' };
 }
 
 function decir(destino, resultado, exito) {
@@ -5126,7 +5139,7 @@ function decir(destino, resultado, exito) {
     const frase = (d && (d.mensaje || d.siguiente)) || '';
     const titulo = resultado.repetida
       ? 'Ya estaba registrado: el pedido había llegado antes y no se duplicó.'
-      : (exito || 'Listo');
+      : (exito || 'Operación realizada.');
     caja.innerHTML = '<div class="aviso ok"><strong>' + escapar(titulo) + '</strong>' +
       (frase ? ' ' + conEnfasis(frase) : '') + tecnico + '</div>';
     GUIA.proximoPaso(destino, caja, exito);
@@ -5222,6 +5235,13 @@ const ESTADO_DE_SUSCRIPCION = new Proxy(ESTADO_DE_SUSCRIPCION_CONOCIDO, {
     Object.prototype.hasOwnProperty.call(mapa, estado) ? mapa[estado] : String(estado),
 });
 
+/** Los tokens de IA del plan son TOTALES: los comparten todas las empresas del estudio, no cada una por separado. */
+const tokensDeIa = (p) => {
+  if (!p.tokensDeIaPorDia) return null;
+  const unaSola = (p.topes || []).some((t) => t.recurso === 'EMPRESAS' && Number(t.tope) === 1);
+  return Number(p.tokensDeIaPorDia).toLocaleString('es-AR') + ' tokens de IA por día' + (unaSola ? '' : ', compartidos entre todas tus empresas');
+};
+
 const nombreDelTope = (recurso, tope, ilimitado) => {
   // SIN_TOPE declarado no es SIN_TOPE_DECLARADO. Uno es una decisión escrita
   // —«este plan no tiene tope de esto»— y el otro es que nadie lo escribió.
@@ -5299,10 +5319,13 @@ function faltaElegirEmpresa(vista) {
 
 function ir(vista, migas) {
   if (faltaElegirEmpresa(vista)) { vista = 'empresa'; migas = ['Elegir empresa']; }
+  // El asistente no es una pantalla: es un panel al costado que se abre sobre la que estás.
+  if (vista === 'asistente') { ASISTENTE_LADO.abrir(true); return; }
+  if (PANTALLAS_SIN_EMPRESA.indexOf(vista) !== -1) ASISTENTE_LADO.abrir(false);
   estado.vista = vista;
   for (const v of VISTAS) {
     const s = E('v-' + v);
-    if (s) s.hidden = v !== vista;
+    if (s && v !== 'asistente') s.hidden = v !== vista;
   }
   for (const b of document.querySelectorAll('nav button')) {
     const activo = b.dataset.vista === vista;
@@ -5340,10 +5363,10 @@ for (const b of document.querySelectorAll('nav button')) {
       return;
     }
     ir(v, [b.dataset.nombre]);
+    if (v === 'asistente') { cargarAsistente(); return; }
     window.scrollTo(0, 0);
     if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
     if (v === 'inteligencia') cargarInteligencia();
-    if (v === 'asistente') cargarAsistente();
     if (v === 'bandeja') bandeja();
     if (v === 'documentos') listarDocumentos();
     if (v === 'operaciones') listarOperaciones();
@@ -5381,6 +5404,31 @@ for (const b of document.querySelectorAll('nav button')) {
     if (v === 'config') cargarConfig();
   };
 }
+
+/** El asistente al costado: se abre desde el menú o desde la pestaña del borde, y se cierra con la «×». */
+const ASISTENTE_LADO = (() => {
+  const panel = E('v-asistente');
+  const pestana = E('b-as-lado');
+  const abierto = () => !panel.hidden;
+  function abrir(si) {
+    panel.hidden = !si;
+    pestana.setAttribute('aria-expanded', String(si));
+    E('app').dataset.asistente = si ? 'si' : 'no';
+    if (si) E('as-texto').focus({ preventScroll: true });
+  }
+  E('b-as-cerrar').onclick = () => abrir(false);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && abierto() && !e.defaultPrevented) abrir(false); });
+  pestana.onclick = () => {
+    const b = document.querySelector('nav button[data-vista="asistente"]');
+    if (b !== null && !b.hidden) b.click();
+  };
+  // La pestaña sigue al botón del menú: si el rol no puede usar el asistente, tampoco la ve.
+  const botonDelMenu = document.querySelector('nav button[data-vista="asistente"]');
+  const sincronizar = () => { pestana.hidden = botonDelMenu === null || botonDelMenu.hidden; if (pestana.hidden) abrir(false); };
+  if (botonDelMenu !== null) new MutationObserver(sincronizar).observe(botonDelMenu, { attributes: true, attributeFilter: ['hidden'] });
+  sincronizar();
+  return { abrir, abierto };
+})();
 
 // ══ 0 · Sesión ════════════════════════════════════════════════════════════
 E('b-alta').onclick = async () => {
@@ -5481,7 +5529,7 @@ async function cargarPlanes() {
         : '<span class="p p-neu">sin precio declarado</span>') + '</td>' +
       '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
       '<td>' + escapar((p.topes || [])
-        .map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).join(' · ') || 'sin declarar') + '</td>';
+        .map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).concat(tokensDeIa(p) || []).join(' · ') || 'sin declarar') + '</td>';
     cuerpo.appendChild(tr);
 
     const o = document.createElement('option');
@@ -6013,7 +6061,7 @@ const GUIAS = {
     que: 'El resumen de tu empresa: qué falta para empezar a trabajar y qué necesita tu atención hoy.',
     pasos: [
       { t: 'Mirá los números de arriba: son tus pendientes. Los que impiden registrar van primero porque frenan el trabajo.' },
-      { t: 'En «Puesta en marcha» fijate qué pasos figuran como pendientes o sin declarar: son los que habilitan funciones del sistema.' },
+      { t: 'En «Puesta en marcha» verificá qué pasos figuran como pendientes o sin declarar: son los que habilitan funciones del sistema.' },
       { t: 'Para resolver un pendiente, andá a «Pendientes»: cada fila te lleva a la pantalla donde se arregla.' },
     ],
     despues: [['bandeja', 'Resolver pendientes'], ['config', 'Completar la configuración'], ['asistente', 'Preguntarle al asistente']],
@@ -6160,7 +6208,7 @@ const GUIAS = {
     despues: [['stock', 'Ver el stock'], ['operaciones', 'Cargar la factura del proveedor']],
   },
   pagos: {
-    que: 'Órdenes de pago a proveedores: qué se paga, cuánto y quién lo aprobó. La orden no mueve plata: la plata sale con el asiento.',
+    que: 'Órdenes de pago a proveedores: qué se paga, cuánto y quién lo aprobó. La orden no mueve fondos: el dinero sale con el asiento.',
     pasos: [
       { t: 'Elegí el proveedor y tocá «Ver qué se le debe».', a: '#b-odp-pagables' },
       { t: 'Marcá los comprobantes a pagar y tocá «Armar el borrador».', a: '#b-odp-alta' },
@@ -6176,7 +6224,7 @@ const GUIAS = {
       { t: 'La primera vez, «Dar de alta una caja»: código, nombre y la cuenta contable.', a: '#caja-a-codigo' },
       { t: 'Abrí la caja con el saldo con el que arranca.', a: '#caja-n-inicial' },
       { t: 'Durante el día registrá cada ingreso y egreso.', a: '#caja-m-tipo' },
-      { t: 'Al cerrar, contá la plata e ingresá lo contado. Si no coincide, decí por qué.', a: '#caja-c-contado' },
+      { t: 'Al cerrar, contá el efectivo e ingresá lo contado. Si no coincide, decí por qué.', a: '#caja-c-contado' },
     ],
     despues: [['bancos', 'Ir a bancos'], ['libros', 'Ver los libros']],
   },
@@ -6186,7 +6234,7 @@ const GUIAS = {
       { t: 'Dá de alta la cuenta bancaria con su cuenta contable.', a: '#ban-a-nombre' },
       { t: 'Creá un «mapeo»: le explica al sistema qué columna del archivo del banco es cada cosa.', a: '#ban-m-nombre' },
       { t: 'Pegá el contenido del extracto y tocá «Importar».', a: '#ban-csv' },
-      { t: 'Pedí la «Propuesta de conciliación» y confirmá de a una: no hay «aceptar todas».', a: '#b-ban-proponer' },
+      { t: 'Pedí la «Propuesta de conciliación» y confirmá una por una: no existe «aceptar todas».', a: '#b-ban-proponer' },
     ],
     despues: [['cheques', 'Ver los cheques'], ['asientos', 'Ver los asientos']],
   },
@@ -6221,22 +6269,22 @@ const GUIAS = {
     despues: [['asientos', 'Ver los asientos'], ['cierre', 'Ir al cierre']],
   },
   proyectos: {
-    que: 'Proyectos o trabajos, con sus horas y tareas, para saber cuál deja plata y cuál no.',
+    que: 'Proyectos o trabajos, con sus horas y tareas, para saber cuál es rentable y cuál no.',
     pasos: [
       { t: 'Abrí el proyecto: código, nombre, cliente y centro de costo.', a: '#proy-n-codigo' },
       { t: 'Tocá «Abrir». Después abrilo desde la lista.', a: '#b-proy-alta' },
       { t: 'Cargá las horas trabajadas y, si hace falta, declará la tarifa por hora.', a: '#proy-h-horas' },
-      { t: 'En «Cuál deja plata» comparás ingresos y costos de todos.', a: '#b-proy' },
+      { t: 'En «Rentabilidad por proyecto» comparás ingresos y costos de todos.', a: '#b-proy' },
     ],
     despues: [['comisiones', 'Ver comisiones'], ['analitica', 'Ver analítica']],
   },
   sucursales: {
-    que: 'Tus sucursales y puntos de venta: cómo le va a cada una.',
+    que: 'Tus sucursales y puntos de venta: el desempeño de cada una.',
     pasos: [
       { t: 'Abrí la sucursal: nombre, depósito y centro de costo.', a: '#suc-n-nombre' },
       { t: 'Tocá «Abrir». Después abrila desde la lista.', a: '#b-suc-alta' },
       { t: 'Declará qué puntos de venta le pertenecen y desde cuándo.', a: '#suc-p-numero' },
-      { t: 'En «Cómo le va a cada boca» ves las ventas atribuidas a cada una.', a: '#b-suc' },
+      { t: 'En «Desempeño por punto de venta» ves las ventas atribuidas a cada uno.', a: '#b-suc' },
     ],
     despues: [['stock', 'Ver los depósitos'], ['analitica', 'Ver analítica']],
   },
@@ -6261,11 +6309,11 @@ const GUIAS = {
     despues: [['libros', 'Ver el Diario y el Mayor'], ['cierre', 'Cerrar el período']],
   },
   libros: {
-    que: 'Los libros contables: Diario, Mayor y balance de sumas y saldos. También podés bajarlos en CSV.',
+    que: 'Los libros contables: Diario, Mayor y balance de sumas y saldos. También podés descargarlos en CSV.',
     pasos: [
       { t: 'Elegí el rango de fechas.', a: '#lib-desde' },
       { t: 'Tocá el libro que querés ver. Para el Mayor, elegí antes la cuenta.', a: '#b-diario' },
-      { t: 'Para llevártelo a Excel, tocá «Bajar … (CSV)».', a: '#b-exp-diario' },
+      { t: 'Para exportarlo a Excel, tocá «Descargar … (CSV)».', a: '#b-exp-diario' },
       { t: 'Emitir un libro le calcula una huella y deja constancia: es un acto del profesional.' },
     ],
     despues: [['estados', 'Armar estados contables'], ['iva', 'Ir al IVA']],
@@ -6307,7 +6355,7 @@ const GUIAS = {
       { t: 'Mirá primero la «Cobertura del detalle»: te dice qué tan completos están los datos.' },
       { t: 'Después recorré las operaciones por mes y los rankings por producto y por cliente.' },
     ],
-    despues: [['analisis', 'Ver alertas y escenarios'], ['libros', 'Bajar los libros']],
+    despues: [['analisis', 'Ver alertas y escenarios'], ['libros', 'Descargar los libros']],
   },
   analisis: {
     que: 'Alertas, flujo de fondos, proyección de cobranzas y simulación de escenarios. Todo con reglas claras, sin adivinar.',
@@ -6336,7 +6384,7 @@ const GUIAS = {
     pasos: [
       { t: 'Filtrá por acción, tipo de objeto, quién lo hizo o fechas.', a: '#au-accion' },
       { t: 'Tocá «Buscar». Cada fila muestra el antes y el después.', a: '#b-au' },
-      { t: 'Para buscar cosas raras, compará períodos o analizá las anomalías del Diario.', a: '#b-au-anom' },
+      { t: 'Para detectar irregularidades, compará períodos o analizá las anomalías del Diario.', a: '#b-au-anom' },
     ],
     despues: [['asientos', 'Ver asientos'], ['config', 'Ir a configuración']],
   },
@@ -6398,8 +6446,8 @@ const PROXIMOS = {
   'caja-alta-msg': { t: 'Caja creada. Ahora abrila con su saldo inicial.', ir: [{ n: 'Mostrame dónde', a: '#caja-n-caja' }] },
   'caja-abrir-msg': { t: 'Caja abierta. Registrá cada ingreso y egreso a medida que ocurren.', ir: [{ n: 'Mostrame dónde', a: '#caja-m-tipo' }] },
   'ban-alta-msg': { t: 'Cuenta creada. Ahora creá el «mapeo» que explica las columnas de su extracto.', ir: [{ n: 'Mostrame dónde', a: '#ban-m-nombre' }] },
-  'ban-mapeo-msg': { t: 'Mapeo listo. Ahora pegá el contenido de un extracto y tocá «Importar».', ir: [{ n: 'Mostrame dónde', a: '#ban-csv' }] },
-  'ban-imp-msg': { t: 'Extracto importado. Pedí la propuesta de conciliación y confirmá de a una.', ir: [{ n: 'Mostrame dónde', a: '#b-ban-proponer' }] },
+  'ban-mapeo-msg': { t: 'Mapeo guardado. Ahora pegá el contenido de un extracto y tocá «Importar».', ir: [{ n: 'Mostrame dónde', a: '#ban-csv' }] },
+  'ban-imp-msg': { t: 'Extracto importado. Pedí la propuesta de conciliación y confirmá una por una.', ir: [{ n: 'Mostrame dónde', a: '#b-ban-proponer' }] },
   'chq-alta-msg': { t: 'Cheque cargado. Está en la cartera: ahí registrás lo que le va pasando.', ir: [{ n: 'Ver la cartera', a: '#b-chq' }] },
   'sol-alta-msg': { t: 'Abrila desde la lista y envíala a aprobar para que la vea quien decide.', ir: [{ n: 'Ver la lista', a: '#b-sol' }] },
   'odp-alta-msg': { t: 'Abrí el borrador desde la lista para aprobarlo y, cuando pagues, registrar el pago.', ir: [{ n: 'Ver la lista', a: '#b-odp' }] },
@@ -6422,12 +6470,8 @@ const PROXIMOS = {
  * Todo se dibuja con `textContent` y nodos del DOM: el texto de las guías es nuestro, pero ninguna guía pasa por `innerHTML`.
  */
 const GUIA = (() => {
-  const CLAVE_GUIAS = 'nexo-guias';
   const CLAVE_BIENVENIDA = 'nexo-bienvenida';
   const SVG = 'http://www.w3.org/2000/svg';
-
-  const cerradas = new Set();
-  try { for (const v of JSON.parse(localStorage.getItem(CLAVE_GUIAS) || '[]')) cerradas.add(v); } catch (e) { /* ignorada */ }
 
   const icono = (id) => {
     const s = document.createElementNS(SVG, 'svg');
@@ -6472,74 +6516,111 @@ const GUIA = (() => {
     return true;
   }
 
-  // ── La tarjeta de cada pantalla ─────────────────────────────────────────────────────────────────────────────────
+  // ── El panel de ayuda de cada pantalla ──────────────────────────────────────────────────────────────────────────
+  // La pantalla abre directo en lo que se hace. Todo lo que explica (cómo se usa, los pasos, cómo funciona por dentro) está detrás de un
+  // cuadradito «?» arriba a la derecha del título, cerrado al entrar. No se recuerda abierto: cada pantalla se ve limpia cada vez.
+  const SIN_PANEL = ['login', 'mfa', 'alta-empresa'];
+
+  /** Las explicaciones estáticas de la pantalla (los párrafos `.ayuda` sin id; los que se llenan por código tienen id y se quedan donde están). */
+  function explicacionesDe(sec) {
+    return [...sec.querySelectorAll(':scope > p.ayuda')].filter((p) => p.id === '' && !p.hidden);
+  }
+
   function construirTarjeta(vista, g) {
     const sec = E('v-' + vista);
-    const h2 = sec ? sec.querySelector('h2') : null;
-    if (h2 === null) return;
+    const h2 = sec ? sec.querySelector(':scope > h2') : null;
+    if (h2 === null || SIN_PANEL.indexOf(vista) !== -1) return;
+    const explicaciones = explicacionesDe(sec);
+    if (g === undefined && explicaciones.length === 0) return;
 
     const t = nodo('div', 'guia');
+    t.id = 'guia-' + vista;
     t.dataset.vista = vista;
-    t.dataset.plegada = cerradas.has(vista) ? 'si' : 'no';
+    t.hidden = true;
 
     const cab = nodo('div', 'guia-cab');
-    cab.append(icono('ayuda'), nodo('strong', '', 'Cómo se usa esta pantalla'), nodo('span', 'espacio'));
-    const ver = nodo('button', 'guia-ver', 'Recorrido guiado');
-    ver.type = 'button';
-    ver.onclick = () => iniciarRecorrido(vista);
-    const plegar = nodo('button', 'guia-plegar', t.dataset.plegada === 'si' ? 'Mostrar' : 'Ocultar');
-    plegar.type = 'button';
-    plegar.onclick = () => {
-      const cerrar = t.dataset.plegada !== 'si';
-      t.dataset.plegada = cerrar ? 'si' : 'no';
-      plegar.textContent = cerrar ? 'Mostrar' : 'Ocultar';
-      if (cerrar) cerradas.add(vista); else cerradas.delete(vista);
-      try { localStorage.setItem(CLAVE_GUIAS, JSON.stringify([...cerradas])); } catch (e) { /* vale por esta visita */ }
-    };
-    cab.append(ver, plegar);
-    t.appendChild(cab);
-    t.appendChild(nodo('p', 'guia-que', g.que));
-
-    const lista = nodo('ol', 'guia-pasos');
-    for (const p of g.pasos) {
-      const li = nodo('li');
-      li.appendChild(nodo('span', 'paso-t', p.t));
-      if (p.a) {
-        const m = nodo('button', 'mostrame', 'Mostrame');
-        m.type = 'button';
-        m.onclick = () => {
-          if (!resaltar(p.a)) {
-            m.textContent = 'Aparece al elegir algo de la lista';
-            m.disabled = true;
-            setTimeout(() => { m.textContent = 'Mostrame'; m.disabled = false; }, 2600);
-          }
-        };
-        li.appendChild(m);
-      }
-      lista.appendChild(li);
+    cab.append(icono('ayuda'), nodo('strong', '', g !== undefined ? 'Cómo se usa esta pantalla' : 'Qué es esta pantalla'), nodo('span', 'espacio'));
+    if (g !== undefined) {
+      const ver = nodo('button', 'guia-ver', 'Recorrido guiado');
+      ver.type = 'button';
+      ver.onclick = () => iniciarRecorrido(vista);
+      cab.appendChild(ver);
     }
-    t.appendChild(lista);
+    t.appendChild(cab);
 
-    const despues = nodo('div', 'guia-despues');
-    despues.appendChild(nodo('span', '', 'Después podés:'));
-    t.appendChild(despues);
+    if (g !== undefined) {
+      t.appendChild(nodo('p', 'guia-que', g.que));
+      const lista = nodo('ol', 'guia-pasos');
+      for (const p of g.pasos) {
+        const li = nodo('li');
+        li.appendChild(nodo('span', 'paso-t', p.t));
+        if (p.a) {
+          const m = nodo('button', 'mostrame', 'Mostrame');
+          m.type = 'button';
+          m.onclick = () => {
+            if (!resaltar(p.a)) {
+              m.textContent = 'Aparece al elegir algo de la lista';
+              m.disabled = true;
+              setTimeout(() => { m.textContent = 'Mostrame'; m.disabled = false; }, 2600);
+            }
+          };
+          li.appendChild(m);
+        }
+        lista.appendChild(li);
+      }
+      t.appendChild(lista);
+
+      const despues = nodo('div', 'guia-despues');
+      despues.appendChild(nodo('span', '', 'Después podés:'));
+      t.appendChild(despues);
+    }
+
+    // El texto técnico de siempre va dentro del panel, plegado.
+    if (explicaciones.length > 0) {
+      const d = nodo('details', 'ayuda-tecnica');
+      d.appendChild(nodo('summary', '', g !== undefined ? 'Detalle del funcionamiento' : 'Leer la explicación'));
+      d.open = g === undefined;
+      for (const p of explicaciones) {
+        // Las que estaban bajo un subtítulo conservan de qué hablan.
+        const previo = p.previousElementSibling;
+        if (previo !== null && /^H[34]$/u.test(previo.tagName)) d.appendChild(nodo('h4', 'ayuda-tema', previo.textContent.trim()));
+        d.appendChild(p);
+      }
+      t.appendChild(d);
+    }
+
+    const cerrar = nodo('button', 'guia-cerrar', 'Cerrar la ayuda');
+    cerrar.type = 'button';
+    t.appendChild(cerrar);
 
     h2.insertAdjacentElement('afterend', t);
 
-    // El texto técnico de siempre queda debajo, plegado.
-    const ay = sec.querySelector(':scope > p.ayuda');
-    if (ay !== null && ay.previousElementSibling === t) {
-      const d = nodo('details', 'ayuda-tecnica');
-      d.appendChild(nodo('summary', '', 'Cómo funciona por dentro'));
-      ay.replaceWith(d);
-      d.appendChild(ay);
-    }
+    const q = nodo('button', 'h2-ayuda', '?');
+    q.type = 'button';
+    q.id = 'b-ayuda-' + vista;
+    q.title = 'Cómo se usa esta pantalla';
+    q.setAttribute('aria-label', 'Mostrar u ocultar la explicación de esta pantalla');
+    q.setAttribute('aria-controls', t.id);
+    q.setAttribute('aria-expanded', 'false');
+    const alternar = (abrir) => {
+      t.hidden = !abrir;
+      q.setAttribute('aria-expanded', String(abrir));
+    };
+    q.onclick = () => alternar(t.hidden);
+    cerrar.onclick = () => { alternar(false); q.focus(); };
+    h2.appendChild(q);
   }
 
   /** Los atajos dependen de lo que el menú le deja ver a esta persona: se recalculan al entrar a cada pantalla. */
   function refrescar(vista) {
     const g = GUIAS[vista];
     E('b-ayuda').hidden = g === undefined;
+    // Cada pantalla se abre limpia: la explicación vuelve a quedar detrás del «?».
+    for (const panel of document.querySelectorAll('.guia')) {
+      panel.hidden = true;
+      const boton = E('b-ayuda-' + panel.dataset.vista);
+      if (boton !== null) boton.setAttribute('aria-expanded', 'false');
+    }
     const t = document.querySelector('.guia[data-vista="' + vista + '"]');
     if (!g || !t) return;
     const caja = t.querySelector('.guia-despues');
@@ -6555,7 +6636,8 @@ const GUIA = (() => {
     caja.hidden = caja.children.length < 2;
   }
 
-  for (const [vista, g] of Object.entries(GUIAS)) construirTarjeta(vista, g);
+  for (const vista of VISTAS) construirTarjeta(vista, GUIAS[vista]);
+
 
   // Cada título lleva el ícono de su botón del menú.
   for (const b of document.querySelectorAll('nav button[data-vista]')) {
@@ -6627,7 +6709,7 @@ const GUIA = (() => {
       }
     }
     E('b-tour-ant').hidden = R.i === 0;
-    E('b-tour-sig').textContent = R.i === R.pasos.length - 1 ? 'Listo' : 'Siguiente';
+    E('b-tour-sig').textContent = R.i === R.pasos.length - 1 ? 'Finalizar' : 'Siguiente';
     ubicar();
     E('b-tour-sig').focus({ preventScroll: true });
   }
@@ -6915,7 +6997,7 @@ const TABLERO = (() => {
     const centro = nodo('div', 'anillo-centro');
     centro.innerHTML = '<svg class="anillo" viewBox="0 0 118 118"><circle class="fondo" cx="59" cy="59" r="' + r + '"/>' +
       '<circle class="valor" cx="59" cy="59" r="' + r + '" stroke-dasharray="0 ' + circ + '"/></svg>' +
-      '<div class="n">' + pct + '%<small>listo</small></div>';
+      '<div class="n">' + pct + '%<small>completado</small></div>';
     envoltorio.appendChild(centro);
     const t = nodo('div', 'anillo-texto');
     t.appendChild(nodo('div', '', texto));
@@ -6946,7 +7028,7 @@ const TABLERO = (() => {
     const faltan = pasos.length - listos;
     anillo(caja, pct,
       datos.puedeOperar
-        ? (faltan === 0 ? 'Todo listo: la empresa está lista para operar.' : 'Ya podés operar. Quedan ' + faltan + (faltan === 1 ? ' paso' : ' pasos') + ' para aprovechar todo.')
+        ? (faltan === 0 ? 'La configuración está completa: la empresa está en condiciones de operar.' : 'Ya podés operar. Quedan ' + faltan + (faltan === 1 ? ' paso' : ' pasos') + ' para aprovechar todo.')
         : 'Todavía no se puede registrar nada: falta resolver lo que bloquea.',
       boton);
   }
@@ -7186,14 +7268,14 @@ function tablaDePuestos() {
       area = p.area;
       filas.push('<tr><td colspan="4"><strong>' + escapar(area) + '</strong></td></tr>');
     }
-    const modulos = p.permisos.length === 0 ? '—' : modulosDeLosPermisos(p.permisos).filter((n) => !['Inicio', 'Pendientes', 'Asistente', 'Preguntar', 'Configuración'].includes(n)).join(', ') || '—';
+    const modulos = p.permisos.length === 0 ? '—' : modulosDeLosPermisos(p.permisos).filter((n) => !['Inicio', 'Pendientes', 'Asistente', 'Consultas', 'Configuración'].includes(n)).join(', ') || '—';
     filas.push(
       '<tr><td><strong>' + escapar(p.nombre) + '</strong></td><td>' + escapar(p.descripcion) + '</td><td>' + escapar(modulos) + '</td><td>' +
       (p.exigeSegundoFactor ? '<span class="p p-ojo">sí</span>' : 'no') + '</td></tr>');
   }
   return '<div class="tabla"><table><thead><tr><th>Puesto</th><th>Qué hace</th><th>Módulos que ve</th><th>2.º factor</th></tr></thead><tbody>' +
     filas.join('') + '</tbody></table></div>' +
-    '<p class="ayuda">Además todos ven Inicio, Pendientes, el Asistente, Preguntar y Configuración. Los módulos que el plan de la empresa no incluye no aparecen para nadie.</p>';
+    '<p class="ayuda">Además todos ven Inicio, Pendientes, el Asistente, Consultas y Configuración. Los módulos que el plan de la empresa no incluye no aparecen para nadie.</p>';
 }
 
 /** Debajo del selector de puestos: qué hace y qué módulos ve quien lo tenga. */
@@ -7417,7 +7499,7 @@ async function cargarInicio() {
       : xs.slice(0, -1).join(', ') + ' y ' + xs[xs.length - 1];
 
     E('arranque-veredicto').innerHTML = arr.datos.puedeOperar
-      ? '<div class="aviso ok"><strong>NEXO está listo para operar.</strong>' +
+      ? '<div class="aviso ok"><strong>NEXO está en condiciones de operar.</strong>' +
         (arr.datos.afectado.length === 0 ? ''
           : ' Todavía hay funcionalidades sin habilitar: ' +
             escapar(arr.datos.afectado.join(', ')) + '.') + '</div>'
@@ -7430,7 +7512,7 @@ async function cargarInicio() {
       // Cinco estados, cinco lecturas distintas. Fundir «no declarado» con
       // «pendiente» haría creer que alcanza con cargar algo.
       const pastillas = {
-        COMPLETO: '<span class="p p-bien">listo</span>',
+        COMPLETO: '<span class="p p-bien">completo</span>',
         BLOQUEANTE: '<span class="p p-mal">impide trabajar</span>',
         PENDIENTE: '<span class="p p-ojo">todavía no</span>',
         NO_DECLARADO: '<span class="p p-ojo">sin declarar</span>',
@@ -7473,7 +7555,7 @@ async function cargarInicio() {
   E('inicio-periodo').innerHTML = periodos.length === 0
     ? ''
     : actual === undefined
-    ? '<div class="aviso ojo"><strong>Hoy no cae en ningún período.</strong> El ejercicio ' +
+    ? '<div class="aviso ojo"><strong>Hoy no corresponde a ningún período.</strong> El ejercicio ' +
       'cargado no cubre esta fecha, así que no se puede registrar nada con fecha de hoy.</div>'
     : '<div class="' + (actual.status === 'ABIERTO' ? 'aviso ok' : 'aviso ojo') + '">' +
       (actual.status === 'ABIERTO'
@@ -7700,7 +7782,7 @@ function tarjetaDePropuesta(p) {
     // El alta de siempre, con el permiso y la bitácora de quien confirma.
     const r = await api(p.metodo, p.ruta, p.datos);
     if (r.ok) {
-      caja.innerHTML = '<strong>Listo: el tercero quedó creado.</strong>';
+      caja.innerHTML = '<strong>El tercero quedó creado.</strong>';
     } else {
       ok.disabled = false;
       no.disabled = false;
@@ -8048,9 +8130,13 @@ E('b-intel-cupo').onclick = async () => {
     '<dt>Cupo diario</dt><dd>' + (d.sinTopeDeclarado
       ? '<span class="p p-neu">sin tope declarado</span>'
       : '<span class="mono">' + escapar(d.topeDiario) + '</span>') + '</dd>' +
-    fila('Tokens del asistente hoy', d.tokensUsadosHoy) +
-    '<dt>Cupo diario de tokens</dt><dd>' + (d.sinTopeDeTokensDeclarado
+    fila('Tokens de IA de todo tu estudio hoy', d.tokensDelEstudioHoy) +
+    '<dt>Tope diario del plan (se reparte entre todas tus empresas)</dt><dd>' + (d.sinTopeDelPlan
       ? '<span class="p p-neu">sin tope declarado</span>'
+      : '<span class="mono">' + escapar(d.topeDelPlanTokens) + '</span>') + '</dd>' +
+    fila('Tokens de IA de esta empresa hoy', d.tokensUsadosHoy) +
+    '<dt>Tope propio de esta empresa (opcional)</dt><dd>' + (d.sinTopeDeTokensDeclarado
+      ? '<span class="p p-neu">sin tope propio</span>'
       : '<span class="mono">' + escapar(d.topeTokensPorDia) + '</span>') + '</dd>' +
     fila('De este usuario, en el último minuto', d.delUsuarioEnElMinuto) +
     fila('Tope técnico por minuto', d.topePorMinuto);
@@ -8376,7 +8462,7 @@ async function listarPropuestas() {
       // distintas: la banda es del modelo, la tanda la decide el motor.
       '<td>' + pastilla(p.banda) + (p.admiteAprobacionEnLote
         ? ' <span class="p p-bien">admite tanda</span>'
-        : ' <span class="p p-ojo">de a una</span>') + '</td>' +
+        : ' <span class="p p-ojo">una por una</span>') + '</td>' +
       '<td>' + (bloqueos.length === 0
         ? '<span class="p p-bien">ninguno</span>'
         : bloqueos.map((b) => '<span class="p p-mal">' + escapar(b) + '</span>').join(' ')) + '</td>' +
@@ -8982,7 +9068,7 @@ async function accionRecepcion(id, accion, pideMotivo) {
     if (deposito && deposito.value) cuerpo.depositoId = deposito.value;
   }
   const r = await api('POST', url, cuerpo);
-  decir('rec-accion-msg', r, 'Listo.');
+  decir('rec-accion-msg', r, 'Operación realizada.');
   if (r.ok) await abrirRecepcion(id);
 }
 
@@ -9241,7 +9327,7 @@ async function accionComercial(id, accion, pideMotivo) {
     : '/commercial-documents/' + id + '/cancel';
 
   const r = await api('POST', url, motivo === undefined ? {} : { motivo: motivo.trim() });
-  decir('com-accion-msg', r, 'Listo.');
+  decir('com-accion-msg', r, 'Operación realizada.');
   if (r.ok) await abrirComercial(id);
 }
 
@@ -15892,7 +15978,7 @@ async function cargarSuscripcion() {
         // declaró todavía, y decirlo así evita prometer lo que no se acordó.
         '<td>' + (p.topes.length === 0
           ? '<span class="p p-neu">sin declarar</span>'
-          : escapar(p.topes.map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).join(' · '))) + '</td>';
+          : escapar(p.topes.map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).concat(tokensDeIa(p) || []).join(' · '))) + '</td>';
       cuerpo.appendChild(tr);
 
       if (p.status === 'DISPONIBLE') {

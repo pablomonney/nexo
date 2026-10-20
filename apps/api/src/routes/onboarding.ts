@@ -228,7 +228,9 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
                            WHERE pf.plan_id = p.id), '[]'::json) AS incluye,
                 coalesce((SELECT json_agg(json_build_object('recurso', l.recurso, 'tope', l.tope, 'ilimitado', l.ilimitado)
                                           ORDER BY l.recurso)
-                            FROM plan_limits l WHERE l.plan_id = p.id), '[]'::json) AS topes
+                            FROM plan_limits l WHERE l.plan_id = p.id), '[]'::json) AS topes,
+                -- Tokens de IA por día: TOTAL del contrato, compartidos por todas las empresas del estudio (0144).
+                (SELECT pq.tokens_por_dia::text FROM plan_ai_quotas pq WHERE pq.plan_id = p.id) AS "tokensDeIaPorDia"
            FROM subscription_plans p
           WHERE p.status = 'DISPONIBLE'
           ORDER BY p.orden`,

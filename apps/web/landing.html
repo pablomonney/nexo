@@ -1061,6 +1061,11 @@ ajustarBotones(document);
     })[recurso] ?? recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
   };
 
+  const tokensDeIa = (p) => {
+    const unaSola = (p.topes || []).some((t) => t.recurso === 'EMPRESAS' && Number(t.tope) === 1);
+    return Number(p.tokensDeIaPorDia).toLocaleString('es-AR') + ' tokens de IA por día' + (unaSola ? '' : ', compartidos entre todas tus empresas');
+  };
+
   try {
     const r = await fetch(ajuste('nexo-planes') || '/planes', { headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error('respuesta ' + r.status);
@@ -1071,9 +1076,10 @@ ajustarBotones(document);
       const tarjeta = document.createElement('article');
       tarjeta.className = 'plan';
       const incluye = (p.incluye || []).map((f) => '<li>' + escapar(f.nombre) + '</li>').join('');
+      // Los tokens de IA son TOTALES: los comparten todas las empresas del plan, no cada una por separado.
       const topes = (p.topes || [])
         .map((t) => '<li>' + escapar(nombreDelTope(t.recurso, t.tope, t.ilimitado)) + '</li>')
-        .join('');
+        .join('') + (p.tokensDeIaPorDia ? '<li>' + escapar(tokensDeIa(p)) + '</li>' : '');
       tarjeta.innerHTML =
         '<h3>' + escapar(p.nombre) + '</h3>' +
         '<p class="desc">' + escapar(p.descripcion || '') + '</p>' +
