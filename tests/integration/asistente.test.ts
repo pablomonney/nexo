@@ -534,6 +534,63 @@ suite('Asistente conversacional', () => {
       expect(g3.pedidos).toHaveLength(1);
     });
 
+    it('sin tope propio rige el del PLAN, y el tope que declara la empresa gana', async () => {
+      type Estado = { cupo: { tokensUsadosHoy: number; topeTokensPorDia: number | null; origenDelTopeDeTokens: string | null } };
+      const base = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo.tokensUsadosHoy;
+
+      // Un plan propio de la prueba: la tabla de planes es global y las suites corren en paralelo.
+      const plan = (
+        await db.query<{ id: string }>(
+          `INSERT INTO subscription_plans (code, name, descripcion, orden) VALUES ($1, $2, 'Plan de la prueba del tope de IA', $3) RETURNING id`,
+          [`T_IA_${stamp}`, `Plan IA ${stamp}`, 5000 + Math.floor(Math.random() * 90000)],
+        )
+      ).rows[0]!.id;
+      try {
+      await db.query(
+        `INSERT INTO plan_features (plan_id, feature_code, declarado_por, motivo) VALUES ($1, 'asistente', 'test', 'La prueba necesita el asistente en su plan')`,
+        [plan],
+      );
+      await db.query(
+        `INSERT INTO company_subscriptions (company_id, plan_id, estado, vigencia_desde, created_by)
+         VALUES ($1, $2, 'ACTIVA', CURRENT_DATE, 'test')`,
+        [empresa, plan],
+      );
+      await db.query('DELETE FROM ai_quotas WHERE company_id = $1', [empresa]);
+      await db.query(
+        `INSERT INTO plan_ai_quotas (plan_id, tokens_por_dia, declarado_por, motivo) VALUES ($1, $2, 'test', 'Tope de la prueba del plan')`,
+        [plan, base + 1000],
+      );
+
+      const e1 = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo;
+      expect(e1).toMatchObject({ topeTokensPorDia: base + 1000, origenDelTopeDeTokens: 'PLAN' });
+
+      // Primer turno: cruza el tope del plan y se completa. El segundo se corta antes de llamar al modelo.
+      const g1 = con(haiku('Primero', { entrada: 1000, salida: 200 }));
+      const uno = await escribir(tokenContadora, 'Primera pregunta');
+      expect(uno.r.statusCode, uno.r.body).toBe(200);
+      expect(g1.pedidos).toHaveLength(1);
+
+      const g2 = con(dicho('no debería llegar'));
+      const dos = await escribir(tokenContadora, 'Segunda pregunta');
+      expect(dos.r.statusCode, dos.r.body).toBe(429);
+      expect(dos.r.json<{ message: string }>().message).toContain('CUPO_DE_TOKENS_AGOTADO');
+      expect(g2.pedidos).toHaveLength(0);
+
+      // La empresa declara uno propio más alto: gana sobre el del plan.
+      const decl = await pedir('POST', '/intelligence/quota', tokenContadora, { tokensPorDia: base + 1_000_000, motivo: 'La empresa amplía su tope' });
+      expect(decl.statusCode, decl.body).toBe(201);
+      const e2 = (await pedir('GET', '/asistente/estado', tokenContadora)).json<Estado>().cupo;
+      expect(e2).toMatchObject({ topeTokensPorDia: base + 1_000_000, origenDelTopeDeTokens: 'EMPRESA' });
+      const g3 = con(haiku('Tercero', { entrada: 10, salida: 5 }));
+      const tres = await escribir(tokenContadora, 'Tercera pregunta');
+      expect(tres.r.statusCode, tres.r.body).toBe(200);
+      expect(g3.pedidos).toHaveLength(1);
+      } finally {
+        // Un plan de prueba no puede quedar a la venta (S-31).
+        await db.query(`UPDATE subscription_plans SET status = 'DISCONTINUADO' WHERE id = $1`, [plan]);
+      }
+    });
+
     it('declarar un cupo sin ningún tope es un 400', async () => {
       const r = await pedir('POST', '/intelligence/quota', tokenContadora, { motivo: 'Sin tope alguno, esto no vale' });
       expect(r.statusCode, r.body).toBe(400);

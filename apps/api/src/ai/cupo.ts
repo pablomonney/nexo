@@ -35,6 +35,8 @@ export interface EstadoDelCupo {
   readonly tokensUsadosHoy: number;
   /** `null` = la empresa no declaró tope de tokens. */
   readonly topeTokensPorDia: number | null;
+  /** De dónde sale el tope de tokens: lo declaró la empresa, o rige el de su plan. `null` si no hay tope. */
+  readonly origenDelTopeDeTokens?: 'EMPRESA' | 'PLAN' | null;
   /** Llamadas de este usuario en el último minuto. */
   readonly delUsuarioEnElMinuto: number;
   readonly topePorMinuto: number;
@@ -57,6 +59,7 @@ export async function leerCupo(
     tope_diario: number | null;
     tokens_hoy: string;
     tope_tokens: string | null;
+    origen_tope: 'EMPRESA' | 'PLAN';
     del_usuario: string;
   }>(
     `SELECT
@@ -69,7 +72,17 @@ export async function leerCupo(
           FROM assistant_messages m
          WHERE m.company_id = $1 AND m.rol = 'asistente'
            AND m.created_at >= date_trunc('day', now()))                       AS tokens_hoy,
-       (SELECT q.tokens_por_dia::text FROM ai_quotas q WHERE q.company_id = $1) AS tope_tokens,
+       -- El tope de la empresa gana; si no declaró uno, rige el del plan que tiene hoy (plan_ai_quotas, 0142).
+       COALESCE(
+         (SELECT q.tokens_por_dia::text FROM ai_quotas q WHERE q.company_id = $1 AND q.tokens_por_dia IS NOT NULL),
+         (SELECT pq.tokens_por_dia::text
+            FROM company_subscriptions s
+            JOIN plan_ai_quotas pq ON pq.plan_id = s.plan_id
+           WHERE s.company_id = $1 AND s.estado IN ('PRUEBA', 'ACTIVA', 'MOROSA')
+           ORDER BY s.created_at DESC
+           LIMIT 1))                                                          AS tope_tokens,
+       (SELECT CASE WHEN EXISTS (SELECT 1 FROM ai_quotas q WHERE q.company_id = $1 AND q.tokens_por_dia IS NOT NULL)
+                    THEN 'EMPRESA' ELSE 'PLAN' END)                           AS origen_tope,
        (SELECT count(*) FROM ai_answers a
          WHERE a.company_id = $1 AND a.created_by = $2
            AND a.created_at >= now() - interval '1 minute')                     AS del_usuario`,
@@ -82,6 +95,7 @@ export async function leerCupo(
     topeDiario: f.tope_diario,
     tokensUsadosHoy: Number(f.tokens_hoy),
     topeTokensPorDia: f.tope_tokens === null ? null : Number(f.tope_tokens),
+    origenDelTopeDeTokens: f.tope_tokens === null ? null : f.origen_tope,
     delUsuarioEnElMinuto: Number(f.del_usuario),
     topePorMinuto,
   };

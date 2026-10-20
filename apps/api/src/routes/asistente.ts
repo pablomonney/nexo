@@ -210,6 +210,7 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
           sinTopeDeclarado: cupo.topeDiario === null,
           tokensUsadosHoy: cupo.tokensUsadosHoy,
           topeTokensPorDia: cupo.topeTokensPorDia,
+          origenDelTopeDeTokens: cupo.origenDelTopeDeTokens ?? null,
           sinTopeDeTokensDeclarado: cupo.topeTokensPorDia === null,
         },
         adjuntos: ADJUNTOS,
