@@ -165,6 +165,9 @@ nav button{display:flex;align-items:center;gap:12px;width:100%;margin:1px 0;padd
            color:var(--tinta2);font:inherit;font-size:.87rem;font-weight:500;text-align:left;cursor:pointer;
            position:relative}
 nav button:hover{background:var(--hund);color:var(--tinta)}
+.explicacion{margin:6px 0 0;font-size:.9rem}
+/* Sin empresa elegida, todo el menú salvo «Cambiar de empresa» está apagado: ninguna pantalla de trabajo funciona sin una empresa. */
+nav[data-sin-empresa="si"] button:not([data-vista="empresa"]){opacity:.4}
 nav button[aria-current="true"]{background:var(--acento-cl);color:var(--acento);font-weight:650}
 nav button[aria-current="true"]::before{content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:3px;
            border-radius:0 3px 3px 0;background:var(--acento)}
@@ -1152,6 +1155,11 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 <!-- ══ Empresa ════════════════════════════════════════════════════════════ -->
 <section id="v-empresa" hidden>
   <h2>Empresa</h2>
+  <div id="empresa-elegir" class="aviso" hidden>
+    <strong>Elegí con qué empresa querés trabajar.</strong>
+    Todo lo que sigue —documentos, asientos, caja, ventas— pasa <em>dentro</em> de la empresa que elijas, y cada una tiene sus propios datos.
+    Tocá <strong>«Trabajar con esta empresa»</strong>. Podés cambiar cuando quieras desde «Cambiar de empresa», en el menú.
+  </div>
   <p class="ayuda">Todo lo que sigue ocurre dentro de la empresa elegida. No es una
     preferencia de la pantalla: es la cabecera <span class="mono">X-Company-Id</span>,
     y el servidor la rechaza si no tenés rol en ella. Cambiar de empresa limpia el
@@ -4977,6 +4985,10 @@ async function api(method, url, cuerpo, esForma, claveDeIdempotencia) {
       try { datos = await r.json(); } catch (e) { /* 204 y similares */ }
     }
     return { ok: r.ok, status: r.status, datos };
+  } catch (e) {
+    // Sin red (o el servidor caído) fetch lanza TypeError: se vuelve una respuesta como las demás para poder explicarla.
+    if (e instanceof TypeError) return { ok: false, status: 0, datos: { error: 'SIN_CONEXION', message: 'No se pudo conectar con NEXO' } };
+    throw e;
   } finally {
     // En `finally` y no después del `return`: si la red se cae, la barra
     // tiene que apagarse igual. Una barra que queda prendida para siempre es
@@ -5016,6 +5028,86 @@ function avisoMal(destino, texto) {
   if (caja) caja.innerHTML = '<div class="aviso mal">' + escapar(texto) + '</div>';
 }
 
+/**
+ * Un error, explicado para quien no es técnico: qué pasó y qué hacer.
+ *
+ * El servidor ya manda una frase (`message`), y es la que se muestra en negrita. Esto agrega lo que la frase sola no dice: **por qué pasó**
+ * y **cuál es el siguiente paso**, para que nadie se quede mirando un código. Si el error no está en la tabla igual se explica por su familia
+ * (400, 401, 403, 404, 409, 422, 429, 5xx): nunca se muestra un error sin una línea de qué hacer.
+ * Devuelve `{ paso, hacer }`.
+ */
+function explicarError(r) {
+  const d = r.datos || {};
+  const codigo = d.error || '';
+  const msg = d.message || '';
+  const st = r.status || 0;
+
+  if (st === 0 || codigo === 'SIN_CONEXION') {
+    return { paso: 'La consola no pudo comunicarse con el servidor. Suele ser tu conexión a internet, o NEXO está reiniciándose un momento.',
+      hacer: 'Revisá que tengas internet y probá de nuevo en un minuto. Lo que estabas por guardar no se guardó. Si sigue igual, avisá al soporte.' };
+  }
+  if (codigo === 'FORBIDDEN' && /X-Company-Id/u.test(msg)) {
+    return { paso: 'Todavía no elegiste con qué empresa trabajar. Todo en NEXO ocurre dentro de una empresa, y cada pedido tiene que decir cuál.',
+      hacer: 'Andá a «Cambiar de empresa» en el menú y tocá «Trabajar con esta empresa» en la que corresponda.' };
+  }
+  if (codigo === 'MFA_SETUP_REQUIRED') {
+    return { paso: 'Tu puesto toca plata o contabilidad, y para esos puestos NEXO exige un segundo factor: un código que se genera en tu celular.',
+      hacer: 'Configurá el segundo factor (la pantalla te lo pide) y volvé a entrar.' };
+  }
+  if (codigo === 'MFA_REQUIRED') {
+    return { paso: 'Falta el código del segundo factor para terminar de entrar.', hacer: 'Escribí el código de 6 dígitos de tu aplicación de códigos y tocá Ingresar.' };
+  }
+  if (codigo === 'INVALID_CREDENTIALS') {
+    return { paso: 'El correo o la contraseña no coinciden. Por seguridad NEXO no dice cuál de los dos está mal.',
+      hacer: 'Revisá cómo escribiste ambos (mayúsculas y espacios). Si no te acordás de la contraseña, usá «Olvidé mi contraseña».' };
+  }
+  if (codigo === 'UNAUTHORIZED' || st === 401) {
+    return { paso: 'Tu sesión se venció o se cerró (por seguridad se cierra sola después de un rato sin usar el sistema).',
+      hacer: 'Volvé a ingresar con tu correo y tu contraseña. No se perdió nada de lo ya guardado.' };
+  }
+  if (codigo === 'SUSCRIPCION_SUSPENDIDA') {
+    return { paso: 'La suscripción de la empresa está suspendida y el acceso a los módulos está cortado. Tus datos están intactos.',
+      hacer: 'Entrá a «Plan» y regularizá la suscripción: el acceso vuelve apenas se registra el pago.' };
+  }
+  if (codigo === 'DEGRADADA_POR_MORA') {
+    return { paso: 'Hay una factura de NEXO sin pagar y este módulo queda en pausa mientras dure. El resto del sistema sigue funcionando.',
+      hacer: 'Mirá «Plan» → «Cuenta con NEXO», pagá lo adeudado y el módulo vuelve solo.' };
+  }
+  if (codigo === 'FUERA_DEL_PLAN') {
+    return { paso: 'El plan que tiene contratada esta empresa no incluye este módulo. No es un error tuyo ni se perdió información.',
+      hacer: 'Para usarlo hay que cambiar de plan: mirá «Plan», o pedíselo a quien administra la empresa.' };
+  }
+  if (st === 403) {
+    return { paso: 'Tu puesto no incluye esta función, o no tenés acceso a esta empresa. Es una protección: cada persona ve y hace solo lo que corresponde a su trabajo.',
+      hacer: 'Si lo necesitás para trabajar, pedile a quien administra el estudio que revise tu puesto (Configuración → «Dar un puesto»).' };
+  }
+  if (st === 404) {
+    return { paso: 'Eso que buscás no existe, o ya no existe, o pertenece a otra empresa (por seguridad NEXO no dice cuál de las tres).',
+      hacer: 'Actualizá la lista y fijate de estar en la empresa correcta. Si lo acabás de crear, probá de nuevo en unos segundos.' };
+  }
+  if (st === 409) {
+    return { paso: 'La operación choca con el estado actual: ya está hecha, o está en un estado desde el que no se puede hacer eso, o alguien la cambió antes que vos.',
+      hacer: 'Actualizá la pantalla para ver cómo está ahora, y repetí solo si todavía corresponde. No se duplicó nada.' };
+  }
+  if (st === 422) {
+    return { paso: 'Los datos están bien escritos, pero una regla del sistema (contable, fiscal o de negocio) no permite esta operación.',
+      hacer: 'Leé la frase de arriba: dice qué regla es. Corregí lo que ahí se indica o consultá con el contador si no está claro.' };
+  }
+  if (st === 429) {
+    return { paso: 'Se hicieron demasiados pedidos seguidos, o se alcanzó el tope diario de uso (por ejemplo del asistente de IA). Es un límite de protección.',
+      hacer: 'Esperá un minuto y probá de nuevo. Si es el tope diario, se renueva al empezar el día; quien administra puede ampliarlo.' };
+  }
+  if (st === 400 || codigo === 'VALIDATION_ERROR' || codigo === 'BAD_REQUEST') {
+    return { paso: 'Hay datos que faltan o no tienen el formato esperado.',
+      hacer: 'Revisá los campos marcados abajo, corregilos y volvé a intentar.' };
+  }
+  if (st >= 500) {
+    return { paso: 'Falló algo de nuestro lado, no por lo que hiciste. Lo registramos.',
+      hacer: 'Probá de nuevo en un momento. Si se repite, copiá el «detalle técnico» de abajo y mandáselo al soporte.' };
+  }
+  return { paso: 'La operación no se pudo completar.', hacer: 'Probá de nuevo; si se repite, copiá el «detalle técnico» y mandáselo al soporte.' };
+}
+
 function decir(destino, resultado, exito) {
   const caja = E(destino);
   if (!caja) return;
@@ -5049,9 +5141,12 @@ function decir(destino, resultado, exito) {
       escapar(x.message || '') + '</li>')
     .join('');
 
+  const ex = explicarError(resultado);
   caja.innerHTML = '<div class="aviso error"><strong>' +
     escapar((d && d.message) || 'No se pudo completar la operación') + '</strong>' +
     (detalles ? '<ul class="limpia">' + detalles + '</ul>' : '') +
+    '<p class="explicacion"><strong>Qué pasó:</strong> ' + escapar(ex.paso) + '</p>' +
+    '<p class="explicacion"><strong>Qué hacer:</strong> ' + escapar(ex.hacer) + '</p>' +
     tecnico + '</div>';
 }
 /**
@@ -5194,7 +5289,16 @@ const VISTAS = ['login','mfa','alta-empresa','empresa','inicio','inteligencia','
                 'iva','bancos','cheques','solicitudes','pagos','caja','integraciones','analitica','analisis',
                 'asientos','libros','estados','cierre','migraciones','auditoria','propietario','suscripcion','config'];
 
+/** Las pantallas que se pueden ver sin tener una empresa elegida. Todas las demás trabajan DENTRO de una empresa. */
+const PANTALLAS_SIN_EMPRESA = ['login', 'mfa', 'alta-empresa', 'empresa'];
+
+/** ¿Hay que mandar a la persona a elegir empresa antes de seguir? (Tiene empresas, y todavía no eligió.) */
+function faltaElegirEmpresa(vista) {
+  return !estado.empresa && estado.empresas.length > 0 && PANTALLAS_SIN_EMPRESA.indexOf(vista) === -1;
+}
+
 function ir(vista, migas) {
+  if (faltaElegirEmpresa(vista)) { vista = 'empresa'; migas = ['Elegir empresa']; }
   estado.vista = vista;
   for (const v of VISTAS) {
     const s = E('v-' + v);
@@ -5226,6 +5330,15 @@ for (const b of document.querySelectorAll('nav button')) {
   b.onclick = () => {
     const v = b.dataset.vista;
     plegarMenu();
+    // Sin empresa elegida ninguna pantalla de trabajo funciona (el servidor pide la empresa en cada pedido): en vez de pedirle al servidor
+    // algo que va a rechazar y mostrar un error, se explica y se lleva a la lista.
+    if (faltaElegirEmpresa(v)) {
+      ir('empresa', ['Elegir empresa']);
+      E('empresa-msg').innerHTML = '<div class="aviso ojo"><strong>Primero elegí con qué empresa querés trabajar.</strong> «' +
+        escapar(b.dataset.nombre || v) + '» necesita una empresa: tocá «Trabajar con esta empresa» en la que corresponda y volvé a intentar.</div>';
+      window.scrollTo(0, 0);
+      return;
+    }
     ir(v, [b.dataset.nombre]);
     window.scrollTo(0, 0);
     if (v === 'inicio') { cargarInicio(); cargarPrueba(); }
@@ -5579,6 +5692,9 @@ async function continuarSegunCartera(destinoDelMensaje) {
 
   E('nav').hidden = false;
   const primera = estado.empresas[0];
+  // Con varias empresas hay que ELEGIR una al entrar: hasta entonces el menú está apagado y la pantalla lo dice.
+  E('nav').dataset.sinEmpresa = 'si';
+  E('empresa-elegir').hidden = false;
   if (estado.empresas.length === 1 && primera !== undefined) {
     // Con una sola empresa, pedirle que la elija de una lista de una es hacerle
     // dar un paso para confirmar lo único posible.
@@ -6915,8 +7031,11 @@ function pintarEmpresas() {
       '<td>' + escapar(c.legalName) + '</td><td class="mono">' + escapar(c.cuit) + '</td>' +
       '<td>' + escapar(c.entityType) + '</td>' +
       '<td>' + (c.roles || []).map((r) => '<span class="p p-neu">' + escapar(r) + '</span>').join(' ') + '</td>' +
-      '<td><span class="clic">usar</span></td>';
+      '<td><button class="sec chico clic">Trabajar con esta empresa</button></td>';
     tr.querySelector('.clic').onclick = () => usarEmpresa(c.id);
+    // La fila entera es el botón: no hay que apuntarle al texto.
+    tr.style.cursor = 'pointer';
+    tr.onclick = (ev) => { if (!ev.target.closest('button')) usarEmpresa(c.id); };
     cuerpo.appendChild(tr);
   }
 }
@@ -6932,7 +7051,11 @@ async function usarEmpresa(id) {
   E('as-detalle').hidden = true;
 
   const c = await api('GET', '/companies/current');
-  if (!c.ok) return decir('empresa-msg', c);
+  if (!c.ok) { estado.empresa = null; return decir('empresa-msg', c); }
+  // Ya hay empresa elegida: se enciende el menú.
+  E('nav').dataset.sinEmpresa = 'no';
+  E('empresa-elegir').hidden = true;
+  limpiar('empresa-msg');
   estado.permisos = c.datos.permissions || [];
   estado.roles = c.datos.roles || [];
   // Los datos de la empresa: de acá sale el mes y día de cierre con el que la

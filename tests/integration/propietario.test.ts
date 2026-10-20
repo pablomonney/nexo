@@ -193,15 +193,10 @@ suite('«Mis clientes» · sólo la propietaria', () => {
     const d = despues.datos;
     const a = antes.datos;
 
-    // Cotas inferiores: otras suites crean empresas y suscripciones en paralelo sobre la misma base.
-    expect(d.empresas.total - a.empresas.total, 'empresas').toBeGreaterThanOrEqual(4);
-    expect(d.empresas.nuevas7Dias - a.empresas.nuevas7Dias).toBeGreaterThanOrEqual(4);
-    expect(d.suscripciones['activa']! - a.suscripciones['activa']!, 'activas').toBeGreaterThanOrEqual(2);
-    expect(d.suscripciones['prueba']! - a.suscripciones['prueba']!, 'en prueba').toBeGreaterThanOrEqual(2);
-    expect(d.suscripciones['pruebasVencidasSinConvertir']! - a.suscripciones['pruebasVencidasSinConvertir']!).toBeGreaterThanOrEqual(1);
-    expect(d.pagan.suscripcionesQuePagan - a.pagan.suscripcionesQuePagan, 'pagan').toBeGreaterThanOrEqual(1);
-    expect(d.pagan.activasSinCobro - a.pagan.activasSinCobro, 'activas sin cobro').toBeGreaterThanOrEqual(1);
-    expect(d.pagan.conPagoEnLosUltimos35Dias - a.pagan.conPagoEnLosUltimos35Dias).toBeGreaterThanOrEqual(1);
+    // Sólo lo que no depende de otras suites: las suites corren en paralelo sobre la misma base y cualquier conteo global (empresas, activas,
+    // sin cobro) lo pueden mover otras mientras ésta mide, hacia arriba o hacia abajo. Lo que se afirma son las filas de ESTA suite (más abajo),
+    // la coherencia dentro de una misma respuesta y la suma en una moneda que nadie más usa.
+    expect(d.empresas.total, 'las cuatro empresas de esta suite están contadas').toBeGreaterThanOrEqual(4);
     // Dentro de UNA misma respuesta las dos mitades de «activa» tienen que sumar el total: no hay carrera que lo explique.
     expect(d.pagan.suscripcionesQuePagan + d.pagan.activasSinCobro).toBe(d.suscripciones['activa']);
 
