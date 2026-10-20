@@ -1041,9 +1041,9 @@ ajustarBotones(document);
     // decirlo mal cuesta el doble.
     if (ilimitado) {
     // «Documentos ilimitados» se lee mejor que «documentos mes: sin tope».
-    const nombres = { COMPROBANTES_MES: 'comprobantes', DOCUMENTOS_MES: 'documentos', EMPRESAS: 'empresas', INTEGRACIONES: 'integraciones', USUARIOS: 'usuarios' };
+    const nombres = { COMPROBANTES_MES: 'comprobantes ilimitados', DOCUMENTOS_MES: 'documentos ilimitados', EMPRESAS: 'empresas ilimitadas', INTEGRACIONES: 'integraciones ilimitadas', USUARIOS: 'usuarios ilimitados' };
     const n = nombres[recurso];
-    return n === undefined ? recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope' : n + ' ilimitados';
+    return n === undefined ? recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope' : n;
   }
 
     // Sin tope declarado tampoco es ilimitado: es que nadie lo declaró. No se
