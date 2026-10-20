@@ -7292,6 +7292,225 @@ function pintarModulosDelPuesto() {
     (p.exigeSegundoFactor ? '<br><em>Este puesto exige segundo factor.</em>' : '');
 }
 
+// ── Puestos propios y permisos por persona: sólo el dueño del estudio (0145) ────────────────────────────────────
+//
+// El control no está acá: lo hace la base (`exigir_dueno_del_estudio`). La consola sólo ofrece la sección a quien el servidor dice que es
+// dueño (`esDuenoDelEstudio`), con la misma regla de siempre: si el backend va a decir que no, la consola no pregunta.
+const PP = { catalogo: { modulos: [] }, puestos: [], personas: [], editando: null, base: new Set() };
+
+async function cargarPuestosPropios(personas) {
+  const [cat, pp] = await Promise.all([api('GET', '/permisos'), api('GET', '/puestos-propios')]);
+  PP.catalogo = cat.ok ? cat.datos : { modulos: [] };
+  PP.puestos = pp.ok ? pp.datos.puestos : [];
+  PP.personas = personas.filter((p, i) => personas.findIndex((q) => q.id === p.id) === i);
+}
+
+const funcionDe = (codigo) => {
+  for (const m of PP.catalogo.modulos) for (const p of m.permisos) if (p.codigo === codigo) return Object.assign({ modulo: m.modulo }, p);
+  return { codigo, modulo: codigo.split(':')[0], funcion: codigo.split(':')[1] || '', descripcion: '', reservado: null, sensible: false };
+};
+
+/** Los módulos que tocan estas funciones, sin repetir. */
+const modulosDeLasFunciones = (codigos) => [...new Set(codigos.map((c) => funcionDe(c).modulo))].sort((a, b) => a.localeCompare(b, 'es'));
+
+function opcionesDePersonas() {
+  return PP.personas.map((p) => '<option value="' + escapar(p.id) + '">' + escapar(p.fullName + ' · ' + p.email) + '</option>').join('');
+}
+
+/** Las funciones agrupadas por módulo, con una casilla cada una. Las reservadas no se pueden marcar (salvo para sacarlas de quien ya las tiene). */
+function matrizDeFunciones(seleccion, base) {
+  return PP.catalogo.modulos.map((m) => {
+    const marcadas = m.permisos.filter((p) => seleccion.has(p.codigo)).length;
+    const lineas = m.permisos.map((p) => {
+      const deSuPuesto = base !== null && base.has(p.codigo);
+      const bloqueada = p.reservado !== null && !deSuPuesto;
+      return '<label class="as-check" title="' + escapar(p.descripcion) + '"><input type="checkbox" data-codigo="' + escapar(p.codigo) + '"' +
+        (seleccion.has(p.codigo) ? ' checked' : '') + (bloqueada ? ' disabled' : '') + '> ' + escapar(p.funcion) +
+        (p.reservado !== null ? ' <em>(reservada: ' + escapar(p.reservado) + ')</em>' : '') +
+        (p.sensible ? ' <span class="p p-ojo">2.º factor</span>' : '') +
+        (deSuPuesto ? ' <small>(viene de su puesto)</small>' : '') + '</label>';
+    }).join('<br>');
+    return '<details class="grupo"' + (marcadas > 0 ? ' open' : '') + '><summary>' + escapar(m.modulo) +
+      ' <span class="p p-neu">' + marcadas + ' de ' + m.permisos.length + '</span></summary><div>' + lineas + '</div></details>';
+  }).join('');
+}
+
+const marcadasEn = (contenedor, incluirBloqueadas) =>
+  [...E(contenedor).querySelectorAll('input[data-codigo]:checked')].filter((i) => incluirBloqueadas || !i.disabled).map((i) => i.dataset.codigo);
+
+function tablaDePuestosPropios() {
+  if (PP.puestos.length === 0) {
+    return '<div class="aviso">Todavía no hay puestos propios en esta empresa. Los puestos predeterminados de arriba cubren los trabajos más comunes; ' +
+      'armá uno propio cuando la empresa se organiza de otra manera.</div>';
+  }
+  return '<div class="tabla"><table><thead><tr><th>Puesto</th><th>Módulos que ve</th><th>Personas</th><th></th></tr></thead><tbody>' +
+    PP.puestos.map((p) => {
+      const modulos = modulosDeLasFunciones(p.permisos).filter((n) => n !== 'Datos de la empresa').join(', ') || '—';
+      const personas = p.personas.length === 0 ? '—' : p.personas.map((x) =>
+        escapar(x.nombre) + ' <button type="button" class="sec" data-pp="quitar" data-id="' + escapar(p.id) + '" data-user="' + escapar(x.userId) + '">Quitar</button>').join('<br>');
+      return '<tr><td><strong>' + escapar(p.nombre) + '</strong><br><span class="ayuda">' + escapar(p.descripcion) + '</span></td><td>' + escapar(modulos) +
+        '</td><td>' + personas + '</td><td><button type="button" class="sec" data-pp="editar" data-id="' + escapar(p.id) + '">Editar</button> ' +
+        '<button type="button" class="sec" data-pp="archivar" data-id="' + escapar(p.id) + '">Archivar</button></td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+/** La sección completa, como texto: `cargarConfig` arma la pantalla con `caja.innerHTML += …`, y lo dinámico se hace después, al tocar. */
+function seccionDePuestosPropios() {
+  const basados = '<option value="">Empezar de cero</option>' + opcionesDePuestos();
+  return '<div class="grupo" id="pp-seccion"><h4>Puestos propios y permisos por persona</h4>' +
+    '<p class="ayuda">Sólo el dueño del estudio ve esta sección. Podés armar puestos a la medida de la empresa y, para una persona puntual, ' +
+    'agregarle o quitarle funciones. Firmar la contabilidad y administrar el sistema siguen siendo del Contador y del Administrador, y ' +
+    'un puesto no puede juntar armar con aprobar. Todo cambio pide un motivo y queda en la bitácora.</p>' +
+    '<div id="pp-lista">' + tablaDePuestosPropios() + '</div>' +
+    '<button id="b-pp-nuevo" type="button">Crear un puesto propio</button>' +
+    '<div id="pp-acc-msg"></div>' +
+    '<div id="pp-editor" class="grupo" hidden>' +
+      '<h4 id="pp-editor-titulo">Nuevo puesto propio</h4>' +
+      '<div class="fila"><div style="flex:1"><label>Nombre del puesto</label><input id="pp-nombre" maxlength="80" placeholder="Ej.: Encargado de caja"></div>' +
+      '<div><label>Basarse en</label><select id="pp-basado">' + basados + '</select></div></div>' +
+      '<label>Qué hace (se lee en la lista de puestos)</label><input id="pp-desc" maxlength="500" placeholder="Ej.: Lleva la caja diaria y concilia los movimientos del banco">' +
+      '<label>Qué funciones incluye <span class="opcional">— la persona ve en el menú sólo los módulos que le tocan</span></label>' +
+      '<div id="pp-matriz"></div><div id="pp-aviso2fa" class="aviso ojo" hidden></div>' +
+      '<div id="pp-motivo-caja" hidden><label>Motivo del cambio</label><input id="pp-motivo-edicion" maxlength="500" placeholder="Por qué se modifica este puesto"></div>' +
+      '<div class="fila"><button id="b-pp-guardar" type="button">Guardar el puesto</button><button id="b-pp-cancelar" type="button" class="sec">Cancelar</button></div>' +
+      '<div id="pp-msg"></div></div>' +
+    '<h4>Dar un puesto propio a una persona</h4>' +
+    '<div class="fila"><div style="flex:2"><label>Persona</label><select id="pp-persona">' + opcionesDePersonas() + '</select></div>' +
+    '<div style="flex:2"><label>Puesto propio</label><select id="pp-puesto-dar">' +
+      PP.puestos.map((p) => '<option value="' + escapar(p.id) + '">' + escapar(p.nombre) + '</option>').join('') + '</select></div></div>' +
+    '<label>Motivo</label><input id="pp-motivo-dar" maxlength="500" placeholder="Por qué esta persona tiene este puesto">' +
+    '<button id="b-pp-dar" type="button">Dar el puesto</button><div id="pp-dar-msg"></div>' +
+    '<h4>Agregar o quitar funciones a una persona</h4>' +
+    '<div class="fila"><div style="flex:2"><label>Persona</label><select id="aj-persona">' + opcionesDePersonas() + '</select></div>' +
+    '<div><label>&nbsp;</label><button id="b-aj-ver" type="button" class="sec">Ver lo que puede hacer</button></div></div>' +
+    '<div id="aj-resumen"></div><div id="aj-matriz"></div><div id="aj-aviso2fa" class="aviso ojo" hidden></div>' +
+    '<div id="aj-guardar-caja" hidden><label>Motivo</label><input id="aj-motivo" maxlength="500" placeholder="Por qué se le agrega o se le quita esto">' +
+    '<button id="b-aj-guardar" type="button">Guardar los ajustes</button></div><div id="aj-msg"></div></div>';
+}
+
+/** Avisa, antes de guardar, que lo elegido le va a pedir segundo factor a quien lo tenga. */
+function avisarSegundoFactor(contenedor, aviso) {
+  const sensibles = marcadasEn(contenedor, true).filter((c) => funcionDe(c).sensible);
+  const caja = E(aviso);
+  caja.hidden = sensibles.length === 0;
+  caja.textContent = sensibles.length === 0 ? '' :
+    'Incluye funciones que mueven dinero, aprueban o tocan la contabilidad (' + sensibles.map((c) => funcionDe(c).modulo + ' — ' + funcionDe(c).funcion).join(', ') +
+    '): quien lo tenga va a necesitar segundo factor para entrar.';
+}
+
+function abrirEditorDePuesto(puesto) {
+  PP.editando = puesto === null ? null : puesto.id;
+  E('pp-editor').hidden = false;
+  E('pp-editor-titulo').textContent = puesto === null ? 'Nuevo puesto propio' : 'Modificar «' + puesto.nombre + '»';
+  E('pp-nombre').value = puesto === null ? '' : puesto.nombre;
+  E('pp-desc').value = puesto === null ? '' : puesto.descripcion;
+  E('pp-basado').value = '';
+  E('pp-motivo-caja').hidden = puesto === null;
+  E('pp-motivo-edicion').value = '';
+  limpiar('pp-msg');
+  E('pp-matriz').innerHTML = matrizDeFunciones(new Set(puesto === null ? [] : puesto.permisos), null);
+  avisarSegundoFactor('pp-matriz', 'pp-aviso2fa');
+  E('pp-editor').scrollIntoView({ block: 'nearest' });
+  E('pp-nombre').focus();
+}
+
+async function manejarPuestosPropios(ev) {
+  const t = ev.target.closest ? ev.target.closest('button') : null;
+  if (t === null) return;
+
+  if (t.id === 'b-pp-nuevo') return abrirEditorDePuesto(null);
+  if (t.id === 'b-pp-cancelar') { E('pp-editor').hidden = true; PP.editando = null; return; }
+
+  if (t.dataset.pp === 'editar') return abrirEditorDePuesto(PP.puestos.find((p) => p.id === t.dataset.id));
+
+  if (t.id === 'b-pp-guardar') {
+    const nombre = E('pp-nombre').value.trim();
+    const descripcion = E('pp-desc').value.trim();
+    if (nombre.length < 3) return avisoMal('pp-msg', 'Escribí el nombre del puesto (3 caracteres o más).');
+    if (descripcion.length < 10) return avisoMal('pp-msg', 'Contá en una frase qué hace el puesto (10 caracteres o más).');
+    const permisos = marcadasEn('pp-matriz', false);
+    if (permisos.length === 0) return avisoMal('pp-msg', 'Marcá al menos una función: un puesto sin funciones no deja hacer nada.');
+    let r;
+    if (PP.editando === null) {
+      r = await api('POST', '/puestos-propios', { nombre, descripcion, permisos });
+    } else {
+      const motivo = E('pp-motivo-edicion').value.trim();
+      if (motivo.length < 10) return avisoMal('pp-msg', 'Escribí el motivo del cambio (10 caracteres o más).');
+      r = await api('PUT', '/puestos-propios/' + PP.editando, { nombre, descripcion, permisos, motivo });
+    }
+    decir('pp-msg', r, 'Puesto guardado.');
+    if (r.ok) await cargarConfig();
+    return;
+  }
+
+  if (t.dataset.pp === 'archivar') {
+    const motivo = E('pp-motivo-dar').value.trim();
+    if (motivo.length < 10) return avisoMal('pp-acc-msg', 'Para archivar escribí el motivo en el campo «Motivo» de más abajo (10 caracteres o más).');
+    const r = await api('POST', '/puestos-propios/' + t.dataset.id + '/archivar', { motivo });
+    decir('pp-acc-msg', r, 'Puesto archivado: las personas que lo tenían dejan de recibir sus funciones.');
+    if (r.ok) await cargarConfig();
+    return;
+  }
+
+  if (t.dataset.pp === 'quitar') {
+    const motivo = E('pp-motivo-dar').value.trim();
+    if (motivo.length < 10) return avisoMal('pp-acc-msg', 'Para quitarlo escribí el motivo en el campo «Motivo» de más abajo (10 caracteres o más).');
+    const r = await api('POST', '/puestos-propios/' + t.dataset.id + '/personas/quitar', { userId: t.dataset.user, motivo });
+    decir('pp-acc-msg', r, 'Puesto quitado.');
+    if (r.ok) await cargarConfig();
+    return;
+  }
+
+  if (t.id === 'b-pp-dar') {
+    const puesto = E('pp-puesto-dar').value;
+    const motivo = E('pp-motivo-dar').value.trim();
+    if (!puesto) return avisoMal('pp-dar-msg', 'Primero armá un puesto propio.');
+    if (motivo.length < 10) return avisoMal('pp-dar-msg', 'Escribí el motivo (10 caracteres o más).');
+    const r = await api('POST', '/puestos-propios/' + puesto + '/personas', { userId: E('pp-persona').value, motivo });
+    decir('pp-dar-msg', r, 'Puesto otorgado.');
+    if (r.ok) await cargarConfig();
+    return;
+  }
+
+  if (t.id === 'b-aj-ver') {
+    const persona = E('aj-persona').value;
+    const r = await api('GET', '/personas/' + persona + '/permisos');
+    if (!r.ok) return decir('aj-msg', r);
+    limpiar('aj-msg');
+    const d = r.datos;
+    PP.base = new Set(d.base);
+    E('aj-resumen').innerHTML = '<div class="aviso">' +
+      (d.roles.length === 0 ? '' : '<strong>Roles:</strong> ' + escapar(d.roles.join(', ')) + '. ') +
+      (d.puestosPropios.length === 0 ? '' : '<strong>Puestos propios:</strong> ' + escapar(d.puestosPropios.map((p) => p.nombre).join(', ')) + '. ') +
+      'Marcá lo que puede hacer: lo que agregues o saques queda como ajuste de esta persona.</div>';
+    E('aj-matriz').innerHTML = matrizDeFunciones(new Set(d.efectivos), PP.base);
+    E('aj-guardar-caja').hidden = false;
+    avisarSegundoFactor('aj-matriz', 'aj-aviso2fa');
+    return;
+  }
+
+  if (t.id === 'b-aj-guardar') {
+    const efectivos = new Set(marcadasEn('aj-matriz', true));
+    const agrega = [...efectivos].filter((c) => !PP.base.has(c));
+    const quita = [...PP.base].filter((c) => !efectivos.has(c));
+    const motivo = E('aj-motivo').value.trim();
+    if (motivo.length < 10) return avisoMal('aj-msg', 'Escribí el motivo (10 caracteres o más).');
+    const r = await api('POST', '/personas/' + E('aj-persona').value + '/ajustes', { agrega, quita, motivo });
+    decir('aj-msg', r, 'Ajustes guardados: ' + agrega.length + ' función(es) agregada(s) y ' + quita.length + ' quitada(s).');
+    if (r.ok) E('b-aj-ver').click();
+  }
+}
+
+/** Al elegir un puesto predeterminado como punto de partida, se marcan sus funciones (menos las reservadas, que no se pueden dar). */
+function basarPuestoEn(codigo) {
+  const base = (estado.puestos || []).find((p) => p.codigo === codigo);
+  if (base === undefined) return;
+  const permitidas = new Set(base.permisos.filter((c) => funcionDe(c).reservado === null));
+  E('pp-matriz').innerHTML = matrizDeFunciones(permitidas, null);
+  if (E('pp-desc').value.trim() === '') E('pp-desc').value = base.descripcion;
+  avisarSegundoFactor('pp-matriz', 'pp-aviso2fa');
+}
+
 /**
  * Una pantalla sin permiso no se ofrece.
  *
@@ -16834,10 +17053,11 @@ async function cargarConfig() {
       // La tabla de «con acceso» tiene que excluirlos — no tienen acceso
       // todavía, es justo lo que están por recibir más abajo.
       const personas = u.datos.users || u.datos.usuarios || [];
-      const conAcceso = personas.filter((p) => p.role);
+      const conAcceso = personas.filter((p) => p.role || (p.puestosPropios || []).length > 0)
+        .map((p) => Object.assign({}, p, { rol: p.role || '—', propios: (p.puestosPropios || []).join(', ') || '—' }));
       caja.innerHTML += '<h3>Personas con acceso</h3>' +
         tablaDe(conAcceso,
-          [['Nombre','fullName'],['Correo','email'],['Rol','role'],['Desde','validFrom']]);
+          [['Nombre','fullName'],['Correo','email'],['Rol','rol'],['Puestos propios','propios'],['Desde','validFrom']]);
 
       // Alta de una persona nueva en el estudio.
       //
@@ -16902,6 +17122,22 @@ async function cargarConfig() {
           '</div><div id="rol-modulos" class="aviso"></div><div id="rol-msg"></div>' +
           '<details class="grupo" open><summary>Todos los puestos: qué hace cada uno y qué módulos ve</summary>' + tablaDePuestos() + '</details></div>';
         pintarModulosDelPuesto();
+
+        // Puestos propios y ajustes por persona: sólo si el servidor dice que es el dueño del estudio.
+        if (u.datos.esDuenoDelEstudio) {
+          await cargarPuestosPropios(personas);
+          caja.innerHTML += seccionDePuestosPropios();
+          if (!caja.dataset.ppEnganchado) {
+            caja.dataset.ppEnganchado = 'si';
+            caja.addEventListener('click', manejarPuestosPropios);
+            caja.addEventListener('change', (ev) => {
+              const o = ev.target;
+              if (o && o.id === 'pp-basado') basarPuestoEn(o.value);
+              if (o && o.matches && o.matches('#pp-matriz input')) avisarSegundoFactor('pp-matriz', 'pp-aviso2fa');
+              if (o && o.matches && o.matches('#aj-matriz input')) avisarSegundoFactor('aj-matriz', 'aj-aviso2fa');
+            });
+          }
+        }
 
         // Por delegación y no con `onclick` sobre el botón.
         //

@@ -548,7 +548,13 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
       const result = await tx.query(
         `SELECT u.id, u.email, u.full_name AS "fullName", u.mfa_enabled AS "mfaEnabled",
                 u.status, r.code AS role,
-                ucr.valid_from AS "validFrom", ucr.valid_to AS "validTo"
+                ucr.valid_from AS "validFrom", ucr.valid_to AS "validTo",
+                -- Los puestos propios de esta empresa que tiene la persona (0145): quien sólo tiene uno también tiene acceso.
+                coalesce((SELECT json_agg(pp.nombre ORDER BY pp.nombre)
+                            FROM asignaciones_de_puesto_propio a
+                            JOIN puestos_propios pp ON pp.id = a.puesto_id AND pp.archivado_el IS NULL
+                           WHERE a.user_id = u.id AND a.company_id = $1
+                             AND (a.valid_to IS NULL OR a.valid_to >= CURRENT_DATE)), '[]'::json) AS "puestosPropios"
            FROM organization_members om
            JOIN users u ON u.id = om.user_id
            LEFT JOIN user_company_roles ucr
@@ -575,6 +581,9 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         users: result.rows,
         organizationId,
         canManageOrganization: nivelDelEstudio === 'OWNER' || nivelDelEstudio === 'ADMIN',
+        // Armar puestos propios y ajustar lo que puede hacer cada persona es sólo del dueño del estudio (0145): la consola no ofrece lo que
+        // la base va a rechazar.
+        esDuenoDelEstudio: nivelDelEstudio === 'OWNER',
       };
     });
   });

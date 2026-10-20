@@ -103,6 +103,22 @@ const SIN_ESCRITOR = new Map<string, string>([
     'Lo escribe el operador con `scripts/recuperar-cuenta.mjs correo` cuando alguien perdió el acceso a la casilla de la ' +
       'cuenta. Tampoco es una operación de la API.',
   ],
+  // Las seis de la 0145: las escribe la función SQL `constancia_de_permisos`, dentro de la misma transacción que el cambio de permisos,
+  // y no `recordAudit`. El barrido sólo mira el código de la API y los CASE de los triggers, así que no las ve: están registradas en la
+  // base y exigen motivo, y `tests/integration/puestos-propios.test.ts` comprueba que cada acto deja su fila con el motivo.
+  ...(
+    [
+      'CREAR_PUESTO_PROPIO',
+      'MODIFICAR_PUESTO_PROPIO',
+      'ARCHIVAR_PUESTO_PROPIO',
+      'ASIGNAR_PUESTO_PROPIO',
+      'QUITAR_PUESTO_PROPIO',
+      'AJUSTAR_PERMISOS_DE_PERSONA',
+    ] as const
+  ).map((accion): [string, string] => [
+    accion,
+    'La escribe la función SQL `constancia_de_permisos` (0145) en la misma transacción que el cambio, no la API: no hay `recordAudit` que ver.',
+  ]),
 ]);
 
 suite('S-20 — el vocabulario de la bitácora', () => {

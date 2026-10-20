@@ -17,11 +17,11 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 
 | Plan | Código | Para quién | Neto por mes | Con IVA | Comprobantes | Empresas | Usuarios | IA por día (total) |
 |---|---|---|---|---|---|---|---|---|
-| **Esencial** | `CONTABLE` | Libros al día: contabilidad, IVA, documentos, auditoría | $ 50.000 | $ 60.500 | ilimitados | 1 | 2 | 330.000 tokens |
-| **Gestión** | `GESTION` | Pyme que vende, compra y maneja stock y caja | $ 100.000 | $ 121.000 | ilimitados | 1 | 5 | 660.000 |
-| **Estudio** | `ESTUDIO` | Contador con cartera de empresas | $ 125.000 | $ 151.250 | ilimitados | 50 | 5 | 830.000 |
-| **Empresa** | `EMPRESA_B1` | Pyme grande o varias empresas: el sistema completo | $ 205.000 | $ 248.050 | ilimitados | 5 | 15 | 1.360.000 |
-| **Empresa Plus** | `COMPLETO` | Lo mismo, con más volumen, usuarios y soporte prioritario | $ 370.000 | $ 447.700 | ilimitados | 20 | 50 | 2.460.000 |
+| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con documentos y auditoría | $ 50.000 | $ 60.500 | ilimitados | 1 | 2 | 330.000 tokens |
+| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 100.000 | $ 121.000 | ilimitados | 1 | 5 | 660.000 |
+| **Estudio** | `ESTUDIO` | Estudio contable con cartera de empresas | $ 125.000 | $ 151.250 | ilimitados | 50 | 5 | 830.000 |
+| **Empresa** | `EMPRESA_B1` | Empresa en crecimiento o con varias razones sociales: el sistema completo | $ 205.000 | $ 248.050 | ilimitados | 5 | 15 | 1.360.000 |
+| **Empresa Plus** | `COMPLETO` | Todo Empresa con mayor capacidad y soporte prioritario | $ 370.000 | $ 447.700 | ilimitados | 20 | 50 | 2.460.000 |
 
 - **Estudio** costaba menos que Gestión ($ 89.900) y es el plan que más soporte consume: ahora cuesta más.
 - **Empresa** no incluía las funciones `analisis`, `inteligencia` e `integraciones` pero declaraba un tope de 10 integraciones: un tope sobre algo que el plan no tenía. Ahora trae todo lo que sabe hacer el sistema, y **Empresa Plus se distingue por volumen, usuarios y soporte, no por funciones.**

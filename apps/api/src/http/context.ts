@@ -11,6 +11,7 @@ import { withCompany, withoutCompany } from '@aai/db';
 import type { FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { hashToken } from '../auth/crypto.js';
+import { permisoSensible } from '../puestos/catalogo-de-permisos.js';
 import { forbidden, HttpError, mfaRequired, unauthorized } from './errors.js';
 import { alcanzaElPlan } from '../planes/alcance.js';
 
@@ -140,7 +141,7 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
   // Fijar `app.company_id` en la empresa pedida no debilita nada — RLS acota por
   // empresa, no autoriza: si el usuario no tiene rol ahí, la consulta sigue
   // devolviendo vacío y el acceso se rechaza igual.
-  const { permissions, roles, alcance } = await withCompany(
+  const { permissions, roles, puestosPropios, conAjustes, alcance } = await withCompany(
     { companyId, actorId: `user:${auth.user.userId}` },
     async (tx) => {
       const permissionRows = await tx.query<{ code: string }>(
@@ -156,6 +157,15 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
             AND (ucr.valid_to IS NULL OR ucr.valid_to >= CURRENT_DATE)`,
         [auth.user.userId, companyId],
       );
+      // Puestos propios y ajustes por persona (0145): quien sólo tiene un puesto propio no tiene ningún rol, y aun así tiene acceso.
+      const personalizado = await tx.query<{ puestos: string; ajustes: string }>(
+        `SELECT (SELECT count(*) FROM asignaciones_de_puesto_propio a
+                  JOIN puestos_propios pp ON pp.id = a.puesto_id AND pp.archivado_el IS NULL
+                 WHERE a.user_id = $1 AND a.company_id = $2
+                   AND (a.valid_to IS NULL OR a.valid_to >= CURRENT_DATE))::text AS puestos,
+                (SELECT count(*) FROM ajustes_de_permisos WHERE user_id = $1 AND company_id = $2)::text AS ajustes`,
+        [auth.user.userId, companyId],
+      );
       // La puerta comercial se resuelve **en la misma transacción** que los
       // permisos y los roles. Abrir una segunda para esto agregaría una
       // conexión y un BEGIN/COMMIT a cada pedido que toca una empresa, que es
@@ -164,19 +174,24 @@ export async function requireCompany(request: FastifyRequest): Promise<RequestTe
       return {
         permissions: new Set(permissionRows.rows.map((row) => row.code)),
         roles: new Set(roleRows.rows.map((row) => row.code)),
+        puestosPropios: Number(personalizado.rows[0]!.puestos),
+        conAjustes: Number(personalizado.rows[0]!.ajustes) > 0,
         alcance: await alcanzaElPlan(tx, companyId, request.url),
       };
     },
   );
 
-  // Sin ningún rol vigente, el usuario no tiene acceso a esa empresa.
-  if (roles.size === 0) {
+  // Sin ningún rol vigente ni puesto propio, el usuario no tiene acceso a esa empresa.
+  if (roles.size === 0 && puestosPropios === 0) {
     throw forbidden('No tenés acceso a esta empresa');
   }
 
   // El segundo factor es una condición de acceso, no una preferencia: un contador
   // sin MFA no llega a la contabilidad aunque su contraseña sea correcta.
-  if (!auth.user.mfaEnabled && [...roles].some((role) => ROLES_REQUIRING_MFA.has(role))) {
+  // Un puesto propio o un ajuste también lo exige si lo que la persona puede hacer mueve plata, aprueba o toca la contabilidad: el segundo
+  // factor no se esquiva armando un puesto a medida.
+  const funcionSensible = (puestosPropios > 0 || conAjustes) && [...permissions].some(permisoSensible);
+  if (!auth.user.mfaEnabled && ([...roles].some((role) => ROLES_REQUIRING_MFA.has(role)) || funcionSensible)) {
     throw new HttpError(
       403,
       'MFA_SETUP_REQUIRED',

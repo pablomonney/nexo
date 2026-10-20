@@ -78,6 +78,20 @@ const PERMITIDAS: Readonly<Record<string, string>> = {
     'Sin parámetros: comprueba que la empresa en contexto sea la designada en platform_owner ANTES ' +
     'de contar y, para cualquier otra, levanta 42501. Devuelve conteos y una lista mínima de clientes, ' +
     'nunca contenido contable',
+  'crear_puesto_propio(uuid,uuid,text,text,text[])':
+    'Comprueba ANTES de escribir que el actor sea el dueño (OWNER) del estudio de la empresa (exigir_dueno_del_estudio) y, si no, levanta 42501; ' +
+    'no deja dar funciones reservadas ni juntar armar con aprobar, y deja la constancia en la bitácora en la misma transacción',
+  'cambiar_puesto_propio(uuid,uuid,uuid,text,text,text[],text)':
+    'Igual que crear_puesto_propio: sólo el dueño del estudio, motivo escrito, sin reservadas ni armar+aprobar, con constancia',
+  'archivar_puesto_propio(uuid,uuid,uuid,text)':
+    'Sólo el dueño del estudio, con motivo; el puesto tiene que ser de la empresa en contexto; con constancia',
+  'dar_puesto_propio(uuid,uuid,uuid,uuid,text)':
+    'Sólo el dueño del estudio, con motivo; el destinatario tiene que pertenecer al estudio y el puesto a la empresa; con constancia',
+  'quitar_puesto_propio(uuid,uuid,uuid,uuid,text)':
+    'Sólo el dueño del estudio, con motivo; sólo borra la asignación de la empresa indicada; con constancia',
+  'ajustar_permisos_de_persona(uuid,uuid,uuid,text[],text[],text)':
+    'Sólo el dueño del estudio, con motivo; el destinatario pertenece al estudio; lo agregado no puede ser reservado y el resultado no puede ' +
+    'juntar armar con aprobar; con constancia',
   'consumo_de_ia_del_estudio()':
     'Sin parámetros: contesta sobre el estudio de la empresa en contexto (app_company_id()), así que no hay ' +
     'identificador ajeno que pasarle. Devuelve dos números (tokens de hoy y tope del plan), nunca filas ni contenido',

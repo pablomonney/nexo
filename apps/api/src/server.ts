@@ -28,6 +28,7 @@ import { vatRoutes } from './routes/vat.js';
 import { periodRoutes } from './routes/periods.js';
 import { predictionRoutes } from './routes/predictions.js';
 import { secretRoutes } from './routes/secretos.js';
+import { puestosPropiosRoutes } from './routes/puestos-propios.js';
 import { studioRoutes } from './routes/studio.js';
 import { workQueueRoutes } from './routes/work-queue.js';
 import { auditRoutes } from './routes/audit.js';
@@ -343,6 +344,7 @@ export async function buildServer(
 
   await app.register(authRoutes);
   await app.register(studioRoutes);
+  await app.register(puestosPropiosRoutes);
   await app.register(accountRoutes);
   await app.register(partyRoutes);
   await app.register(productRoutes);

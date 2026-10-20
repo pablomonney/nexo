@@ -94,6 +94,14 @@ export const ACTIONS_REQUIRING_REASON = [
   // identidad escritos, una cuenta que cambió de segundo factor o de correo no se puede explicar (0135).
   'RESETEAR_SEGUNDO_FACTOR',
   'CAMBIAR_CORREO_DE_CUENTA',
+  // Decidir qué puede hacer cada persona es el acto más sensible del sistema: un permiso de más es acceso regalado. Sin el motivo escrito, dentro
+  // de un año nadie sabe por qué alguien podía hacer lo que podía (0145).
+  'CREAR_PUESTO_PROPIO',
+  'MODIFICAR_PUESTO_PROPIO',
+  'ARCHIVAR_PUESTO_PROPIO',
+  'ASIGNAR_PUESTO_PROPIO',
+  'QUITAR_PUESTO_PROPIO',
+  'AJUSTAR_PERMISOS_DE_PERSONA',
 ] as const;
 
 export interface AuditEvent {

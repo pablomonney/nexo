@@ -147,11 +147,11 @@ const TOPES = {
  *     Empresa Plus  lo mismo con más volumen, más usuarios y soporte prioritario
  */
 const NOMBRES = {
-  CONTABLE: ['NEXO Esencial', 'Tus libros al día: contabilidad, IVA, documentos y auditoría de una empresa'],
-  GESTION: ['NEXO Gestión', 'Una pyme que vende, compra y maneja stock y caja, con la contabilidad al día'],
-  ESTUDIO: ['NEXO Estudio', 'Para el contador que lleva muchas empresas: la cartera de clientes bajo un mismo techo'],
-  EMPRESA_B1: ['NEXO Empresa', 'Pyme grande o varias empresas: sucursales, proyectos, comisiones, CRM, análisis e integraciones'],
-  COMPLETO: ['NEXO Empresa Plus', 'Todo NEXO Empresa con más volumen y más usuarios, integraciones sin tope y soporte prioritario'],
+  CONTABLE: ['NEXO Esencial', 'Contabilidad, IVA y comprobantes de una empresa, con documentos, auditoría, conexión con ARCA y asistente de IA'],
+  GESTION: ['NEXO Gestión', 'Gestión integral de una empresa: ventas, compras, stock, tesorería y listas de precios, con la contabilidad al día'],
+  ESTUDIO: ['NEXO Estudio', 'Para estudios contables: la cartera de empresas de sus clientes en un solo lugar, con contabilidad, IVA, documentos y analítica'],
+  EMPRESA_B1: ['NEXO Empresa', 'El sistema completo para empresas en crecimiento o con varias razones sociales: sucursales, proyectos, comisiones, CRM, análisis y decisiones'],
+  COMPLETO: ['NEXO Empresa Plus', 'Todo NEXO Empresa con mayor capacidad: más empresas, más usuarios, mayor cupo de IA y soporte prioritario'],
 };
 
 /**
