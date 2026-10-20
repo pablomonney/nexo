@@ -17,11 +17,11 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 
 | Plan | Código | Para quién | Neto por mes | Con IVA | Comprobantes | Empresas | Usuarios | IA por mes (tope por día) |
 |---|---|---|---|---|---|---|---|---|
-| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con tesorería, documentos y auditoría | $ 49.999 | $ 60.498,79 | ilimitados | 1 | 4 | 22.200.000 (740.000) |
-| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 99.999 | $ 120.998,79 | ilimitados | 1 | 10 | 44.400.000 (1.480.000) |
+| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con tesorería, documentos y auditoría | $ 49.999 | $ 60.498,79 | ilimitados | 1 | 2 | 22.200.000 (740.000) |
+| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 99.999 | $ 120.998,79 | ilimitados | 1 | 5 | 44.400.000 (1.480.000) |
 | **Estudio** | `ESTUDIO` | Estudio contable con cartera de empresas | $ 149.999 | $ 181.498,79 | ilimitados | 50 | 10 | 66.900.000 (2.230.000) |
-| **Empresa** | `EMPRESA_B1` | Empresa en crecimiento o con varias razones sociales: el sistema completo | $ 199.999 | $ 241.998,79 | ilimitados | 5 | 30 | 89.100.000 (2.970.000) |
-| **Empresa Plus** | `COMPLETO` | Todo Empresa con mayor capacidad y soporte prioritario | $ 349.999 | $ 423.498,79 | ilimitados | 20 | 100 | 156.000.000 (5.200.000) |
+| **Empresa** | `EMPRESA_B1` | Empresa en crecimiento o con varias razones sociales: el sistema completo | $ 199.999 | $ 241.998,79 | ilimitados | 5 | 20 | 89.100.000 (2.970.000) |
+| **Empresa Plus** | `COMPLETO` | Todo Empresa con mayor capacidad y soporte prioritario | $ 349.999 | $ 423.498,79 | ilimitados | 20 | 80 | 156.000.000 (5.200.000) |
 
 - **Estudio** costaba menos que Gestión ($ 89.900) y es el plan que más soporte consume: ahora cuesta más.
 - **Empresa** no incluía las funciones `analisis`, `inteligencia` e `integraciones` pero declaraba un tope de 10 integraciones: un tope sobre algo que el plan no tenía. Ahora trae todo lo que sabe hacer el sistema, y **Empresa Plus se distingue por volumen, usuarios y soporte, no por funciones.**
