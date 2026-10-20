@@ -13,12 +13,22 @@
  * Cuántos tokens entran en cada plan es una decisión comercial, y una decisión comercial cambia: por eso es un script con motivo
  * escrito y no una migración que quede fijada en la historia del esquema. Correrlo dos veces deja la base como está.
  *
- * ## De dónde salen los números
+ * ## De dónde salen los números (decisión del titular, 2026-10-19: «que sea un 15 % de lo que pagan por mes»)
  *
- * Son un **punto de partida prudente**, no un cálculo de costo. A los precios publicados para Claude Haiku 5.5 (US$ 0,10 por millón
- * de tokens de entrada y US$ 0,50 por millón de salida), el tope más alto de la lista —un millón por día— cuesta como máximo
- * unos US$ 0,50 por día y por empresa, en el peor caso (todo en salida). Un turno normal usa ~1.200 tokens: 100.000 tokens por
- * día son unas 80 consultas.
+ * El presupuesto de IA de cada plan es el **15 % de su precio neto mensual**. Se convierte a dólares (supuesto: US$ 1 = $ 1.500; si el
+ * dólar es otro se recalcula acá) y se reparte en 30 días al precio del **peor caso**: todo en salida, a US$ 0,50 por millón de tokens
+ * (Claude Haiku 5.5). El uso normal cuesta alrededor de un tercio de eso. En los planes que atienden varias empresas el tope es **por
+ * empresa**, así que el presupuesto se divide por la cantidad de empresas del plan: si todas usan su tope completo todos los días, el gasto
+ * sigue siendo ≤ 15 %.
+ *
+ *     plan          neto/mes   15 %      US$/mes   ÷ 30 días ÷ empresas → tokens/día por empresa
+ *     Esencial       50.000     7.500      5,00        1 empresa      → 330.000
+ *     Gestión       100.000    15.000     10,00        1 empresa      → 660.000
+ *     Estudio       125.000    18.750     12,50       20 empresas     →  40.000
+ *     Empresa       205.000    30.750     20,50        5 empresas     → 270.000
+ *     Empresa Plus  370.000    55.500     37,00       20 empresas     → 120.000
+ *
+ * Un turno normal usa ~1.200 tokens: 330.000 por día son unas 275 consultas.
  *
  * Los códigos de plan son los de la lista comercial de `sembrar-comercial-b1.mjs`.
  */
@@ -38,14 +48,14 @@ try {
 const aplicar = process.argv.includes('--aplicar');
 const DECLARANTE = 'comercial-2026-10';
 const MOTIVO =
-  'Tope diario de tokens del asistente por plan, decidido el 2026-10-19: todos los planes incluyen IA y ninguno queda sin tope de gasto.';
+  'Tope diario de tokens del asistente por plan y por empresa, decidido el 2026-10-19: el presupuesto de IA es el 15 % del precio neto mensual del plan (peor caso, US$ 1 = $ 1.500).';
 
 const CUPOS = [
-  ['CONTABLE', 100_000],
-  ['GESTION', 200_000],
-  ['ESTUDIO', 200_000],
-  ['EMPRESA_B1', 500_000],
-  ['COMPLETO', 1_000_000],
+  ['CONTABLE', 330_000],
+  ['GESTION', 660_000],
+  ['ESTUDIO', 40_000],
+  ['EMPRESA_B1', 270_000],
+  ['COMPLETO', 120_000],
 ];
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });

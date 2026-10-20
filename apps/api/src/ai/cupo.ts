@@ -80,7 +80,10 @@ export async function leerCupo(
             JOIN plan_ai_quotas pq ON pq.plan_id = s.plan_id
            WHERE s.company_id = $1 AND s.estado IN ('PRUEBA', 'ACTIVA', 'MOROSA')
            ORDER BY s.created_at DESC
-           LIMIT 1))                                                          AS tope_tokens,
+           LIMIT 1),
+         -- Sin tope propio ni suscripción propia (p. ej. una empresa que un estudio da de alta dentro de su organización): rige el MÁS
+         -- BAJO de los topes de plan, y no «sin tope». Una empresa sin suscripción no se queda sin límite de gasto.
+         (SELECT min(pq.tokens_por_dia)::text FROM plan_ai_quotas pq))        AS tope_tokens,
        (SELECT CASE WHEN EXISTS (SELECT 1 FROM ai_quotas q WHERE q.company_id = $1 AND q.tokens_por_dia IS NOT NULL)
                     THEN 'EMPRESA' ELSE 'PLAN' END)                           AS origen_tope,
        (SELECT count(*) FROM ai_answers a
