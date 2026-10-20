@@ -401,7 +401,8 @@ async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada):
           planCode: body.plan,
           periodicidad: body.periodicidad,
           moneda: precio.moneda,
-          importe: precio.importe,
+          // Lo que se cobra: con un precio NETO («+ IVA») es el neto más el IVA, no el neto tal cual.
+          importe: precio.importeACobrar,
           desde: hoy,
           actorId: `user:${auth.user.userId}`,
         });
@@ -423,6 +424,8 @@ async function declararRutas(app: FastifyInstance, pasarela: PasarelaInyectada):
             moneda: precio.moneda,
             importe: precio.importe,
             incluyeImpuestos: precio.incluyeImpuestos,
+            // Lo que efectivamente se cobra por período: con un precio NETO es el neto más el IVA.
+            importeACobrar: precio.importeACobrar,
             proximaFacturacion: hoy,
           },
           alcance:

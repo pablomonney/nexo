@@ -64,7 +64,7 @@ const desdeDeclarado = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) 
 const DECLARANTE = 'comercial-2026-09';
 
 const MOTIVO_PRECIO =
-  'Lista comercial de septiembre de 2026. Importes FINALES, con IVA incluido.';
+  'Lista comercial de septiembre de 2026, publicada sin IVA («+ IVA») desde el 2026-10-19: importes NETOS; el final es el mismo.';
 const MOTIVO_TOPE =
   'Topes comerciales de septiembre de 2026. Decisión tomada, no hipótesis.';
 
@@ -83,19 +83,24 @@ async function hoySegunLaBase(cliente) {
 }
 
 /**
- * Los precios definitivos. **Finales, con IVA incluido.**
+ * Los precios definitivos. **NETOS: la lista dice «+ IVA».**
+ *
+ * El 2026-10-19 el titular pidió publicarlos sin IVA y con «+ IVA» (antes eran finales). Cada neto es el final de la lista de septiembre
+ * dividido por 1,21 y redondeado al centavo, de modo que al sumarle el 21 % vuelve al mismo precio final, salvo un centavo en Empresa (lo comprueba
+ * `tests/unit/iva-de-la-lista.test.ts`): 59.900 → 49.504,13 · 89.900 → 74.297,52 · 119.900 → 99.090,91 · 249.900 → 206.528,93 (suma 249.900,01: el único que no vuelve al centavo) ·
+ * 449.900 → 371.818,18. Lo que se cobra es el neto más el IVA (`apps/api/src/billing/iva.ts`).
  *
  * `incluye_impuestos` no tiene valor por defecto en el esquema justamente para
  * que esta decisión se escriba: suponerla mal cambia lo que se cobra en un 21 %.
  */
-const INCLUYE_IMPUESTOS = true;
+const INCLUYE_IMPUESTOS = false;
 
 const PRECIOS = [
-  ['CONTABLE', 'MENSUAL', 'ARS', '59900.00'],
-  ['ESTUDIO', 'MENSUAL', 'ARS', '89900.00'],
-  ['GESTION', 'MENSUAL', 'ARS', '119900.00'],
-  ['EMPRESA_B1', 'MENSUAL', 'ARS', '249900.00'],
-  ['COMPLETO', 'MENSUAL', 'ARS', '449900.00'],
+  ['CONTABLE', 'MENSUAL', 'ARS', '49504.13'],
+  ['ESTUDIO', 'MENSUAL', 'ARS', '74297.52'],
+  ['GESTION', 'MENSUAL', 'ARS', '99090.91'],
+  ['EMPRESA_B1', 'MENSUAL', 'ARS', '206528.93'],
+  ['COMPLETO', 'MENSUAL', 'ARS', '371818.18'],
 ];
 
 /**
@@ -142,7 +147,7 @@ try {
   const desde = desdeDeclarado ?? (await hoySegunLaBase(cliente));
 
   console.log(`\n══ Configuración comercial ${aplicar ? '' : '(ENSAYO)'} ═══════════════════\n`);
-  console.log(`  Vigente desde ${desde}   ·   importes FINALES (IVA incluido)\n`);
+  console.log(`  Vigente desde ${desde}   ·   importes NETOS (+ IVA)\n`);
 
   for (const [code, , moneda, importe] of PRECIOS) {
     const t = TOPES[code];

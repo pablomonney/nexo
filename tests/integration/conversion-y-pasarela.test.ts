@@ -50,7 +50,10 @@ const PASSWORD = 'una-contrasena-suficientemente-larga';
 
 /** El precio del plan de prueba. Un número cualquiera: lo que importa es que sea **el mismo** que termina en la suscripción. */
 const PRECIO = '12345.67';
-const PRECIO_EN_CENTAVOS = 1_234_567n;
+// El precio de lista es NETO («+ IVA», `incluye_impuestos = false`): lo que se cobra es el neto más el 21 % redondeado al centavo.
+// 12345,67 × 21 % = 2592,5907 → 2592,59; total 14938,26.
+const PRECIO_COBRADO = '14938.26';
+const PRECIO_COBRADO_EN_CENTAVOS = 1_493_826n;
 
 /**
  * Lo que el doble de la pasarela va a contestar, y qué se le preguntó.
@@ -485,10 +488,48 @@ suite('De la prueba al cobro', () => {
     expect(s.estado).toBe('ACTIVA');
     expect(s.periodicidad).toBe('MENSUAL');
     expect(s.moneda).toBe('ARS');
-    expect(s.importe_acordado).toBe(PRECIO);
+    expect(s.importe_acordado).toBe(PRECIO_COBRADO);
     expect(s.proxima_facturacion).not.toBeNull();
     // La vigencia deja de tener fin: la prueba terminaba, la suscripción no.
     expect(s.vigencia_hasta).toBeNull();
+  });
+
+  it('un precio de lista NETO («+ IVA») se cobra con el IVA sumado, y uno que ya lo incluye se cobra tal cual', async () => {
+    // La lista mensual es neta (`incluye_impuestos = false`): se pacta neto + 21 %. Antes se pactaba el neto tal cual y se cobraba un 21 % menos
+    // de lo que la página prometía. La anual declara el IVA INCLUIDO: no se le suma nada.
+    await declararPrecio();
+    await db.query(
+      `INSERT INTO plan_prices
+         (plan_id, periodicidad, moneda, importe, incluye_impuestos, vigente_desde, declarado_por, motivo)
+       VALUES ($1, 'ANUAL', 'ARS', 100000.00, true, CURRENT_DATE, 'test:conversion', 'Precio anual final de la suite de conversión')
+       ON CONFLICT DO NOTHING`,
+      [planId],
+    );
+
+    await empezarPrueba();
+    const neto = await app.inject({
+      method: 'POST', url: '/subscription/convertir',
+      headers: cabeceras(),
+      payload: { plan: planCode, periodicidad: 'MENSUAL', moneda: 'ARS' },
+    });
+    expect(neto.statusCode, neto.payload).toBe(200);
+    expect(neto.json<{ condiciones: { importe: string; incluyeImpuestos: boolean; importeACobrar: string } }>().condiciones).toMatchObject({
+      importe: PRECIO,
+      incluyeImpuestos: false,
+      importeACobrar: PRECIO_COBRADO,
+    });
+    expect((await suscripcion()).importe_acordado).toBe(PRECIO_COBRADO);
+
+    await borrarSuscripciones();
+    await empezarPrueba();
+    const final = await app.inject({
+      method: 'POST', url: '/subscription/convertir',
+      headers: cabeceras(),
+      payload: { plan: planCode, periodicidad: 'ANUAL', moneda: 'ARS' },
+    });
+    expect(final.statusCode, final.payload).toBe(200);
+    expect(final.json<{ condiciones: { importeACobrar: string } }>().condiciones.importeACobrar).toBe('100000.00');
+    expect((await suscripcion()).importe_acordado).toBe('100000.00');
   });
 
   it('el importe sale de la lista aunque el cliente mande otro', async () => {
@@ -505,7 +546,7 @@ suite('De la prueba al cobro', () => {
       payload: { plan: planCode, periodicidad: 'MENSUAL', moneda: 'ARS', importe: '1.00' },
     });
     expect(r.statusCode, r.payload).toBe(200);
-    expect((await suscripcion()).importe_acordado).toBe(PRECIO);
+    expect((await suscripcion()).importe_acordado).toBe(PRECIO_COBRADO);
   });
 
   it('una moneda que el sistema no conoce se rechaza antes de mirar el precio', async () => {
@@ -629,7 +670,7 @@ suite('De la prueba al cobro', () => {
   it('el importe que viaja a la pasarela es el acordado, en centavos', async () => {
     // Nunca se multiplica un flotante por cien. El importe sale de
     // `numeric(18,2)` como texto y se convierte con aritmética de enteros.
-    expect(guion.ultimoPedido?.importeCentavos).toBe(PRECIO_EN_CENTAVOS);
+    expect(guion.ultimoPedido?.importeCentavos).toBe(PRECIO_COBRADO_EN_CENTAVOS);
     expect(guion.ultimoPedido?.moneda).toBe('ARS');
     // La clave del vínculo es el id de la suscripción, no el correo.
     expect(guion.ultimoPedido?.correoDelPagador).toBe(correo);
@@ -930,14 +971,14 @@ suite('De la prueba al cobro', () => {
 
     const mio = informe!.emitidos.find((d) => d.companyId === empresa);
     expect(mio, JSON.stringify(informe!.omitidos)).toBeDefined();
-    expect(mio!.importe).toBe(PRECIO);
+    expect(mio!.importe).toBe(PRECIO_COBRADO);
     expect(mio!.moneda).toBe('ARS');
 
     // El documento existió dentro de la transacción, con el importe de la
     // lista. Que después se haya deshecho no le quita nada a lo que prueba:
     // el ciclo levantó la suscripción convertida y emitió el cargo.
     expect(docEstado).toBe('EMITIDO');
-    expect(docImporte).toBe(PRECIO);
+    expect(docImporte).toBe(PRECIO_COBRADO);
   });
 
   // ── 4 · Cancelar, pausar y reactivar: NEXO y la pasarela, o ninguno ──────
@@ -1247,7 +1288,7 @@ suite('De la prueba al cobro', () => {
        VALUES ($1, 'mercadopago', 'sandbox', 'MENSUAL', 'ARS', $2, $3::numeric,
                'test:conversion', 'Mapeo de la suite de conversión')
        ON CONFLICT DO NOTHING`,
-      [planId, `plan-externo-${planCode}`, PRECIO],
+      [planId, `plan-externo-${planCode}`, PRECIO_COBRADO],
     );
   }
 });

@@ -76,6 +76,12 @@ Construido como **primer paso** del orden de arriba: la propietaria ya tiene **u
 - **Qué significa «paga».** Suscripción `ACTIVA` con **al menos un cargo `PAGADO`**. La cuenta de prueba de producción está `ACTIVA` hasta 2099 **sin cobro**: contarla inflaría justo el número que necesitás exacto, por eso se informa aparte como «activas sin cobro».
 - **Lo que todavía no hace.** Mide cobros registrados en `billing_documents`; no sabe de pagos que nadie cargó. Hasta que el webhook de Mercado Pago esté en el servidor real (§5, pendiente), los pagos por transferencia entran cuando alguien los registra.
 
+### Precios publicados «+ IVA» (decisión del titular, 2026-10-19)
+
+El titular pidió publicar los precios **sin IVA y con «+ IVA»** (hasta entonces eran finales). Cada neto es el final de la lista de septiembre dividido por 1,21 y redondeado al centavo; al sumarle el 21 % vuelve al mismo precio (salvo un centavo en Empresa, que no tiene un neto exacto). Lo que se cobra es el neto **más** el IVA: `apps/api/src/billing/iva.ts` lo suma al fijar el importe de la suscripción y al declarar el plan en la pasarela. Antes el cobro habría salido por el neto tal cual, un 21 % menos de lo publicado.
+
+**Advertencia que sigue en pie:** un monotributista emite factura C y **no discrimina IVA**. Si la condición del titular frente al IVA resulta ser monotributista (a confirmar con el contador), cobrar «+ IVA» no es coherente con su régimen. La decisión se tomó con esta advertencia a la vista; si el contador la contradice, se vuelve a precios finales cambiando `INCLUYE_IMPUESTOS` y la lista en `scripts/sembrar-comercial-b1.mjs` (una vigencia nueva cierra la anterior), sin tocar código. Los cargos de NEXO siguen sin ser comprobantes fiscales: no discriminan el IVA hasta que haya emisión (E8).
+
 ## 5 · Lo que necesito de vos
 
 1. **Confirmar la condición frente al IVA de quien emite** (D1) —idealmente con el contador, con las cinco preguntas del §3.5—. Con eso: facturas **C**, leyenda de precios y pantalla de IVA quedan alineadas.

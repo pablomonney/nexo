@@ -37,6 +37,7 @@
 
 import type { Tx } from '@aai/db';
 import { isCurrency, moneyFromDecimalString, type Money } from '@aai/shared';
+import { centavosATexto, sumarIva } from './iva.js';
 
 export type Periodicidad = 'MENSUAL' | 'ANUAL';
 
@@ -50,6 +51,13 @@ export interface PrecioDeLista {
   readonly moneda: string;
   readonly periodicidad: Periodicidad;
   readonly incluyeImpuestos: boolean;
+  /**
+   * Lo que se le cobra al cliente, en texto decimal. Con `incluyeImpuestos` es el mismo `importe`; si el precio de lista es NETO («+ IVA»),
+   * es el neto más el IVA. Es lo que se pacta en `importe_acordado`: cobrar el neto tal cual sería cobrar un 21 % menos de lo publicado.
+   */
+  readonly importeACobrar: string;
+  /** El IVA que se suma, en centavos (0 si el precio ya lo incluye). */
+  readonly ivaCentavos: bigint;
 }
 
 export type MotivoSinPrecio = 'PLAN_DESCONOCIDO' | 'SIN_PRECIO_VIGENTE' | 'MONEDA_DESCONOCIDA';
@@ -124,6 +132,7 @@ export async function precioVigenteDe(
   }
 
   const dinero: Money = moneyFromDecimalString(fila.importe, entrada.moneda);
+  const conIva = fila.incluye_impuestos ? null : sumarIva(dinero.amount);
 
   return {
     hay: true,
@@ -135,6 +144,8 @@ export async function precioVigenteDe(
       moneda: entrada.moneda,
       periodicidad: entrada.periodicidad,
       incluyeImpuestos: fila.incluye_impuestos,
+      importeACobrar: conIva === null ? fila.importe : centavosATexto(conIva.totalCentavos),
+      ivaCentavos: conIva === null ? 0n : conIva.ivaCentavos,
     },
   };
 }

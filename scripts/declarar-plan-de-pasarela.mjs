@@ -167,12 +167,15 @@ try {
   // A centavos sin pasar por punto flotante: el importe viene como texto
   // decimal desde `numeric(18,2)` y se convierte con aritmética de enteros.
   const [entera, decimales] = importe.split('.');
-  const centavos = BigInt(entera) * 100n + BigInt((decimales ?? '').padEnd(2, '0'));
+  const centavosDeLista = BigInt(entera) * 100n + BigInt((decimales ?? '').padEnd(2, '0'));
+  // Con un precio NETO («+ IVA») la pasarela debita el neto más el IVA (21 %, redondeado al centavo): debitar el neto sería cobrar de menos.
+  const centavos = incluyeImpuestos ? centavosDeLista : centavosDeLista + (centavosDeLista * 21n * 2n + 100n) / 200n;
 
   console.log(`\n══ Plan de pasarela ═════════════════════════════════════════\n`);
   console.log(`  plan        ${plan} — ${nombre}`);
   console.log(`  condiciones ${periodicidad} ${moneda} ${importe}`);
-  console.log(`  impuestos   ${incluyeImpuestos ? 'incluidos en el importe' : 'por fuera'}`);
+  console.log(`  impuestos   ${incluyeImpuestos ? 'incluidos en el importe' : 'por fuera: la pasarela debita el neto más el IVA'}`);
+  console.log(`  se debita   ${moneda} ${(centavos / 100n).toString()}.${(centavos % 100n).toString().padStart(2, '0')}`);
   console.log(`  pasarela    ${proveedor.id}  ambiente ${ambiente}`);
 
   if (ensayo) {

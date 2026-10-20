@@ -15713,7 +15713,7 @@ async function cargarSuscripcion() {
         // sale obliga a mirar la tabla de arriba y volver.
         oc.textContent = p.nombre + ((p.precios || []).length === 0
           ? ' — sin precio declarado'
-          : ' — ' + p.precios.map((x) => x.moneda + ' ' + x.importe).join(' · '));
+          : ' — ' + p.precios.map((x) => x.moneda + ' ' + x.importe + (x.incluyeImpuestos ? '' : ' + IVA')).join(' · '));
         selC.appendChild(oc);
       }
     }
