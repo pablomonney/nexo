@@ -818,7 +818,7 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 
       <div class="gnav"><div class="gnav-t" role="button" tabindex="0" aria-expanded="true">Comprar<svg class="ico"><use href="#i-chevron"/></svg></div>
         <div class="gnav-items">
-          <button data-vista="documentos" data-nombre="Documentos" data-desc="Subí facturas y PDFs: el sistema los lee" data-claves="subir ocr comprobante archivo escanear"><svg class="ico"><use href="#i-documentos"/></svg><span class="txt">Documentos</span></button>
+          <button data-vista="documentos" data-nombre="Documentos" data-desc="Subí facturas: los XML de ARCA se leen solos; PDF y fotos se archivan" data-claves="subir ocr comprobante archivo escanear"><svg class="ico"><use href="#i-documentos"/></svg><span class="txt">Documentos</span></button>
           <button data-vista="solicitudes" data-nombre="Pedidos de compra" data-desc="Pedir mercadería o servicios y aprobarlos" data-claves="solicitudes compras requisición"><svg class="ico"><use href="#i-solicitudes"/></svg><span class="txt">Pedidos de compra</span></button>
           <button data-vista="recepciones" data-nombre="Recepciones" data-desc="Qué mercadería llegó y cuándo" data-claves="remito recibir mercadería entrada"><svg class="ico"><use href="#i-recepciones"/></svg><span class="txt">Recepciones</span></button>
           <button data-vista="pagos" data-nombre="Órdenes de pago" data-desc="Armar, aprobar y registrar pagos a proveedores" data-claves="pagos proveedores pagar deuda"><svg class="ico"><use href="#i-pagos"/></svg><span class="txt">Órdenes de pago</span></button>
@@ -1445,9 +1445,9 @@ section>h2{font-size:1.4rem;letter-spacing:-.02em}
 <!-- ══ Documentos ═════════════════════════════════════════════════════════ -->
 <section id="v-documentos" hidden>
   <h2>Documentos</h2>
-  <p class="ayuda">Subir archiva y calcula el hash. La extracción corre sola; sin motor
-    de OCR responde <span class="mono">SIN_MOTOR_OCR</span>, que no es lo mismo que
-    «no se encontró nada».</p>
+  <p class="ayuda">Subir archiva y calcula el hash. <strong>Hoy la lectura automática es solo para los XML de
+    ARCA.</strong> Un PDF o una foto queda archivado y responde <span class="mono">SIN_MOTOR_OCR</span>, que no
+    es lo mismo que «no se encontró nada»: los datos se cargan a mano o con ayuda del asistente.</p>
   <div class="fila">
     <div><label>Archivo (PDF, JPG, PNG, XML, CSV, XLSX)</label><input id="archivo" type="file"></div>
   </div>
@@ -6009,7 +6009,7 @@ const GUIAS = {
   },
 
   documentos: {
-    que: 'Subí facturas, remitos o extractos (PDF, foto, XML, Excel): el sistema los archiva y lee lo que dicen.',
+    que: 'Subí facturas, remitos o extractos (PDF, foto, XML, Excel): el sistema los archiva. Los XML de ARCA los lee solo; un PDF o una foto lo cargás vos, o con ayuda del asistente.',
     pasos: [
       { t: 'Elegí el archivo y tocá «Subir».', a: '#archivo' },
       { t: 'Abrilo desde la lista y revisá «Lo que se leyó»: el sistema nunca da por bueno un dato dudoso.' },
