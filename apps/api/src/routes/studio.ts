@@ -268,6 +268,8 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
         role: z.enum([
           'ADMINISTRADOR', 'CONTADOR', 'AUDITOR',
           'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA',
+          // Los puestos predeterminados (0143).
+          'GERENTE', 'VENDEDOR', 'COMPRADOR', 'TESORERO', 'DEPOSITO',
         ]),
       })
       .parse(request.body);
@@ -288,6 +290,41 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return { ok: true };
+  });
+
+  /**
+   * Los puestos (roles) que se pueden dar, con lo que cada uno puede hacer.
+   *
+   * La consola arma «Dar un puesto» con esto: de los permisos de cada puesto sale **qué módulos ve esa persona**, con la misma tabla
+   * permiso→pantalla que usa para esconder el menú. No hay una segunda lista de módulos por puesto que pueda desactualizarse.
+   *
+   * Los puestos son los mismos para todas las empresas (son datos de referencia, no de una empresa); no se escribe nada acá.
+   */
+  app.get('/puestos', async (request) => {
+    const tenant = await requireCompany(request);
+    requirePermission(tenant, 'user:read');
+
+    return withCompany(
+      { companyId: tenant.companyId, actorId: `user:${requireAuth(request).user.userId}` },
+      async (tx) => {
+        const r = await tx.query<{ codigo: string; nombre: string; descripcion: string; permisos: string[] }>(
+          `SELECT r.code AS codigo, r.name AS nombre, r.description AS descripcion,
+                  COALESCE(array_agg(p.code ORDER BY p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permisos
+             FROM roles r
+             LEFT JOIN role_permissions rp ON rp.role_id = r.id
+             LEFT JOIN permissions p ON p.id = rp.permission_id
+            GROUP BY r.id, r.code, r.name, r.description
+            ORDER BY array_position(ARRAY['ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'GERENTE', 'VENDEDOR', 'COMPRADOR', 'TESORERO', 'DEPOSITO',
+                                          'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA'], r.code)`,
+        );
+        return {
+          puestos: r.rows.map((p) => ({ ...p, exigeSegundoFactor: ROLES_REQUIRING_MFA.has(p.codigo) })),
+          alcance:
+            'Los puestos se suman: una persona puede tener más de uno. Los módulos de cada puesto salen de sus permisos; ' +
+            'ninguno de los puestos de trabajo toca la contabilidad ni administra el sistema.',
+        };
+      },
+    );
   });
 
   /**

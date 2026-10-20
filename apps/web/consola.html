@@ -7005,6 +7005,59 @@ async function usarEmpresa(id) {
 }
 
 /**
+ * Qué permiso hace falta para ver cada pantalla del menú. Una pantalla que no figura acá la ve cualquiera que haya entrado.
+ *
+ * Es la **única** tabla permiso→pantalla: la usa `aplicarPermisosANav` para esconder lo que el rol no puede usar y «Dar un puesto» para
+ * decir qué módulos va a ver una persona. Dos listas se desactualizarían una de la otra.
+ */
+const PERMISO_DE_LA_PANTALLA = {
+  asistente: 'intelligence:ask',
+  documentos: 'document:read', propuestas: 'prediction:review',
+  operaciones: 'journal_entry:read',
+  terceros: 'party:read', productos: 'product:read', precios: 'product:read',
+  crm: 'crm:read', proyectos: 'project:read', comisiones: 'commission:read', sucursales: 'branch:read',
+  comercial: 'commercial:read', recepciones: 'receipt:read',
+  stock: 'stock:read', activos: 'asset:read',
+  iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
+  solicitudes: 'purchase_request:read',
+  pagos: 'payment_order:read',
+  caja: 'cash:read',
+  integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
+  asientos: 'journal_entry:read', libros: 'report:read',
+  estados: 'statement:read', cierre: 'period:read',
+  migraciones: 'migration:read',
+  auditoria: 'audit:read', config: 'company:read',
+  suscripcion: 'subscription:read',
+};
+
+/** Los nombres de los módulos que ve quien tiene estos permisos (los que el menú dibujaría para él, sin mirar el plan). */
+function modulosDeLosPermisos(permisos) {
+  const tiene = new Set(permisos);
+  const nombres = [];
+  for (const b of document.querySelectorAll('nav button[data-vista]')) {
+    const v = b.dataset.vista;
+    if (v === 'propietario' || v === 'empresa') continue;
+    const p = PERMISO_DE_LA_PANTALLA[v];
+    if (p === undefined || tiene.has(p)) nombres.push(b.dataset.nombre);
+  }
+  return nombres;
+}
+
+/** Debajo del selector de puestos: qué hace y qué módulos ve quien lo tenga. */
+function pintarModulosDelPuesto() {
+  const caja = E('rol-modulos');
+  const sel = E('rol-codigo');
+  if (!caja || !sel) return;
+  const p = (estado.puestos || []).find((x) => x.codigo === sel.value);
+  if (p === undefined || p.permisos.length === 0) { caja.hidden = true; return; }
+  caja.hidden = false;
+  caja.innerHTML =
+    '<strong>' + escapar(p.nombre) + '.</strong> ' + escapar(p.descripcion) +
+    '<br><strong>Ve:</strong> ' + escapar(modulosDeLosPermisos(p.permisos).join(' · ')) +
+    (p.exigeSegundoFactor ? '<br><em>Este puesto exige segundo factor.</em>' : '');
+}
+
+/**
  * Una pantalla sin permiso no se ofrece.
  *
  * No es cosmética: un botón que termina en 403 le enseña a la persona que el
@@ -7012,25 +7065,7 @@ async function usarEmpresa(id) {
  * pregunta.
  */
 function aplicarPermisosANav() {
-  const requiere = {
-    asistente: 'intelligence:ask',
-    documentos: 'document:read', propuestas: 'prediction:review',
-    operaciones: 'journal_entry:read',
-    terceros: 'party:read', productos: 'product:read', precios: 'product:read',
-    crm: 'crm:read', proyectos: 'project:read', comisiones: 'commission:read', sucursales: 'branch:read',
-    comercial: 'commercial:read', recepciones: 'receipt:read',
-    stock: 'stock:read', activos: 'asset:read',
-    iva: 'vat_book:read', bancos: 'bank:read', cheques: 'check:read',
-    solicitudes: 'purchase_request:read',
-    pagos: 'payment_order:read',
-    caja: 'cash:read',
-    integraciones: 'integration:read', analitica: 'analytics:read', analisis: 'analysis:read',
-    asientos: 'journal_entry:read', libros: 'report:read',
-    estados: 'statement:read', cierre: 'period:read',
-    migraciones: 'migration:read',
-    auditoria: 'audit:read', config: 'company:read',
-    suscripcion: 'subscription:read',
-  };
+  const requiere = PERMISO_DE_LA_PANTALLA;
   /**
    * El otro motivo por el que el backend dice que no.
    *
@@ -16607,23 +16642,28 @@ async function cargarConfig() {
       // pantalla: lo dice `grant_company_role`, que acepta como actor al
       // ADMINISTRADOR de esa misma empresa. Acá solo se le da por dónde.
       if (puede('user:manage')) {
+        // Los puestos salen del servidor, con los permisos de cada uno: de ahí sale qué módulos ve esa persona.
+        const pu = await api('GET', '/puestos');
+        estado.puestos = pu.ok ? pu.datos.puestos : [
+          'ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA',
+        ].map((c) => ({ codigo: c, nombre: c, descripcion: '', permisos: [], exigeSegundoFactor: false }));
         const opciones = personas
           .filter((p, i) => personas.findIndex((q) => q.id === p.id) === i)
           .map((p) => '<option value="' + escapar(p.id) + '">' +
             escapar(p.fullName + ' · ' + p.email) + '</option>').join('');
         caja.innerHTML +=
-          '<div class="grupo"><h4>Dar un rol</h4>' +
-          '<p class="ayuda">Los roles se suman: una misma persona puede administrar y llevar ' +
-          'la contabilidad. Lo que nunca se junta es proponer y aprobar un asiento — eso lo ' +
-          'impide la base, no esta pantalla.</p>' +
+          '<div class="grupo"><h4>Dar un puesto</h4>' +
+          '<p class="ayuda">Cada puesto trae sus módulos: la persona ve en el menú sólo lo que le toca. Los puestos se suman: ' +
+          'una misma persona puede ser vendedora y compradora, o administrar y llevar la contabilidad. Lo que nunca se junta es ' +
+          'proponer y aprobar un asiento — eso lo impide la base, no esta pantalla.</p>' +
           '<div class="fila">' +
           '<div style="flex:2"><label>Persona</label><select id="rol-persona">' + opciones + '</select></div>' +
-          '<div><label>Rol</label><select id="rol-codigo">' +
-          ['ADMINISTRADOR','CONTADOR','AUDITOR','USUARIO_EMPRESA','CARGADOR','SOLO_LECTURA']
-            .map((r) => '<option>' + r + '</option>').join('') +
+          '<div><label>Puesto</label><select id="rol-codigo">' +
+          estado.puestos.map((r) => '<option value="' + escapar(r.codigo) + '">' + escapar(r.nombre) + '</option>').join('') +
           '</select></div>' +
-          '<div><label>&nbsp;</label><button id="b-rol-dar">Dar el rol</button></div>' +
-          '</div><div id="rol-msg"></div></div>';
+          '<div><label>&nbsp;</label><button id="b-rol-dar">Dar el puesto</button></div>' +
+          '</div><div id="rol-modulos" class="aviso"></div><div id="rol-msg"></div></div>';
+        pintarModulosDelPuesto();
 
         // Por delegación y no con `onclick` sobre el botón.
         //
@@ -16635,6 +16675,9 @@ async function cargarConfig() {
         // oyente va ahí.
         if (!caja.dataset.rolEnganchado) {
           caja.dataset.rolEnganchado = 'si';
+          caja.addEventListener('change', (ev) => {
+            if (ev.target && ev.target.id === 'rol-codigo') pintarModulosDelPuesto();
+          });
           caja.addEventListener('click', async (ev) => {
             const boton = ev.target.closest && ev.target.closest('#b-rol-dar');
             if (!boton) return;
@@ -16644,7 +16687,7 @@ async function cargarConfig() {
               userId: persona,
               role: E('rol-codigo').value,
             });
-            decir('rol-msg', r, 'Rol otorgado.');
+            decir('rol-msg', r, 'Puesto otorgado.');
             // Los permisos propios cambian en el acto si el rol es para uno mismo.
             if (r.ok) await usarEmpresa(estado.empresa);
           });
