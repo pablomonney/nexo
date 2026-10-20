@@ -307,6 +307,7 @@ suite('La puerta comercial de los planes', () => {
   let fx: Fixture;
   let empresa: string;
   let token: string;
+  let topesOriginales: { plan_id: string; recurso: string; tope: number | null; ilimitado: boolean; declarado_por: string }[] = [];
 
   beforeAll(async () => {
     initPool(process.env.DATABASE_URL!);
@@ -314,6 +315,8 @@ suite('La puerta comercial de los planes', () => {
     await app.ready();
     db = await connect();
     fx = await seed(db, 'puerta');
+    // Esta suite cambia topes de los planes de la lista comercial (filas compartidas): se saca una foto y se repone al terminar.
+    topesOriginales = (await db.query<(typeof topesOriginales)[number]>('SELECT plan_id, recurso, tope, ilimitado, declarado_por FROM plan_limits')).rows;
     const stamp = await sufijoUnico(db);
 
     const { hash: argonHash } = await import('@node-rs/argon2');
@@ -384,6 +387,13 @@ suite('La puerta comercial de los planes', () => {
   });
 
   afterAll(async () => {
+    for (const f of topesOriginales) {
+      await db.query(
+        `INSERT INTO plan_limits (plan_id, recurso, tope, ilimitado, declarado_por) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (plan_id, recurso) DO UPDATE SET tope = EXCLUDED.tope, ilimitado = EXCLUDED.ilimitado, declarado_por = EXCLUDED.declarado_por`,
+        [f.plan_id, f.recurso, f.tope, f.ilimitado, f.declarado_por],
+      );
+    }
     await app.close();
     await db.end();
     await closePool();

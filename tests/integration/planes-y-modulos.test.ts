@@ -59,6 +59,24 @@ const RUTAS: Readonly<Record<string, readonly string[]>> = {
   arca: ['/companies/current/arca/capabilities'],
 };
 
+/**
+ * Otras suites cambian un tope de estos planes un instante y lo reponen al terminar (`suscripciones`, `prueba-y-planes`): son filas compartidas y las
+ * suites corren en paralelo. Lo declarado se mira con algunos reintentos, para no confundir ese instante con una lista comercial distinta.
+ */
+async function conReintentos(comprobar: () => Promise<void>): Promise<void> {
+  let ultimo: unknown;
+  for (let i = 0; i < 12; i += 1) {
+    try {
+      await comprobar();
+      return;
+    } catch (error) {
+      ultimo = error;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  throw ultimo;
+}
+
 suite('cada plan tiene los módulos que le corresponden', () => {
   let db: Client;
 
@@ -71,22 +89,26 @@ suite('cada plan tiene los módulos que le corresponden', () => {
 
   describe('1 · lo declarado', () => {
     it.each(Object.entries(MATRIZ))('%s trae exactamente sus funcionalidades', async (codigo, plan) => {
-      const r = await db.query<{ feature_code: string }>(
-        `SELECT pf.feature_code FROM plan_features pf JOIN subscription_plans p ON p.id = pf.plan_id WHERE p.code = $1 ORDER BY 1`,
-        [codigo],
-      );
-      expect(r.rows.map((f) => f.feature_code), `${plan.nombre} (${codigo})`).toEqual([...plan.funcionalidades].sort());
+      await conReintentos(async () => {
+        const r = await db.query<{ feature_code: string }>(
+          `SELECT pf.feature_code FROM plan_features pf JOIN subscription_plans p ON p.id = pf.plan_id WHERE p.code = $1 ORDER BY 1`,
+          [codigo],
+        );
+        expect(r.rows.map((f) => f.feature_code), `${plan.nombre} (${codigo})`).toEqual([...plan.funcionalidades].sort());
+      });
     });
 
     it.each(Object.entries(MATRIZ))('%s: empresas y usuarios son los de la lista, y comprobantes, documentos e integraciones son ilimitados', async (codigo, plan) => {
-      const r = await db.query<{ recurso: string; tope: number | null; ilimitado: boolean }>(
-        `SELECT l.recurso, l.tope, l.ilimitado FROM plan_limits l JOIN subscription_plans p ON p.id = l.plan_id WHERE p.code = $1`,
-        [codigo],
-      );
-      const por = new Map(r.rows.map((f) => [f.recurso, f]));
-      expect(por.get('EMPRESAS')).toMatchObject({ tope: plan.empresas, ilimitado: false });
-      expect(por.get('USUARIOS')).toMatchObject({ tope: plan.usuarios, ilimitado: false });
-      for (const recurso of ['COMPROBANTES_MES', 'DOCUMENTOS_MES', 'INTEGRACIONES']) expect(por.get(recurso)?.ilimitado, `${codigo} ${recurso}`).toBe(true);
+      await conReintentos(async () => {
+        const r = await db.query<{ recurso: string; tope: number | null; ilimitado: boolean }>(
+          `SELECT l.recurso, l.tope, l.ilimitado FROM plan_limits l JOIN subscription_plans p ON p.id = l.plan_id WHERE p.code = $1`,
+          [codigo],
+        );
+        const por = new Map(r.rows.map((f) => [f.recurso, f]));
+        expect(por.get('EMPRESAS')).toMatchObject({ tope: plan.empresas, ilimitado: false });
+        expect(por.get('USUARIOS')).toMatchObject({ tope: plan.usuarios, ilimitado: false });
+        for (const recurso of ['COMPROBANTES_MES', 'DOCUMENTOS_MES', 'INTEGRACIONES']) expect(por.get(recurso)?.ilimitado, `${codigo} ${recurso}`).toBe(true);
+      });
     });
 
     it('los cinco planes están a la venta, con nombre y descripción', async () => {

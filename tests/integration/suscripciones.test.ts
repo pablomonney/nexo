@@ -324,6 +324,12 @@ suite('Suscripciones', () => {
     // Desde B-1 los planes vienen con sus topes sembrados, así que para ejercer
     // esta propiedad hay que sacar uno. Se elige INTEGRACIONES porque ninguna
     // otra suite afirma nada sobre él, y se repone al final.
+    const filaOriginal = (
+      await db.query<{ tope: number | null; ilimitado: boolean; declarado_por: string }>(
+        `SELECT tope, ilimitado, declarado_por FROM plan_limits WHERE plan_id = $1 AND recurso = 'INTEGRACIONES'`,
+        [planPyme],
+      )
+    ).rows[0];
     await db.query(
       `DELETE FROM plan_limits WHERE plan_id = $1 AND recurso = 'INTEGRACIONES'`,
       [planPyme],
@@ -341,11 +347,12 @@ suite('Suscripciones', () => {
     const exceso = items.find((i) => i.rama === 'PLAN_EXCEDIDO');
     expect(exceso?.evidenciaFaltante ?? []).not.toContain('INTEGRACIONES');
 
+    // Se repone la fila tal como estaba (hoy las integraciones son ilimitadas), no una hipótesis vieja.
     await db.query(
-      `INSERT INTO plan_limits (plan_id, recurso, tope, declarado_por)
-       VALUES ($1, 'INTEGRACIONES', 2, 'hipotesis-b1')
+      `INSERT INTO plan_limits (plan_id, recurso, tope, ilimitado, declarado_por)
+       VALUES ($1, 'INTEGRACIONES', $2, $3, $4)
        ON CONFLICT (plan_id, recurso) DO NOTHING`,
-      [planPyme],
+      [planPyme, filaOriginal === undefined ? 2 : filaOriginal.tope, filaOriginal === undefined ? false : filaOriginal.ilimitado, filaOriginal?.declarado_por ?? 'hipotesis-b1'],
     );
   });
 

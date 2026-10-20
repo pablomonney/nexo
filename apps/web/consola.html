@@ -7551,17 +7551,17 @@ function aplicarPermisosANav() {
    * Es la misma regla de arriba aplicada a la otra puerta. El dominio es el
    * primer segmento de la ruta, igual que en `alcanzaElPlan`: la lista de lo
    * excluido la manda el servidor, así que acá solo hace falta saber a qué
-   * dominio pertenece cada pantalla.
+   * dominio pertenece cada pantalla. Los dominios son los de la RUTA de la API (primer segmento): la API corta por ellos (0147).
    */
   const dominioDe = {
     inteligencia: 'intelligence', asistente: 'asistente', propuestas: 'predictions', analisis: 'analysis',
-    analitica: 'analytics', comercial: 'comercial', comisiones: 'comisiones',
-    crm: 'crm', integraciones: 'integraciones', productos: 'products',
-    precios: 'precios', proyectos: 'proyectos', stock: 'stock',
-    recuentos: 'recuentos', activos: 'activos', sucursales: 'sucursales',
-    caja: 'caja', bancos: 'banks', cheques: 'cheques',
-    solicitudes: 'solicitudes-de-compra', recepciones: 'recepciones',
-    pagos: 'ordenes-de-pago',
+    analitica: 'analytics', comercial: 'commercial-documents', comisiones: 'salespeople',
+    crm: 'crm', integraciones: 'integrations', productos: 'products',
+    precios: 'price-lists', proyectos: 'projects', stock: 'stock',
+    recuentos: 'stock-counts', activos: 'fixed-assets', sucursales: 'branches',
+    caja: 'cash-boxes', bancos: 'banks', cheques: 'checks',
+    solicitudes: 'purchase-requests', recepciones: 'goods-receipts',
+    pagos: 'payment-orders',
   };
   const fuera = estado.fueraDelPlan || [];
 
