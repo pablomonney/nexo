@@ -17,15 +17,15 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 
 | Plan | Código | Para quién | Neto por mes | Con IVA | Comprobantes | Empresas | Usuarios | IA por mes (tope por día) |
 |---|---|---|---|---|---|---|---|---|
-| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con documentos y auditoría | $ 49.999 | $ 60.498,79 | ilimitados | 1 | 4 | 9.900.000 (330.000) |
-| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 99.999 | $ 120.998,79 | ilimitados | 1 | 10 | 19.800.000 (660.000) |
-| **Estudio** | `ESTUDIO` | Estudio contable con cartera de empresas | $ 149.999 | $ 181.498,79 | ilimitados | 50 | 10 | 29.700.000 (990.000) |
-| **Empresa** | `EMPRESA_B1` | Empresa en crecimiento o con varias razones sociales: el sistema completo | $ 199.999 | $ 241.998,79 | ilimitados | 5 | 30 | 39.900.000 (1.330.000) |
-| **Empresa Plus** | `COMPLETO` | Todo Empresa con mayor capacidad y soporte prioritario | $ 349.999 | $ 423.498,79 | ilimitados | 20 | 100 | 69.900.000 (2.330.000) |
+| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con tesorería, documentos y auditoría | $ 49.999 | $ 60.498,79 | ilimitados | 1 | 4 | 22.200.000 (740.000) |
+| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 99.999 | $ 120.998,79 | ilimitados | 1 | 10 | 44.400.000 (1.480.000) |
+| **Estudio** | `ESTUDIO` | Estudio contable con cartera de empresas | $ 149.999 | $ 181.498,79 | ilimitados | 50 | 10 | 66.900.000 (2.230.000) |
+| **Empresa** | `EMPRESA_B1` | Empresa en crecimiento o con varias razones sociales: el sistema completo | $ 199.999 | $ 241.998,79 | ilimitados | 5 | 30 | 89.100.000 (2.970.000) |
+| **Empresa Plus** | `COMPLETO` | Todo Empresa con mayor capacidad y soporte prioritario | $ 349.999 | $ 423.498,79 | ilimitados | 20 | 100 | 156.000.000 (5.200.000) |
 
 - **Estudio** costaba menos que Gestión ($ 89.900) y es el plan que más soporte consume: ahora cuesta más.
 - **Empresa** no incluía las funciones `analisis`, `inteligencia` e `integraciones` pero declaraba un tope de 10 integraciones: un tope sobre algo que el plan no tenía. Ahora trae todo lo que sabe hacer el sistema, y **Empresa Plus se distingue por volumen, usuarios y soporte, no por funciones.**
-- **Todos los planes incluyen el asistente de IA** con un tope diario de tokens **total del contrato** (`plan_ai_quotas`, migraciones 0142 y 0144): lo comparten todas las empresas del estudio, así que lo que se usa en una se gasta para todas. Cada empresa puede declarar además uno propio, más chico, como límite extra. El presupuesto de IA de cada plan es el **15 % de su precio neto mensual**, al precio del peor caso (todo en salida, US$ 0,50 por millón de tokens) y con US$ 1 = $ 1.500; al ser total, no se divide por empresa. El cálculo está en `scripts/declarar-cupos-de-ia-por-plan.mjs`; si el dólar es otro se recalcula. Sin suscripción en el estudio rige el más bajo de los topes de plan, no «sin tope». Los **comprobantes son ilimitados** en todos los planes.
+- **Todos los planes incluyen el asistente de IA** con un tope diario de tokens **total del contrato** (`plan_ai_quotas`, migraciones 0142 y 0144): lo comparten todas las empresas del estudio, así que lo que se usa en una se gasta para todas. Cada empresa puede declarar además uno propio, más chico, como límite extra. El presupuesto de IA de cada plan es el **15 % de su precio neto mensual**, al precio medido con el modelo real (97 % entrada a US$ 0,10 y 3 % salida a US$ 0,50 por millón, duplicado como margen) y con US$ 1 = $ 1.500; al ser total, no se divide por empresa. El cálculo está en `scripts/declarar-cupos-de-ia-por-plan.mjs`; si el dólar es otro se recalcula. Sin suscripción en el estudio rige el más bajo de los topes de plan, no «sin tope». Los **comprobantes son ilimitados** en todos los planes.
 - **Documentos e integraciones son ilimitados en todos los planes** (2026-10-19): hoy no cambian el costo —la única integración es la importación manual y subir un documento sólo ocupa espacio—. Si con conectores automáticos pesaran, se vuelve a declarar un tope: es un cambio de datos. La función de integraciones está incluida en los cinco planes.
 - **Estudio atiende hasta 50 empresas** (antes 20).
 - Los topes miden y avisan: **no bloquean.**
@@ -39,7 +39,8 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 | Clientes y proveedores · Documentos · Auditoría · Integraciones · ARCA | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Asistente de IA | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Ventas (presupuestos y pedidos) · Compras (pedidos, recepciones, órdenes de pago) | — | ✔ | — | ✔ | ✔ |
-| Tesorería (caja, bancos, cheques) · Stock y bienes de uso · Productos y precios | — | ✔ | — | ✔ | ✔ |
+| Tesorería (caja, bancos, cheques) | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Stock y bienes de uso · Productos y precios | — | ✔ | — | ✔ | ✔ |
 | Analítica | — | — | ✔ | ✔ | ✔ |
 | Sucursales · Proyectos · Comisiones · CRM | — | — | — | ✔ | ✔ |
 | Análisis y decisiones · Consultas · Propuestas de IA | — | — | — | ✔ | ✔ |
@@ -48,7 +49,7 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 
 **Auditoría del 2026-10-20:** la consola ocultaba las pantallas que un plan no incluye, pero la API **no las cerraba** (los dominios de la 0105 eran los nombres de las pantallas, no los de las rutas): un cliente de Esencial podía usar por API Ventas, Compras, Tesorería, Stock, Sucursales, Proyectos y Comisiones. La migración 0147 agrega las rutas reales. Y el asistente contestaba sobre cualquier módulo si el rol de la persona lo permitía: ahora sólo sobre los del plan (`preguntasDelPlan`).
 
-**Para decidir (comercial):** Esencial y Estudio no traen Tesorería, así que no concilian bancos ni llevan caja ni cheques; para quien «lleva los libros» la conciliación bancaria suele ser parte del trabajo. Si se quiere, es un cambio de datos (agregar `tesoreria` a esos planes).
+**Tesorería en todos los planes (decisión del titular, 2026-10-20):** Esencial y Estudio también incluyen caja, bancos y cheques: para quien lleva los libros la conciliación bancaria es parte del trabajo.
 
 ## Reglas de gestión
 

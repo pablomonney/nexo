@@ -433,7 +433,6 @@ suite('S-33 — el menú no ofrece lo que el plan no incluye', () => {
   const LLAMADOS_DESDE_OTRA_PANTALLA: Readonly<Record<string, string>> = {
     'decision-records':
       'Se carga dentro de Señales, y los planes que excluyen decision-records excluyen analysis con él',
-    'cash-sessions': 'Las sesiones de caja se piden desde Caja (cash-boxes), que el mismo plan ya esconde: son del mismo módulo',
     'stock-valuation': 'La valuación de existencias se pide desde Stock, que el mismo plan ya esconde',
     warehouses: 'Los depósitos se piden desde Stock y desde Recepciones, que el mismo plan ya esconde',
     pricing: 'La resolución de precios se pide desde Precios y desde Presupuestos y pedidos, que el mismo plan ya esconde',

@@ -146,9 +146,9 @@ const TOPES = {
  *     Empresa Plus  lo mismo con más volumen, más usuarios y soporte prioritario
  */
 const NOMBRES = {
-  CONTABLE: ['NEXO Esencial', 'Contabilidad, IVA y comprobantes de una empresa, con documentos, auditoría, conexión con ARCA y asistente de IA'],
+  CONTABLE: ['NEXO Esencial', 'Contabilidad, IVA y comprobantes de una empresa, con tesorería (caja, bancos y cheques), documentos, auditoría, conexión con ARCA y asistente de IA'],
   GESTION: ['NEXO Gestión', 'Gestión integral de una empresa: ventas, compras, stock, tesorería y listas de precios, con la contabilidad al día'],
-  ESTUDIO: ['NEXO Estudio', 'Para estudios contables: la cartera de empresas de sus clientes en un solo lugar, con contabilidad, IVA, documentos y analítica'],
+  ESTUDIO: ['NEXO Estudio', 'Para estudios contables: la cartera de empresas de sus clientes en un solo lugar, con contabilidad, IVA, tesorería, documentos y analítica'],
   EMPRESA_B1: ['NEXO Empresa', 'El sistema completo para empresas en crecimiento o con varias razones sociales: sucursales, proyectos, comisiones, CRM, análisis y decisiones'],
   COMPLETO: ['NEXO Empresa Plus', 'Todo NEXO Empresa con mayor capacidad: más empresas, más usuarios, mayor cupo de IA y soporte prioritario'],
 };
@@ -165,6 +165,9 @@ const FUNCIONES_QUE_FALTABAN = [
   ['CONTABLE', 'integraciones'],
   ['GESTION', 'integraciones'],
   ['ESTUDIO', 'integraciones'],
+  // Decisión del titular (2026-10-20): Esencial y Estudio incluyen Tesorería (caja, bancos y cheques): quien lleva los libros concilia bancos.
+  ['CONTABLE', 'tesoreria'],
+  ['ESTUDIO', 'tesoreria'],
 ];
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });
@@ -253,7 +256,7 @@ try {
   for (const [code, funcion] of FUNCIONES_QUE_FALTABAN) {
     await cliente.query(
       `INSERT INTO plan_features (plan_id, feature_code, declarado_por, motivo)
-       VALUES ($1, $2, $3, 'Empresa incluye todo lo que sabe hacer el sistema; Empresa Plus se distingue por volumen y soporte (2026-10-19).')
+       VALUES ($1, $2, $3, 'Funcionalidad declarada por decisión comercial (2026-10-19 y 2026-10-20): Empresa trae todo; Esencial y Estudio incluyen Tesorería.')
        ON CONFLICT DO NOTHING`,
       [planes.get(code).id, funcion, DECLARANTE],
     );

@@ -23,8 +23,8 @@ import { crearEntorno, type EntornoApi } from './helpers/entorno-api.js';
 const suite = hasDatabase ? describe : describe.skip;
 
 /** La lista comercial: qué funcionalidades trae cada plan. */
-const BASE = ['contabilidad', 'fiscal', 'terceros', 'documentos', 'auditoria', 'integraciones', 'arca', 'asistente'];
-const GESTION = ['comercial', 'compras', 'stock', 'tesoreria', 'precios'];
+const BASE = ['contabilidad', 'fiscal', 'terceros', 'documentos', 'auditoria', 'integraciones', 'arca', 'asistente', 'tesoreria'];
+const GESTION = ['comercial', 'compras', 'stock', 'precios'];
 const TODO = ['sucursales', 'proyectos', 'comisiones', 'crm', 'analitica', 'analisis', 'inteligencia'];
 
 const MATRIZ: Readonly<Record<string, { nombre: string; funcionalidades: readonly string[]; empresas: number; usuarios: number }>> = {
@@ -179,12 +179,12 @@ suite('cada plan tiene los módulos que le corresponden', () => {
       for (const f of Object.values(FUNCIONALIDAD_DEL_PERMISO)) if (f !== null) expect(existentes.has(f), f).toBe(true);
     });
 
-    it('Esencial no ofrece preguntas de stock, de cheques ni de proyectos; Empresa las ofrece todas', () => {
+    it('Esencial no ofrece preguntas de stock ni de proyectos (sí de cheques: incluye Tesorería); Empresa las ofrece todas', () => {
       const todos = new Set(CATALOGO.flatMap((p) => p.permisos));
       const conTodo = preguntasPara(todos);
       const esencial = preguntasDelPlan(conTodo, new Set(MATRIZ['CONTABLE']!.funcionalidades)).map((p) => p.id);
       expect(esencial).not.toContain('VALOR_DEL_STOCK');
-      expect(esencial).not.toContain('QUE_CHEQUES_TENGO');
+      expect(esencial, 'Esencial incluye Tesorería').toContain('QUE_CHEQUES_TENGO');
       expect(esencial).not.toContain('COMO_VAN_LOS_PROYECTOS');
       const empresa = preguntasDelPlan(conTodo, new Set(MATRIZ['EMPRESA_B1']!.funcionalidades)).map((p) => p.id);
       expect(empresa).toHaveLength(conTodo.length);
