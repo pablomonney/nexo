@@ -14818,11 +14818,12 @@ const rango = () => 'desde=' + E('lib-desde').value + '&hasta=' + E('lib-hasta')
 
 function tablaDe(filas, columnas) {
   if (!filas || filas.length === 0) return '<div class="aviso">Sin movimientos en el rango.</div>';
-  return '<table><thead><tr>' + columnas.map((c) => '<th>' + escapar(c[0]) + '</th>').join('') +
+  // En un contenedor que se desplaza: una tabla ancha no ensancha la página en el celular.
+  return '<div class="tabla"><table><thead><tr>' + columnas.map((c) => '<th>' + escapar(c[0]) + '</th>').join('') +
     '</tr></thead><tbody>' +
     filas.map((f) => '<tr>' + columnas.map((c) =>
       '<td class="mono">' + escapar(f[c[1]]) + '</td>').join('') + '</tr>').join('') +
-    '</tbody></table>';
+    '</tbody></table></div>';
 }
 
 E('b-diario').onclick = async () => {
