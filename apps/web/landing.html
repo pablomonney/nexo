@@ -1064,6 +1064,22 @@ ajustarBotones(document);
     return Number(p.tokensDeIaPorDia).toLocaleString('es-AR') + ' tokens de IA por día' + (unaSola ? '' : ', compartidos entre todas tus empresas');
   };
 
+
+  // Los topes de un plan, en el orden en que se lee una lista de precios: primero lo que se cuenta (empresas, usuarios, inteligencia artificial)
+  // y después lo ilimitado, dicho en una sola frase cuando los tres lo son.
+  const topesOrdenados = (p) => {
+    const por = new Map((p.topes || []).map((t) => [t.recurso, t]));
+    const dicho = (r) => nombreDelTope(r, por.get(r).tope, por.get(r).ilimitado);
+    const lista = [];
+    for (const r of ['EMPRESAS', 'USUARIOS']) if (por.has(r)) lista.push(dicho(r));
+    if (p.tokensDeIaPorDia) lista.push(tokensDeIa(p));
+    const libres = ['COMPROBANTES_MES', 'DOCUMENTOS_MES', 'INTEGRACIONES'];
+    if (libres.every((r) => por.has(r) && por.get(r).ilimitado)) lista.push('comprobantes, documentos e integraciones ilimitados');
+    else for (const r of libres) if (por.has(r)) lista.push(dicho(r));
+    for (const t of p.topes || []) if (!['EMPRESAS', 'USUARIOS', ...libres].includes(t.recurso)) lista.push(nombreDelTope(t.recurso, t.tope, t.ilimitado));
+    return lista;
+  };
+
   try {
     const r = await fetch(ajuste('nexo-planes') || '/planes', { headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error('respuesta ' + r.status);
@@ -1074,10 +1090,7 @@ ajustarBotones(document);
       const tarjeta = document.createElement('article');
       tarjeta.className = 'plan';
       const incluye = (p.incluye || []).map((f) => '<li>' + escapar(f.nombre) + '</li>').join('');
-      // Los tokens de IA son TOTALES: los comparten todas las empresas del plan, no cada una por separado.
-      const topes = (p.topes || [])
-        .map((t) => '<li>' + escapar(nombreDelTope(t.recurso, t.tope, t.ilimitado)) + '</li>')
-        .join('') + (p.tokensDeIaPorDia ? '<li>' + escapar(tokensDeIa(p)) + '</li>' : '');
+      const topes = topesOrdenados(p).map((t) => '<li>' + escapar(t.charAt(0).toUpperCase() + t.slice(1)) + '</li>').join('');
       tarjeta.innerHTML =
         '<h3>' + escapar(p.nombre) + '</h3>' +
         '<p class="desc">' + escapar(p.descripcion || '') + '</p>' +

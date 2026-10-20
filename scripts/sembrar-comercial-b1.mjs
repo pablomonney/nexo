@@ -85,15 +85,14 @@ async function hoySegunLaBase(cliente) {
 /**
  * Los precios definitivos. **NETOS y REDONDOS: la lista dice «+ IVA».**
  *
- * El 2026-10-19 el titular pidió publicarlos sin IVA, con «+ IVA» y con números redondos. Cada neto es el múltiplo de $ 5.000 más cercano
- * al que daba la lista de septiembre sin IVA (final ÷ 1,21), de modo que el final con IVA queda a menos de un 2 % del anterior (salvo Estudio,
- * que sube a propósito, ver abajo):
+ * El 2026-10-19 el titular pidió publicarlos sin IVA y con «+ IVA»; el 2026-10-20, que terminen en 999 y en cifras más redondas. Cada neto es
+ * «un número redondo menos un peso» ($ 49.999, $ 99.999…): en el escalón se lee como el redondo de abajo.
  *
- *     Contable     $  50.000 + IVA  → $  60.500   (antes $  59.900 con IVA incluido)
- *     Estudio      $ 125.000 + IVA  → $ 151.250   (antes $  89.900: costaba menos que Gestión y es el plan que más soporte consume)
- *     Gestión      $ 100.000 + IVA  → $ 121.000   (antes $ 119.900)
- *     Empresa      $ 205.000 + IVA  → $ 248.050   (antes $ 249.900)
- *     Completo     $ 370.000 + IVA  → $ 447.700   (antes $ 449.900)
+ *     Esencial      $  49.999 + IVA  → $  60.498,79   (antes $  50.000)
+ *     Gestión       $  99.999 + IVA  → $ 120.998,79   (antes $ 100.000)
+ *     Estudio       $ 149.999 + IVA  → $ 181.498,79   (antes $ 125.000: es el plan que más soporte consume y atiende hasta 50 empresas)
+ *     Empresa       $ 199.999 + IVA  → $ 241.998,79   (antes $ 205.000)
+ *     Empresa Plus  $ 349.999 + IVA  → $ 423.498,79   (antes $ 370.000)
  *
  * Lo que se cobra es el neto más el 21 % (`apps/api/src/billing/iva.ts`; lo comprueba `tests/unit/iva-de-la-lista.test.ts`).
  *
@@ -103,11 +102,11 @@ async function hoySegunLaBase(cliente) {
 const INCLUYE_IMPUESTOS = false;
 
 const PRECIOS = [
-  ['CONTABLE', 'MENSUAL', 'ARS', '50000.00'],
-  ['ESTUDIO', 'MENSUAL', 'ARS', '125000.00'],
-  ['GESTION', 'MENSUAL', 'ARS', '100000.00'],
-  ['EMPRESA_B1', 'MENSUAL', 'ARS', '205000.00'],
-  ['COMPLETO', 'MENSUAL', 'ARS', '370000.00'],
+  ['CONTABLE', 'MENSUAL', 'ARS', '49999.00'],
+  ['ESTUDIO', 'MENSUAL', 'ARS', '149999.00'],
+  ['GESTION', 'MENSUAL', 'ARS', '99999.00'],
+  ['EMPRESA_B1', 'MENSUAL', 'ARS', '199999.00'],
+  ['COMPLETO', 'MENSUAL', 'ARS', '349999.00'],
 ];
 
 /**
@@ -133,8 +132,8 @@ const TOPES = {
   CONTABLE:   { EMPRESAS: 1,  USUARIOS: 2,  COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
   ESTUDIO:    { EMPRESAS: 50, USUARIOS: 5,  COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
   GESTION:    { EMPRESAS: 1,  USUARIOS: 5,  COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
-  EMPRESA_B1: { EMPRESAS: 5,  USUARIOS: 15, COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
-  COMPLETO:   { EMPRESAS: 20, USUARIOS: 50, COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
+  EMPRESA_B1: { EMPRESAS: 5,  USUARIOS: 30, COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
+  COMPLETO:   { EMPRESAS: 20, USUARIOS: 100, COMPROBANTES_MES: ILIMITADO, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
 };
 
 /**

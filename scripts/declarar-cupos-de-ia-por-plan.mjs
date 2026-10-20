@@ -21,14 +21,14 @@
  * (Claude Haiku 5.5). El uso normal cuesta alrededor de un tercio de eso. El tope es **total del plan**, no por empresa: da lo mismo cuántas
  * empresas lo usen, el gasto del contrato nunca pasa del 15 %.
  *
- *     plan          neto/mes   15 %      US$/mes   ÷ 30 días → tokens por día, en total
- *     Esencial       50.000     7.500      5,00                   330.000
- *     Gestión       100.000    15.000     10,00                   660.000
- *     Estudio       125.000    18.750     12,50                   830.000
- *     Empresa       205.000    30.750     20,50                 1.360.000
- *     Empresa Plus  370.000    55.500     37,00                 2.460.000
+ *     plan          neto/mes   15 %      US$/mes   ÷ 30 días → tokens por día, en total (redondeado hacia abajo a 10.000)
+ *     Esencial       49.999     7.500      5,00                   330.000
+ *     Gestión        99.999    15.000     10,00                   660.000
+ *     Estudio       149.999    22.500     15,00                   990.000
+ *     Empresa       199.999    30.000     20,00                 1.330.000
+ *     Empresa Plus  349.999    52.500     35,00                 2.330.000
  *
- * Un turno normal usa ~1.200 tokens: 330.000 por día son unas 275 consultas.
+ * Medido el 2026-10-20 con el modelo real, una consulta con herramienta usa ~13.000 tokens (no 1.200): 330.000 por día son 25–30 consultas.
  *
  * Los códigos de plan son los de la lista comercial de `sembrar-comercial-b1.mjs`.
  */
@@ -53,9 +53,9 @@ const MOTIVO =
 const CUPOS = [
   ['CONTABLE', 330_000],
   ['GESTION', 660_000],
-  ['ESTUDIO', 830_000],
-  ['EMPRESA_B1', 1_360_000],
-  ['COMPLETO', 2_460_000],
+  ['ESTUDIO', 990_000],
+  ['EMPRESA_B1', 1_330_000],
+  ['COMPLETO', 2_330_000],
 ];
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });

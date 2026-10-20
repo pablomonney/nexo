@@ -5257,6 +5257,21 @@ const nombreDelTope = (recurso, tope, ilimitado) => {
   return f ? f(tope) : recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
 };
 
+// Los topes de un plan, en el orden en que se lee una lista de precios: primero lo que se cuenta (empresas, usuarios, inteligencia artificial)
+// y después lo ilimitado, dicho en una sola frase cuando los tres lo son.
+const topesOrdenados = (p) => {
+  const por = new Map((p.topes || []).map((t) => [t.recurso, t]));
+  const dicho = (r) => nombreDelTope(r, por.get(r).tope, por.get(r).ilimitado);
+  const lista = [];
+  for (const r of ['EMPRESAS', 'USUARIOS']) if (por.has(r)) lista.push(dicho(r));
+  { const ia = tokensDeIa(p); if (ia) lista.push(ia); }
+  const libres = ['COMPROBANTES_MES', 'DOCUMENTOS_MES', 'INTEGRACIONES'];
+  if (libres.every((r) => por.has(r) && por.get(r).ilimitado)) lista.push('comprobantes, documentos e integraciones ilimitados');
+  else for (const r of libres) if (por.has(r)) lista.push(dicho(r));
+  for (const t of p.topes || []) if (!['EMPRESAS', 'USUARIOS', ...libres].includes(t.recurso)) lista.push(nombreDelTope(t.recurso, t.tope, t.ilimitado));
+  return lista;
+};
+
 /**
  * Lo que falta declarar para resolver la normativa, dicho como una frase.
  *
@@ -5545,8 +5560,7 @@ async function cargarPlanes() {
           (p.precio.incluyeImpuestos ? '' : ' + IVA') + ' / mes'
         : '<span class="p p-neu">sin precio declarado</span>') + '</td>' +
       '<td>' + escapar((p.incluye || []).map((f) => f.nombre).join(' · ') || '—') + '</td>' +
-      '<td>' + escapar((p.topes || [])
-        .map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).concat(tokensDeIa(p) || []).join(' · ') || 'sin declarar') + '</td>';
+      '<td>' + escapar(topesOrdenados(p).join(' · ') || 'sin declarar') + '</td>';
     cuerpo.appendChild(tr);
 
     const o = document.createElement('option');
@@ -16218,7 +16232,7 @@ async function cargarSuscripcion() {
         // declaró todavía, y decirlo así evita prometer lo que no se acordó.
         '<td>' + (p.topes.length === 0
           ? '<span class="p p-neu">sin declarar</span>'
-          : escapar(p.topes.map((t) => nombreDelTope(t.recurso, t.tope, t.ilimitado)).concat(tokensDeIa(p) || []).join(' · '))) + '</td>';
+          : escapar(topesOrdenados(p).join(' · '))) + '</td>';
       cuerpo.appendChild(tr);
 
       if (p.status === 'DISPONIBLE') {
