@@ -5239,7 +5239,8 @@ const ESTADO_DE_SUSCRIPCION = new Proxy(ESTADO_DE_SUSCRIPCION_CONOCIDO, {
 const tokensDeIa = (p) => {
   if (!p.tokensDeIaPorDia) return null;
   const unaSola = (p.topes || []).some((t) => t.recurso === 'EMPRESAS' && Number(t.tope) === 1);
-  return Number(p.tokensDeIaPorDia).toLocaleString('es-AR') + ' tokens de IA por día' + (unaSola ? '' : ', compartidos entre todas tus empresas');
+  // Se muestra el total del MES (30 días de tope diario): es lo que se compara entre planes. El tope se aplica por día, y se dice.
+  return (Number(p.tokensDeIaPorDia) * 30).toLocaleString('es-AR') + ' tokens de IA por mes (hasta ' + Number(p.tokensDeIaPorDia).toLocaleString('es-AR') + ' por día)' + (unaSola ? '' : ', compartidos entre todas tus empresas');
 };
 
 const nombreDelTope = (recurso, tope, ilimitado) => {
