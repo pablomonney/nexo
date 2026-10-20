@@ -126,12 +126,15 @@ const PRECIOS = [
  */
 const ILIMITADO = Symbol('sin tope');
 
+// Desde el 2026-10-19 los documentos y las integraciones son ILIMITADOS en todos los planes (decisión del titular: no modifican el costo hoy,
+// porque la única integración es la importación manual y subir un documento sólo ocupa espacio). Si con conectores automáticos pesaran,
+// se vuelve a declarar un tope: es un cambio de datos. Estudio atiende hasta 50 empresas (antes 20).
 const TOPES = {
-  CONTABLE:   { EMPRESAS: 1,  USUARIOS: 2,  COMPROBANTES_MES: 1000,   DOCUMENTOS_MES: 1000,   INTEGRACIONES: 1 },
-  ESTUDIO:    { EMPRESAS: 20, USUARIOS: 5,  COMPROBANTES_MES: 5000,   DOCUMENTOS_MES: 5000,   INTEGRACIONES: 3 },
-  GESTION:    { EMPRESAS: 1,  USUARIOS: 5,  COMPROBANTES_MES: 5000,   DOCUMENTOS_MES: 5000,   INTEGRACIONES: 3 },
-  EMPRESA_B1: { EMPRESAS: 5,  USUARIOS: 15, COMPROBANTES_MES: 25000,  DOCUMENTOS_MES: 25000,  INTEGRACIONES: 10 },
-  COMPLETO:   { EMPRESAS: 20, USUARIOS: 50, COMPROBANTES_MES: 100000, DOCUMENTOS_MES: 100000, INTEGRACIONES: ILIMITADO },
+  CONTABLE:   { EMPRESAS: 1,  USUARIOS: 2,  COMPROBANTES_MES: 1000,   DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
+  ESTUDIO:    { EMPRESAS: 50, USUARIOS: 5,  COMPROBANTES_MES: 5000,   DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
+  GESTION:    { EMPRESAS: 1,  USUARIOS: 5,  COMPROBANTES_MES: 5000,   DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
+  EMPRESA_B1: { EMPRESAS: 5,  USUARIOS: 15, COMPROBANTES_MES: 25000,  DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
+  COMPLETO:   { EMPRESAS: 20, USUARIOS: 50, COMPROBANTES_MES: 100000, DOCUMENTOS_MES: ILIMITADO, INTEGRACIONES: ILIMITADO },
 };
 
 /**
@@ -159,6 +162,10 @@ const FUNCIONES_QUE_FALTABAN = [
   ['EMPRESA_B1', 'analisis'],
   ['EMPRESA_B1', 'inteligencia'],
   ['EMPRESA_B1', 'integraciones'],
+  // Integraciones ilimitadas en todos los planes: la función tiene que estar en todos, o el tope ilimitado no vale nada.
+  ['CONTABLE', 'integraciones'],
+  ['GESTION', 'integraciones'],
+  ['ESTUDIO', 'integraciones'],
 ];
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });

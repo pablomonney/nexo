@@ -24,7 +24,7 @@
  *     plan          neto/mes   15 %      US$/mes   ÷ 30 días ÷ empresas → tokens/día por empresa
  *     Esencial       50.000     7.500      5,00        1 empresa      → 330.000
  *     Gestión       100.000    15.000     10,00        1 empresa      → 660.000
- *     Estudio       125.000    18.750     12,50       20 empresas     →  40.000
+ *     Estudio       125.000    18.750     12,50       50 empresas     →  16.000
  *     Empresa       205.000    30.750     20,50        5 empresas     → 270.000
  *     Empresa Plus  370.000    55.500     37,00       20 empresas     → 120.000
  *
@@ -53,7 +53,7 @@ const MOTIVO =
 const CUPOS = [
   ['CONTABLE', 330_000],
   ['GESTION', 660_000],
-  ['ESTUDIO', 40_000],
+  ['ESTUDIO', 16_000],
   ['EMPRESA_B1', 270_000],
   ['COMPLETO', 120_000],
 ];

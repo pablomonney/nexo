@@ -5132,7 +5132,12 @@ const nombreDelTope = (recurso, tope, ilimitado) => {
   // —«este plan no tiene tope de esto»— y el otro es que nadie lo escribió.
   // Mostrarlos igual haría que un plan que se vende ilimitado apareciera como
   // un hueco en la tabla de planes.
-  if (ilimitado) return recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope';
+  if (ilimitado) {
+    // «Documentos ilimitados» se lee mejor que «documentos mes: sin tope».
+    const nombres = { COMPROBANTES_MES: 'comprobantes', DOCUMENTOS_MES: 'documentos', EMPRESAS: 'empresas', INTEGRACIONES: 'integraciones', USUARIOS: 'usuarios' };
+    const n = nombres[recurso];
+    return n === undefined ? recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope' : n + ' ilimitados';
+  }
   const f = NOMBRE_DEL_RECURSO[recurso];
   return f ? f(tope) : recurso.toLowerCase().replace(/_/g, ' ') + ': ' + tope;
 };

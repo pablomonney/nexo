@@ -19,13 +19,15 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 |---|---|---|---|---|---|---|---|---|
 | **Esencial** | `CONTABLE` | Libros al día: contabilidad, IVA, documentos, auditoría | $ 50.000 | $ 60.500 | 1.000 | 1 | 2 | 330.000 tokens |
 | **Gestión** | `GESTION` | Pyme que vende, compra y maneja stock y caja | $ 100.000 | $ 121.000 | 5.000 | 1 | 5 | 660.000 |
-| **Estudio** | `ESTUDIO` | Contador con cartera de empresas | $ 125.000 | $ 151.250 | 5.000 | 20 | 5 | 40.000 por empresa |
+| **Estudio** | `ESTUDIO` | Contador con cartera de empresas | $ 125.000 | $ 151.250 | 5.000 | 50 | 5 | 16.000 por empresa |
 | **Empresa** | `EMPRESA_B1` | Pyme grande o varias empresas: el sistema completo | $ 205.000 | $ 248.050 | 25.000 | 5 | 15 | 270.000 por empresa |
 | **Empresa Plus** | `COMPLETO` | Lo mismo, con más volumen, usuarios y soporte prioritario | $ 370.000 | $ 447.700 | 100.000 | 20 | 50 | 120.000 por empresa |
 
 - **Estudio** costaba menos que Gestión ($ 89.900) y es el plan que más soporte consume: ahora cuesta más.
 - **Empresa** no incluía las funciones `analisis`, `inteligencia` e `integraciones` pero declaraba un tope de 10 integraciones: un tope sobre algo que el plan no tenía. Ahora trae todo lo que sabe hacer el sistema, y **Empresa Plus se distingue por volumen, usuarios y soporte, no por funciones.**
-- **Todos los planes incluyen el asistente de IA** con un tope diario de tokens **por empresa** (`plan_ai_quotas`, migración 0142); la empresa puede declarar uno propio y ese gana. El presupuesto de IA de cada plan es el **15 % de su precio neto mensual**, al precio del peor caso (todo en salida, US$ 0,50 por millón de tokens) y con US$ 1 = $ 1.500; en los planes multiempresa se reparte entre las empresas del plan (por eso 40.000 por empresa en Estudio). El cálculo está en `scripts/declarar-cupos-de-ia-por-plan.mjs`; si el dólar es otro se recalcula. Una empresa sin suscripción propia ni tope propio hereda el más bajo de los topes de plan, no «sin tope».
+- **Todos los planes incluyen el asistente de IA** con un tope diario de tokens **por empresa** (`plan_ai_quotas`, migración 0142); la empresa puede declarar uno propio y ese gana. El presupuesto de IA de cada plan es el **15 % de su precio neto mensual**, al precio del peor caso (todo en salida, US$ 0,50 por millón de tokens) y con US$ 1 = $ 1.500; en los planes multiempresa se reparte entre las empresas del plan (por eso 16.000 por empresa en Estudio, que atiende hasta 50). El cálculo está en `scripts/declarar-cupos-de-ia-por-plan.mjs`; si el dólar es otro se recalcula. Una empresa sin suscripción propia ni tope propio hereda el más bajo de los topes de plan, no «sin tope».
+- **Documentos e integraciones son ilimitados en todos los planes** (2026-10-19): hoy no cambian el costo —la única integración es la importación manual y subir un documento sólo ocupa espacio—. Si con conectores automáticos pesaran, se vuelve a declarar un tope: es un cambio de datos. La función de integraciones está incluida en los cinco planes.
+- **Estudio atiende hasta 50 empresas** (antes 20).
 - Los topes miden y avisan: **no bloquean.**
 
 ## Reglas de gestión

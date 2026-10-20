@@ -1039,7 +1039,12 @@ ajustarBotones(document);
     // caro: el campo llegaba y nadie lo leía, igual que pasaba con
     // `incluyeImpuestos`. Y «sin tope» es lo que se está vendiendo, así que
     // decirlo mal cuesta el doble.
-    if (ilimitado) return recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope';
+    if (ilimitado) {
+    // «Documentos ilimitados» se lee mejor que «documentos mes: sin tope».
+    const nombres = { COMPROBANTES_MES: 'comprobantes', DOCUMENTOS_MES: 'documentos', EMPRESAS: 'empresas', INTEGRACIONES: 'integraciones', USUARIOS: 'usuarios' };
+    const n = nombres[recurso];
+    return n === undefined ? recurso.toLowerCase().replace(/_/g, ' ') + ': sin tope' : n + ' ilimitados';
+  }
 
     // Sin tope declarado tampoco es ilimitado: es que nadie lo declaró. No se
     // inventa un número ni se promete «sin límite».
