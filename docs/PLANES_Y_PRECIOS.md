@@ -17,9 +17,9 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 
 | Plan | Código | Para quién | Neto por mes | Con IVA | Comprobantes | Empresas | Usuarios | IA por mes (tope por día) |
 |---|---|---|---|---|---|---|---|---|
-| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con documentos y auditoría | $ 49.999 | $ 60.498,79 | ilimitados | 1 | 2 | 9.900.000 (330.000) |
-| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 99.999 | $ 120.998,79 | ilimitados | 1 | 5 | 19.800.000 (660.000) |
-| **Estudio** | `ESTUDIO` | Estudio contable con cartera de empresas | $ 149.999 | $ 181.498,79 | ilimitados | 50 | 5 | 29.700.000 (990.000) |
+| **Esencial** | `CONTABLE` | Contabilidad, IVA y comprobantes de una empresa, con documentos y auditoría | $ 49.999 | $ 60.498,79 | ilimitados | 1 | 4 | 9.900.000 (330.000) |
+| **Gestión** | `GESTION` | Gestión integral: ventas, compras, stock y tesorería | $ 99.999 | $ 120.998,79 | ilimitados | 1 | 10 | 19.800.000 (660.000) |
+| **Estudio** | `ESTUDIO` | Estudio contable con cartera de empresas | $ 149.999 | $ 181.498,79 | ilimitados | 50 | 10 | 29.700.000 (990.000) |
 | **Empresa** | `EMPRESA_B1` | Empresa en crecimiento o con varias razones sociales: el sistema completo | $ 199.999 | $ 241.998,79 | ilimitados | 5 | 30 | 39.900.000 (1.330.000) |
 | **Empresa Plus** | `COMPLETO` | Todo Empresa con mayor capacidad y soporte prioritario | $ 349.999 | $ 423.498,79 | ilimitados | 20 | 100 | 69.900.000 (2.330.000) |
 

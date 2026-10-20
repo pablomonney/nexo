@@ -28,9 +28,9 @@ const GESTION = ['comercial', 'compras', 'stock', 'tesoreria', 'precios'];
 const TODO = ['sucursales', 'proyectos', 'comisiones', 'crm', 'analitica', 'analisis', 'inteligencia'];
 
 const MATRIZ: Readonly<Record<string, { nombre: string; funcionalidades: readonly string[]; empresas: number; usuarios: number }>> = {
-  CONTABLE: { nombre: 'NEXO Esencial', funcionalidades: BASE, empresas: 1, usuarios: 2 },
-  GESTION: { nombre: 'NEXO Gestión', funcionalidades: [...BASE, ...GESTION], empresas: 1, usuarios: 5 },
-  ESTUDIO: { nombre: 'NEXO Estudio', funcionalidades: [...BASE, 'analitica'], empresas: 50, usuarios: 5 },
+  CONTABLE: { nombre: 'NEXO Esencial', funcionalidades: BASE, empresas: 1, usuarios: 4 },
+  GESTION: { nombre: 'NEXO Gestión', funcionalidades: [...BASE, ...GESTION], empresas: 1, usuarios: 10 },
+  ESTUDIO: { nombre: 'NEXO Estudio', funcionalidades: [...BASE, 'analitica'], empresas: 50, usuarios: 10 },
   EMPRESA_B1: { nombre: 'NEXO Empresa', funcionalidades: [...BASE, ...GESTION, ...TODO], empresas: 5, usuarios: 30 },
   COMPLETO: { nombre: 'NEXO Empresa Plus', funcionalidades: [...BASE, ...GESTION, ...TODO], empresas: 20, usuarios: 100 },
 };
