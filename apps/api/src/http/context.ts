@@ -33,8 +33,12 @@ export interface RequestTenant {
 }
 
 /** SECURITY.md §2: para estos roles el segundo factor es obligatorio, no sugerido. */
-// Gerente (aprueba pedidos de compra y órdenes de pago) y Tesorero (arma pagos y maneja la caja) mueven plata: también exigen segundo factor (0143).
-export const ROLES_REQUIRING_MFA = new Set(['ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'GERENTE', 'TESORERO']);
+// Los puestos que mueven plata, aprueban o tocan la contabilidad también exigen segundo factor (0143). La lista sale de `segundoFactor` en
+// `infrastructure/db/datos/puestos.json` y `tests/security/puestos-predeterminados.test.ts` comprueba que coincidan.
+export const ROLES_REQUIRING_MFA = new Set([
+  'ADMINISTRADOR', 'CONTADOR', 'AUDITOR',
+  'GERENTE', 'TESORERO', 'RESPONSABLE_DE_PAGOS', 'JEFE_DE_COMPRAS', 'JEFE_DE_DEPOSITO', 'ASISTENTE_CONTABLE', 'RESPONSABLE_DE_IMPUESTOS',
+]);
 
 declare module 'fastify' {
   interface FastifyRequest {

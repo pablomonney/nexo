@@ -68,6 +68,10 @@ suite('los puestos predeterminados', () => {
     await crearPersona('DEPOSITO', false);
     await crearPersona('TESORERO', true);
     await crearPersona('GERENTE', true);
+    await crearPersona('CAJERO', false);
+    await crearPersona('RESPONSABLE_DE_PAGOS', true);
+    await crearPersona('ASISTENTE_CONTABLE', true);
+    await crearPersona('SOCIO', false);
   });
 
   afterAll(async () => {
@@ -79,13 +83,21 @@ suite('los puestos predeterminados', () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it('GET /puestos lista los once, con permisos, y marca los que exigen segundo factor', async () => {
+  it('GET /puestos lista los roles de siempre y los puestos, agrupados por área, con permisos y segundo factor', async () => {
     const r = await env.pedir('GET', '/puestos');
     expect(r.statusCode, r.body).toBe(200);
-    const { puestos } = r.json<{ puestos: Array<{ codigo: string; nombre: string; permisos: string[]; exigeSegundoFactor: boolean }> }>();
-    expect(puestos.map((p) => p.codigo)).toEqual([
-      'ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'GERENTE', 'VENDEDOR', 'COMPRADOR', 'TESORERO', 'DEPOSITO', 'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA',
-    ]);
+    const { puestos } = r.json<{ puestos: Array<{ codigo: string; nombre: string; area: string; descripcion: string; permisos: string[]; exigeSegundoFactor: boolean }> }>();
+    expect(puestos.length).toBeGreaterThanOrEqual(32);
+    for (const c of ['ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA', 'GERENTE', 'JEFE_DE_VENTAS', 'CAJERO', 'RESPONSABLE_DE_PAGOS', 'ASISTENTE_CONTABLE']) {
+      expect(puestos.map((p) => p.codigo), c).toContain(c);
+    }
+    // Cada puesto trae su área y su explicación, y las áreas vienen juntas (una sola racha por área).
+    for (const p of puestos) {
+      expect(p.area.length, p.codigo).toBeGreaterThan(0);
+      expect(p.descripcion.length, p.codigo).toBeGreaterThan(5);
+    }
+    const rachas = puestos.filter((p, i) => i === 0 || p.area !== puestos[i - 1]!.area).map((p) => p.area);
+    expect(new Set(rachas).size, 'las áreas no vienen agrupadas').toBe(rachas.length);
     const por = (c: string) => puestos.find((p) => p.codigo === c)!;
     expect(por('VENDEDOR').permisos).toContain('commercial:write');
     expect(por('VENDEDOR').permisos).not.toContain('journal_entry:create');
@@ -125,13 +137,28 @@ suite('los puestos predeterminados', () => {
     expect(c.permissions).toContain('purchase_request:approve');
   });
 
-  it('Gerente y Tesorero no pasan sin segundo factor; Vendedor, Comprador y Depósito sí', async () => {
-    for (const puesto of ['GERENTE', 'TESORERO']) {
+  it('Cajero, Responsable de pagos, Asistente contable y Socio ven lo suyo y nada más', async () => {
+    expect((await como('CAJERO', 'GET', '/cash-boxes')).statusCode).toBe(200);
+    expect((await como('CAJERO', 'GET', '/payment-orders')).statusCode).toBe(403);
+    expect((await como('RESPONSABLE_DE_PAGOS', 'GET', '/payment-orders')).statusCode).toBe(200);
+    const rp = (await como('RESPONSABLE_DE_PAGOS', 'GET', '/companies/current')).json<{ permissions: string[] }>();
+    expect(rp.permissions).toContain('payment_order:approve');
+    expect((await como('ASISTENTE_CONTABLE', 'GET', '/journal-entries')).statusCode).toBe(200);
+    const ac = (await como('ASISTENTE_CONTABLE', 'GET', '/companies/current')).json<{ permissions: string[] }>();
+    expect(ac.permissions).toContain('journal_entry:create');
+    expect(ac.permissions, 'propone, no aprueba').not.toContain('journal_entry:approve');
+    expect((await como('SOCIO', 'GET', '/journal-entries')).statusCode).toBe(403);
+    expect((await como('SOCIO', 'GET', '/cash-boxes')).statusCode).toBe(403);
+    expect((await como('SOCIO', 'GET', '/companies/current')).statusCode).toBe(200);
+  });
+
+  it('los puestos que mueven plata o tocan la contabilidad no pasan sin segundo factor; los demás sí', async () => {
+    for (const puesto of ['GERENTE', 'TESORERO', 'JEFE_DE_COMPRAS', 'JEFE_DE_DEPOSITO', 'ASISTENTE_CONTABLE', 'RESPONSABLE_DE_IMPUESTOS']) {
       const sinMfa = await crearPersona(puesto, false);
       const r = await env.app.inject({ method: 'GET', url: '/companies/current', headers: { authorization: `Bearer ${sinMfa}`, 'x-company-id': env.empresa } });
       expect(r.statusCode, `${puesto} sin segundo factor`).toBe(403);
     }
-    for (const puesto of ['VENDEDOR', 'COMPRADOR', 'DEPOSITO']) {
+    for (const puesto of ['VENDEDOR', 'COMPRADOR', 'DEPOSITO', 'JEFE_DE_VENTAS', 'COBRANZAS', 'ANALISTA_DE_GESTION']) {
       const sinMfa = await crearPersona(puesto, false);
       const r = await env.app.inject({ method: 'GET', url: '/companies/current', headers: { authorization: `Bearer ${sinMfa}`, 'x-company-id': env.empresa } });
       expect(r.statusCode, `${puesto} sin segundo factor`).toBe(200);

@@ -7043,6 +7043,36 @@ function modulosDeLosPermisos(permisos) {
   return nombres;
 }
 
+/** El selector de puestos, agrupado por área. */
+function opcionesDePuestos() {
+  const areas = [];
+  for (const p of estado.puestos) if (areas.indexOf(p.area) === -1) areas.push(p.area);
+  return areas.map((a) =>
+    '<optgroup label="' + escapar(a) + '">' +
+    estado.puestos.filter((p) => p.area === a)
+      .map((p) => '<option value="' + escapar(p.codigo) + '">' + escapar(p.nombre) + '</option>').join('') +
+    '</optgroup>').join('');
+}
+
+/** La tabla de todos los puestos: al lado de cada uno, qué hace y qué módulos ve (de sus permisos, con la misma tabla que arma el menú). */
+function tablaDePuestos() {
+  const filas = [];
+  let area = null;
+  for (const p of estado.puestos) {
+    if (p.area !== area) {
+      area = p.area;
+      filas.push('<tr><td colspan="4"><strong>' + escapar(area) + '</strong></td></tr>');
+    }
+    const modulos = p.permisos.length === 0 ? '—' : modulosDeLosPermisos(p.permisos).filter((n) => !['Inicio', 'Pendientes', 'Asistente', 'Preguntar', 'Configuración'].includes(n)).join(', ') || '—';
+    filas.push(
+      '<tr><td><strong>' + escapar(p.nombre) + '</strong></td><td>' + escapar(p.descripcion) + '</td><td>' + escapar(modulos) + '</td><td>' +
+      (p.exigeSegundoFactor ? '<span class="p p-ojo">sí</span>' : 'no') + '</td></tr>');
+  }
+  return '<div class="tabla"><table><thead><tr><th>Puesto</th><th>Qué hace</th><th>Módulos que ve</th><th>2.º factor</th></tr></thead><tbody>' +
+    filas.join('') + '</tbody></table></div>' +
+    '<p class="ayuda">Además todos ven Inicio, Pendientes, el Asistente, Preguntar y Configuración. Los módulos que el plan de la empresa no incluye no aparecen para nadie.</p>';
+}
+
 /** Debajo del selector de puestos: qué hace y qué módulos ve quien lo tenga. */
 function pintarModulosDelPuesto() {
   const caja = E('rol-modulos');
@@ -16646,7 +16676,7 @@ async function cargarConfig() {
         const pu = await api('GET', '/puestos');
         estado.puestos = pu.ok ? pu.datos.puestos : [
           'ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA',
-        ].map((c) => ({ codigo: c, nombre: c, descripcion: '', permisos: [], exigeSegundoFactor: false }));
+        ].map((c) => ({ codigo: c, nombre: c, area: 'Roles', descripcion: '', permisos: [], exigeSegundoFactor: false }));
         const opciones = personas
           .filter((p, i) => personas.findIndex((q) => q.id === p.id) === i)
           .map((p) => '<option value="' + escapar(p.id) + '">' +
@@ -16658,11 +16688,10 @@ async function cargarConfig() {
           'proponer y aprobar un asiento — eso lo impide la base, no esta pantalla.</p>' +
           '<div class="fila">' +
           '<div style="flex:2"><label>Persona</label><select id="rol-persona">' + opciones + '</select></div>' +
-          '<div><label>Puesto</label><select id="rol-codigo">' +
-          estado.puestos.map((r) => '<option value="' + escapar(r.codigo) + '">' + escapar(r.nombre) + '</option>').join('') +
-          '</select></div>' +
+          '<div><label>Puesto</label><select id="rol-codigo">' + opcionesDePuestos() + '</select></div>' +
           '<div><label>&nbsp;</label><button id="b-rol-dar">Dar el puesto</button></div>' +
-          '</div><div id="rol-modulos" class="aviso"></div><div id="rol-msg"></div></div>';
+          '</div><div id="rol-modulos" class="aviso"></div><div id="rol-msg"></div>' +
+          '<details class="grupo" open><summary>Todos los puestos: qué hace cada uno y qué módulos ve</summary>' + tablaDePuestos() + '</details></div>';
         pintarModulosDelPuesto();
 
         // Por delegación y no con `onclick` sobre el botón.

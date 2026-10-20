@@ -22,7 +22,7 @@ import {
   requirePermission,
   ROLES_REQUIRING_MFA,
 } from '../http/context.js';
-import { conflict, forbidden, HttpError } from '../http/errors.js';
+import { badRequest, conflict, forbidden, HttpError } from '../http/errors.js';
 import {
   estadoComercialDe,
   funcionalidadesDe,
@@ -265,12 +265,8 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     const body = z
       .object({
         userId: z.string().uuid(),
-        role: z.enum([
-          'ADMINISTRADOR', 'CONTADOR', 'AUDITOR',
-          'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA',
-          // Los puestos predeterminados (0143).
-          'GERENTE', 'VENDEDOR', 'COMPRADOR', 'TESORERO', 'DEPOSITO',
-        ]),
+        // Un rol o un puesto predeterminado (0143). La lista vive en la base (`roles.code`): uno que no existe lo rechaza `grant_company_role`.
+        role: z.string().regex(/^[A-Z][A-Z_]{2,40}$/u, 'Código de puesto inválido'),
       })
       .parse(request.body);
 
@@ -286,6 +282,8 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       const failure = error as { code?: string };
       if (failure.code === '42501') throw forbidden('No autorizado a asignar roles en esta empresa');
+      // Un código que no existe (`grant_company_role` levanta check_violation): es un dato mal mandado, no una falla del servidor.
+      if (failure.code === '23514') throw badRequest(`No existe el puesto ${body.role}.`);
       throw error;
     }
 
@@ -307,15 +305,15 @@ export async function studioRoutes(app: FastifyInstance): Promise<void> {
     return withCompany(
       { companyId: tenant.companyId, actorId: `user:${requireAuth(request).user.userId}` },
       async (tx) => {
-        const r = await tx.query<{ codigo: string; nombre: string; descripcion: string; permisos: string[] }>(
-          `SELECT r.code AS codigo, r.name AS nombre, r.description AS descripcion,
+        const r = await tx.query<{ codigo: string; nombre: string; area: string; descripcion: string; permisos: string[] }>(
+          `SELECT r.code AS codigo, r.name AS nombre, r.area, r.description AS descripcion,
                   COALESCE(array_agg(p.code ORDER BY p.code) FILTER (WHERE p.code IS NOT NULL), '{}') AS permisos
              FROM roles r
              LEFT JOIN role_permissions rp ON rp.role_id = r.id
              LEFT JOIN permissions p ON p.id = rp.permission_id
-            GROUP BY r.id, r.code, r.name, r.description
-            ORDER BY array_position(ARRAY['ADMINISTRADOR', 'CONTADOR', 'AUDITOR', 'GERENTE', 'VENDEDOR', 'COMPRADOR', 'TESORERO', 'DEPOSITO',
-                                          'USUARIO_EMPRESA', 'CARGADOR', 'SOLO_LECTURA'], r.code)`,
+            GROUP BY r.id, r.code, r.name, r.area, r.description
+            ORDER BY array_position(ARRAY['Administración del sistema', 'Dirección', 'Ventas', 'Compras y depósito', 'Tesorería', 'Operación',
+                                          'Contabilidad', 'Control', 'Consulta'], r.area), r.name`,
         );
         return {
           puestos: r.rows.map((p) => ({ ...p, exigeSegundoFactor: ROLES_REQUIRING_MFA.has(p.codigo) })),

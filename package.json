@@ -77,7 +77,8 @@
     "landing:construir": "node scripts/construir-landing.mjs",
     "bench:migracion": "node scripts/bench-migracion.mjs",
     "limpiar:pruebas": "node scripts/limpiar-datos-de-prueba.mjs",
-    "diario": "node scripts/tareas-diarias.mjs"
+    "diario": "node scripts/tareas-diarias.mjs",
+    "docs:puestos": "node scripts/documentar-puestos.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

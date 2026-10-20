@@ -1,0 +1,148 @@
+{
+  "_nota": "Los puestos predeterminados de NEXO (migración 0143): código, nombre, área, qué hace, permisos y si exige segundo factor. La migración y la documentación se generan de acá, y tests/security/puestos-predeterminados.test.ts compara la base contra este archivo: cambiar un permiso es cambiar este archivo, a propósito. Los seis roles de acceso de siempre (ADMINISTRADOR, CONTADOR, AUDITOR, USUARIO_EMPRESA, CARGADOR, SOLO_LECTURA) no están acá: vienen de la migración 0002.",
+  "areas_de_los_roles_de_siempre": {
+    "ADMINISTRADOR": "Administración del sistema",
+    "CONTADOR": "Contabilidad",
+    "AUDITOR": "Control",
+    "USUARIO_EMPRESA": "Operación",
+    "CARGADOR": "Operación",
+    "SOLO_LECTURA": "Consulta"
+  },
+  "puestos": [
+    {
+      "codigo": "GERENTE", "nombre": "Gerente", "area": "Dirección", "segundoFactor": true,
+      "descripcion": "Dirección: ve todo el negocio, aprueba pedidos de compra y órdenes de pago y registra decisiones. No toca la contabilidad",
+      "permisos": ["account:read", "alert:acknowledge", "alert:read", "allocation:read", "analysis:read", "analytics:read", "asset:read", "audit:read", "bank:read", "billing:read", "branch:read", "cash:read", "check:read", "commercial:read", "commission:read", "company:read", "cost_center:read", "crm:read", "decision:approve", "decision:read", "decision:write", "document:read", "intelligence:ask", "journal_entry:read", "party:read", "payment_order:approve", "payment_order:read", "period:read", "prediction:read", "product:read", "project:read", "purchase_request:approve", "purchase_request:read", "receipt:read", "report:read", "statement:read", "stock:read", "vat_book:read"]
+    },
+    {
+      "codigo": "SOCIO", "nombre": "Socio o inversor", "area": "Dirección", "segundoFactor": false,
+      "descripcion": "Consulta los resultados del negocio: estados contables, libros, analítica y señales. Solo lectura, no opera nada",
+      "permisos": ["analysis:read", "analytics:read", "company:read", "intelligence:ask", "period:read", "report:read", "statement:read"]
+    },
+    {
+      "codigo": "ANALISTA_DE_GESTION", "nombre": "Analista de gestión", "area": "Dirección", "segundoFactor": false,
+      "descripcion": "Control de gestión: analiza el negocio (analítica, señales y escenarios), reconoce alertas y sigue indicadores de ventas, caja y stock. No opera ni toca la contabilidad",
+      "permisos": ["alert:acknowledge", "alert:read", "analysis:read", "analytics:read", "bank:read", "branch:read", "cash:read", "check:read", "commercial:read", "commission:read", "company:read", "cost_center:read", "crm:read", "decision:read", "document:read", "intelligence:ask", "party:read", "period:read", "prediction:read", "product:read", "project:read", "stock:read"]
+    },
+
+    {
+      "codigo": "JEFE_DE_VENTAS", "nombre": "Jefe de ventas", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Dirige al equipo comercial: vende, define las comisiones y sigue las cifras de ventas y el CRM",
+      "permisos": ["alert:read", "analysis:read", "analytics:read", "branch:read", "commercial:read", "commercial:write", "commission:read", "commission:write", "company:read", "crm:read", "crm:write", "document:read", "intelligence:ask", "party:read", "party:write", "product:read"]
+    },
+    {
+      "codigo": "VENDEDOR", "nombre": "Vendedor", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Ventas: presupuestos y pedidos, clientes, productos y precios, CRM y sus comisiones",
+      "permisos": ["branch:read", "commercial:read", "commercial:write", "commission:read", "company:read", "crm:read", "crm:write", "document:read", "intelligence:ask", "party:read", "party:write", "product:read"]
+    },
+    {
+      "codigo": "EJECUTIVO_DE_CUENTAS", "nombre": "Ejecutivo de cuentas", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Lleva el seguimiento comercial de sus clientes: oportunidades en el CRM y fichas de clientes. Ve los pedidos, no los modifica",
+      "permisos": ["commercial:read", "company:read", "crm:read", "crm:write", "document:read", "intelligence:ask", "party:read", "party:write", "product:read"]
+    },
+    {
+      "codigo": "ATENCION_AL_CLIENTE", "nombre": "Atención al cliente", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Consulta clientes, pedidos y productos para responder, y deja constancia de cada contacto en el CRM. No modifica pedidos ni precios",
+      "permisos": ["commercial:read", "company:read", "crm:read", "crm:write", "document:read", "intelligence:ask", "party:read", "product:read"]
+    },
+    {
+      "codigo": "RESPONSABLE_DE_COMISIONES", "nombre": "Responsable de comisiones", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Define los esquemas de comisiones y controla lo que gana cada vendedor por sus ventas",
+      "permisos": ["commercial:read", "commission:read", "commission:write", "company:read", "crm:read", "intelligence:ask", "party:read"]
+    },
+    {
+      "codigo": "RESPONSABLE_DE_PRECIOS", "nombre": "Responsable de productos y precios", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Mantiene el catálogo de productos y las listas de precios con su vigencia",
+      "permisos": ["branch:read", "commercial:read", "company:read", "document:read", "intelligence:ask", "product:read", "product:write"]
+    },
+    {
+      "codigo": "ENCARGADO_DE_SUCURSAL", "nombre": "Encargado de sucursal", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Maneja una sucursal: vende, cobra en su caja y ve su stock y sus números",
+      "permisos": ["analytics:read", "branch:read", "cash:read", "cash:write", "commercial:read", "commercial:write", "commission:read", "company:read", "crm:read", "document:read", "intelligence:ask", "party:read", "party:write", "product:read", "stock:read"]
+    },
+    {
+      "codigo": "CAJERO", "nombre": "Cajero", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Abre y cierra la caja, registra cobros y pagos chicos y consulta pedidos, clientes y productos",
+      "permisos": ["cash:read", "cash:write", "commercial:read", "company:read", "intelligence:ask", "party:read", "product:read"]
+    },
+    {
+      "codigo": "COBRANZAS", "nombre": "Cobranzas", "area": "Ventas", "segundoFactor": false,
+      "descripcion": "Sigue la cuenta corriente de los clientes (cuánto deben y desde cuándo), registra cobros en caja y deja constancia de cada gestión en el CRM",
+      "permisos": ["allocation:read", "bank:read", "cash:read", "cash:write", "commercial:read", "company:read", "crm:read", "crm:write", "document:read", "intelligence:ask", "party:read"]
+    },
+
+    {
+      "codigo": "JEFE_DE_COMPRAS", "nombre": "Jefe de compras", "area": "Compras y depósito", "segundoFactor": true,
+      "descripcion": "Dirige las compras: pide y aprueba los pedidos de compra de su equipo, y ve proveedores, recepciones y órdenes de pago",
+      "permisos": ["company:read", "document:read", "document:upload", "intelligence:ask", "party:read", "party:write", "payment_order:read", "product:read", "purchase_request:approve", "purchase_request:read", "purchase_request:write", "receipt:read", "stock:read"]
+    },
+    {
+      "codigo": "COMPRADOR", "nombre": "Comprador", "area": "Compras y depósito", "segundoFactor": false,
+      "descripcion": "Compras: pedidos de compra, proveedores y recepciones. Pide, no aprueba",
+      "permisos": ["company:read", "document:read", "document:upload", "intelligence:ask", "party:read", "party:write", "payment_order:read", "product:read", "purchase_request:read", "purchase_request:write", "receipt:read", "stock:read"]
+    },
+    {
+      "codigo": "RECEPCION_DE_MERCADERIA", "nombre": "Recepción de mercadería", "area": "Compras y depósito", "segundoFactor": false,
+      "descripcion": "Recibe la mercadería y la registra contra el pedido de compra. No mueve ni ajusta stock",
+      "permisos": ["company:read", "document:read", "document:upload", "intelligence:ask", "product:read", "purchase_request:read", "receipt:read", "receipt:write", "stock:read"]
+    },
+    {
+      "codigo": "DEPOSITO", "nombre": "Encargado de depósito", "area": "Compras y depósito", "segundoFactor": false,
+      "descripcion": "Depósito: stock, recuentos y recepciones de mercadería. No hace ajustes de stock",
+      "permisos": ["company:read", "document:read", "intelligence:ask", "product:read", "purchase_request:read", "receipt:read", "receipt:write", "stock:count", "stock:read", "stock:write"]
+    },
+    {
+      "codigo": "JEFE_DE_DEPOSITO", "nombre": "Jefe de depósito", "area": "Compras y depósito", "segundoFactor": true,
+      "descripcion": "Dirige el depósito: todo lo del encargado y además hace ajustes de stock (que cambian el inventario contable, por eso pide segundo factor)",
+      "permisos": ["company:read", "document:read", "document:upload", "intelligence:ask", "product:read", "purchase_request:read", "receipt:read", "receipt:write", "stock:adjust", "stock:count", "stock:read", "stock:write"]
+    },
+
+    {
+      "codigo": "RESPONSABLE_DE_PAGOS", "nombre": "Responsable de pagos", "area": "Tesorería", "segundoFactor": true,
+      "descripcion": "Aprueba las órdenes de pago que arma el Tesorero y lleva caja, bancos y cheques. Quien arma un pago no lo aprueba: eso lo hace esta persona",
+      "permisos": ["bank:import", "bank:read", "bank:reconcile", "cash:read", "cash:write", "check:read", "check:write", "company:read", "document:read", "intelligence:ask", "party:read", "payment_order:approve", "payment_order:read", "payment_order:write"]
+    },
+    {
+      "codigo": "TESORERO", "nombre": "Tesorero", "area": "Tesorería", "segundoFactor": true,
+      "descripcion": "Tesorería: caja, bancos, cheques y órdenes de pago. Arma los pagos, no los aprueba",
+      "permisos": ["bank:import", "bank:read", "bank:reconcile", "cash:read", "cash:write", "check:read", "check:write", "company:read", "document:read", "intelligence:ask", "party:read", "payment_order:read", "payment_order:write"]
+    },
+    {
+      "codigo": "CONCILIADOR_BANCARIO", "nombre": "Conciliador bancario", "area": "Tesorería", "segundoFactor": false,
+      "descripcion": "Importa los extractos del banco y los concilia con la caja y los cheques. No arma ni aprueba pagos",
+      "permisos": ["bank:import", "bank:read", "bank:reconcile", "cash:read", "check:read", "company:read", "document:read", "document:upload", "intelligence:ask", "party:read"]
+    },
+    {
+      "codigo": "RESPONSABLE_DE_CHEQUES", "nombre": "Responsable de cheques", "area": "Tesorería", "segundoFactor": false,
+      "descripcion": "Lleva la cartera de cheques propios y de terceros: recibe, deposita, entrega y registra sus movimientos",
+      "permisos": ["bank:read", "check:read", "check:write", "company:read", "document:read", "intelligence:ask", "party:read"]
+    },
+
+    {
+      "codigo": "RESPONSABLE_DE_PROYECTOS", "nombre": "Responsable de proyectos", "area": "Operación", "segundoFactor": false,
+      "descripcion": "Lleva los proyectos y sus costos: qué proyecto deja plata y cuál no",
+      "permisos": ["analytics:read", "commercial:read", "company:read", "cost_center:read", "document:read", "intelligence:ask", "party:read", "project:read", "project:write"]
+    },
+    {
+      "codigo": "RESPONSABLE_DE_BIENES_DE_USO", "nombre": "Responsable de bienes de uso", "area": "Operación", "segundoFactor": false,
+      "descripcion": "Da de alta y mantiene los bienes de uso (activos fijos). La amortización la calcula el Contador",
+      "permisos": ["asset:read", "asset:write", "branch:read", "company:read", "cost_center:read", "document:read", "document:upload", "intelligence:ask"]
+    },
+    {
+      "codigo": "RESPONSABLE_DE_ECOMMERCE", "nombre": "Responsable de e-commerce", "area": "Operación", "segundoFactor": false,
+      "descripcion": "Maneja la tienda online y los canales de venta: carga lo que llega de afuera, lo resuelve contra clientes y productos y mantiene el catálogo",
+      "permisos": ["commercial:read", "company:read", "document:read", "document:upload", "integration:ingest", "integration:read", "integration:resolve", "intelligence:ask", "party:read", "party:write", "product:read", "product:write", "stock:read"]
+    },
+
+    {
+      "codigo": "ASISTENTE_CONTABLE", "nombre": "Asistente contable", "area": "Contabilidad", "segundoFactor": true,
+      "descripcion": "Carga asientos (los propone, no los aprueba) y prepara la documentación para el Contador. No cierra períodos ni emite estados",
+      "permisos": ["account:read", "allocation:read", "bank:read", "company:read", "document:read", "document:upload", "intelligence:ask", "journal_entry:create", "journal_entry:read", "party:read", "period:read", "report:read", "statement:read", "vat_book:read"]
+    },
+    {
+      "codigo": "RESPONSABLE_DE_IMPUESTOS", "nombre": "Responsable de impuestos", "area": "Contabilidad", "segundoFactor": true,
+      "descripcion": "Prepara el IVA y la parte fiscal: arma los subdiarios y los libros de IVA, declara las afectaciones y constata los comprobantes",
+      "permisos": ["account:read", "company:read", "document:read", "intelligence:ask", "journal_entry:read", "party:read", "period:read", "report:read", "tax_affectation:declare", "tax_transaction:constatar", "vat_book:generate", "vat_book:read"]
+    }
+  ]
+}
