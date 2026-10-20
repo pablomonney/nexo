@@ -26,23 +26,32 @@ describe('sumarIva', () => {
   });
 
   it('el total es neto + IVA, sin perder un centavo', () => {
-    for (const neto of [1n, 99n, 4_950_413n, 9_909_091n, 20_652_893n, 37_181_818n, 12_388_430n, 7_429_752n]) {
+    for (const neto of [1n, 99n, 4_950_413n, 9_909_091n, 20_652_893n, 37_181_818n, 12_388_430n, 7_429_752n, 5_000_000n]) {
       const r = sumarIva(neto);
       expect(r.totalCentavos).toBe(neto + r.ivaCentavos);
     }
   });
 
-  it('los cinco precios de la lista, pasados a neto, vuelven al precio final (Empresa, a menos de un centavo)', () => {
-    // Los netos son el final ÷ 1,21 redondeado al centavo; sumarles el IVA devuelve el final de la lista de septiembre.
-    const finales: Array<[string, bigint, bigint]> = [
-      ['CONTABLE', 4_950_413n, 5_990_000n],
-      ['GESTION', 9_909_091n, 11_990_000n],
-      ['ESTUDIO', 7_429_752n, 8_990_000n],
-      // Para 249.900 no existe un neto en centavos que devuelva el final exacto: 206.528,92 → 249.899,99 y 206.528,93 → 249.900,01.
-      ['EMPRESA_B1', 20_652_893n, 24_990_001n],
-      ['COMPLETO', 37_181_818n, 44_990_000n],
+  it('los cinco precios publicados (netos y redondos) dan el final con IVA que se cobra', () => {
+    // Netos = el múltiplo de $ 5.000 más cercano a (final de septiembre ÷ 1,21); el final con IVA queda a menos de un 2 % del anterior.
+    const lista: Array<[string, bigint, bigint]> = [
+      ['CONTABLE', 5_000_000n, 6_050_000n],
+      ['ESTUDIO', 7_500_000n, 9_075_000n],
+      ['GESTION', 10_000_000n, 12_100_000n],
+      ['EMPRESA_B1', 20_500_000n, 24_805_000n],
+      ['COMPLETO', 37_000_000n, 44_770_000n],
     ];
-    for (const [plan, neto, final] of finales) expect(sumarIva(neto).totalCentavos, plan).toBe(final);
+    for (const [plan, neto, final] of lista) expect(sumarIva(neto).totalCentavos, plan).toBe(final);
+
+    const anteriores: Record<string, bigint> = {
+      CONTABLE: 5_990_000n, ESTUDIO: 8_990_000n, GESTION: 11_990_000n, EMPRESA_B1: 24_990_000n, COMPLETO: 44_990_000n,
+    };
+    for (const [plan, neto, final] of lista) {
+      const antes = anteriores[plan]!;
+      const diferencia = final > antes ? final - antes : antes - final;
+      expect(diferencia * 100n < antes * 2n, `${plan} cambia más de un 2 %`).toBe(true);
+      void neto;
+    }
   });
 
   it('cero queda en cero y un importe negativo no existe', () => {

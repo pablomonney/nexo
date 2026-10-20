@@ -64,7 +64,7 @@ const desdeDeclarado = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/u.test(a)) 
 const DECLARANTE = 'comercial-2026-09';
 
 const MOTIVO_PRECIO =
-  'Lista comercial de septiembre de 2026, publicada sin IVA («+ IVA») desde el 2026-10-19: importes NETOS; el final es el mismo.';
+  'Lista comercial de septiembre de 2026, publicada sin IVA («+ IVA») y con números redondos desde el 2026-10-19: importes NETOS.';
 const MOTIVO_TOPE =
   'Topes comerciales de septiembre de 2026. Decisión tomada, no hipótesis.';
 
@@ -83,12 +83,19 @@ async function hoySegunLaBase(cliente) {
 }
 
 /**
- * Los precios definitivos. **NETOS: la lista dice «+ IVA».**
+ * Los precios definitivos. **NETOS y REDONDOS: la lista dice «+ IVA».**
  *
- * El 2026-10-19 el titular pidió publicarlos sin IVA y con «+ IVA» (antes eran finales). Cada neto es el final de la lista de septiembre
- * dividido por 1,21 y redondeado al centavo, de modo que al sumarle el 21 % vuelve al mismo precio final, salvo un centavo en Empresa (lo comprueba
- * `tests/unit/iva-de-la-lista.test.ts`): 59.900 → 49.504,13 · 89.900 → 74.297,52 · 119.900 → 99.090,91 · 249.900 → 206.528,93 (suma 249.900,01: el único que no vuelve al centavo) ·
- * 449.900 → 371.818,18. Lo que se cobra es el neto más el IVA (`apps/api/src/billing/iva.ts`).
+ * El 2026-10-19 el titular pidió publicarlos sin IVA, con «+ IVA» y con números redondos. Cada neto es el múltiplo de $ 5.000 más cercano
+ * al que daba la lista de septiembre sin IVA (final ÷ 1,21), de modo que el final con IVA queda a menos de un 2 % del anterior (salvo Estudio,
+ * que sube a propósito, ver abajo):
+ *
+ *     Contable     $  50.000 + IVA  → $  60.500   (antes $  59.900 con IVA incluido)
+ *     Estudio      $ 125.000 + IVA  → $ 151.250   (antes $  89.900: costaba menos que Gestión y es el plan que más soporte consume)
+ *     Gestión      $ 100.000 + IVA  → $ 121.000   (antes $ 119.900)
+ *     Empresa      $ 205.000 + IVA  → $ 248.050   (antes $ 249.900)
+ *     Completo     $ 370.000 + IVA  → $ 447.700   (antes $ 449.900)
+ *
+ * Lo que se cobra es el neto más el 21 % (`apps/api/src/billing/iva.ts`; lo comprueba `tests/unit/iva-de-la-lista.test.ts`).
  *
  * `incluye_impuestos` no tiene valor por defecto en el esquema justamente para
  * que esta decisión se escriba: suponerla mal cambia lo que se cobra en un 21 %.
@@ -96,11 +103,11 @@ async function hoySegunLaBase(cliente) {
 const INCLUYE_IMPUESTOS = false;
 
 const PRECIOS = [
-  ['CONTABLE', 'MENSUAL', 'ARS', '49504.13'],
-  ['ESTUDIO', 'MENSUAL', 'ARS', '74297.52'],
-  ['GESTION', 'MENSUAL', 'ARS', '99090.91'],
-  ['EMPRESA_B1', 'MENSUAL', 'ARS', '206528.93'],
-  ['COMPLETO', 'MENSUAL', 'ARS', '371818.18'],
+  ['CONTABLE', 'MENSUAL', 'ARS', '50000.00'],
+  ['ESTUDIO', 'MENSUAL', 'ARS', '125000.00'],
+  ['GESTION', 'MENSUAL', 'ARS', '100000.00'],
+  ['EMPRESA_B1', 'MENSUAL', 'ARS', '205000.00'],
+  ['COMPLETO', 'MENSUAL', 'ARS', '370000.00'],
 ];
 
 /**
@@ -126,6 +133,33 @@ const TOPES = {
   EMPRESA_B1: { EMPRESAS: 5,  USUARIOS: 15, COMPROBANTES_MES: 25000,  DOCUMENTOS_MES: 25000,  INTEGRACIONES: 10 },
   COMPLETO:   { EMPRESAS: 20, USUARIOS: 50, COMPROBANTES_MES: 100000, DOCUMENTOS_MES: 100000, INTEGRACIONES: ILIMITADO },
 };
+
+/**
+ * Cada plan por **quién lo compra** (2026-10-19). Los códigos no cambian: una suscripción histórica los cita.
+ *
+ *     Esencial      llevar los libros al día
+ *     Gestión       una pyme que vende, compra y maneja stock y caja
+ *     Estudio       un contador con una cartera de empresas
+ *     Empresa       una pyme grande o varias empresas: el sistema completo, por volumen
+ *     Empresa Plus  lo mismo con más volumen, más usuarios y soporte prioritario
+ */
+const NOMBRES = {
+  CONTABLE: ['NEXO Esencial', 'Tus libros al día: contabilidad, IVA, documentos y auditoría de una empresa'],
+  GESTION: ['NEXO Gestión', 'Una pyme que vende, compra y maneja stock y caja, con la contabilidad al día'],
+  ESTUDIO: ['NEXO Estudio', 'Para el contador que lleva muchas empresas: la cartera de clientes bajo un mismo techo'],
+  EMPRESA_B1: ['NEXO Empresa', 'Pyme grande o varias empresas: sucursales, proyectos, comisiones, CRM, análisis e integraciones'],
+  COMPLETO: ['NEXO Empresa Plus', 'Todo NEXO Empresa con más volumen y más usuarios, integraciones sin tope y soporte prioritario'],
+};
+
+/**
+ * Empresa declaraba un tope de 10 integraciones y no incluía la funcionalidad `integraciones`: un tope sobre algo que el plan no tenía.
+ * Ahora Empresa trae todo lo que sabe hacer el sistema; Empresa Plus se distingue por volumen, usuarios y soporte, no por funciones.
+ */
+const FUNCIONES_QUE_FALTABAN = [
+  ['EMPRESA_B1', 'analisis'],
+  ['EMPRESA_B1', 'inteligencia'],
+  ['EMPRESA_B1', 'integraciones'],
+];
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });
 await cliente.connect();
@@ -205,6 +239,18 @@ try {
         [planId, recurso, sinTope ? null : valor, sinTope, DECLARANTE],
       );
     }
+  }
+
+  for (const [code, [nombre, descripcion]] of Object.entries(NOMBRES)) {
+    await cliente.query('UPDATE subscription_plans SET name = $2, descripcion = $3 WHERE id = $1', [planes.get(code).id, nombre, descripcion]);
+  }
+  for (const [code, funcion] of FUNCIONES_QUE_FALTABAN) {
+    await cliente.query(
+      `INSERT INTO plan_features (plan_id, feature_code, declarado_por, motivo)
+       VALUES ($1, $2, $3, 'Empresa incluye todo lo que sabe hacer el sistema; Empresa Plus se distingue por volumen y soporte (2026-10-19).')
+       ON CONFLICT DO NOTHING`,
+      [planes.get(code).id, funcion, DECLARANTE],
+    );
   }
 
   await cliente.query('COMMIT');

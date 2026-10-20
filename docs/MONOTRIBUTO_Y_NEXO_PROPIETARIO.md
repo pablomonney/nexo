@@ -78,7 +78,7 @@ Construido como **primer paso** del orden de arriba: la propietaria ya tiene **u
 
 ### Precios publicados «+ IVA» (decisión del titular, 2026-10-19)
 
-El titular pidió publicar los precios **sin IVA y con «+ IVA»** (hasta entonces eran finales). Cada neto es el final de la lista de septiembre dividido por 1,21 y redondeado al centavo; al sumarle el 21 % vuelve al mismo precio (salvo un centavo en Empresa, que no tiene un neto exacto). Lo que se cobra es el neto **más** el IVA: `apps/api/src/billing/iva.ts` lo suma al fijar el importe de la suscripción y al declarar el plan en la pasarela. Antes el cobro habría salido por el neto tal cual, un 21 % menos de lo publicado.
+El titular pidió publicar los precios **sin IVA y con «+ IVA»** (hasta entonces eran finales). Los netos son **redondos** (múltiplos de $ 5.000, cerca de final ÷ 1,21); la lista y el criterio están en `docs/PLANES_Y_PRECIOS.md`. Lo que se cobra es el neto **más** el IVA: `apps/api/src/billing/iva.ts` lo suma al fijar el importe de la suscripción y al declarar el plan en la pasarela. Antes el cobro habría salido por el neto tal cual, un 21 % menos de lo publicado.
 
 **Advertencia que sigue en pie:** un monotributista emite factura C y **no discrimina IVA**. Si la condición del titular frente al IVA resulta ser monotributista (a confirmar con el contador), cobrar «+ IVA» no es coherente con su régimen. La decisión se tomó con esta advertencia a la vista; si el contador la contradice, se vuelve a precios finales cambiando `INCLUYE_IMPUESTOS` y la lista en `scripts/sembrar-comercial-b1.mjs` (una vigencia nueva cierra la anterior), sin tocar código. Los cargos de NEXO siguen sin ser comprobantes fiscales: no discriminan el IVA hasta que haya emisión (E8).
 
