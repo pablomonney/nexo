@@ -16,20 +16,21 @@
  *
  * ## De dónde salen los números (decisión del titular: «que sea un 15 % de lo que pagan por mes»; 2026-10-20: «que se suban»)
  *
- * El presupuesto de IA de cada plan es el **15 % de su precio neto mensual**. Se convierte a dólares (supuesto: US$ 1 = $ 1.500; si el
- * dólar es otro se recalcula acá) y se reparte en 30 días. El precio por token es el **medido con el modelo real** (2026-10-20): el 97 % de
- * lo que se gasta es entrada (US$ 0,10 por millón) y el 3 % salida (US$ 0,50 por millón), o sea ≈ US$ 0,112 por millón; se **duplica** como
- * margen (US$ 0,224 por millón) por si las respuestas se alargan. Hasta el 2026-10-19 se contaba todo como salida (US$ 0,50 por millón): era
- * 4,5 veces más prudente de lo que el uso real justifica. El tope es **total del plan**, no por empresa: el gasto del contrato no pasa del 15 %.
+ * El presupuesto de IA de cada plan es el **10 % de su precio neto mensual** (decisión del titular, 2026-10-20: antes era el 15 % calculado
+ * con un precio por token más caro). Se convierte a dólares (US$ 1 = $ 1.550) y se reparte en 30 días al precio **medido con el modelo real**:
+ * el 97 % de lo que se gasta es entrada (US$ 0,10 por millón) y el 3 % salida (US$ 0,50 por millón), o sea ≈ US$ 0,112 por millón de tokens.
+ * Sin margen: si las respuestas se alargan, el costo sube por encima del 10 % (cada punto de salida de más cuesta ≈ 0,4 puntos). El tope es
+ * **total del plan**, no por empresa.
  *
- *     plan          neto/mes   15 %      US$/mes   ÷ 30 días ÷ US$ 0,224/M → tokens por día (redondeado hacia abajo a 10.000)
- *     Esencial       49.999     7.500      5,00                   740.000   (22,2 millones por mes)
- *     Gestión        99.999    15.000     10,00                 1.480.000   (44,4 millones)
- *     Estudio       149.999    22.500     15,00                 2.230.000   (66,9 millones)
- *     Empresa       199.999    30.000     20,00                 2.970.000   (89,1 millones)
- *     Empresa Plus  349.999    52.500     35,00                 5.200.000   (156 millones)
+ *     plan          neto/mes   10 %      US$/mes   ÷ 30 días ÷ US$ 0,112/M → tokens por día (redondeado hacia abajo a 10.000)
+ *     Esencial       49.999     5.000      3,23                   960.000   (28,8 millones por mes)
+ *     Gestión        99.999    10.000      6,45                 1.920.000   (57,6 millones)
+ *     Estudio       149.999    15.000      9,68                 2.880.000   (86,4 millones)
+ *     Empresa       199.999    20.000     12,90                 3.840.000   (115,2 millones)
+ *     Empresa Plus  349.999    35.000     22,58                 6.720.000   (201,6 millones)
  *
- * Medido con el modelo real, una consulta con herramienta usa ~13.000 tokens (no 1.200): 740.000 por día son unas 55 consultas.
+ * Si se usa el tope completo todos los días, el costo es el 10 % del precio. Una consulta con herramienta usa ~13.000 tokens (medido con el
+ * modelo real): 960.000 por día son unas 70 consultas.
  *
  * Los códigos de plan son los de la lista comercial de `sembrar-comercial-b1.mjs`.
  */
@@ -49,14 +50,14 @@ try {
 const aplicar = process.argv.includes('--aplicar');
 const DECLARANTE = 'comercial-2026-10';
 const MOTIVO =
-  'Tope diario de tokens del asistente por plan, TOTAL para todas las empresas del estudio (2026-10-20): el presupuesto de IA es el 15 % del precio neto mensual del plan (peor caso, US$ 1 = $ 1.500).';
+  'Tope diario de tokens del asistente por plan, TOTAL para todas las empresas del estudio (2026-10-20): el presupuesto de IA es el 10 % del precio neto mensual del plan (precio por token medido, US$ 1 = $ 1.550).';
 
 const CUPOS = [
-  ['CONTABLE', 740_000],
-  ['GESTION', 1_480_000],
-  ['ESTUDIO', 2_230_000],
-  ['EMPRESA_B1', 2_970_000],
-  ['COMPLETO', 5_200_000],
+  ['CONTABLE', 960_000],
+  ['GESTION', 1_920_000],
+  ['ESTUDIO', 2_880_000],
+  ['EMPRESA_B1', 3_840_000],
+  ['COMPLETO', 6_720_000],
 ];
 
 const cliente = new pg.Client({ connectionString: process.env.DATABASE_URL, ...opcionesDeConexion() });
