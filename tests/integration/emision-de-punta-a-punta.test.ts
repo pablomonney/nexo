@@ -274,7 +274,9 @@ suite('E4 · emitir de punta a punta (base real, ARCA simulado)', () => {
     const a = await declarar(pv);
     const b = await declarar(pv);
     const arca = new ArcaSimulado(50);
-    arca.demoraMs = 150; // la primera sigue «llamando» mientras la segunda intenta reservar
+    // La primera sigue «llamando» mientras la segunda intenta reservar. Con 150 ms la prueba se volvía una carrera cuando la máquina andaba cargada
+    // (la primera terminaba antes de que la segunda intentara y las dos salían AUTORIZADAS); 800 ms deja margen sin cambiar lo que se afirma.
+    arca.demoraMs = 800;
 
     const [ra, rb] = await Promise.all([
       emitirIntencion({ repo: repoDe(), transporte: arca }, a, armarEn(pv)),
