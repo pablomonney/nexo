@@ -30,6 +30,26 @@ Precios **sin IVA**; al cobrar se suma el 21 % (`apps/api/src/billing/iva.ts`). 
 - **Estudio atiende hasta 50 empresas** (antes 20).
 - Los topes miden y avisan: **no bloquean.**
 
+## Qué módulos trae cada plan
+
+| Módulo (pantallas) | Esencial | Gestión | Estudio | Empresa | Empresa Plus |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Contabilidad (asientos, libros, estados, cierre de períodos) | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Fiscal (facturas y comprobantes, IVA) | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Clientes y proveedores · Documentos · Auditoría · Integraciones · ARCA | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Asistente de IA | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Ventas (presupuestos y pedidos) · Compras (pedidos, recepciones, órdenes de pago) | — | ✔ | — | ✔ | ✔ |
+| Tesorería (caja, bancos, cheques) · Stock y bienes de uso · Productos y precios | — | ✔ | — | ✔ | ✔ |
+| Analítica | — | — | ✔ | ✔ | ✔ |
+| Sucursales · Proyectos · Comisiones · CRM | — | — | — | ✔ | ✔ |
+| Análisis y decisiones · Consultas · Propuestas de IA | — | — | — | ✔ | ✔ |
+
+**Cómo se comprueba** (`tests/integration/planes-y-modulos.test.ts`): lo declarado (funcionalidades y topes de cada plan), lo que hace la API (una empresa con cada plan: cada módulo incluido contesta y cada excluido contesta `FUERA_DEL_PLAN`, con rutas reales), que cada pantalla del menú esté atada a un dominio que la API corta, y que el asistente sólo conteste sobre los módulos del plan.
+
+**Auditoría del 2026-10-20:** la consola ocultaba las pantallas que un plan no incluye, pero la API **no las cerraba** (los dominios de la 0105 eran los nombres de las pantallas, no los de las rutas): un cliente de Esencial podía usar por API Ventas, Compras, Tesorería, Stock, Sucursales, Proyectos y Comisiones. La migración 0147 agrega las rutas reales. Y el asistente contestaba sobre cualquier módulo si el rol de la persona lo permitía: ahora sólo sobre los del plan (`preguntasDelPlan`).
+
+**Para decidir (comercial):** Esencial y Estudio no traen Tesorería, así que no concilian bancos ni llevan caja ni cheques; para quien «lleva los libros» la conciliación bancaria suele ser parte del trabajo. Si se quiere, es un cambio de datos (agregar `tesoreria` a esos planes).
+
 ## Reglas de gestión
 
 - Prueba de 14 días, completa y sin tarjeta, con el plan elegido.

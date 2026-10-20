@@ -20,7 +20,7 @@
 
 import { withCompany, withoutCompany } from '@aai/db';
 import { ROLES_REQUIRING_MFA } from '../http/context.js';
-import { alcanzaElPlan } from '../planes/alcance.js';
+import { alcanzaElPlan, funcionalidadesDe } from '../planes/alcance.js';
 import { permisoSensible } from '../puestos/catalogo-de-permisos.js';
 
 /** Hasta cuántas empresas mira el asistente en un turno. Un estudio más grande se avisa, no se recorta en silencio. */
@@ -32,6 +32,8 @@ export interface EmpresaAccesible {
   readonly cuit: string;
   /** Lo que esta persona puede en ESA empresa. */
   readonly permisos: ReadonlySet<string>;
+  /** Los módulos que tiene contratados ESA empresa (`null` = sin suscripción con plan: no se restringe). */
+  readonly funcionalidades: ReadonlySet<string> | null;
 }
 
 export interface AccesoDelEstudio {
@@ -96,7 +98,7 @@ export async function accesoDelEstudio(quien: QuienPregunta): Promise<AccesoDelE
       const exigeSegundoFactor =
         c.roles.some((r) => ROLES_REQUIRING_MFA.has(r)) || (Number(personalizado) > 0 && [...permisos].some(permisoSensible));
       if (exigeSegundoFactor && !quien.mfaActivado) return null;
-      return permisos;
+      return { permisos, funcionalidades: await funcionalidadesDe(tx, c.id) };
     });
     if (veredicto === null) {
       if (c.id !== quien.companyId) sinAsistente += 1;
@@ -106,7 +108,7 @@ export async function accesoDelEstudio(quien: QuienPregunta): Promise<AccesoDelE
       hayMas = true;
       continue;
     }
-    empresas.push({ id: c.id, razonSocial: c.legal_name, cuit: c.cuit, permisos: veredicto });
+    empresas.push({ id: c.id, razonSocial: c.legal_name, cuit: c.cuit, permisos: veredicto.permisos, funcionalidades: veredicto.funcionalidades });
   }
 
   return { empresas, hayMas, sinAsistente };

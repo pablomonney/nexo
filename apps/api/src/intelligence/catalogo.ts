@@ -758,8 +758,8 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
   {
     id: 'QUE_PROVEEDOR_VENDE_MAS',
     pregunta: '¿A qué proveedores les compro más?',
-    nucleo: ['proveedores', 'proveedor', 'le compro', 'les compro', 'compro mas'],
-    apoyo: ['que', 'cuales', 'quien', 'mas', 'compro', 'compras'],
+    nucleo: ['le compro', 'les compro', 'compro mas'],
+    apoyo: ['proveedores', 'proveedor', 'que', 'cuales', 'quien', 'mas', 'compro', 'compras'],
     permisos: ['analytics:read', 'party:read'],
     admiteMes: false,
     responder: (tx, companyId) => tercerosPorVolumen(tx, companyId, 'COMPRAS'),
@@ -770,18 +770,12 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
     pregunta: '¿Cuáles son las alícuotas del IVA?',
     nucleo: ['alicuota', 'alicuotas', 'iva general', 'porcentaje de iva'],
     apoyo: ['cuales', 'cual', 'es', 'son', 'iva', 'vigente', 'vigentes'],
-    permisos: [],
+    permisos: ['company:read'],
     admiteMes: false,
     responder: async (tx) => {
       // Las alícuotas son del registro normativo (no de la empresa): cada una cita su norma y su artículo, y sólo se muestran las vigentes hoy.
-      const r = await tx.query<{ label: string; numerator: string; denominator: string; articulo: string; titulo: string; valid_from: string }>(
-        `SELECT r.label, r.numerator::text, r.denominator::text, r.articulo, n.titulo, r.valid_from::text
-           FROM tax_rates r
-           JOIN taxes t ON t.id = r.tax_id AND t.code = 'IVA'
-           JOIN norm_versions nv ON nv.id = r.norm_version_id
-           JOIN norms n ON n.id = nv.norm_id
-          WHERE r.valid_from <= CURRENT_DATE AND (r.valid_to IS NULL OR r.valid_to >= CURRENT_DATE)
-          ORDER BY r.numerator::numeric / r.denominator::numeric`,
+      const r = await tx.query<{ etiqueta: string; porcentaje: string; articulo: string; norma: string }>(
+        `SELECT etiqueta, porcentaje::text, articulo, norma FROM alicuotas_vigentes_del_iva ORDER BY porcentaje`,
       );
       return {
         titulo: 'Alícuotas del IVA vigentes',
@@ -789,11 +783,11 @@ export const CATALOGO: readonly PreguntaDelCatalogo[] = [
         unidad: '%',
         periodo: null,
         datos: r.rows.map((a) => ({
-          etiqueta: a.label,
-          valor: `${((Number(a.numerator) * 100) / Number(a.denominator)).toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`,
-          origen: `${a.titulo} — ${a.articulo}`,
+          etiqueta: a.etiqueta,
+          valor: `${Number(a.porcentaje).toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`,
+          origen: `${a.norma} — ${a.articulo}`,
         })),
-        origen: ['tax_rates', 'norm_versions'],
+        origen: ['alicuotas_vigentes_del_iva'],
         metodologia: 'Alícuotas archivadas en el registro normativo de NEXO, cada una con la norma y el artículo de donde sale. Sólo las vigentes a la fecha de hoy.',
         noIncluye:
           'Regímenes especiales, exenciones y tratamientos por actividad o por bien que no figuren en el registro. Si hay duda sobre cuál corresponde a una operación, eso lo define el contador.',
@@ -1356,4 +1350,45 @@ export function preguntasPara(
   catalogo: readonly PreguntaDelCatalogo[] = CATALOGO,
 ): PreguntaDelCatalogo[] {
   return catalogo.filter((p) => p.permisos.every((permiso) => permisos.has(permiso)));
+}
+
+/**
+ * Qué funcionalidad del plan cubre cada permiso de lectura que usa el catálogo (`product_features`).
+ *
+ * Los permisos dicen qué puede ver la PERSONA; el plan dice qué módulos tiene contratados la EMPRESA. Una pregunta sobre el stock de una empresa
+ * cuyo plan no incluye stock no se contesta, aunque el rol de quien pregunta pueda leerlo: es la misma puerta comercial que cierra la pantalla
+ * (`alcanzaElPlan`). `null` = no la cubre ninguna funcionalidad (ningún plan la puede excluir).
+ */
+export const FUNCIONALIDAD_DEL_PERMISO: Readonly<Record<string, string | null>> = {
+  'allocation:read': 'fiscal',
+  'analysis:read': 'analisis',
+  'analytics:read': 'analitica',
+  'branch:read': 'sucursales',
+  'check:read': 'tesoreria',
+  'commission:read': 'comisiones',
+  'company:read': null,
+  'cost_center:read': 'sucursales',
+  'journal_entry:read': 'contabilidad',
+  'party:read': 'terceros',
+  'product:read': 'precios',
+  'project:read': 'proyectos',
+  'report:read': 'contabilidad',
+  'stock:read': 'stock',
+};
+
+/**
+ * Las preguntas que ofrece el plan: las que cruzan datos de módulos que la empresa tiene contratados.
+ * `funcionalidades === null` es «sin suscripción con plan»: se deja pasar, como en la puerta comercial (falla abierta).
+ */
+export function preguntasDelPlan(
+  preguntas: readonly PreguntaDelCatalogo[],
+  funcionalidades: ReadonlySet<string> | null,
+): PreguntaDelCatalogo[] {
+  if (funcionalidades === null) return [...preguntas];
+  return preguntas.filter((p) =>
+    p.permisos.every((permiso) => {
+      const f = FUNCIONALIDAD_DEL_PERMISO[permiso];
+      return f === undefined || f === null || funcionalidades.has(f);
+    }),
+  );
 }

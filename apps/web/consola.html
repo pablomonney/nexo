@@ -9982,7 +9982,8 @@ E('b-tf-rol').onclick = async () => {
 };
 
 async function cargarListasDePrecioDelTercero(id) {
-  const puedeAsignar = puede('party:write') && puede('product:read');
+  // Las listas de precios son del módulo «Productos y listas de precios»: un plan que no lo incluye no las ofrece (la API las cierra).
+  const puedeAsignar = puede('party:write') && puede('product:read') && (estado.fueraDelPlan || []).indexOf('precios') === -1;
   E('tf-pre-asignar-caja').hidden = !puedeAsignar;
   const [asignadas, listas] = await Promise.all([
     api('GET', '/parties/' + id + '/price-lists'),

@@ -39,6 +39,7 @@ import { crearProveedorDeChat, estadoDelAsistente } from '../ai/asistente-provee
 import { evaluarCupo, leerCupo, precioVigente } from '../ai/cupo.js';
 import { armarHerramientas } from '../asistente/herramientas.js';
 import { config } from '../config.js';
+import { funcionalidadesDe } from '../planes/alcance.js';
 import {
   clientIp,
   requireAuth,
@@ -356,7 +357,9 @@ export function asistenteRoutes(opciones: OpcionesDelAsistente = {}) {
         return { hoy, historial: m.rows };
       });
 
-      const herramientas = armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions, usuarioId: auth.user.userId, mfaActivado: auth.user.mfaEnabled });
+      // Los módulos que tiene contratados la empresa: el asistente sólo contesta sobre lo que el plan incluye.
+      const funcionalidades = await withCompany({ companyId: tenant.companyId, actorId }, (tx) => funcionalidadesDe(tx, tenant.companyId));
+      const herramientas = armarHerramientas({ companyId: tenant.companyId, actorId, permisos: tenant.permissions, usuarioId: auth.user.userId, mfaActivado: auth.user.mfaEnabled, funcionalidades });
       const historial = normalizarHistorial(previo.historial);
       const system =
         `${ASISTENTE_V2.texto}\n\nCONTEXTO DE ESTA CONVERSACIÓN\n- Hoy es ${String(previo.hoy)}.\n` +

@@ -35,6 +35,7 @@ import {
   formatearRespuesta,
   hoyDeLaBase,
   mesCorrienteDe,
+  preguntasDelPlan,
   preguntasPara,
   type PreguntaDelCatalogo,
 } from '../intelligence/catalogo.js';
@@ -52,7 +53,13 @@ export interface ContextoDeHerramientas {
    */
   readonly usuarioId?: string;
   readonly mfaActivado?: boolean;
+  /** Los módulos que tiene contratados esta empresa (`null`/ausente = sin restricción de plan). */
+  readonly funcionalidades?: ReadonlySet<string> | null;
 }
+
+/** Las preguntas que ofrece una empresa: por lo que PUEDE la persona y por lo que CONTRATÓ la empresa. */
+const preguntasDe = (permisos: ReadonlySet<string>, funcionalidades: ReadonlySet<string> | null | undefined): PreguntaDelCatalogo[] =>
+  preguntasDelPlan(preguntasPara(permisos), funcionalidades ?? null);
 
 /** El contexto con la lista de empresas del estudio ya resuelta (una vez por turno). */
 interface ContextoInterno extends ContextoDeHerramientas {
@@ -63,7 +70,7 @@ interface ContextoInterno extends ContextoDeHerramientas {
 async function empresasDe(ctx: ContextoInterno): Promise<readonly EmpresaAccesible[]> {
   const acceso = await ctx.estudio();
   if (acceso.empresas.some((e) => e.id === ctx.companyId)) return acceso.empresas;
-  return [{ id: ctx.companyId, razonSocial: 'Esta empresa', cuit: '', permisos: ctx.permisos }, ...acceso.empresas];
+  return [{ id: ctx.companyId, razonSocial: 'Esta empresa', cuit: '', permisos: ctx.permisos, funcionalidades: ctx.funcionalidades ?? null }, ...acceso.empresas];
 }
 
 /** Una empresa destino: la actual si no se indica otra. */
@@ -104,7 +111,7 @@ const mensajeDe = (error: z.ZodError): string =>
 // ---------------------------------------------------------------------------------------------------------------------
 
 function preguntarAlSistema(ctx: ContextoInterno): HerramientaDeChat | null {
-  const disponibles = preguntasPara(ctx.permisos);
+  const disponibles = preguntasDe(ctx.permisos, ctx.funcionalidades);
   if (disponibles.length === 0) return null;
 
   const entrada = z.object({ preguntaId: z.string().max(60), mes: z.string().regex(MES).optional(), empresa: z.string().max(200).optional() }).strict();
@@ -137,7 +144,7 @@ function preguntarAlSistema(ctx: ContextoInterno): HerramientaDeChat | null {
       const d = await destino(ctx, e.data.empresa);
       if ('error' in d) return fallo(d.error);
       // Las preguntas de ESA empresa: lo que la persona puede ahí, no lo que puede en la que está.
-      const deEsa = preguntasPara(d.empresa.permisos);
+      const deEsa = preguntasDe(d.empresa.permisos, d.empresa.funcionalidades);
       const pregunta = deEsa.find((p) => p.id === e.data.preguntaId);
       if (pregunta === undefined) {
         return fallo(
@@ -238,7 +245,7 @@ function empresasDelEstudio(ctx: ContextoInterno): HerramientaDeChat | null {
           razonSocial: e.razonSocial,
           cuit: e.cuit,
           esLaActual: e.id === ctx.companyId,
-          preguntasDisponibles: preguntasPara(e.permisos).length,
+          preguntasDisponibles: preguntasDe(e.permisos, e.funcionalidades).length,
         })),
         ...(acceso.hayMas ? { aviso: `El estudio tiene más empresas; se listan las primeras ${String(lista.length)}.` } : {}),
         ...(acceso.sinAsistente > 0
@@ -255,7 +262,7 @@ function empresasDelEstudio(ctx: ContextoInterno): HerramientaDeChat | null {
 
 function preguntarATodasLasEmpresas(ctx: ContextoInterno): HerramientaDeChat | null {
   if (ctx.usuarioId === undefined) return null;
-  const disponibles = preguntasPara(ctx.permisos);
+  const disponibles = preguntasDe(ctx.permisos, ctx.funcionalidades);
   if (disponibles.length === 0) return null;
   const entrada = z.object({ preguntaId: z.string().max(60), mes: z.string().regex(MES).optional() }).strict();
 
@@ -290,7 +297,7 @@ function preguntarATodasLasEmpresas(ctx: ContextoInterno): HerramientaDeChat | n
       const sinEstaPregunta: string[] = [];
       let titulo = '';
       for (const emp of empresas) {
-        const pregunta: PreguntaDelCatalogo | undefined = preguntasPara(emp.permisos).find((p) => p.id === e.data.preguntaId);
+        const pregunta: PreguntaDelCatalogo | undefined = preguntasDe(emp.permisos, emp.funcionalidades).find((p) => p.id === e.data.preguntaId);
         if (pregunta === undefined) { sinEstaPregunta.push(emp.razonSocial); continue; }
         const r = await withCompany({ companyId: emp.id, actorId: ctx.actorId }, async (tx) => {
           const hoy = await hoyDeLaBase(tx);

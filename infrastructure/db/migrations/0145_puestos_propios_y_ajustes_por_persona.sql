@@ -137,12 +137,18 @@ BEGIN
 END
 $$;
 
--- Lo suyo, cada persona lo puede leer sin empresa en contexto (sale de `app.actor_id`, que fija la aplicación con la sesión): es lo que permite
--- que `user_companies()` le muestre su empresa a quien sólo tiene un puesto propio. Sólo lectura, sólo sus propias asignaciones.
-CREATE POLICY asignaciones_propias ON asignaciones_de_puesto_propio FOR SELECT
-  USING (user_id = app_actor_user_id());
-CREATE POLICY puestos_de_mis_asignaciones ON puestos_propios FOR SELECT
-  USING (EXISTS (SELECT 1 FROM asignaciones_de_puesto_propio a WHERE a.puesto_id = puestos_propios.id AND a.user_id = app_actor_user_id()));
+-- Cada persona puede leer SUS PROPIAS asignaciones sin empresa en contexto (el actor sale de `app.actor_id`, que fija la aplicación con la sesión): es lo
+-- que permite que `user_companies()` le muestre su empresa a quien sólo tiene un puesto propio. Sigue siendo UNA política por tabla, y sigue
+-- nombrando `app_company_id()`: la escritura (WITH CHECK) es sólo de la empresa en contexto; la lectura suma las filas propias de la persona.
+DROP POLICY tenant_isolation ON asignaciones_de_puesto_propio;
+CREATE POLICY tenant_isolation ON asignaciones_de_puesto_propio
+  USING (company_id = app_company_id() OR user_id = app_actor_user_id())
+  WITH CHECK (company_id = app_company_id());
+DROP POLICY tenant_isolation ON puestos_propios;
+CREATE POLICY tenant_isolation ON puestos_propios
+  USING (company_id = app_company_id()
+         OR EXISTS (SELECT 1 FROM asignaciones_de_puesto_propio a WHERE a.puesto_id = puestos_propios.id AND a.user_id = app_actor_user_id()))
+  WITH CHECK (company_id = app_company_id());
 
 INSERT INTO audit_actions (id, dominio, requiere_motivo) VALUES
   ('CREAR_PUESTO_PROPIO',        'puestos', true),
@@ -505,3 +511,23 @@ AS $$
    GROUP BY c.id, c.legal_name, c.cuit, c.entity_type, c.jurisdiction,
             c.regulator, c.fiscal_year_end, c.status, o.id, o.name;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Las alícuotas vigentes del IVA, como vista (para el catálogo de preguntas del asistente)
+-- ---------------------------------------------------------------------------
+-- Intelligence lee significado, no tablas (S-26): «alícuotas vigentes» es una decisión —qué es vigente hoy, y cuál es su norma y artículo—
+-- y vive acá, en la vista, y no escrita dentro de una respuesta. Son datos del registro normativo, no de una empresa.
+CREATE VIEW alicuotas_vigentes_del_iva WITH (security_invoker = true) AS
+SELECT r.label                                                        AS etiqueta,
+       round(r.numerator::numeric * 100 / r.denominator::numeric, 2)  AS porcentaje,
+       r.articulo,
+       n.titulo                                                       AS norma,
+       r.valid_from
+  FROM tax_rates r
+  JOIN taxes t         ON t.id = r.tax_id AND t.code = 'IVA'
+  JOIN norm_versions nv ON nv.id = r.norm_version_id
+  JOIN norms n         ON n.id = nv.norm_id
+ WHERE r.valid_from <= CURRENT_DATE
+   AND (r.valid_to IS NULL OR r.valid_to >= CURRENT_DATE);
+GRANT SELECT ON alicuotas_vigentes_del_iva TO aai_app;
+COMMENT ON VIEW alicuotas_vigentes_del_iva IS 'Alícuotas del IVA vigentes hoy, cada una con su norma y su artículo (registro normativo).';

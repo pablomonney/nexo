@@ -91,6 +91,8 @@ describe('El catálogo de preguntas', () => {
       // La cobranza del mes se fecha por el asiento que la registra (0090), así
       // que la respuesta exige poder leer el Mayor. Antes no lo miraba.
       'journal_entry:read',
+      // Las alícuotas del IVA son del registro normativo, no de la empresa: alcanza con haber entrado a ella.
+      'company:read',
     ]);
     expect(preguntasPara(todos)).toHaveLength(CATALOGO.length);
 
