@@ -86,6 +86,15 @@ export interface PlanParaProveedor {
    * cuerpo salga sin `free_trial`.
    */
   readonly diasDePruebaDelProveedor?: number | null;
+  /**
+   * A dónde vuelve el cliente después de autorizar (`PAYMENTS_BACK_URL`).
+   *
+   * Mercado Pago **la exige también al crear el plan**, no sólo la suscripción:
+   * medido contra la API real el 2026-10-22, un `POST /preapproval_plan` sin
+   * `back_url` contesta 400 «Back url is required». Los dobles de prueba lo
+   * aceptaban, y por eso el defecto llegó hasta el primer plan de verdad.
+   */
+  readonly urlDeRetorno?: string | null;
 }
 
 export interface SuscripcionParaProveedor {

@@ -143,6 +143,21 @@ describe('el adaptador manda lo que corresponde', () => {
     expect(cuerpo).not.toContain('@@importe@@');
   });
 
+  it('el plan lleva la URL de retorno: Mercado Pago no lo crea sin ella', async () => {
+    // Medido contra la API real el 2026-10-22: sin `back_url`, `POST /preapproval_plan` contesta 400
+    // «Back url is required». Los dobles lo aceptaban y el defecto llegó hasta el primer plan de verdad.
+    const { mp, llamadas } = proveedor([ok({ id: 'plan-1', status: 'active' })]);
+    await mp.asegurarPlan({
+      codigo: 'CONTABLE',
+      nombre: 'NEXO Esencial',
+      importeCentavos: 6_049_879n,
+      moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      urlDeRetorno: 'https://nexointelligence.com.ar',
+    });
+    expect(llamadas[0]!.init.body).toContain('"back_url":"https://nexointelligence.com.ar"');
+  });
+
   it('un importe con centavos redondos no pierde los ceros al reconstruirse', async () => {
     const { mp, llamadas } = proveedor([ok({ id: 'plan-1', status: 'active' })]);
     await mp.asegurarPlan({

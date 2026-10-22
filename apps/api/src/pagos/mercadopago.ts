@@ -370,6 +370,8 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
       cuerpo = conImporte(
         {
           reason: plan.nombre,
+          // Mercado Pago la exige para crear el plan (400 «Back url is required»).
+          ...(plan.urlDeRetorno ? { back_url: plan.urlDeRetorno } : {}),
           auto_recurring: {
             frequency,
             frequency_type: type,

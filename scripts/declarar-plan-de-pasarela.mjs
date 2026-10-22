@@ -178,9 +178,16 @@ try {
   console.log(`  se debita   ${moneda} ${(centavos / 100n).toString()}.${(centavos % 100n).toString().padStart(2, '0')}`);
   console.log(`  pasarela    ${proveedor.id}  ambiente ${ambiente}`);
 
+  // Mercado Pago no crea el plan sin URL de retorno (400 «Back url is required», medido el 2026-10-22).
+  const urlDeRetorno = config.pagos.backUrl;
+  console.log(`  retorno     ${urlDeRetorno || '(falta PAYMENTS_BACK_URL)'}`);
+
   if (ensayo) {
     console.log('\n  ENSAYO: no se llamó a la pasarela y no se escribió nada.\n');
     process.exit(0);
+  }
+  if (!urlDeRetorno) {
+    throw new Error('Falta PAYMENTS_BACK_URL: Mercado Pago no crea el plan sin la URL a la que vuelve el cliente.');
   }
 
   const salida = await proveedor.asegurarPlan({
@@ -189,6 +196,7 @@ try {
     importeCentavos: centavos,
     moneda,
     periodicidad,
+    urlDeRetorno,
   });
 
   if (!salida.ok) {
