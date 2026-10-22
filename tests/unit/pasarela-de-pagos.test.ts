@@ -282,6 +282,8 @@ describe('el adaptador manda lo que corresponde', () => {
       correoDelPagador: 'alguien@prueba.local',
       importeCentavos: 19_999n,
       moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      descripcion: 'NEXO Esencial',
       urlDeRetorno: 'https://ejemplo.invalid/volver',
     });
 
@@ -291,6 +293,32 @@ describe('el adaptador manda lo que corresponde', () => {
     // que NEXO tocara la tarjeta.
     expect(cuerpo).toContain('"status":"pending"');
     expect(llamadas[0]!.url).toBe(`${BASE_DE_MERCADO_PAGO}/preapproval`);
+  });
+
+  it('la suscripción sale SIN plan y con la recurrencia adentro: así devuelve el init_point', async () => {
+    // Medido contra la API real el 2026-10-22: con `preapproval_plan_id`, `pending` y sin tarjeta,
+    // Mercado Pago contesta 400 «card_token_id is required». Sin plan, con la recurrencia y el
+    // importe adentro, crea la suscripción pendiente y devuelve el enlace donde el cliente autoriza.
+    const { mp, llamadas } = proveedor([
+      ok({ id: 'sub-1', status: 'pending', init_point: 'https://mp.invalid/ir' }),
+    ]);
+    await mp.crearSuscripcion({
+      referenciaNexo: 'suscripcion:0193abc',
+      planExternoId: 'plan-1',
+      correoDelPagador: 'alguien@prueba.local',
+      importeCentavos: 6_049_879n,
+      moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      descripcion: 'NEXO Esencial',
+      urlDeRetorno: 'https://ejemplo.invalid/volver',
+    });
+    const cuerpo = llamadas[0]!.init.body!;
+    expect(cuerpo).not.toContain('preapproval_plan_id');
+    expect(cuerpo).toContain('"reason":"NEXO Esencial"');
+    expect(cuerpo).toContain('"frequency":1');
+    expect(cuerpo).toContain('"frequency_type":"months"');
+    // Con IVA: lo acordado es lo que se debita.
+    expect(cuerpo).toContain('"transaction_amount":60498.79');
   });
 
   it('el token va en la cabecera y en ningún otro lado', async () => {
@@ -384,6 +412,8 @@ describe('el adaptador clasifica los fallos por lo que hay que hacer', () => {
       correoDelPagador: 'a@b.local',
       importeCentavos: 100n,
       moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      descripcion: 'NEXO Esencial',
       urlDeRetorno: 'https://ejemplo.invalid/v',
     });
     expect(!r.ok && r.fallo.codigo).toBe('TIMEOUT');
@@ -416,6 +446,8 @@ describe('el adaptador no reintenta lo que podría cobrar dos veces', () => {
       correoDelPagador: 'a@b.local',
       importeCentavos: 100n,
       moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      descripcion: 'NEXO Esencial',
       urlDeRetorno: 'https://ejemplo.invalid/v',
     });
     expect(r.ok).toBe(false);
@@ -432,6 +464,8 @@ describe('el adaptador no reintenta lo que podría cobrar dos veces', () => {
       correoDelPagador: 'a@b.local',
       importeCentavos: 100n,
       moneda: 'ARS',
+      periodicidad: 'MENSUAL',
+      descripcion: 'NEXO Esencial',
       urlDeRetorno: 'https://ejemplo.invalid/v',
     });
     expect(r.ok).toBe(true);

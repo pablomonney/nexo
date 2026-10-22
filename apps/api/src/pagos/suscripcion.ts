@@ -108,6 +108,7 @@ interface FilaDeSuscripcion {
   readonly id: string;
   readonly plan_id: string;
   readonly plan_code: string;
+  readonly plan_nombre: string;
   readonly estado: string;
   readonly periodicidad: string | null;
   readonly moneda: string | null;
@@ -171,7 +172,7 @@ export async function conectarConLaPasarela(
    * puede tenerlo, porque dos instalaciones pueden compartir cuenta.
    */
   const fila = await tx.query<FilaDeSuscripcion>(
-    `SELECT s.id, s.plan_id, p.code AS plan_code, s.estado, s.periodicidad, s.moneda,
+    `SELECT s.id, s.plan_id, p.code AS plan_code, p.name AS plan_nombre, s.estado, s.periodicidad, s.moneda,
             s.importe_acordado::text AS importe_acordado,
             s.referencia_externa, s.proveedor_pago, s.ambiente_pago
        FROM company_subscriptions s
@@ -275,6 +276,8 @@ export async function conectarConLaPasarela(
     correoDelPagador: entrada.correoDelPagador,
     importeCentavos: centavos,
     moneda: s.moneda,
+    periodicidad: s.periodicidad === 'ANUAL' ? 'ANUAL' : 'MENSUAL',
+    descripcion: s.plan_nombre,
     urlDeRetorno,
   });
 

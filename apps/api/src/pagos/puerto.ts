@@ -106,11 +106,27 @@ export interface SuscripcionParaProveedor {
    * compartirla.
    */
   readonly referenciaNexo: string;
+  /**
+   * El plan creado en el proveedor para este plan, periodicidad y moneda.
+   *
+   * **Se exige y no viaja.** Que exista confirma que el operador declaró el plan del
+   * lado de la pasarela; pero una suscripción **atada** a un plan, en Mercado Pago,
+   * sólo se crea con la tarjeta ya tokenizada en el sitio propio (`card_token_id`):
+   * medido contra la API real el 2026-10-22, un `POST /preapproval` con
+   * `preapproval_plan_id`, `status: pending` y sin tarjeta contesta 400
+   * «card_token_id is required». Para mandar al cliente a autorizar en el sitio del
+   * proveedor (`init_point`) la suscripción se crea **sin** plan, con la recurrencia
+   * y el importe adentro.
+   */
   readonly planExternoId: string;
   /** El proveedor lo exige para identificar al pagador. No es la clave. */
   readonly correoDelPagador: string;
+  /** Lo acordado por período, **con impuestos** (`importe_acordado`): es lo que se debita. */
   readonly importeCentavos: bigint;
   readonly moneda: string;
+  readonly periodicidad: Periodicidad;
+  /** Lo que ve el cliente en el sitio del proveedor y en su resumen, por ejemplo «NEXO Esencial». */
+  readonly descripcion: string;
   /** A dónde vuelve el navegador después de autorizar. */
   readonly urlDeRetorno: string;
 }

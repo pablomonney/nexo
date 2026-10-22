@@ -408,11 +408,16 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
   // ── Suscripciones ────────────────────────────────────────────────────────
 
   async crearSuscripcion(datos: SuscripcionParaProveedor): Promise<Resultado<SuscripcionExterna>> {
+    const { frequency, type } = recurrencia(datos.periodicidad);
     let cuerpo: string;
     try {
       cuerpo = conImporte(
         {
-          preapproval_plan_id: datos.planExternoId,
+          // **Sin `preapproval_plan_id`.** Atada a un plan, Mercado Pago sólo crea la
+          // suscripción con la tarjeta ya tokenizada (400 «card_token_id is required»,
+          // medido el 2026-10-22). Sin plan y en `pending` devuelve el `init_point`
+          // donde el cliente autoriza. Ver `SuscripcionParaProveedor.planExternoId`.
+          reason: datos.descripcion,
           // Mercado Pago exige el correo del pagador para identificarlo de su
           // lado. Que lo exija no lo convierte en la clave: la clave es
           // `external_reference`, que es lo que se busca al recibir un webhook.
@@ -427,6 +432,8 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
           // requeriría un `card_token_id`, o sea que NEXO tocara la tarjeta.
           status: 'pending',
           auto_recurring: {
+            frequency,
+            frequency_type: type,
             transaction_amount: MARCA_DE_IMPORTE,
             currency_id: datos.moneda,
           },
