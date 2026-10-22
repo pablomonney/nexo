@@ -771,8 +771,47 @@ describe('el ambiente declarado y la credencial que hay', () => {
 
   it('con el gestor andando, el desajuste se detecta', async () => {
     const gestor = { get: async () => ({ valor: TOKEN_SINTETICO }) };
-    expect(await verificarAmbienteDePagos(CONFIGURADO, gestor as never)).toContain(
+    expect(
+      await verificarAmbienteDePagos(CONFIGURADO, gestor as never, cuentaQueDice(['normal'])),
+    ).toContain('mueve plata real');
+  });
+
+  // Las suscripciones sólo se prueban con un VENDEDOR de prueba, y su token empieza con `APP_USR-`
+  // (con el `TEST-` de una cuenta real, Mercado Pago contesta «Una de las partes … es de prueba»).
+  it('sandbox con APP_USR- arranca sólo si Mercado Pago dice que la cuenta es de prueba', async () => {
+    const gestor = { get: async () => ({ valor: TOKEN_SINTETICO }) };
+    const llamadas: string[] = [];
+    expect(
+      await verificarAmbienteDePagos(CONFIGURADO, gestor as never, cuentaQueDice(['test_user'], llamadas)),
+    ).toBeNull();
+    expect(llamadas).toEqual([`${BASE_DE_MERCADO_PAGO}/users/me`]);
+  });
+
+  it('ante la duda no arranca: sin red o con otra respuesta, es como una cuenta real', async () => {
+    const gestor = { get: async () => ({ valor: TOKEN_SINTETICO }) };
+    const sinRed = (async () => {
+      throw new Error('sin red');
+    }) as never;
+    expect(await verificarAmbienteDePagos(CONFIGURADO, gestor as never, sinRed)).toContain('mueve plata real');
+    expect(await verificarAmbienteDePagos(CONFIGURADO, gestor as never, cuentaQueDice(['test_user'], [], 401))).toContain(
       'mueve plata real',
     );
   });
+
+  it('en producción no pregunta nada: el prefijo alcanza', async () => {
+    const gestor = { get: async () => ({ valor: TOKEN_SINTETICO }) };
+    const llamadas: string[] = [];
+    expect(
+      await verificarAmbienteDePagos({ ...CONFIGURADO, ambiente: 'production' }, gestor as never, cuentaQueDice(['normal'], llamadas)),
+    ).toBeNull();
+    expect(llamadas).toEqual([]);
+  });
 });
+
+/** Un `fetch` que contesta `GET /users/me` con esos `tags` (y anota a dónde se llamó). */
+function cuentaQueDice(tags: string[], llamadas: string[] = [], status = 200) {
+  return (async (url: string) => {
+    llamadas.push(url);
+    return { ok: status === 200, status, text: async () => JSON.stringify({ id: 1, tags }) };
+  }) as never;
+}

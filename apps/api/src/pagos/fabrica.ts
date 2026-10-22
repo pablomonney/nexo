@@ -35,7 +35,7 @@
 import { EnvSecretProvider, type SecretProvider, type SecretRef } from '@aai/secrets';
 import { config } from '../config.js';
 import { SinPasarela, type ProveedorDePagos } from './puerto.js';
-import { ProveedorDeMercadoPago, type FetchLike } from './mercadopago.js';
+import { BASE_DE_MERCADO_PAGO, ProveedorDeMercadoPago, type FetchLike } from './mercadopago.js';
 
 export type EstadoDeLosPagos = 'DESHABILITADO' | 'PREPARADO' | 'CONFIGURADO';
 
@@ -172,6 +172,42 @@ export function prefijoDeToken(token: string): string {
 }
 
 /**
+ * ¿El token es de una **cuenta de prueba** de Mercado Pago?
+ *
+ * ## Por qué hace falta
+ *
+ * Las suscripciones no se pueden probar con el token `TEST-` de una cuenta real:
+ * el comprador de prueba llega al final del pago y Mercado Pago contesta «Una de
+ * las partes con la que intentás hacer el pago es de prueba» (medido el
+ * 2026-10-22). Exige que las **dos** partes sean de prueba, y el vendedor de
+ * prueba trae credenciales con prefijo `APP_USR-` — el mismo que una cuenta real.
+ * El prefijo deja de alcanzar para distinguir prueba de cobro.
+ *
+ * Así que, sólo para `sandbox` con un `APP_USR-`, se le pregunta a Mercado Pago
+ * de quién es la cuenta: `GET /users/me` trae `tags`, y una cuenta de prueba
+ * lleva `test_user` (la real, `normal`). Ante cualquier duda —sin red, otro
+ * código, otra forma— contesta **no**: el costo de equivocarse para el otro lado
+ * es cobrar plata real creyendo que se prueba.
+ */
+export async function esCuentaDePruebaDeMercadoPago(
+  token: string,
+  fetchFn: FetchLike = globalThis.fetch as unknown as FetchLike,
+): Promise<boolean> {
+  try {
+    const respuesta = await fetchFn(`${BASE_DE_MERCADO_PAGO}/users/me`, {
+      method: 'GET',
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (respuesta.status !== 200) return false;
+    const cuerpo = JSON.parse(await respuesta.text()) as { tags?: unknown };
+    return Array.isArray(cuerpo.tags) && cuerpo.tags.includes('test_user');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Se corre antes de escuchar, después de `verificarProveedorDePagos`.
  *
  * Resuelve el token **una vez, al arrancar**, para comprobar su prefijo contra
@@ -188,6 +224,7 @@ export function prefijoDeToken(token: string): string {
 export async function verificarAmbienteDePagos(
   pagos: ConfiguracionDePagos = config.pagos,
   secretos?: SecretProvider,
+  fetchFn?: FetchLike,
 ): Promise<string | null> {
   if (estadoDeLosPagos(pagos) !== 'CONFIGURADO') {
     // Sin pasarela configurada no hay token que comprobar, pero el ambiente
@@ -205,7 +242,18 @@ export async function verificarAmbienteDePagos(
     return null;
   }
 
-  return problemaDeAmbiente(pagos.ambiente, prefijoDeToken(token));
+  const problema = problemaDeAmbiente(pagos.ambiente, prefijoDeToken(token));
+  // `sandbox` con un `APP_USR-`: se admite sólo si Mercado Pago confirma que la cuenta es de prueba
+  // (el vendedor de prueba, que es lo que exigen las suscripciones). Ver `esCuentaDePruebaDeMercadoPago`.
+  if (
+    problema !== null &&
+    pagos.ambiente === 'sandbox' &&
+    prefijoDeToken(token).startsWith(PREFIJO_DE_PRODUCCION) &&
+    (await esCuentaDePruebaDeMercadoPago(token, fetchFn))
+  ) {
+    return null;
+  }
+  return problema;
 }
 
 /**
