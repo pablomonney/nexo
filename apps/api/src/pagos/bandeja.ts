@@ -38,6 +38,17 @@
  * el evento igual se registra. Un cobro que entró y que NEXO no supo a qué
  * imputar es exactamente la clase de cosa que tiene que quedar escrita.
  *
+ * ## El primer cobro llega antes que el documento
+ *
+ * Mercado Pago debita en el momento en que el cliente autoriza, y el documento
+ * lo emite el ciclo diario, horas después. Si eso se leyera como «no se puede
+ * atribuir», el primer cobro de **cada** cliente quedaría sin imputar para
+ * siempre. Por eso, cuando la suscripción es de NEXO y sigue viva pero todavía
+ * no tiene documento, la fila queda `EN_ESPERA`: sigue `PENDIENTE` en la base y
+ * se vuelve a mirar cada hora, hasta `PLAZO_DE_ESPERA_HORAS` desde que llegó. Si
+ * para entonces no apareció el documento, ya no es demora del ciclo: queda
+ * `SIN_EFECTO` como cualquier cobro que no se pudo atribuir.
+ *
  * ## El importe del intento es el de NEXO, no el de la pasarela
  *
  * `PagoExterno` no trae importe **a propósito** (ver `mercadopago.ts`): leerlo
@@ -77,7 +88,21 @@ const QUE_ES: Readonly<Record<string, 'PAGO' | 'SUSCRIPCION' | 'IGNORAR'>> = {
   subscription_preapproval_plan: 'IGNORAR',
 };
 
-export type DesenlaceDeFila = 'APLICADO' | 'SIN_EFECTO' | 'FALLIDO';
+/**
+ * `EN_ESPERA` no es un estado de la base: la fila sigue `PENDIENTE` y se vuelve
+ * a mirar. Ver «El primer cobro llega antes que el documento».
+ */
+export type DesenlaceDeFila = 'APLICADO' | 'SIN_EFECTO' | 'FALLIDO' | 'EN_ESPERA';
+
+/**
+ * Cuánto se espera el documento de un cobro que llegó primero. El ciclo emite
+ * una vez por día; tres días cubren un ciclo que no corrió sin dejar que un
+ * cobro de verdad huérfano se reintente para siempre.
+ */
+export const PLAZO_DE_ESPERA_HORAS = 72;
+
+/** Cada cuánto se vuelve a mirar una fila en espera. */
+const REINTENTO_DE_ESPERA = '1 hour';
 
 export interface FilaDeBandeja {
   readonly id: string;
@@ -87,6 +112,7 @@ export interface FilaDeBandeja {
   readonly tipo: string;
   readonly accion: string | null;
   readonly recurso_id: string;
+  readonly recibido_el: Date;
 }
 
 export interface ResultadoDeFila {
@@ -189,8 +215,8 @@ async function aplicarPago(
   );
 
   if (existente.rows[0] === undefined) {
-    const creado = await crearIntentoParaElPago(tx, proveedor.id, pago);
-    if (creado !== null) return dicho('SIN_EFECTO', creado);
+    const creado = await crearIntentoParaElPago(tx, proveedor.id, pago, fila.recibido_el);
+    if (creado !== null) return dicho(creado.desenlace, creado.detalle);
   }
 
   const salida = await procesarEventoDePago(tx, {
@@ -226,20 +252,23 @@ async function aplicarPago(
 /**
  * Crea el intento que la pasarela nunca pidió, si el pago se puede atribuir.
  *
- * Devuelve `null` cuando lo creó, o el motivo cuando no se pudo. El motivo es lo
- * que va a leer quien mire la bandeja, así que dice qué falta y no solo que
- * falló.
+ * Devuelve `null` cuando lo creó, o el desenlace y su motivo cuando no se pudo.
+ * El motivo es lo que va a leer quien mire la bandeja, así que dice qué falta y
+ * no solo que falló.
  */
 async function crearIntentoParaElPago(
   tx: Tx,
   proveedor: string,
   pago: { readonly id: string; readonly suscripcionExternaId?: string | null },
-): Promise<string | null> {
+  recibidoEl: Date,
+): Promise<{ readonly desenlace: DesenlaceDeFila; readonly detalle: string } | null> {
   if (pago.suscripcionExternaId === null || pago.suscripcionExternaId === undefined) {
-    return (
-      `El pago ${pago.id} no dice de qué suscripción salió: no se puede atribuir a ningún ` +
-      'documento. Se registró el evento y no se creó ningún intento.'
-    );
+    return {
+      desenlace: 'SIN_EFECTO',
+      detalle:
+        `El pago ${pago.id} no dice de qué suscripción salió: no se puede atribuir a ningún ` +
+        'documento. Se registró el evento y no se creó ningún intento.',
+    };
   }
 
   // El documento emitido más viejo de esa suscripción. El más viejo y no el más
@@ -268,12 +297,33 @@ async function crearIntentoParaElPago(
 
   const d = doc.rows[0];
   if (d === undefined) {
-    return (
-      `El pago ${pago.id} corresponde a la suscripción ${pago.suscripcionExternaId}, que no ` +
-      'tiene ningún documento emitido esperando cobro. Se registró el evento y no se creó ' +
-      'ningún intento: imputarlo a un documento que no existe sería inventar la deuda que ' +
-      'cancela.'
+    // ¿Es el primer cobro, que llegó antes que el documento? Solo si la
+    // suscripción es de NEXO y no está cancelada: de una cancelada no va a salir
+    // ningún documento, y de una ajena tampoco.
+    const viva = await tx.query(
+      `SELECT 1 FROM company_subscriptions
+        WHERE referencia_externa = $1 AND proveedor_pago = $2 AND estado <> 'CANCELADA'`,
+      [pago.suscripcionExternaId, proveedor],
     );
+    const horas = (Date.now() - recibidoEl.getTime()) / 3_600_000;
+    if ((viva.rowCount ?? 0) > 0 && horas < PLAZO_DE_ESPERA_HORAS) {
+      return {
+        desenlace: 'EN_ESPERA',
+        detalle:
+          `El pago ${pago.id} corresponde a la suscripción ${pago.suscripcionExternaId}, que ` +
+          'todavía no tiene documento emitido: la pasarela cobra al autorizar y el ciclo ' +
+          `emite después. Se vuelve a mirar cada hora hasta ${PLAZO_DE_ESPERA_HORAS} h ` +
+          'desde que llegó.',
+      };
+    }
+    return {
+      desenlace: 'SIN_EFECTO',
+      detalle:
+        `El pago ${pago.id} corresponde a la suscripción ${pago.suscripcionExternaId}, que no ` +
+        'tiene ningún documento emitido esperando cobro. Se registró el evento y no se creó ' +
+        'ningún intento: imputarlo a un documento que no existe sería inventar la deuda que ' +
+        'cancela.',
+    };
   }
 
   await tx.query(
@@ -389,12 +439,15 @@ export async function drenarBandeja(
   limite = 200,
 ): Promise<ResultadoDeFila[]> {
   const { rows } = await tx.query<FilaDeBandeja>(
-    `SELECT id, proveedor, ambiente, evento_externo, tipo, accion, recurso_id
+    // `procesado_el` en una fila PENDIENTE quiere decir que está en espera: se
+    // vuelve a mirar cuando pasó el intervalo, no en cada corrida.
+    `SELECT id, proveedor, ambiente, evento_externo, tipo, accion, recurso_id, recibido_el
        FROM payment_webhook_inbox
       WHERE estado = 'PENDIENTE'
+        AND (procesado_el IS NULL OR procesado_el < now() - $2::interval)
       ORDER BY recibido_el
       LIMIT $1`,
-    [limite],
+    [limite, REINTENTO_DE_ESPERA],
   );
 
   const hechos: ResultadoDeFila[] = [];
@@ -406,7 +459,11 @@ export async function drenarBandeja(
       `UPDATE payment_webhook_inbox
           SET estado = $1, detalle = $2, procesado_el = now(), intentos = intentos + 1
         WHERE id = $3`,
-      [resultado.desenlace, resultado.detalle, fila.id],
+      [
+        resultado.desenlace === 'EN_ESPERA' ? 'PENDIENTE' : resultado.desenlace,
+        resultado.detalle,
+        fila.id,
+      ],
     );
 
     hechos.push(resultado);

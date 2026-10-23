@@ -340,6 +340,82 @@ suite('La bandeja de pagos', () => {
     expect(intento.rowCount).toBe(0);
   });
 
+  it('el primer cobro llega antes que el documento: espera y se aplica cuando aparece', async () => {
+    // Mercado Pago debita al autorizar; el ciclo emite el documento después.
+    // Descartarlo dejaría sin imputar el primer cobro de cada cliente.
+    const empresa = await nuevaEmpresa('primero');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-primero`);
+    guion.pago = {
+      id: `mp-pago-${stamp}-primero`,
+      estado: 'PAGADO',
+      suscripcion: `mp-sub-${stamp}-primero`,
+    };
+    await encolar(`evt-${stamp}-primero`, 'payment', `mp-pago-${stamp}-primero`);
+
+    const [espera] = await drenar();
+    expect(espera!.desenlace).toBe('EN_ESPERA');
+    const fila = () =>
+      db.query<{ estado: string; intentos: number }>(
+        'SELECT estado, intentos FROM payment_webhook_inbox WHERE evento_externo = $1',
+        [`evt-${stamp}-primero`],
+      );
+    expect((await fila()).rows[0]!.estado).toBe('PENDIENTE');
+
+    // Antes de la hora no se vuelve a consultar.
+    expect(await drenar(), 'se reconsultó en cada corrida').toHaveLength(0);
+
+    const doc = await emitir(empresa, sub);
+    await db.query(
+      `UPDATE payment_webhook_inbox SET procesado_el = now() - interval '2 hours'
+        WHERE evento_externo = $1`,
+      [`evt-${stamp}-primero`],
+    );
+
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('APLICADO');
+    expect((await fila()).rows[0]).toMatchObject({ estado: 'APLICADO', intentos: 2 });
+    const intento = await db.query<{ estado: string; document_id: string }>(
+      `SELECT estado, document_id FROM payment_intents
+        WHERE proveedor = 'mercadopago' AND referencia_externa = $1`,
+      [`mp-pago-${stamp}-primero`],
+    );
+    expect(intento.rows[0]).toMatchObject({ estado: 'PAGADO', document_id: doc });
+  });
+
+  it('pasado el plazo, un cobro sin documento deja de esperar', async () => {
+    const empresa = await nuevaEmpresa('vencido');
+    await suscribir(empresa, `mp-sub-${stamp}-vencido`);
+    guion.pago = {
+      id: `mp-pago-${stamp}-vencido`,
+      estado: 'PAGADO',
+      suscripcion: `mp-sub-${stamp}-vencido`,
+    };
+    await encolar(`evt-${stamp}-vencido`, 'payment', `mp-pago-${stamp}-vencido`);
+    await db.query(
+      `UPDATE payment_webhook_inbox SET recibido_el = now() - interval '4 days'
+        WHERE evento_externo = $1`,
+      [`evt-${stamp}-vencido`],
+    );
+
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('SIN_EFECTO');
+    expect(hecho!.detalle).toContain('no tiene ningún documento emitido');
+  });
+
+  it('de una suscripción cancelada no se espera ningún documento', async () => {
+    const empresa = await nuevaEmpresa('baja');
+    await suscribir(empresa, `mp-sub-${stamp}-baja`, 'CANCELADA');
+    guion.pago = {
+      id: `mp-pago-${stamp}-baja`,
+      estado: 'PAGADO',
+      suscripcion: `mp-sub-${stamp}-baja`,
+    };
+    await encolar(`evt-${stamp}-baja`, 'payment', `mp-pago-${stamp}-baja`);
+
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('SIN_EFECTO');
+  });
+
   it('un cobro sin suscripción declarada tampoco se atribuye', async () => {
     guion.pago = { id: `mp-pago-${stamp}-suelto`, estado: 'PAGADO', suscripcion: null };
     await encolar(`evt-${stamp}-suelto`, 'payment', `mp-pago-${stamp}-suelto`);
