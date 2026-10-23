@@ -219,6 +219,13 @@ export interface ProveedorDePagos {
   consultarPago(id: string): Promise<Resultado<PagoExterno>>;
 
   /**
+   * El débito de una suscripción, cuando el proveedor lo notifica con un id propio
+   * que **no** es el de un pago (Mercado Pago: `subscription_authorized_payment`).
+   * Devuelve el pago que lo respalda. Opcional: quien no lo tiene, notifica pagos.
+   */
+  consultarPagoAutorizado?(id: string): Promise<Resultado<PagoExterno>>;
+
+  /**
    * ¿La notificación viene de verdad del proveedor?
    *
    * Devuelve `null` cuando **no se puede afirmar**: no hay proveedor, o hay pero

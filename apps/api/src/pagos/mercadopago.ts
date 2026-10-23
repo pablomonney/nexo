@@ -176,6 +176,18 @@ function identificador(fuente: Record<string, unknown>, campo: string): string |
 }
 
 /**
+ * La suscripción de un pago que la trae en `point_of_interaction.transaction_data.subscription_id`,
+ * que es donde Mercado Pago la pone en los débitos de una suscripción.
+ */
+function suscripcionDelPuntoDeInteraccion(cuerpo: Record<string, unknown>): string | null {
+  const punto = cuerpo['point_of_interaction'];
+  if (typeof punto !== 'object' || punto === null) return null;
+  const datos = (punto as Record<string, unknown>)['transaction_data'];
+  if (typeof datos !== 'object' || datos === null) return null;
+  return identificador(datos as Record<string, unknown>, 'subscription_id');
+}
+
+/**
  * El mensaje de error de Mercado Pago, si viene con la forma esperada.
  *
  * Se leen `message` y `error`, y **nada más**. Volcar el cuerpo entero metería
@@ -558,8 +570,12 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
         id: idPago,
         estado: estadoDePagoDesde(externo),
         // De qué suscripción salió este cobro. Es lo que permite atribuirlo sin
-        // confiar en el payload del webhook.
-        suscripcionExternaId: identificador(cuerpo, 'preapproval_id'),
+        // confiar en el payload del webhook. En los débitos de una suscripción,
+        // Mercado Pago no lo pone en `preapproval_id` sino en
+        // `point_of_interaction.transaction_data.subscription_id` (medido contra
+        // la API real el 2026-10-22).
+        suscripcionExternaId:
+          identificador(cuerpo, 'preapproval_id') ?? suscripcionDelPuntoDeInteraccion(cuerpo),
         // **El importe no se lee.** Mercado Pago lo devuelve como número JSON, y
         // convertirlo a centavos exigiría multiplicar un `double` por 100 —el
         // error que la Regla 4 existe para impedir—. El importe que el billing
@@ -581,6 +597,49 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
         // para que ocupe más. La columna no tiene tope, pero un campo sin tope
         // alimentado desde afuera es un campo que alguien va a llenar.
         detalleDelFallo: cadena(cuerpo, 'status_detail')?.slice(0, 500) ?? null,
+      },
+    };
+  }
+
+  /**
+   * El débito de una suscripción (`subscription_authorized_payment`).
+   *
+   * **No es un pago:** su id es el de un «pago autorizado» y `/v1/payments/{id}`
+   * contesta 404 (medido el 2026-10-22). Se consulta `/authorized_payments/{id}`,
+   * que trae la suscripción (`preapproval_id`) y el pago real que lo respalda
+   * (`payment.id`); ese pago se consulta como cualquier otro, así el estado sale
+   * del mismo lugar y con la misma traducción. Mientras el débito no tiene pago
+   * (programado o en reintento) no hay nada que aplicar todavía.
+   */
+  async consultarPagoAutorizado(id: string): Promise<Resultado<PagoExterno>> {
+    const salida = await this.#llamar(
+      'GET',
+      `/authorized_payments/${encodeURIComponent(id)}`,
+      'LECTURA',
+    );
+    if (!salida.ok) return salida;
+
+    const cuerpo = salida.valor.cuerpo;
+    const pago = cuerpo['payment'];
+    const idDelPago =
+      typeof pago === 'object' && pago !== null
+        ? identificador(pago as Record<string, unknown>, 'id')
+        : null;
+    if (idDelPago === null) {
+      return this.#error(
+        'NO_ENCONTRADO',
+        `el débito ${id} todavía no tiene pago (estado ${cadena(cuerpo, 'status') ?? 'desconocido'})`,
+      );
+    }
+
+    const consulta = await this.consultarPago(idDelPago);
+    if (!consulta.ok) return consulta;
+    return {
+      ok: true,
+      valor: {
+        ...consulta.valor,
+        suscripcionExternaId:
+          consulta.valor.suscripcionExternaId ?? identificador(cuerpo, 'preapproval_id'),
       },
     };
   }

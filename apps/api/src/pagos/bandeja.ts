@@ -66,8 +66,9 @@ import type { ProveedorDePagos } from './puerto.js';
  */
 const QUE_ES: Readonly<Record<string, 'PAGO' | 'SUSCRIPCION' | 'IGNORAR'>> = {
   payment: 'PAGO',
-  // El débito automático de una suscripción. Es un pago como cualquier otro y
-  // se consulta por el mismo endpoint.
+  // El débito automático de una suscripción. Se trata como un pago, pero su id
+  // NO es el de un pago: se consulta como «pago autorizado» y de ahí sale el
+  // pago que lo respalda (`consultarPagoAutorizado`).
   subscription_authorized_payment: 'PAGO',
   subscription_preapproval: 'SUSCRIPCION',
   // Un cambio en el catálogo de planes del proveedor. No afecta a ninguna
@@ -167,7 +168,11 @@ async function aplicarPago(
   proveedor: ProveedorDePagos,
   dicho: Dicho,
 ): Promise<ResultadoDeFila> {
-  const consulta = await proveedor.consultarPago(fila.recurso_id);
+  // El débito de una suscripción no es un pago: su id es el de un «pago autorizado».
+  const consulta =
+    fila.tipo === 'subscription_authorized_payment' && proveedor.consultarPagoAutorizado
+      ? await proveedor.consultarPagoAutorizado(fila.recurso_id)
+      : await proveedor.consultarPago(fila.recurso_id);
   if (!consulta.ok) {
     return dicho(
       'FALLIDO',

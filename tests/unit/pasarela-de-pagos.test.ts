@@ -376,6 +376,54 @@ describe('el adaptador clasifica los fallos por lo que hay que hacer', () => {
     }
   });
 
+  // Formas medidas contra la API real (sandbox) el 2026-10-22, recortadas a lo que se lee.
+  const PAGO_DE_SUSCRIPCION = {
+    id: 185645885446,
+    status: 'approved',
+    status_detail: 'accredited',
+    currency_id: 'ARS',
+    external_reference: 'suscripcion-nexo-1',
+    point_of_interaction: { transaction_data: { subscription_id: '71400e6fda754836b1082c8a7cb34d2e' } },
+  };
+
+  it('el pago de una suscripción dice de cuál salió en point_of_interaction', async () => {
+    // Sin esto, el aviso `payment` de un débito quedaba «no dice de qué suscripción salió».
+    const { mp } = proveedor([ok(PAGO_DE_SUSCRIPCION)]);
+    const r = await mp.consultarPago('185645885446');
+    expect(r.ok && r.valor.suscripcionExternaId).toBe('71400e6fda754836b1082c8a7cb34d2e');
+    expect(r.ok && r.valor.id).toBe('185645885446');
+  });
+
+  it('el débito de una suscripción se consulta como pago autorizado y sale el pago que lo respalda', async () => {
+    // `/v1/payments/<id del débito>` contesta 404: el id de un `subscription_authorized_payment` no es
+    // el de un pago. Se consulta `/authorized_payments/<id>` y de ahí el pago real.
+    const { mp, llamadas } = proveedor([
+      ok({
+        id: 7033195343,
+        preapproval_id: '71400e6fda754836b1082c8a7cb34d2e',
+        status: 'processed',
+        payment: { id: 185645885446, status: 'approved', status_detail: 'accredited' },
+      }),
+      ok({ ...PAGO_DE_SUSCRIPCION, point_of_interaction: {} }),
+    ]);
+    const r = await mp.consultarPagoAutorizado('7033195343');
+    expect(llamadas.map((l) => l.url)).toEqual([
+      `${BASE_DE_MERCADO_PAGO}/authorized_payments/7033195343`,
+      `${BASE_DE_MERCADO_PAGO}/v1/payments/185645885446`,
+    ]);
+    expect(r.ok && r.valor.id).toBe('185645885446');
+    expect(r.ok && r.valor.estado).toBe('PAGADO');
+    // Si el pago no lo trae, la suscripción sale del débito.
+    expect(r.ok && r.valor.suscripcionExternaId).toBe('71400e6fda754836b1082c8a7cb34d2e');
+  });
+
+  it('un débito que todavía no tiene pago no se inventa', async () => {
+    const { mp, llamadas } = proveedor([ok({ id: 1, preapproval_id: 'sub-1', status: 'scheduled' })]);
+    const r = await mp.consultarPagoAutorizado('1');
+    expect(!r.ok && r.fallo.codigo).toBe('NO_ENCONTRADO');
+    expect(llamadas).toHaveLength(1);
+  });
+
   it('un cuerpo que no es JSON es RESPUESTA_ILEGIBLE y no un éxito vacío', async () => {
     const { mp } = proveedor([{ ok: true, status: 200, cuerpo: '<html>502 Bad Gateway</html>' }]);
     const r = await mp.consultarPago('1');
