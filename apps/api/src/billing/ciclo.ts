@@ -430,17 +430,62 @@ export async function registrarCobro(
     };
   }
 
-  await tx.query(
-    `UPDATE billing_documents SET estado = 'PAGADO', pagado_el = $1::date WHERE id = $2`,
-    [entrada.pagadoEl, d.id],
+  const saldado = await saldarDocumento(tx, {
+    documentId: d.id,
+    proveedor: entrada.proveedor,
+    actorId: entrada.actorId,
+    pagadoEl: entrada.pagadoEl,
+  });
+
+  return {
+    estado: 'REGISTRADO',
+    intentId: intento.rows[0]!.id,
+    reactivada: saldado?.reactivada ?? false,
+  };
+}
+
+/**
+ * Lo que sigue a un cobro aplicado: el documento queda PAGADO y, si ya no se
+ * debe nada, la suscripción vuelve a ACTIVA.
+ *
+ * Es un paso aparte porque hay dos caminos que cobran —el registro a mano y la
+ * pasarela— y los dos tienen que dejar lo mismo. Mientras esto vivió solo dentro
+ * de `registrarCobro`, un cobro por tarjeta dejaba el intento PAGADO y el
+ * documento EMITIDO: la cobranza seguía corriendo sobre alguien que ya había
+ * pagado, y el cobro del mes siguiente se imputaba a este documento.
+ *
+ * Devuelve `null` si el documento ya no estaba por cobrar —otro camino lo saldó
+ * antes—, así que llamarlo dos veces es inocuo.
+ */
+export async function saldarDocumento(
+  tx: Tx,
+  entrada: {
+    readonly documentId: string;
+    readonly proveedor: string;
+    readonly actorId: string;
+    readonly pagadoEl: CalendarDate;
+  },
+): Promise<{ readonly reactivada: boolean } | null> {
+  const saldado = await tx.query<{
+    company_id: string;
+    subscription_id: string;
+    moneda: string;
+    importe_total: string;
+  }>(
+    `UPDATE billing_documents SET estado = 'PAGADO', pagado_el = $1::date
+      WHERE id = $2 AND estado IN ('EMITIDO', 'INCOBRABLE')
+      RETURNING company_id, subscription_id, moneda, importe_total::text AS importe_total`,
+    [entrada.pagadoEl, entrada.documentId],
   );
+  const d = saldado.rows[0];
+  if (d === undefined) return null;
 
   await recordAudit(tx, d.company_id, {
     actorType: 'SYSTEM',
     actorId: entrada.actorId,
     action: 'REGISTRAR_COBRO',
     objectType: 'billing_document',
-    objectId: d.id,
+    objectId: entrada.documentId,
     newValue: {
       proveedor: entrada.proveedor,
       moneda: d.moneda,
@@ -496,11 +541,11 @@ export async function registrarCobro(
       // módulos, la otra perdió el acceso entero— y la bitácora es de donde
       // sale `saas_movimientos`.
       oldValue: { estado: estadoPrevio },
-      newValue: { documento: d.id, estado: 'ACTIVA' },
+      newValue: { documento: entrada.documentId, estado: 'ACTIVA' },
     });
   }
 
-  return { estado: 'REGISTRADO', intentId: intento.rows[0]!.id, reactivada: reactivar };
+  return { reactivada: reactivar };
 }
 
 /**

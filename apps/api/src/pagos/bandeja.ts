@@ -64,7 +64,12 @@
 import type { Tx } from '@aai/db';
 import { consecuenciaDeSuscripcion, puedeTransicionar } from '@aai/billing-engine';
 import type { EstadoDeSuscripcion } from '@aai/billing-engine';
-import { procesarEventoDePago, type ResultadoDeEvento } from '../billing/ciclo.js';
+import { hoyEnZonaDeNegocio } from '@aai/shared';
+import {
+  procesarEventoDePago,
+  saldarDocumento,
+  type ResultadoDeEvento,
+} from '../billing/ciclo.js';
 import { anotarProximoCobro } from './suscripcion.js';
 import type { ProveedorDePagos } from './puerto.js';
 
@@ -242,11 +247,40 @@ async function aplicarPago(
     CONFLICTO: 'SIN_EFECTO',
   };
 
+  // Un intento PAGADO salda su documento, por el mismo paso que el registro a
+  // mano. Se mira el estado del intento y no solo si este evento se aplicó: así
+  // un aviso repetido termina de saldar un documento que una versión anterior
+  // dejó EMITIDO con el intento ya PAGADO.
+  const saldado = await saldarSiEstaPagado(tx, proveedor.id, salida.intentId);
+
   return dicho(
-    traduccion[salida.resultado],
+    saldado === null ? traduccion[salida.resultado] : 'APLICADO',
     `El pago ${pago.id} está ${pago.estado} según la pasarela. ` +
-      `procesarEventoDePago: ${salida.resultado}.`,
+      `procesarEventoDePago: ${salida.resultado}.` +
+      (saldado === null
+        ? ''
+        : ` El documento quedó PAGADO${saldado.reactivada ? ' y la suscripción volvió a ACTIVA' : ''}.`),
   );
+}
+
+async function saldarSiEstaPagado(
+  tx: Tx,
+  proveedor: string,
+  intentId: string | null,
+): Promise<{ readonly reactivada: boolean } | null> {
+  if (intentId === null) return null;
+  const intento = await tx.query<{ estado: string; document_id: string | null }>(
+    'SELECT estado, document_id FROM payment_intents WHERE id = $1',
+    [intentId],
+  );
+  const i = intento.rows[0];
+  if (i === undefined || i.estado !== 'PAGADO' || i.document_id === null) return null;
+  return saldarDocumento(tx, {
+    documentId: i.document_id,
+    proveedor,
+    actorId: 'system:pagos-bandeja',
+    pagadoEl: hoyEnZonaDeNegocio(),
+  });
 }
 
 /**

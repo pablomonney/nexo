@@ -228,6 +228,16 @@ suite('La bandeja de pagos', () => {
     // `double` por cien.
     expect(intento.rows[0]!.importe).toBe('3000.00');
 
+    // Y el documento quedó saldado, como con un cobro registrado a mano. Si
+    // siguiera EMITIDO, la cobranza correría sobre alguien que ya pagó y el
+    // cobro del mes siguiente se imputaría a este documento.
+    const documento = await db.query<{ estado: string; pagado_el: Date | null }>(
+      'SELECT estado, pagado_el FROM billing_documents WHERE id = $1',
+      [doc],
+    );
+    expect(documento.rows[0]!.estado).toBe('PAGADO');
+    expect(documento.rows[0]!.pagado_el).not.toBeNull();
+
     // Y quedó el rastro del evento, que es lo único que hay el día que un
     // cliente diga que pagó.
     const evento = await db.query<{ resultado: string }>(
@@ -380,6 +390,67 @@ suite('La bandeja de pagos', () => {
       [`mp-pago-${stamp}-primero`],
     );
     expect(intento.rows[0]).toMatchObject({ estado: 'PAGADO', document_id: doc });
+  });
+
+  it('un cobro por la pasarela levanta la mora, igual que uno registrado a mano', async () => {
+    const empresa = await nuevaEmpresa('morosa');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-morosa`);
+    await db.query(
+      `UPDATE company_subscriptions
+          SET estado = 'MOROSA', morosa_desde = '2026-01-12'::date, motivo = 'Falta de pago'
+        WHERE id = $1`,
+      [sub],
+    );
+    await emitir(empresa, sub);
+    guion.pago = {
+      id: `mp-pago-${stamp}-morosa`,
+      estado: 'PAGADO',
+      suscripcion: `mp-sub-${stamp}-morosa`,
+    };
+    await encolar(`evt-${stamp}-morosa`, 'payment', `mp-pago-${stamp}-morosa`);
+
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('APLICADO');
+    expect(hecho!.detalle).toContain('volvió a ACTIVA');
+    const s = await db.query<{ estado: string; morosa_desde: Date | null }>(
+      'SELECT estado, morosa_desde FROM company_subscriptions WHERE id = $1',
+      [sub],
+    );
+    expect(s.rows[0]).toMatchObject({ estado: 'ACTIVA', morosa_desde: null });
+  });
+
+  it('un aviso repetido salda el documento que quedó EMITIDO con el intento ya PAGADO', async () => {
+    // Lo que dejó en producción la versión que no saldaba: intento PAGADO,
+    // documento EMITIDO. Reprocesar el aviso tiene que terminar el trabajo.
+    const empresa = await nuevaEmpresa('a-medias');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-medias`);
+    const doc = await emitir(empresa, sub);
+    await db.query(
+      `INSERT INTO payment_intents
+         (company_id, document_id, proveedor, referencia_externa, moneda, importe,
+          idempotency_key, estado)
+       VALUES ($1, $2, 'mercadopago', $3, 'ARS', 3000.00, $4, 'PAGADO')`,
+      [empresa, doc, `mp-pago-${stamp}-medias`, `mercadopago:mp-pago-${stamp}-medias`],
+    );
+    guion.pago = {
+      id: `mp-pago-${stamp}-medias`,
+      estado: 'PAGADO',
+      suscripcion: `mp-sub-${stamp}-medias`,
+    };
+    await encolar(`evt-${stamp}-medias`, 'payment', `mp-pago-${stamp}-medias`);
+
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('APLICADO');
+    const documento = await db.query<{ estado: string }>(
+      'SELECT estado FROM billing_documents WHERE id = $1',
+      [doc],
+    );
+    expect(documento.rows[0]!.estado).toBe('PAGADO');
+
+    // Y una vez saldado, otro aviso más ya no hace nada.
+    await encolar(`evt-${stamp}-medias-2`, 'payment', `mp-pago-${stamp}-medias`);
+    const [otra] = await drenar();
+    expect(otra!.desenlace).toBe('SIN_EFECTO');
   });
 
   it('pasado el plazo, un cobro sin documento deja de esperar', async () => {
