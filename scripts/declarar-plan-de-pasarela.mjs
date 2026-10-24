@@ -170,12 +170,16 @@ try {
   const centavosDeLista = BigInt(entera) * 100n + BigInt((decimales ?? '').padEnd(2, '0'));
   // Con un precio NETO («+ IVA») la pasarela debita el neto más el IVA (21 %, redondeado al centavo): debitar el neto sería cobrar de menos.
   const centavos = incluyeImpuestos ? centavosDeLista : centavosDeLista + (centavosDeLista * 21n * 2n + 100n) / 200n;
+  // Lo que se debita, y no el precio de lista, es lo que se declara en el mapeo:
+  // `work_queue_pasarela` lo compara con `importe_acordado`, que lleva el IVA.
+  // Guardar el neto marcaba como divergente a cada empresa con precio «+ IVA».
+  const seDebita = `${(centavos / 100n).toString()}.${(centavos % 100n).toString().padStart(2, '0')}`;
 
   console.log(`\n══ Plan de pasarela ═════════════════════════════════════════\n`);
   console.log(`  plan        ${plan} — ${nombre}`);
   console.log(`  condiciones ${periodicidad} ${moneda} ${importe}`);
   console.log(`  impuestos   ${incluyeImpuestos ? 'incluidos en el importe' : 'por fuera: la pasarela debita el neto más el IVA'}`);
-  console.log(`  se debita   ${moneda} ${(centavos / 100n).toString()}.${(centavos % 100n).toString().padStart(2, '0')}`);
+  console.log(`  se debita   ${moneda} ${seDebita}`);
   console.log(`  pasarela    ${proveedor.id}  ambiente ${ambiente}`);
 
   // Mercado Pago no crea el plan sin URL de retorno (400 «Back url is required», medido el 2026-10-22).
@@ -220,7 +224,7 @@ try {
       periodicidad,
       moneda,
       salida.valor.id,
-      importe,
+      seDebita,
       'script:declarar-plan-de-pasarela',
       motivo,
     ],

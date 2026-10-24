@@ -199,35 +199,55 @@ export async function conectarConLaPasarela(
   // `preapproval` le cobraría dos veces a la misma empresa. Se consulta el
   // estado y se devuelve lo que hay, que es lo que quien llama necesita para
   // saber si falta autorizar.
+  //
+  // Salvo que la pasarela diga que esa suscripción está CANCELADA: de ahí no
+  // vuelve, ya no puede debitar, y quedarse atado a ella dejaba al cliente que
+  // canceló desde Mercado Pago —o que se quedó sin tarjeta— sin ninguna forma de
+  // volver a pagar. Entonces se crea otra, y la referencia vieja se libera recién
+  // cuando la nueva ya existe (más abajo): si algo falla antes, queda todo como
+  // estaba.
+  let reemplazaA: string | undefined;
   if (s.referencia_externa !== null) {
     const consulta = await proveedor.consultarSuscripcion(s.referencia_externa);
-    return {
-      estado: 'YA_ESTABA',
-      referenciaExterna: s.referencia_externa,
-      proveedor: s.proveedor_pago ?? proveedor.id,
-      ambiente: s.ambiente_pago ?? ambiente,
-      // `init_point` solo viene al crearla: una consulta posterior no lo trae, y
-      // eso no es un fallo. Si el cliente perdió la pestaña, la autorización se
-      // retoma desde el panel del proveedor.
-      urlDeAutorizacion: consulta.ok ? (consulta.valor.urlDeAutorizacion ?? null) : null,
-      estadoEnLaPasarela: consulta.ok ? consulta.valor.estado : null,
-      detalle: consulta.ok
-        ? `La suscripción ya estaba conectada y la pasarela la reporta ${consulta.valor.estado}.`
-        : `La suscripción ya estaba conectada. No se pudo consultar su estado ` +
-          `(${consulta.fallo.codigo}): ${consulta.fallo.detalle}`,
-    };
+    const muerta =
+      consulta.ok &&
+      consulta.valor.estado === 'CANCELADA' &&
+      s.proveedor_pago === proveedor.id &&
+      s.ambiente_pago === ambiente;
+    if (!muerta) {
+      return {
+        estado: 'YA_ESTABA',
+        referenciaExterna: s.referencia_externa,
+        proveedor: s.proveedor_pago ?? proveedor.id,
+        ambiente: s.ambiente_pago ?? ambiente,
+        // `init_point` solo viene al crearla: una consulta posterior no lo trae, y
+        // eso no es un fallo. Si el cliente perdió la pestaña, la autorización se
+        // retoma desde el panel del proveedor.
+        urlDeAutorizacion: consulta.ok ? (consulta.valor.urlDeAutorizacion ?? null) : null,
+        estadoEnLaPasarela: consulta.ok ? consulta.valor.estado : null,
+        detalle: consulta.ok
+          ? `La suscripción ya estaba conectada y la pasarela la reporta ${consulta.valor.estado}.`
+          : `La suscripción ya estaba conectada. No se pudo consultar su estado ` +
+            `(${consulta.fallo.codigo}): ${consulta.fallo.detalle}`,
+      };
+    }
+    reemplazaA = s.referencia_externa;
   }
 
-  if (s.estado !== 'ACTIVA') {
+  if (s.estado !== 'ACTIVA' && s.estado !== 'MOROSA' && s.estado !== 'SUSPENDIDA') {
     // PRUEBA no se conecta: una prueba no tiene precio acordado, así que no hay
     // importe con el que suscribir. El camino es convertirla primero.
+    //
+    // MOROSA y SUSPENDIDA sí: conectar un medio de pago es justamente cómo se
+    // sale de ahí. El primer débito salda el documento más viejo y, si no queda
+    // otra deuda, `saldarDocumento` reactiva.
     return {
       estado: 'NO_SE_PUDO',
       motivo: 'ESTADO_NO_CONTRATABLE',
       detalle:
-        `La suscripción está ${s.estado}. Para conectarla a la pasarela tiene que estar ` +
-        'ACTIVA, es decir con plan, periodicidad, moneda e importe acordados: eso es lo que ' +
-        'hace la conversión de la prueba.',
+        `La suscripción está ${s.estado}. Para conectarla a la pasarela tiene que tener ` +
+        'plan, periodicidad, moneda e importe acordados: eso es lo que hace la conversión ' +
+        'de la prueba.',
     };
   }
 
@@ -279,6 +299,7 @@ export async function conectarConLaPasarela(
     periodicidad: s.periodicidad === 'ANUAL' ? 'ANUAL' : 'MENSUAL',
     descripcion: s.plan_nombre,
     urlDeRetorno,
+    ...(reemplazaA === undefined ? {} : { reemplazaA }),
   });
 
   if (!salida.ok) {
@@ -291,6 +312,16 @@ export async function conectarConLaPasarela(
       motivo: 'LA_PASARELA_RECHAZO',
       detalle: `La pasarela rechazó la suscripción (${salida.fallo.codigo}): ${salida.fallo.detalle}`,
     };
+  }
+
+  if (reemplazaA !== undefined) {
+    // La vieja queda en la bitácora, en el registro de esta conexión.
+    await tx.query(
+      `UPDATE company_subscriptions
+          SET referencia_externa = NULL, proveedor_pago = NULL, ambiente_pago = NULL
+        WHERE id = $1 AND referencia_externa = $2`,
+      [s.id, reemplazaA],
+    );
   }
 
   await guardarReferencia(tx, s.id, salida.valor, proveedor.id, ambiente);
@@ -306,8 +337,14 @@ export async function conectarConLaPasarela(
     objectType: 'company_subscription',
     objectId: s.id,
     motivo:
+      (reemplazaA === undefined
+        ? ''
+        : `Reemplaza a ${reemplazaA}, que la pasarela tenía cancelada y ya no podía debitar. `) +
       'Se creó la suscripción del lado de la pasarela. El cliente todavía tiene que ' +
       'autorizar su medio de pago.',
+    ...(reemplazaA === undefined
+      ? {}
+      : { oldValue: { proveedor: s.proveedor_pago, ambiente: s.ambiente_pago, referencia: reemplazaA } }),
     newValue: {
       proveedor: proveedor.id,
       ambiente,

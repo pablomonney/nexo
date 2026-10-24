@@ -210,6 +210,15 @@ async function aplicarPago(
       `No se pudo consultar el pago (${consulta.fallo.codigo}): ${consulta.fallo.detalle}`,
     );
   }
+  if (consulta.valor === null) {
+    // No es FALLIDO: no se movió plata, y un FALLIDO por mes y por cliente
+    // haría que la tarea saliera con error sin que haya nada que mirar.
+    return dicho(
+      'SIN_EFECTO',
+      `El débito ${fila.recurso_id} está agendado y todavía no se cobró. El cobro llega en su ` +
+        'propio aviso.',
+    );
+  }
   const pago = consulta.valor;
 
   // ¿Hay ya un intento con esta referencia? Si lo hay, esto es una
@@ -444,12 +453,41 @@ async function aplicarSuscripcion(
     );
   }
 
+  if (consecuencia.hacia === 'ACTIVA' && (s.estado === 'MOROSA' || s.estado === 'SUSPENDIDA')) {
+    // Que la pasarela tenga autorización para cobrar no quiere decir que se
+    // haya cobrado. Con la tarjeta rechazada, Mercado Pago sigue `authorized` y
+    // reintenta, y avisa cambios de la suscripción por otros motivos: si cada
+    // aviso reactivara, la mora y la suspensión se levantarían solas con la
+    // deuda abierta. La regla es la de `saldarDocumento`: se vuelve a ACTIVA
+    // cuando no queda nada emitido sin pagar.
+    const deuda = await tx.query(
+      `SELECT 1 FROM billing_documents WHERE subscription_id = $1 AND estado = 'EMITIDO' LIMIT 1`,
+      [s.id],
+    );
+    if ((deuda.rowCount ?? 0) > 0) {
+      return dicho(
+        'SIN_EFECTO',
+        `La pasarela informa ${consulta.valor.estado} y la suscripción está ${s.estado} con ` +
+          'deuda emitida sin pagar. Tener con qué cobrar no es haber cobrado: se reactiva ' +
+          'cuando entre el cobro.',
+      );
+    }
+  }
+
   // `motivo` es obligatorio para SUSPENDIDA y CANCELADA (`cs_baja_con_motivo`,
   // 0073). No es burocracia: sin él, la pantalla del cliente diría que su
-  // servicio está suspendido y no por qué.
+  // servicio está suspendido y no por qué. Al volver a ACTIVA se limpian las
+  // marcas de la baja, como en `saldarDocumento`.
   await tx.query(
-    `UPDATE company_subscriptions SET estado = $1, motivo = $2 WHERE id = $3 AND estado = $4`,
-    [consecuencia.hacia, consecuencia.motivo.slice(0, 500), s.id, s.estado],
+    `UPDATE company_subscriptions
+        SET estado = $1,
+            motivo = CASE WHEN $1 = 'ACTIVA' THEN NULL ELSE $2 END,
+            suspendida_el = CASE WHEN $1 = 'SUSPENDIDA' THEN $5::date
+                                 WHEN $1 = 'ACTIVA' THEN NULL
+                                 ELSE suspendida_el END,
+            morosa_desde = CASE WHEN $1 = 'ACTIVA' THEN NULL ELSE morosa_desde END
+      WHERE id = $3 AND estado = $4`,
+    [consecuencia.hacia, consecuencia.motivo.slice(0, 500), s.id, s.estado, hoyEnZonaDeNegocio()],
   );
 
   return dicho(

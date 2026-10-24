@@ -40,6 +40,8 @@ interface Guion {
   } | null;
   suscripcion: { id: string; estado: string; proximoCobro?: string } | null;
   falla: boolean;
+  /** El débito existe y todavía no se cobró (Mercado Pago: `scheduled`). */
+  debitoSinPago?: boolean;
 }
 
 /**
@@ -53,7 +55,7 @@ interface Guion {
 function doble(guion: Guion) {
   const fallo = { codigo: 'PROVEEDOR_CAIDO' as const, detalle: 'el doble está caído' };
   const noEsta = { codigo: 'NO_ENCONTRADO' as const, detalle: 'el doble no lo tiene' };
-  return {
+  const proveedor = {
     id: 'mercadopago',
     asegurarPlan: async () => ({ ok: false as const, fallo: noEsta }),
     crearSuscripcion: async () => ({ ok: false as const, fallo: noEsta }),
@@ -97,6 +99,12 @@ function doble(guion: Guion) {
           };
     },
     verificarFirma: async () => true,
+  };
+  return {
+    ...proveedor,
+    // El débito sale por acá; el resto del guion es el del pago que lo respalda.
+    consultarPagoAutorizado: async () =>
+      guion.debitoSinPago === true ? { ok: true as const, valor: null } : proveedor.consultarPago(),
   };
 }
 
@@ -515,6 +523,71 @@ suite('La bandeja de pagos', () => {
     // El motivo no es burocracia: es lo que el cliente ve cuando su servicio se
     // corta.
     expect(fila.rows[0]!.motivo).toContain('no se cancela');
+    const fecha = await db.query<{ suspendida_el: Date | null }>(
+      'SELECT suspendida_el FROM company_subscriptions WHERE id = $1',
+      [sub],
+    );
+    expect(fecha.rows[0]!.suspendida_el, 'la suspensión quedó sin fecha').not.toBeNull();
+  });
+
+  it('una autorización de la pasarela no levanta la mora mientras haya deuda emitida', async () => {
+    // Con la tarjeta rechazada, Mercado Pago sigue `authorized` y reintenta. Si
+    // cada aviso reactivara, la mora se levantaría sola con la deuda abierta.
+    const empresa = await nuevaEmpresa('morosa-autorizada');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-morosa-aut`);
+    await db.query(
+      `UPDATE company_subscriptions
+          SET estado = 'MOROSA', morosa_desde = '2026-01-12'::date, motivo = 'Falta de pago'
+        WHERE id = $1`,
+      [sub],
+    );
+    await emitir(empresa, sub);
+
+    guion.suscripcion = { id: `mp-sub-${stamp}-morosa-aut`, estado: 'AUTORIZADA' };
+    await encolar(`evt-${stamp}-morosa-aut`, 'subscription_preapproval', `mp-sub-${stamp}-morosa-aut`);
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('SIN_EFECTO');
+    expect(hecho!.detalle).toContain('deuda emitida');
+
+    const fila = await db.query<{ estado: string }>(
+      'SELECT estado FROM company_subscriptions WHERE id = $1',
+      [sub],
+    );
+    expect(fila.rows[0]!.estado).toBe('MOROSA');
+  });
+
+  it('sin deuda, una autorización reactiva y limpia las marcas de la baja', async () => {
+    const empresa = await nuevaEmpresa('suspendida-autorizada');
+    const sub = await suscribir(empresa, `mp-sub-${stamp}-susp-aut`);
+    await db.query(
+      `UPDATE company_subscriptions
+          SET estado = 'SUSPENDIDA', suspendida_el = '2026-01-20'::date,
+              motivo = 'La pasarela dejó de cobrar'
+        WHERE id = $1`,
+      [sub],
+    );
+
+    guion.suscripcion = { id: `mp-sub-${stamp}-susp-aut`, estado: 'AUTORIZADA' };
+    await encolar(`evt-${stamp}-susp-aut`, 'subscription_preapproval', `mp-sub-${stamp}-susp-aut`);
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('APLICADO');
+
+    const fila = await db.query<{
+      estado: string;
+      motivo: string | null;
+      suspendida_el: Date | null;
+    }>('SELECT estado, motivo, suspendida_el FROM company_subscriptions WHERE id = $1', [sub]);
+    expect(fila.rows[0]).toMatchObject({ estado: 'ACTIVA', motivo: null, suspendida_el: null });
+  });
+
+  it('un débito agendado sin cobrar todavía no es un fallo', async () => {
+    // Mercado Pago avisa el débito antes de cobrarlo. Un FALLIDO por mes y por
+    // cliente haría salir la tarea con error sin que haya nada que mirar.
+    guion.debitoSinPago = true;
+    await encolar(`evt-${stamp}-agendado`, 'subscription_authorized_payment', '999');
+    const [hecho] = await drenar();
+    expect(hecho!.desenlace).toBe('SIN_EFECTO');
+    expect(hecho!.detalle).toContain('agendado');
   });
 
   it('una pausa en la pasarela suspende, y avisarlo dos veces no la aplica dos veces', async () => {

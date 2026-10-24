@@ -129,6 +129,12 @@ export interface SuscripcionParaProveedor {
   readonly descripcion: string;
   /** A dónde vuelve el navegador después de autorizar. */
   readonly urlDeRetorno: string;
+  /**
+   * La suscripción del proveedor que esta reemplaza, si la anterior quedó
+   * cancelada de su lado. Entra en la clave de idempotencia: con la misma clave
+   * que la primera vez, el proveedor devolvería la cancelada en vez de crear una.
+   */
+  readonly reemplazaA?: string;
 }
 
 export interface FalloDePago {
@@ -222,8 +228,11 @@ export interface ProveedorDePagos {
    * El débito de una suscripción, cuando el proveedor lo notifica con un id propio
    * que **no** es el de un pago (Mercado Pago: `subscription_authorized_payment`).
    * Devuelve el pago que lo respalda. Opcional: quien no lo tiene, notifica pagos.
+   *
+   * `null` es un éxito: el débito existe y todavía no se cobró —está agendado—.
+   * No es un fallo porque no se movió plata; el cobro llega en su propio aviso.
    */
-  consultarPagoAutorizado?(id: string): Promise<Resultado<PagoExterno>>;
+  consultarPagoAutorizado?(id: string): Promise<Resultado<PagoExterno | null>>;
 
   /**
    * ¿La notificación viene de verdad del proveedor?

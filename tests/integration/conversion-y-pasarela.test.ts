@@ -72,6 +72,7 @@ interface Guion {
     importeCentavos: bigint;
     moneda: string;
     urlDeRetorno: string;
+    reemplazaA?: string;
   } | null;
   respuesta: 'OK' | 'RECHAZA';
   /**
@@ -689,6 +690,56 @@ suite('De la prueba al cobro', () => {
     expect(r.statusCode, r.payload).toBe(200);
     expect(r.json<{ estado: string }>().estado).toBe('YA_ESTABA');
     expect(guion.creaciones).toBe(antes);
+  });
+
+  it('si la pasarela la canceló y la nueva falla, la referencia vieja queda como estaba', async () => {
+    const vieja = (await suscripcion()).referencia_externa;
+    guion.externo = 'CANCELADA';
+    guion.respuesta = 'RECHAZA';
+    const r = await app.inject({
+      method: 'POST', url: '/subscription/pasarela', headers: cabeceras(),
+    });
+    guion.respuesta = 'OK';
+
+    expect(r.statusCode).toBe(409);
+    expect((await suscripcion()).referencia_externa).toBe(vieja);
+  });
+
+  it('si la pasarela la canceló, un SUSPENDIDO conecta una nueva en vez de quedar atado', async () => {
+    // El cliente que canceló desde Mercado Pago, o que se quedó sin tarjeta,
+    // queda SUSPENDIDO (bandeja) con una referencia que ya no puede debitar.
+    // Contestarle «ya estaba conectada» lo dejaba sin forma de volver a pagar.
+    const vieja = (await suscripcion()).referencia_externa!;
+    await db.query(
+      `UPDATE company_subscriptions
+          SET estado = 'SUSPENDIDA', suspendida_el = CURRENT_DATE,
+              motivo = 'La pasarela ya no tiene autorización para cobrar'
+        WHERE company_id = $1`,
+      [empresa],
+    );
+    guion.externo = 'CANCELADA';
+    const antes = guion.creaciones;
+
+    const r = await app.inject({
+      method: 'POST', url: '/subscription/pasarela', headers: cabeceras(),
+    });
+
+    expect(r.statusCode, r.payload).toBe(200);
+    const cuerpo = r.json<{ estado: string; referenciaExterna: string }>();
+    expect(cuerpo.estado).toBe('CONECTADA');
+    expect(cuerpo.referenciaExterna).not.toBe(vieja);
+    expect(guion.creaciones).toBe(antes + 1);
+    // Con otra clave de idempotencia: con la de la primera vez, Mercado Pago
+    // devolvería la cancelada.
+    expect(guion.ultimoPedido?.reemplazaA).toBe(vieja);
+    expect((await suscripcion()).referencia_externa).toBe(cuerpo.referenciaExterna);
+
+    const bitacora = await db.query<{ old_value: { referencia: string } }>(
+      `SELECT old_value FROM audit_logs
+        WHERE company_id = $1 AND action = 'CONECTAR_PASARELA' AND old_value IS NOT NULL`,
+      [empresa],
+    );
+    expect(bitacora.rows[0]?.old_value.referencia).toBe(vieja);
   });
 
   it('si la pasarela rechaza, no queda ninguna referencia escrita', async () => {

@@ -458,7 +458,12 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
     }
 
     const salida = await this.#llamar('POST', '/preapproval', 'ESCRITURA', cuerpo, {
-      'x-idempotency-key': `sub:${datos.referenciaNexo}`,
+      // Determinística por reemplazo: el reintento de la misma reconexión
+      // sigue sin crear dos.
+      'x-idempotency-key':
+        datos.reemplazaA === undefined
+          ? `sub:${datos.referenciaNexo}`
+          : `sub:${datos.referenciaNexo}:tras:${datos.reemplazaA}`,
     });
     if (!salida.ok) return salida;
     return this.#leerSuscripcion(salida.valor.cuerpo);
@@ -611,7 +616,7 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
    * del mismo lugar y con la misma traducción. Mientras el débito no tiene pago
    * (programado o en reintento) no hay nada que aplicar todavía.
    */
-  async consultarPagoAutorizado(id: string): Promise<Resultado<PagoExterno>> {
+  async consultarPagoAutorizado(id: string): Promise<Resultado<PagoExterno | null>> {
     const salida = await this.#llamar(
       'GET',
       `/authorized_payments/${encodeURIComponent(id)}`,
@@ -625,12 +630,9 @@ export class ProveedorDeMercadoPago implements ProveedorDePagos {
       typeof pago === 'object' && pago !== null
         ? identificador(pago as Record<string, unknown>, 'id')
         : null;
-    if (idDelPago === null) {
-      return this.#error(
-        'NO_ENCONTRADO',
-        `el débito ${id} todavía no tiene pago (estado ${cadena(cuerpo, 'status') ?? 'desconocido'})`,
-      );
-    }
+    // Agendado y sin cobrar todavía (`scheduled`): Mercado Pago avisa el débito
+    // antes de debitarlo. No hay pago que consultar, y tampoco es un fallo.
+    if (idDelPago === null) return { ok: true, valor: null };
 
     const consulta = await this.consultarPago(idDelPago);
     if (!consulta.ok) return consulta;

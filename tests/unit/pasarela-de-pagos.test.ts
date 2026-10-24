@@ -411,16 +411,16 @@ describe('el adaptador clasifica los fallos por lo que hay que hacer', () => {
       `${BASE_DE_MERCADO_PAGO}/authorized_payments/7033195343`,
       `${BASE_DE_MERCADO_PAGO}/v1/payments/185645885446`,
     ]);
-    expect(r.ok && r.valor.id).toBe('185645885446');
-    expect(r.ok && r.valor.estado).toBe('PAGADO');
+    expect(r.ok && r.valor?.id).toBe('185645885446');
+    expect(r.ok && r.valor?.estado).toBe('PAGADO');
     // Si el pago no lo trae, la suscripción sale del débito.
-    expect(r.ok && r.valor.suscripcionExternaId).toBe('71400e6fda754836b1082c8a7cb34d2e');
+    expect(r.ok && r.valor?.suscripcionExternaId).toBe('71400e6fda754836b1082c8a7cb34d2e');
   });
 
-  it('un débito que todavía no tiene pago no se inventa', async () => {
+  it('un débito agendado que todavía no tiene pago no se inventa, y tampoco es un fallo', async () => {
     const { mp, llamadas } = proveedor([ok({ id: 1, preapproval_id: 'sub-1', status: 'scheduled' })]);
     const r = await mp.consultarPagoAutorizado('1');
-    expect(!r.ok && r.fallo.codigo).toBe('NO_ENCONTRADO');
+    expect(r).toEqual({ ok: true, valor: null });
     expect(llamadas).toHaveLength(1);
   });
 
